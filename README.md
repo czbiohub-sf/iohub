@@ -1,4 +1,4 @@
-# waveorders
+# waveorder
 Code for developing phase imaging algorithm with polarization microscope <br/> 
 <br/>
 To install package, simply do: <br/>
