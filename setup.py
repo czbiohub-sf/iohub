@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-setup(  name             = 'waverder',
+setup(  name             = 'waveorder',
         version          = '0.0.1',
         description      = 'functions for reconstructing and visualizing phase and birefrigence',
         author           = 'Li-Hao Yeh',
