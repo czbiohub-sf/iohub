@@ -17,26 +17,31 @@ This package also enables simulations and reconstructions of other label-free im
 
 ## Installation
 
-### Create a new conda environment (optional, but recommended)
->Install conda package management system by installing anaconda or miniconda ([link](https://conda.io/)). 
->Creating a conda environment dedicated to `waveorder` will avoid version conflicts among packages required by `waveorder` and packages required by other python software.
->
+### Create a new conda environment
+Install conda package management system by installing anaconda or miniconda ([link](https://conda.io/)). 
+
+1) Creating a conda environment dedicated to `waveorder` will avoid version conflicts among packages required by `waveorder` and packages required by other python software.
 >```buildoutcfg
 >conda create -n <your-environment-name> python=3.7
->conda activate <your-environment-name>
+>conda activate <your-environment-name> (or source activate <your-environment-name>)
 >```
 
+2) Then, install jupyter notebook with
+>```buildoutcfg
+>conda install jupyter
+>```
+    
 ### Install `waveorder` and required packages
->Install the git version control system git : [link](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
->
->Use git to clone this repository to your current directory:
+Install the git version control system git : [link](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
+
+1) Use git to clone this repository to your current directory:
 >```buildoutcfg
 >git clone https://github.com/mehta-lab/waveorder.git
 >```
-><br>
-You can install dependencies via pip (python index package) <br>
->  
->    If you are running ReconstructOrder on your own machine, <br>
+
+2) Then, you can install dependencies via pip (python index package) <br>
+  
+>    If you are running waveorder on your own machine, <br>
 >
 >    a) navigate to the cloned repository:
 >
@@ -50,11 +55,12 @@ You can install dependencies via pip (python index package) <br>
 >    pip install -r requirements.txt
 >    ```
 >    <br>
->    c) Create a symbolic library link with setup.py:
+
+3) Create a symbolic library link with setup.py:
 >
->    ```buildoutcfg
->    python setup.py develop
->    ```
+>```buildoutcfg
+>python setup.py develop
+>```
 
 *`waveorder` supports NVIDIA GPU computation through cupy package, please follow [here](https://github.com/cupy/cupy) for installation (check cupy is properly installed by ```import cupy```). To enable gpu processing, set ```use_gpu=True``` when initializing the simulator/reconstructor class.*
 
@@ -63,17 +69,17 @@ You can install dependencies via pip (python index package) <br>
 
 In the following, we demonstrate how to run `waveorder` for simulation and reconstruction. <br>
 
-a) In the terminal, switch to the environment with ReconstructOrder installed 
+1) In the terminal, switch to the environment with waveorder installed 
 >  ```buildoutcfg
 >  conda activate <your-environment-name>
 >  ```
 
-b) Navigate to the repository folder:
+2) Navigate to the repository folder:
 >  ```buildoutcfg
 >  cd waveorder/example
 >  ```
 
-c) Open jupyter notebook or lab to run the simulation/reconstruction notebook in the folder:
+3) Open jupyter notebook or lab to run the simulation/reconstruction notebook in the folder:
 >  ```buildoutcfg
 >  jupyter notebook
 >  ```
