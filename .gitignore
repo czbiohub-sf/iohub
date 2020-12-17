@@ -4,3 +4,6 @@ waveorder.egg-info/
 waveorder/__pycache__/
 build/
 dist/
+*.npz
+*.png
+*.tif[f]
