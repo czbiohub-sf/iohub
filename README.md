@@ -19,9 +19,9 @@ In addition to uPTI, `waveorder` also enables simulations and reconstructions of
 
 1. Reconstruction of 2D/3D phase, projected retardance, and in-plane orientation from a brightfield, polarization-diverse, and depth-diverse acquisition ([QLIPP](https://elifesciences.org/articles/55502))
 
-1. Reconstruction of 2D/3D phase from a brightfield, depth-diverse microscope (Transport of intensity, TIE)
+1. Reconstruction of 2D/3D phase from a brightfield, depth-diverse acquisition ([Optical diffraction tomography with partially coherent illumination](https://www.osapublishing.org/ao/abstract.cfm?uri=ao-57-1-a205))
     
-2. Reconstruction 2D/3D phase from an illumination-diverse and depth-diverse acquisition (differential phase contrast, DPC)
+2. Reconstruction 2D/3D phase from an illumination-diverse and depth-diverse acquisition ([3D differential phase contrast](https://www.osapublishing.org/boe/fulltext.cfm?uri=boe-7-10-3940&id=349951))
        
 
 
