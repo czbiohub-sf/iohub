@@ -19,9 +19,9 @@ In addition to uPTI, `waveorder` also enables simulations and reconstructions of
 
 1. Reconstruction of 2D/3D phase, projected retardance, and in-plane orientation from a brightfield, polarization-diverse, and depth-diverse acquisition ([QLIPP](https://elifesciences.org/articles/55502))
 
-1. Reconstruction of 2D/3D phase from a brightfield, depth-diverse acquisition ([Optical diffraction tomography with partially coherent illumination](https://www.osapublishing.org/ao/abstract.cfm?uri=ao-57-1-a205))
+2. Reconstruction of 2D/3D phase from a brightfield, depth-diverse acquisition ([2D](https://www.osapublishing.org/ao/abstract.cfm?uri=ao-54-28-8566)/[3D (PODT)](https://www.osapublishing.org/ao/abstract.cfm?uri=ao-57-1-a205) phase)
     
-2. Reconstruction 2D/3D phase from an illumination-diverse and depth-diverse acquisition ([3D differential phase contrast](https://www.osapublishing.org/boe/fulltext.cfm?uri=boe-7-10-3940&id=349951))
+3. Reconstruction 2D/3D phase from an illumination-diverse and depth-diverse acquisition ([2D](https://www.osapublishing.org/oe/fulltext.cfm?uri=oe-23-9-11394&id=315599)/[3D](https://www.osapublishing.org/boe/fulltext.cfm?uri=boe-7-10-3940&id=349951) differential phase contrast)
        
 
 
@@ -94,7 +94,7 @@ In the following, we demonstrate how to run `waveorder` for simulation and recon
 >  jupyter notebook
 >  ```
     
-Currently, the example notebooks contain simulations for 2D QLIPP, 3D PODT, and 2D/3D uPTI. There is also a notebook demonstrating the reconstruction of the experimental data of 3D uPTI (data will be uploaded soon).
+Currently, the example notebooks contain simulations for 2D QLIPP, 3D PODT, and 2D/3D uPTI. There is also a notebook demonstrating the reconstruction of the experimental data of 3D uPTI (data will be uploaded soon). It is recommended to install `cupy` before running uPTI simulation because uPTI computation takes up more resources.
     
 ## License
 Chan Zuckerberg Biohub Software License
