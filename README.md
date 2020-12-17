@@ -1,19 +1,29 @@
 # waveorder
-This is a package developed to simulate and deconvolve polarization measurements under various partially coherent illumination patterns considering diffraction effects. This generalized wave simulator/reconstructor enable us to develop a new label-free imaging method, __uniaxial permittivity tensor imaging (uPTI)__, that reconstructs density (phase) and 3D anisotropy (principal retardance, 3D orientation of the optic axis, and optic sign) of specimens from asymmetrically illuminated and polarization-resolved images. The acquisition, calibration, background correction, and reconstruction algorithms are described in the following preprint:
+This package enables wave optical simulations and deconvolution of optical properties that report microscopic architectural order. 
 
-```Yeh, L.-H., Ivanov, I. E., Chhun, B. B., Guo, S.-M., Hashemi, E., Byrum, J. R., Pérez-Bermejo, J. A., Wang, H., Yu, Y., Kazansky, P. G., Conklin, B. R., Han, M. H., Mehta, S. B. (2019). uPTI: uniaxial permittivity tensor imaging of intrinsic density and anisotropy, BioRxiv XXXXXX.<br/>```
+This vectorial wave simulator/reconstructor enabled development of a new label-free imaging method, __uniaxial permittivity tensor imaging (uPTI)__, that reconstructs density (phase) and 3D anisotropy (principal retardance, 3D orientation of the optic axis, and optic sign) of specimens from polarization-resolved images acquired with multiple oblique illuminations.
 
-As an illustration, following figure shows the simulated and reconstructed data of uPTI using `waveorder`: 
+The acquisition, calibration, background correction, reconstruction, and applications of uPTI are described in the following [preprint](https://doi.org/10.1101/2020.12.15.422951):
+
+``` L.-H. Yeh, I. E. Ivanov, B. B. Chhun, S.-M. Guo, E. Hashemi, J. R. Byrum, J. A. Pérez-Bermejo, H. Wang, Y. Yu, P. G. Kazansky, B. R. Conklin, M. H. Han, and S. B. Mehta, "uPTI: uniaxial permittivity tensor imaging of intrinsic density and anisotropy," bioRxiv 2020.12.15.422951 (2020).```
+
+Please cite above paper if you use or adapt this code.
+
+uPTI provides reconstruction of phase, principal retardance, 3D orientation, and optic sign from a polarization-diverse and illumination-diverse acquisition. Following figure summarizes how the acquisition and reconstructions work with simulated images and reconstructed uPTI data using `waveorder`: 
 
 ![Data_flow](Fig_Readme.png)
 
-This package also enables simulations and reconstructions of other label-free imaging (phase, polarization) modality under partially coherent illumination such as:
+When the acquisition is polarization-diverse, illumination-diverse, and depth-diverse, `waveorder` can reconstruct the above measurements across volume. 
 
-1. 2D/3D phase reconstruction with a single brightfield defocused stack (Transport of intensity, TIE)
+In addition to uPTI, `waveorder` also enables simulations and reconstructions of subsets of label-free measurements with subsets of acquired dimensions. 
+
+1. Reconstruction of 2D/3D phase, projected retardance, and in-plane orientation from a brightfield, polarization-diverse, and depth-diverse acquisition ([QLIPP](https://elifesciences.org/articles/55502))
+
+1. Reconstruction of 2D/3D phase from a brightfield, depth-diverse microscope (Transport of intensity, TIE)
     
-2. 2D/3D phase reconstruction with intensities of asymetric illumination (differential phase contrast, DPC)
+2. Reconstruction 2D/3D phase from an illumination-diverse and depth-diverse acquisition (differential phase contrast, DPC)
        
-3. 2D/3D joint phase and polarization (2D orientation) reconstruction with brightfield-illuminated polarization-sensitive intensities (QLIPP)
+
 
 ## Installation
 
