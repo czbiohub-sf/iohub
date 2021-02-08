@@ -108,19 +108,20 @@ class MicromanagerReader:
 
         return os.path.join(folder_, ome_master)
 
-    def get_zarr(self, position=-1):
+    def get_zarr(self, position=0):
         if len(self._positions) == 0:
             self._extract_data(self.master_ome_tiff)
         # if no position specified, return a full zarr array containing all positions
-        if position == -1:
-            print("no position specified, returning full dataset")
-            full_shape = (len(self._positions), ) + self._positions[0].shape
-            working_z = zarr.empty(full_shape, chunks=(1, )*(len(full_shape)-2)+full_shape[-2:])
-            for pos in range(len(self._positions)):
-                working_z[pos] = self._positions[pos]
-                return working_z
-        else:
-            return self._positions[position]
+        # if position == -1:
+        #     print("no position specified, returning full dataset")
+        #     full_shape = (len(self._positions), ) + self._positions[0].shape
+        #     working_z = zarr.empty(full_shape, chunks=(1, )*(len(full_shape)-2)+full_shape[-2:])
+        #     for pos in range(len(self._positions)):
+        #         working_z[pos] = self._positions[pos]
+        #         return working_z
+        # else:
+        #     return self._positions[position]
+        return self._positions[position]
 
     def get_array(self, position=0):
         if len(self._positions) == 0:
@@ -147,7 +148,7 @@ class MicromanagerReader:
 #     non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
 #
 #     r = MicromanagerReader(non_master_old_large_folder)
-#     r.get_zarr(0)
+#     print(r.get_zarr(3))
 #     # print(r.get_master_ome())
 #     # print(r.get_num_positions())
 #
