@@ -103,6 +103,7 @@ class MicromanagerReader:
                 # search for tag corresponding to non-ome-tiff files
                 if not tag_search(root, "BinaryOnly"):
                     ome_master = file
+                    break
                 else:
                     continue
 
