@@ -2,11 +2,32 @@ import numpy as np
 import os
 import zarr
 from tifffile import TiffFile
+from copy import copy
+import logging
+
+
+# replicate from aicsimageio logging mechanism
+###############################################################################
+
+# modify the logging.ERROR level lower for more info
+# CRITICAL
+# ERROR
+# WARNING
+# INFO
+# DEBUG
+# NOTSET
+logging.basicConfig(
+    level=logging.ERROR,
+    format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
+)
+log = logging.getLogger(__name__)
+
+###############################################################################
 
 
 class MicromanagerReader:
 
-    def __init__(self, folder):
+    def __init__(self, folder, extract_data=False):
         """
         loads ome-tiff files in folder into zarr or numpy arrays
         Strategy:
@@ -29,8 +50,10 @@ class MicromanagerReader:
         self.chnames = []
 
         self.master_ome_tiff = self._get_master_ome_tiff(folder)
-        print(self.master_ome_tiff)
         self._set_mm_meta()
+
+        if extract_data:
+            self._extract_data(self.master_ome_tiff)
 
     def _set_mm_meta(self):
         with TiffFile(self.master_ome_tiff) as tif:
@@ -39,11 +62,10 @@ class MicromanagerReader:
             if self.mm_meta['Summary']['Positions'] > 1:
                 self.stage_positions = []
                 for p in range(self.mm_meta['Summary']['Positions']):
-                    print(f"appending {self.mm_meta['Summary']['StagePositions'][p]}")
-                    self.stage_positions.append(self.mm_meta['Summary']['StagePositions'][p])
+                    pos = self._simplify_stage_position(self.mm_meta['Summary']['StagePositions'][p])
+                    self.stage_positions.append(pos)
 
             for ch in self.mm_meta['Summary']['ChNames']:
-                print(f"appending {ch}")
                 self.chnames.append(ch)
 
             self.height = self.mm_meta['Summary']['Height']
@@ -52,12 +74,25 @@ class MicromanagerReader:
             self.slices = self.mm_meta['Summary']['Slices']
             self.channels = self.mm_meta['Summary']['Channels']
 
+    def _simplify_stage_position(self, stage_pos: dict):
+        """
+        flattens the nested dictionary structure of stage_pos and removes superfluous keys
+        :param stage_pos: dictionary containing a single position's device info
+        :return:
+        """
+        out = copy(stage_pos)
+        out.pop('DevicePositions')
+        for dev_pos in stage_pos['DevicePositions']:
+            out.update({dev_pos['Device']: dev_pos['Position_um']})
+        return out
+
     def _extract_data(self, master_ome):
         """
         extract all series from ome-tiff and place into dict of (pos: zarr)
         :param master_ome: full path to master OME-tiff
         :return:
         """
+        log.info(f"extracting data from {master_ome}")
         with TiffFile(master_ome) as tif:
             for idx, tiffpageseries in enumerate(tif.series):
                 self._positions[idx] = zarr.open(tiffpageseries.aszarr(), mode='r')
@@ -79,13 +114,12 @@ class MicromanagerReader:
             """
             for element in root_:
                 if element.tag.endswith(tag_name):
-                    # todo: question: can we load a full OME-XML from companion file rather than search all files?
-                    print(f'OME series: not an ome-tiff master file')
+                    log.warning(f'OME series: not an ome-tiff master file')
                     return True
             return False
 
         for file in os.listdir(folder_):
-            print(f"checking {file} for ome-master records")
+            log.info(f"checking {file} for ome-master records")
             if not file.endswith('.ome.tif'):
                 continue
             with TiffFile(os.path.join(folder_, file)) as tiff:
@@ -98,9 +132,9 @@ class MicromanagerReader:
                         omexml = omexml.decode(errors='ignore').encode()
                         root = etree.fromstring(omexml)
                     except Exception as ex:
-                        print(f"Exception while parsing root from omexml: {ex}")
+                        log.error(f"Exception while parsing root from omexml: {ex}")
 
-                # search for tag corresponding to non-ome-tiff files
+                # search for tag corresponding to non-ome-tiff-master files
                 if not tag_search(root, "BinaryOnly"):
                     ome_master = file
                     break
@@ -136,23 +170,23 @@ class MicromanagerReader:
         return len(self._positions)
 
 
-# def main():
-#     no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
-#     # multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
-#
-#     master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-#     non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-#     non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
-#     non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
-#
-#     master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-#     non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-#
-#     r = MicromanagerReader(non_master_old_large_folder)
-#     print(r.get_zarr(3))
-#     # print(r.get_master_ome())
-#     # print(r.get_num_positions())
-#
-#
-# if __name__ == "__main__":
-#     main()
+def main():
+    no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
+    # multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
+
+    master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+    non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+    non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
+    non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
+
+    master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+    non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+
+    r = MicromanagerReader(non_master_old_large_folder)
+    print(r.get_zarr(3))
+    # print(r.get_master_ome())
+    # print(r.get_num_positions())
+
+
+if __name__ == "__main__":
+    main()
