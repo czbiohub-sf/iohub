@@ -17,7 +17,7 @@ import logging
 # DEBUG
 # NOTSET
 logging.basicConfig(
-    level=logging.ERROR,
+    level=logging.DEBUG,
     format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
 )
 log = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 class MicromanagerReader:
 
-    def __init__(self, folder, extract_data=False):
+    def __init__(self, folder, extract_data=False, log_level=logging.ERROR):
         """
         loads ome-tiff files in folder into zarr or numpy arrays
         Strategy:
@@ -39,6 +39,12 @@ class MicromanagerReader:
         :param reader: tifffile or aicsimageio
         """
 
+        logging.basicConfig(
+            level=log_level,
+            format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
+        )
+        self.log = logging.getLogger(__name__)
+
         self._positions = {}
         self.mm_meta = None
         self.stage_positions = 0
@@ -47,6 +53,7 @@ class MicromanagerReader:
         self.frames = 0
         self.slices = 0
         self.channels = 0
+        self.shape = (self.frames, self.slices, self.channels, self.height, self.width)
         self.chnames = []
 
         self.master_ome_tiff = self._get_master_ome_tiff(folder)
@@ -170,23 +177,26 @@ class MicromanagerReader:
         return len(self._positions)
 
 
-def main():
-    no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
-    # multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
-
-    master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-    non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-    non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
-    non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
-
-    master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-    non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-
-    r = MicromanagerReader(non_master_old_large_folder)
-    print(r.get_zarr(3))
-    # print(r.get_master_ome())
-    # print(r.get_num_positions())
-
-
-if __name__ == "__main__":
-    main()
+# def main():
+#     no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
+#     # multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
+#
+#     master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+#     non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+#     non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
+#     non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
+#
+#     master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+#     non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+#
+#     ivan_dataset = '/Volumes/comp_micro/rawdata/falcon/Ivan/20210128 HEK CAAX SiRActin/FOV1_1'
+#     ivan_file = 'FOV1_1_MMStack_Default_23.ome.tif'
+#
+#     r = MicromanagerReader(ivan_dataset)
+#     print(r.get_zarr(3))
+#     # print(r.get_master_ome())
+#     # print(r.get_num_positions())
+#
+#
+# if __name__ == "__main__":
+#     main()
