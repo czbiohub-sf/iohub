@@ -170,11 +170,11 @@ class MicromanagerReader:
             self._extract_data(self.master_ome_tiff)
         return np.array(self._positions[position])
 
-    def get_master_ome(self):
-        return self.master_ome_tiff
+    # def get_master_ome(self):
+    #     return self.master_ome_tiff
 
-    def get_num_positions(self):
-        return len(self._positions)
+    # def get_num_positions(self):
+    #     return len(self._positions)
 
 
 # def main():
