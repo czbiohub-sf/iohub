@@ -60,7 +60,7 @@ class MicromanagerReader:
         self._set_mm_meta()
 
         if extract_data:
-            self._extract_data(self.master_ome_tiff)
+            self.extract_data(self.master_ome_tiff)
 
     def _set_mm_meta(self):
         with TiffFile(self.master_ome_tiff) as tif:
@@ -93,7 +93,7 @@ class MicromanagerReader:
             out.update({dev_pos['Device']: dev_pos['Position_um']})
         return out
 
-    def _extract_data(self, master_ome):
+    def extract_data(self, master_ome):
         """
         extract all series from ome-tiff and place into dict of (pos: zarr)
         :param master_ome: full path to master OME-tiff
@@ -150,31 +150,37 @@ class MicromanagerReader:
 
         return os.path.join(folder_, ome_master)
 
-    def get_zarr(self, position=0):
-        if len(self._positions) == 0:
-            self._extract_data(self.master_ome_tiff)
-        # if no position specified, return a full zarr array containing all positions
-        # if position == -1:
-        #     print("no position specified, returning full dataset")
-        #     full_shape = (len(self._positions), ) + self._positions[0].shape
-        #     working_z = zarr.empty(full_shape, chunks=(1, )*(len(full_shape)-2)+full_shape[-2:])
-        #     for pos in range(len(self._positions)):
-        #         working_z[pos] = self._positions[pos]
-        #         return working_z
-        # else:
-        #     return self._positions[position]
+    def get_zarr(self, position):
+        """
+        return a zarr array for a given position
+        :param position: int
+            position (aka ome-tiff scene)
+        :return: zarr.array
+        """
+        if not self._positions:
+            self.extract_data(self.master_ome_tiff)
         return self._positions[position]
 
-    def get_array(self, position=0):
-        if len(self._positions) == 0:
-            self._extract_data(self.master_ome_tiff)
+    def get_array(self, position):
+        """
+        return a numpy array for a given position
+        :param position: int
+            position (aka ome-tiff scene)
+        :return: np.ndarray
+        """
+        if not self._positions:
+            self.extract_data(self.master_ome_tiff)
         return np.array(self._positions[position])
 
-    # def get_master_ome(self):
-    #     return self.master_ome_tiff
-
-    # def get_num_positions(self):
-    #     return len(self._positions)
+    def get_num_positions(self):
+        """
+        get total number of scenes referenced in ome-tiff metadata
+        :return: int
+        """
+        if self._positions:
+            return len(self._positions)
+        else:
+            log.error("ome-tiff scenes not read.")
 
 
 # def main():
