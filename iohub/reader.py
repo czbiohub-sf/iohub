@@ -27,16 +27,21 @@ log = logging.getLogger(__name__)
 
 class MicromanagerReader:
 
-    def __init__(self, folder, extract_data=False, log_level=logging.ERROR):
+    def __init__(self, folder: str, extract_data: bool = False, log_level: int = logging.ERROR):
         """
-        loads ome-tiff files in folder into zarr or numpy arrays
+        reads ome-tiff files into zarr or numpy arrays
         Strategy:
-            1. read all files in folder
-            2. search for the file whose omexml does not contain the element tag "BinaryOnly"-> this is the master ome-tiff
-            3. each series represents a micro-manager stage position.  upon call for data, assign this data to a dict
+            1. search the file's omexml metadata for the "master file" location
+            2. load the master file
+            3. read micro-manager metadata into class attributes
 
-        :param folder: folder containing all ome-tiff files
-        :param reader: tifffile or aicsimageio
+        :param folder: str
+            folder or file containing all ome-tiff files
+        :param extract_data: bool
+            True if ome_series should be extracted immediately
+        :param log_level: int
+            One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
+
         """
 
         logging.basicConfig(
@@ -117,37 +122,44 @@ class MicromanagerReader:
 
         ome_master = None
 
-        for file in os.listdir(folder_):
-            log.info(f"checking {file} for ome-master records")
-            if not file.endswith('.ome.tif'):
-                continue
+        if os.path.isdir(folder_):
+            dirname = folder_
+            file = [f for f in os.listdir(folder_) if ".ome.tif" in f][0]
+        elif os.path.isfile(folder_) and folder_.endswith('.ome.tif'):
+            dirname = os.path.dirname(folder_)
+            file = folder_
+        else:
+            raise ValueError("supplied folder contains no ome.tif or is itself not an ome.tif")
 
-            with TiffFile(os.path.join(folder_, file)) as tiff:
-                omexml = tiff.pages[0].description
-                # get omexml root from first page
+        log.info(f"checking {file} for ome-master records")
+
+        with TiffFile(os.path.join(dirname, file)) as tiff:
+            omexml = tiff.pages[0].description
+            # get omexml root from first page
+            try:
+                root = etree.fromstring(omexml)
+            except etree.ParseError as exc:
                 try:
+                    omexml = omexml.decode(errors='ignore').encode()
                     root = etree.fromstring(omexml)
-                except etree.ParseError as exc:
-                    try:
-                        omexml = omexml.decode(errors='ignore').encode()
-                        root = etree.fromstring(omexml)
-                    except Exception as ex:
-                        log.error(f"Exception while parsing root from omexml: {ex}")
+                except Exception as ex:
+                    log.error(f"Exception while parsing root from omexml: {ex}")
 
-                for element in root:
-                    # MetadataFile attribute identifies master-ome from a BinaryOnly non-master file
-                    if element.tag.endswith('BinaryOnly'):
-                        log.warning(f'OME series: BinaryOnly: not an ome-tiff master file')
-                        ome_master = element.attrib['MetadataFile']
-                        return os.path.join(folder_, ome_master)
-                    # Name attribute identifies master-ome from a master-ome file.
-                    elif element.tag.endswith("Image"):
-                        log.warning(f'OME series: Master-ome found')
-                        ome_master = element.attrib['Name'] + ".ome.tif"
-                        return os.path.join(folder_, ome_master)
+            # search all elements for tags that identify ome-master tiff
+            for element in root:
+                # MetadataFile attribute identifies master-ome from a BinaryOnly non-master file
+                if element.tag.endswith('BinaryOnly'):
+                    log.warning(f'OME series: BinaryOnly: not an ome-tiff master file')
+                    ome_master = element.attrib['MetadataFile']
+                    return os.path.join(dirname, ome_master)
+                # Name attribute identifies master-ome from a master-ome file.
+                elif element.tag.endswith("Image"):
+                    log.warning(f'OME series: Master-ome found')
+                    ome_master = element.attrib['Name'] + ".ome.tif"
+                    return os.path.join(dirname, ome_master)
 
-                if not ome_master:
-                    raise AttributeError("no ome-master file found")
+            if not ome_master:
+                raise AttributeError("no ome-master file found")
 
     def get_zarr(self, position):
         """
