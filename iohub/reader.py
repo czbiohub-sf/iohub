@@ -65,7 +65,7 @@ class MicromanagerReader:
         self._set_mm_meta()
 
         if extract_data:
-            self.extract_data(self.master_ome_tiff)
+            self._create_stores(self.master_ome_tiff)
 
     def _set_mm_meta(self):
         with TiffFile(self.master_ome_tiff) as tif:
@@ -98,7 +98,7 @@ class MicromanagerReader:
             out.update({dev_pos['Device']: dev_pos['Position_um']})
         return out
 
-    def extract_data(self, master_ome):
+    def _create_stores(self, master_ome):
         """
         extract all series from ome-tiff and place into dict of (pos: zarr)
         :param master_ome: full path to master OME-tiff
@@ -169,7 +169,7 @@ class MicromanagerReader:
         :return: zarr.array
         """
         if not self._positions:
-            self.extract_data(self.master_ome_tiff)
+            self._create_stores(self.master_ome_tiff)
         return self._positions[position]
 
     def get_array(self, position):
@@ -180,7 +180,7 @@ class MicromanagerReader:
         :return: np.ndarray
         """
         if not self._positions:
-            self.extract_data(self.master_ome_tiff)
+            self._create_stores(self.master_ome_tiff)
         return np.array(self._positions[position])
 
     def get_num_positions(self):
