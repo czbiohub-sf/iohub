@@ -115,20 +115,13 @@ class MicromanagerReader:
 
         from xml.etree import ElementTree as etree  # delayed import
 
-        def tag_search(root_, tag_name='BinaryOnly'):
-            """
-            returns True if tag_name is present
-            """
-            for element in root_:
-                if element.tag.endswith(tag_name):
-                    log.warning(f'OME series: not an ome-tiff master file')
-                    return True
-            return False
+        ome_master = None
 
         for file in os.listdir(folder_):
             log.info(f"checking {file} for ome-master records")
             if not file.endswith('.ome.tif'):
                 continue
+
             with TiffFile(os.path.join(folder_, file)) as tiff:
                 omexml = tiff.pages[0].description
                 # get omexml root from first page
@@ -141,14 +134,20 @@ class MicromanagerReader:
                     except Exception as ex:
                         log.error(f"Exception while parsing root from omexml: {ex}")
 
-                # search for tag corresponding to non-ome-tiff-master files
-                if not tag_search(root, "BinaryOnly"):
-                    ome_master = file
-                    break
-                else:
-                    continue
+                for element in root:
+                    # MetadataFile attribute identifies master-ome from a BinaryOnly non-master file
+                    if element.tag.endswith('BinaryOnly'):
+                        log.warning(f'OME series: BinaryOnly: not an ome-tiff master file')
+                        ome_master = element.attrib['MetadataFile']
+                        return os.path.join(folder_, ome_master)
+                    # Name attribute identifies master-ome from a master-ome file.
+                    elif element.tag.endswith("Image"):
+                        log.warning(f'OME series: Master-ome found')
+                        ome_master = element.attrib['Name'] + ".ome.tif"
+                        return os.path.join(folder_, ome_master)
 
-        return os.path.join(folder_, ome_master)
+                if not ome_master:
+                    raise AttributeError("no ome-master file found")
 
     def get_zarr(self, position):
         """
