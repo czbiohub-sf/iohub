@@ -58,8 +58,7 @@ class MicromanagerReader:
         self.frames = 0
         self.slices = 0
         self.channels = 0
-        self.shape = (self.frames, self.slices, self.channels, self.height, self.width)
-        self.chnames = []
+        self.channel_names = []
 
         self.master_ome_tiff = self._get_master_ome_tiff(folder)
         self._set_mm_meta()
@@ -78,7 +77,7 @@ class MicromanagerReader:
                     self.stage_positions.append(pos)
 
             for ch in self.mm_meta['Summary']['ChNames']:
-                self.chnames.append(ch)
+                self.channel_names.append(ch)
 
             self.height = self.mm_meta['Summary']['Height']
             self.width = self.mm_meta['Summary']['Width']
@@ -111,8 +110,9 @@ class MicromanagerReader:
 
     def _get_master_ome_tiff(self, folder_):
         """
-        search all ome.tif in directory
-        check the omexml for element tag corresponding to companion files (not-master-ome)
+        given either a single ome.tiff or a folder of ome.tiffs
+            load the omexml metadata for a single file and
+            search for the element attribute corresponding to the master file
 
         :param folder_: full path to folder containing images
         :return: full path to master-ome tiff
@@ -129,7 +129,7 @@ class MicromanagerReader:
             dirname = os.path.dirname(folder_)
             file = folder_
         else:
-            raise ValueError("supplied folder contains no ome.tif or is itself not an ome.tif")
+            raise ValueError("supplied path contains no ome.tif or is itself not an ome.tif")
 
         log.info(f"checking {file} for ome-master records")
 
@@ -192,6 +192,14 @@ class MicromanagerReader:
             return len(self._positions)
         else:
             log.error("ome-tiff scenes not read.")
+
+    @property
+    def shape(self):
+        """
+        return the underlying data shape as a tuple
+        :return: tuple
+        """
+        return self.frames, self.slices, self.channels, self.height, self.width
 
 
 # def main():
