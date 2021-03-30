@@ -15,9 +15,9 @@ use zarr.copy_store to copy memory store to directory store
 
 """
 
-# todo: how should we supply data?  as individual arrays?
-# todo: don't forget that the user should be allowed to supply np arrays and zarr arrays
-# todo: change to persistent arrays
+# todo: implement hierarchies / groups
+# todo: add checks for inconsistent data shapes
+# todo: change to persistent arrays?
 
 
 # initialize upfront -- with file path and dimensions -- use zeros and replace later
@@ -43,7 +43,6 @@ class WaveorderWriter:
         datatype is one of "stokes" or "physical"
         :param save_dir:
         :param datatype:
-        :param chunksize:
         """
 
         self._check_is_dir(save_dir)
@@ -65,7 +64,8 @@ class WaveorderWriter:
             self.save_dir = path
 
     def add_store(self, name: str):
-        # Add Zarr store to existing save directory
+        # Add Zarr store to existing save directory,
+        # if store already exists, open that store
 
         path = os.path.join(self.save_dir, name)
 
@@ -80,17 +80,20 @@ class WaveorderWriter:
 
     def set_zarr_parameters(self, shape, chunks, **kwargs):
         # use kwargs to assign zarr array parameters
-        self.__builder.init_zarr()
+        # self.__builder.init_zarr()
         pass
 
     def set_mm_metadata(self, meta):
-        self.__builder.init_meta()
+        # self.__builder.init_meta()
         pass
 
     def set_save_dir(self, path):
         self._check_is_dir(path)
 
     def set_store(self, path):
+
+        # Change to an existing store,
+        # if store doesn't exist, raise error
 
         if os.path.exists(path):
             print(f'Opening existing store at {path}')
@@ -123,6 +126,18 @@ class WaveorderWriter:
     #     pass
 
     def write(self, data, P, T, Z):
+        """
+        Wrapper that calls the builder's write function.
+        Will write to existing array of zeros and place
+        data over the specified indicies
+
+        :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
+        :param P: (tuple or value), index or index range of the position dimension
+        :param T: (tuple or value), index or index range of the time dimension
+        :param Z: (tuple or value), index or index range of the Z dimension
+
+        """
+
         self.__builder.init_zarr(self.store)
         self.__builder.write(data, P, T, Z)
         pass
@@ -161,9 +176,12 @@ class PhysicalZarr(Builder):
 
         shape = np.shape(data)
 
+        # Check if the array of zeros has been initialized
         if self.__pzarr.__len__() == 0:
             raise ValueError('Array not initialized')
 
+        # Look through different indexing conditions
+        # and index accordingly
         if len(P) == 1 and len(T) == 1 and len(Z) == 1:
 
             if len(shape) > 2:
@@ -193,13 +211,16 @@ class PhysicalZarr(Builder):
             self.__pzarr['array'][P[0]:P[1], T[0], Z[0]] = data
 
 
+    # Placeholder function for future compressor customization
     def init_compressor(self, **kwargs):
         self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
 
+    # Initialize zero array
     def init_array(self, store, data_shape, chunk_size, dtype):
         if self.__compressor == None:
             self.init_compressor()
 
+        # Make sure data matches OME zarr structure
         if len(data_shape) != 5:
             raise ValueError('Data shape must be (P, T, Z, Y, X)')
 
