@@ -2,8 +2,14 @@ import numpy as np
 import os
 import zarr
 from tifffile import TiffFile
+import tifffile as tiff
 from copy import copy
 import logging
+
+# libraries for singlepage tiff sequence reading
+import glob
+import json
+import natsort
 
 
 # replicate from aicsimageio logging mechanism
@@ -16,18 +22,102 @@ import logging
 # INFO
 # DEBUG
 # NOTSET
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
-)
-log = logging.getLogger(__name__)
+# logging.basicConfig(
+#     level=logging.DEBUG,
+#     format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
+# )
+# log = logging.getLogger(__name__)
 
 ###############################################################################
 
 
 class MicromanagerReader:
 
-    def __init__(self, folder: str, extract_data: bool = False, log_level: int = logging.ERROR):
+    def __init__(self,
+                 src: str,
+                 data_type: str,
+                 extract_data: bool = False,
+                 log_level: int = logging.ERROR):
+        """
+        reads ome-tiff files into zarr or numpy arrays
+        Strategy:
+            1. search the file's omexml metadata for the "master file" location
+            2. load the master file
+            3. read micro-manager metadata into class attributes
+
+        :param src: str
+            folder or file containing all ome-tiff files
+        :param data_type: str
+            whether data is 'ometiff', 'singlepagetiff', 'zarr'
+        :param extract_data: bool
+            True if ome_series should be extracted immediately
+        :param log_level: int
+            One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
+
+        """
+
+        logging.basicConfig(
+            level=log_level,
+            format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
+        )
+        self.log = logging.getLogger(__name__)
+
+        # identify data structure type
+        if data_type == 'ometiff':
+            self.reader = OmeTiffReader(src, extract_data)
+        elif data_type == 'singlepagetiff':
+            self.reader = MicromanagerSequenceReader(src, extract_data)
+        else:
+            raise NotImplementedError()
+
+        self.mm_meta = self.reader.mm_meta
+        self.stage_positions = self.reader.stage_positions
+        self.height = self.reader.height
+        self.width = self.reader.width
+        self.frames = self.reader.frames
+        self.slices = self.reader.slices
+        self.channels = self.reader.channels
+        self.channel_names = self.reader.channel_names
+
+    def get_zarr(self, position):
+        """
+        return a zarr array for a given position
+        :param position: int
+            position (aka ome-tiff scene)
+        :return: zarr.array
+        """
+        return self.reader.get_zarr(position)
+
+    def get_array(self, position):
+        """
+        return a numpy array for a given position
+        :param position: int
+            position (aka ome-tiff scene)
+        :return: np.ndarray
+        """
+        return self.reader.get_array(position)
+
+    def get_num_positions(self):
+        """
+        get total number of scenes referenced in ome-tiff metadata
+        :return: int
+        """
+        return self.reader.get_num_positions()
+
+    @property
+    def shape(self):
+        """
+        return the underlying data shape as a tuple
+        :return: tuple
+        """
+        return self.frames, self.slices, self.channels, self.height, self.width
+
+
+class OmeTiffReader:
+
+    def __init__(self,
+                 folder: str,
+                 extract_data: bool = False):
         """
         reads ome-tiff files into zarr or numpy arrays
         Strategy:
@@ -44,13 +134,9 @@ class MicromanagerReader:
 
         """
 
-        logging.basicConfig(
-            level=log_level,
-            format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
-        )
         self.log = logging.getLogger(__name__)
 
-        self._positions = {}
+        self.positions = {}
         self.mm_meta = None
         self.stage_positions = 0
         self.height = 0
@@ -103,10 +189,10 @@ class MicromanagerReader:
         :param master_ome: full path to master OME-tiff
         :return:
         """
-        log.info(f"extracting data from {master_ome}")
+        self.log.info(f"extracting data from {master_ome}")
         with TiffFile(master_ome) as tif:
             for idx, tiffpageseries in enumerate(tif.series):
-                self._positions[idx] = zarr.open(tiffpageseries.aszarr(), mode='r')
+                self.positions[idx] = zarr.open(tiffpageseries.aszarr(), mode='r')
 
     def _get_master_ome_tiff(self, folder_):
         """
@@ -131,7 +217,7 @@ class MicromanagerReader:
         else:
             raise ValueError("supplied path contains no ome.tif or is itself not an ome.tif")
 
-        log.info(f"checking {file} for ome-master records")
+        self.log.info(f"checking {file} for ome-master records")
 
         with TiffFile(os.path.join(dirname, file)) as tiff:
             omexml = tiff.pages[0].description
@@ -143,18 +229,18 @@ class MicromanagerReader:
                     omexml = omexml.decode(errors='ignore').encode()
                     root = etree.fromstring(omexml)
                 except Exception as ex:
-                    log.error(f"Exception while parsing root from omexml: {ex}")
+                    self.log.error(f"Exception while parsing root from omexml: {ex}")
 
             # search all elements for tags that identify ome-master tiff
             for element in root:
                 # MetadataFile attribute identifies master-ome from a BinaryOnly non-master file
                 if element.tag.endswith('BinaryOnly'):
-                    log.warning(f'OME series: BinaryOnly: not an ome-tiff master file')
+                    self.log.warning(f'OME series: BinaryOnly: not an ome-tiff master file')
                     ome_master = element.attrib['MetadataFile']
                     return os.path.join(dirname, ome_master)
                 # Name attribute identifies master-ome from a master-ome file.
                 elif element.tag.endswith("Image"):
-                    log.warning(f'OME series: Master-ome found')
+                    self.log.warning(f'OME series: Master-ome found')
                     ome_master = element.attrib['Name'] + ".ome.tif"
                     return os.path.join(dirname, ome_master)
 
@@ -168,9 +254,9 @@ class MicromanagerReader:
             position (aka ome-tiff scene)
         :return: zarr.array
         """
-        if not self._positions:
+        if not self.positions:
             self._create_stores(self.master_ome_tiff)
-        return self._positions[position]
+        return self.positions[position]
 
     def get_array(self, position):
         """
@@ -179,19 +265,19 @@ class MicromanagerReader:
             position (aka ome-tiff scene)
         :return: np.ndarray
         """
-        if not self._positions:
+        if not self.positions:
             self._create_stores(self.master_ome_tiff)
-        return np.array(self._positions[position])
+        return np.array(self.positions[position])
 
     def get_num_positions(self):
         """
         get total number of scenes referenced in ome-tiff metadata
         :return: int
         """
-        if self._positions:
-            return len(self._positions)
+        if self.positions:
+            return len(self.positions)
         else:
-            log.error("ome-tiff scenes not read.")
+            self.log.error("ome-tiff scenes not read.")
 
     @property
     def shape(self):
@@ -202,26 +288,217 @@ class MicromanagerReader:
         return self.frames, self.slices, self.channels, self.height, self.width
 
 
-# def main():
-#     no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
-#     # multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
-#
-#     master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-#     non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-#     non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
-#     non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
-#
-#     master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-#     non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-#
-#     ivan_dataset = '/Volumes/comp_micro/rawdata/falcon/Ivan/20210128 HEK CAAX SiRActin/FOV1_1'
-#     ivan_file = 'FOV1_1_MMStack_Default_23.ome.tif'
-#
-#     r = MicromanagerReader(ivan_dataset)
-#     print(r.get_zarr(3))
-#     # print(r.get_master_ome())
-#     # print(r.get_num_positions())
-#
-#
-# if __name__ == "__main__":
-#     main()
+class MicromanagerSequenceReader:
+
+    def __init__(self,
+                 folder,
+                 extract_data):
+
+        if not os.path.isdir(folder):
+            raise NotImplementedError("supplied path for singlepage tiff sequence reader is not a folder")
+
+        self.log = logging.getLogger(__name__)
+        self.positions = {}
+        self.mm_meta = None
+        self.stage_positions = 0
+        self.height = 0
+        self.width = 0
+        self.frames = 0
+        self.slices = 0
+        self.channels = 0
+        self.channel_names = []
+
+        self.coord_to_filename = {}
+
+        # identify type of subdirectory
+        sub_dirs = self._get_sub_dirs(folder)
+        if sub_dirs:
+            pos_path = os.path.join(folder, sub_dirs[0])
+        else:
+            raise AttributeError("supplied folder does not contain position or default subdirectories")
+
+        # pull one metadata sample and extract experiment dimensions
+        metadata_path = os.path.join(pos_path, 'metadata.txt')
+        with open(metadata_path, 'r') as f:
+            self.mm_meta = json.load(f)
+
+        self.mm_version = self.mm_meta['Summary']['MicroManagerVersion']
+        if self.mm_version == '1.4.22':
+            self._mm1_meta_parser()
+        elif 'beta' in self.mm_version:
+            self._mm2beta_meta_parser()
+        elif 'gamma' in self.mm_version:
+            self._mm2gamma_meta_parser()
+        else:
+            raise NotImplementedError(
+                f'Current MicroManager reader only supports version 1.4.22 and 2.0 but {self.mm_version} was detected')
+
+        # create coordinate to filename maps
+        self.coord_to_filename = self.read_tiff_series(folder)
+
+        if extract_data:
+            self._create_stores()
+
+    def get_zarr(self, position_):
+        if not self.positions:
+            self._create_stores()
+        return self.positions[position_]
+
+    def get_array(self, position_):
+        if not self.positions:
+            self._create_stores()
+        return np.array(self.positions[position_])
+
+    def get_num_positions(self):
+        if self.positions:
+            return len(self.positions)
+        else:
+            self.log.error("singlepage tiffs not loaded")
+
+    def _create_stores(self):
+        """
+        extract all singlepage tiffs at each coordinate and place them in a zarr array
+        coordinates are of shape = (pos, time, channel, z)
+
+        :return:
+        """
+        self.log.info("")
+        z = zarr.zeros(shape=(self.frames,
+                              self.channels,
+                              self.slices,
+                              self.height,
+                              self.width),
+                       chunks=(1,
+                               1,
+                               1,
+                               self.height,
+                               self.width))
+        for c, fn in self.coord_to_filename.items():
+            z[c[1], c[2], c[3]] = zarr.open(tiff.imread(fn, aszarr=True))
+            self.positions[c[0]] = z
+
+    def read_tiff_series(self, folder: str):
+        """
+        given a folder containing position subfolders, each of which contains
+            single-page-tiff series acquired in mm2.0 gamma, parse the metadata
+            to map image coordinates to filepaths/names
+        :param folder: str
+        :return: dict
+            keys are coordinates and values are filenames.  Coordinates follow (p, t, c, z) indexing.
+        """
+        positions = [p for p in os.listdir(folder) if os.path.isdir(os.path.join(folder, p))]
+        if not positions:
+            raise FileNotFoundError("no position subfolder found in supplied folder")
+
+        metadatas = [os.path.join(folder, position, 'metadata.txt') for position in positions]
+        if not metadatas:
+            raise FileNotFoundError("no metadata.txt file found in position directories")
+
+        coord_filename_map = {}
+        for idx, metadata in enumerate(metadatas):
+            with open(metadata, 'r+') as m:
+                j = json.load(m)
+                coord_filename_map.update(self._extract_coord_to_filename(j, folder, positions[idx]))
+
+        return coord_filename_map
+
+    def _extract_coord_to_filename(self, json_, parent_folder, position=None):
+        coords = set()
+        meta = dict()
+
+        # separate coords from meta
+        for element in json_.keys():
+            # present for mm2-gamma metadata
+            if "Coords" in element:
+                coords.add(element)
+            if "Metadata" in element:
+                meta[element.split('-')[2]] = element
+
+            # present in mm1.4.22 metadata
+            if "FrameKey" in element:
+                coords.add(element)
+
+        # build a dict of coord to filename maps
+        coord_to_filename = dict()
+        for c in coords:
+            # indices common to both mm2 and mm1
+            ch_idx = json_[c]['ChannelIndex']
+            pos_idx = json_[c]['PositionIndex']
+            time_idx = json_[c]['FrameIndex']
+            z_idx = json_[c]['SliceIndex']
+
+            # extract filepath for this coordinate
+            try:
+                # for mm2-gamma. filename contains position folder
+                if c.split('-')[2] in meta:
+                    filepath = json_[meta[c.split('-')[2]]]['FileName']
+                # for mm1, file name does not contain position folder
+                else:
+                    filepath = json_[c]['FileName']
+                    filepath = os.path.join(position, filepath)  # position name is not present in metadata
+            except KeyError as ke:
+                self.log.error(f"metadata for supplied image coordinate {c} not found")
+                raise ke
+
+            coordinate = (pos_idx, time_idx, ch_idx, z_idx)
+            coord_to_filename[coordinate] = os.path.join(parent_folder, filepath)
+
+        return coord_to_filename
+
+    def _get_sub_dirs(self, f):
+        sub_dir_path = glob.glob(os.path.join(f, '*/'))
+        sub_dir_name = [os.path.split(subdir[:-1])[1] for subdir in sub_dir_path]
+        #    assert subDirName, 'No sub directories found'
+        return natsort.natsorted(sub_dir_name)
+
+    def _mm1_meta_parser(self):
+        self.width = self.mm_meta['Summary']['Width']
+        self.height = self.mm_meta['Summary']['Height']
+        self.frames = self.mm_meta['Summary']['Frames']
+        self.slices = self.mm_meta['Summary']['Slices']
+        self.channels = self.mm_meta['Summary']['Channels']
+
+    def _mm2beta_meta_parser(self):
+        self.width = int(self.mm_meta['Summary']['UserData']['Width']['PropVal'])
+        self.height = int(self.mm_meta['Summary']['UserData']['Height']['PropVal'])
+        self.time_stamp = self.mm_meta['Summary']['StartTime']
+
+    def _mm2gamma_meta_parser(self):
+        keys_list = list(self.mm_meta.keys())
+        if 'FrameKey-0-0-0' in keys_list[1]:
+            roi_string = self.mm_meta[keys_list[1]]['ROI']
+            self.width = int(roi_string.split('-')[2])
+            self.height = int(roi_string.split('-')[3])
+        elif 'Metadata-' in keys_list[2]:
+            self.width = self.mm_meta[keys_list[2]]['Width']
+            self.height = self.mm_meta[keys_list[2]]['Height']
+        else:
+            raise ValueError('Metadata file incompatible with metadata reader')
+        self.frames = self.mm_meta['Summary']['Frames']
+        self.slices = self.mm_meta['Summary']['Slices']
+        self.channels = self.mm_meta['Summary']['Channels']
+
+
+def main():
+    no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
+    # multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
+
+    master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+    non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+    non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
+    non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
+
+    master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+    non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+
+    ivan_dataset = '/Volumes/comp_micro/rawdata/falcon/Ivan/20210128 HEK CAAX SiRActin/FOV1_1'
+    ivan_file = 'FOV1_1_MMStack_Default_23.ome.tif'
+
+    r = MicromanagerReader(ivan_dataset)
+    print(r.get_zarr(3))
+    # print(r.get_master_ome())
+    # print(r.get_num_positions())
+
+
+if __name__ == "__main__":
+    main()
