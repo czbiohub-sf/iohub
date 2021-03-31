@@ -352,26 +352,28 @@ class MicromanagerSequenceReader:
         # create coordinate to filename maps
         self.coord_to_filename = self.read_tiff_series(folder)
 
+        # todo: consider iterating over all positions.  Doable once we add a metadata search for stage positions
         if extract_data:
-            self._create_stores()
+            self._create_stores(0)
 
     def get_zarr(self, position_):
-        if not self.positions:
-            self._create_stores()
+        if position_ not in self.positions.keys():
+            self._create_stores(position_)
         return self.positions[position_]
 
     def get_array(self, position_):
-        if not self.positions:
-            self._create_stores()
+        if position_ not in self.positions.keys():
+            self._create_stores(position_)
         return np.array(self.positions[position_])
 
     def get_num_positions(self):
+        self.log.warning("num positions for singlepage tiff reader is ambiguous.  only loaded positions are reported")
         if self.positions:
             return len(self.positions)
         else:
             self.log.error("singlepage tiffs not loaded")
 
-    def _create_stores(self):
+    def _create_stores(self, p):
         """
         extract all singlepage tiffs at each coordinate and place them in a zarr array
         coordinates are of shape = (pos, time, channel, z)
@@ -389,9 +391,10 @@ class MicromanagerSequenceReader:
                                self.height,
                                self.width))
         for c, fn in self.coord_to_filename.items():
-            self.log.info(f"reading coord = {c} from filename = {fn}")
-            z[c[1], c[2], c[3]] = zarr.open(tiff.imread(fn, aszarr=True))
-            self.positions[c[0]] = z
+            if c[0] == p:
+                self.log.info(f"reading coord = {c} from filename = {fn}")
+                z[c[1], c[2], c[3]] = zarr.open(tiff.imread(fn, aszarr=True))
+        self.positions[p] = z
 
     def read_tiff_series(self, folder: str):
         """
@@ -537,33 +540,35 @@ class MicromanagerSequenceReader:
         self.channels = self.mm_meta['Summary']['Channels']
 
 
-# def main():
-#     no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
-#     multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
-#
-#     master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-#     non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
-#     non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
-#     non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
-#
-#     master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-#     non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
-#
-#     ivan_dataset = '/Volumes/comp_micro/rawdata/falcon/Ivan/20210128 HEK CAAX SiRActin/FOV1_1'
-#     ivan_file = 'FOV1_1_MMStack_Default_23.ome.tif'
-#
-#     mm1_single = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_one_position/mm1422_kazansky_one_position'
-#     mm1_multi_snake = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_HCS_snake/mm1422_kazansky_HCS_snake'
-#     mm1_multi_grid = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_grid/mm1422_kazansky_grid'
-#     mm1_multi_large = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm1422/autosave_mm1422_50tp_4p_3c_2k_1'
-#
-#     r = MicromanagerReader(non_master_old_large_folder,
-#                            data_type='ometiff',
-#                            extract_data=True)
-#     print(r.get_zarr(0))
-#     # print(r.get_master_ome())
-#     # print(r.get_num_positions())
-#
-#
-# if __name__ == "__main__":
-#     main()
+def main():
+    no_positions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_files_tpzc_200tp_1p_5z_3c_2k_1'
+    multipositions = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1'
+
+    master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+    non_master_new_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/test_1/'
+    non_master_new_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/image_stack_tpzc_50tp_4p_5z_3c_2k_1/'
+    # non_master_old_large_folder = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_4p_5z_3c_2k_1/'
+
+    master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+    non_master_old_folder = '/Volumes/comp_micro/rawdata/hummingbird/Janie/2021_02_03_40x_04NA_A549/48hr_RSV_IFN/Coverslip_1/C1_MultiChan_Stack_1/'
+
+    ivan_dataset = '/Volumes/comp_micro/rawdata/falcon/Ivan/20210128 HEK CAAX SiRActin/FOV1_1'
+    ivan_file = 'FOV1_1_MMStack_Default_23.ome.tif'
+
+    mm1_single = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_one_position/mm1422_kazansky_one_position'
+    mm1_multi_snake = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_HCS_snake/mm1422_kazansky_HCS_snake'
+    mm1_multi_grid = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_grid/mm1422_kazansky_grid'
+    mm1_multi_large = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm1422/autosave_mm1422_50tp_4p_3c_2k_1'
+
+    r = MicromanagerReader(mm1_multi_grid,
+                           data_type='singlepagetiff',
+                           # data_type='ometiff',
+                           extract_data=True)
+    print(r.get_zarr(0))
+    print(r.get_zarr(1))
+    # print(r.get_master_ome())
+    print(r.get_num_positions())
+
+
+if __name__ == "__main__":
+    main()
