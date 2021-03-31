@@ -160,14 +160,27 @@ class MicromanagerOmeTiffReader:
         with TiffFile(self.master_ome_tiff) as tif:
             self.mm_meta = tif.micromanager_metadata
 
-            if self.mm_meta['Summary']['Positions'] > 1:
-                self.stage_positions = []
-                for p in range(self.mm_meta['Summary']['Positions']):
-                    pos = self._simplify_stage_position(self.mm_meta['Summary']['StagePositions'][p])
-                    self.stage_positions.append(pos)
+            if 'beta' in self.mm_meta['Summary']['MicroManagerVersion']:
 
-            for ch in self.mm_meta['Summary']['ChNames']:
-                self.channel_names.append(ch)
+                if self.mm_meta['Summary']['Positions'] > 1:
+                    self.stage_positions = []
+
+                    for p in range(len(self.mm_meta['Summary']['StagePositions'])):
+                        pos = self._simplify_stage_position_beta(self.mm_meta['Summary']['StagePositions'][p])
+                        self.stage_positions.append(pos)
+
+                self.channel_names = 'Not Listed'
+
+            else:
+                if self.mm_meta['Summary']['Positions'] > 1:
+                    self.stage_positions = []
+
+                    for p in range(self.mm_meta['Summary']['Positions']):
+                        pos = self._simplify_stage_position(self.mm_meta['Summary']['StagePositions'][p])
+                        self.stage_positions.append(pos)
+
+                for ch in self.mm_meta['Summary']['ChNames']:
+                    self.channel_names.append(ch)
 
             self.height = self.mm_meta['Summary']['Height']
             self.width = self.mm_meta['Summary']['Width']
@@ -186,6 +199,30 @@ class MicromanagerOmeTiffReader:
         for dev_pos in stage_pos['DevicePositions']:
             out.update({dev_pos['Device']: dev_pos['Position_um']})
         return out
+
+    def _simplify_stage_position_beta(self, stage_pos: dict):
+        """
+        flattens the nested dictionary structure of stage_pos and removes superfluous keys
+        for MM2.0 Beta versions
+        :param stage_pos: dictionary containing a single position's device info
+        :return:
+        """
+        new_dict = {}
+        new_dict['Label'] = stage_pos['label']
+        new_dict['GridRow'] = stage_pos['gridRow']
+        new_dict['GridCol'] = stage_pos['gridCol']
+
+        for sub in stage_pos['subpositions']:
+            values = []
+            for field in ['x', 'y', 'z']:
+                if sub[field] != 0:
+                    values.append(sub[field])
+            if len(values) == 1:
+                new_dict[sub['stageName']] = values[0]
+            else:
+                new_dict[sub['stageName']] = values
+
+        return new_dict
 
     def _create_stores(self, master_ome):
         """
