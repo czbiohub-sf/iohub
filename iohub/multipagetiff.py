@@ -100,6 +100,34 @@ class MicromanagerOmeTiffReader:
         if bool(missing_coords) is True:
             self._missing_dims = set(missing_coords)
 
+    def _reshape_zarr(self, zar):
+        """
+        reshape zarr arrays to match (T, C, Z, Y, X)
+        if zarr array is lower dimensional, reshape to match the target
+        if zarr array is purely 2 or 3 dimensional, no need to reshape
+        :param zar: zarr.array
+        :return: zarr.array
+        """
+
+        if self._missing_dims is None:
+            target = np.array(zar).reshape((self.frames, self.channels, self.slices, self.height, self.width))
+            return zarr.array(target, chunks=(1, 1, 1, self.height, self.width))
+
+        elif {'T'} == self._missing_dims:
+            target = np.array(zar).reshape((self.channels, self.slices, self.height, self.width))
+            return zarr.array(target, chunks=(1, 1, self.height, self.width))
+
+        # at least one channel is always present
+        # elif {'C'} == self._missing_dims:
+        #     target = np.array(zar).reshape((self.frames, self.slices, self.height, self.width))
+
+        elif {'Z'} == self._missing_dims:
+            target = np.array(zar).reshape((self.frames, self.channels, self.height, self.width))
+            return zarr.array(target, chunks=(1, 1, self.height, self.width))
+
+        else:
+            return zar
+
     def _expand_zarr(self, zar):
         """
         takes a zarr array and, if necessary, expands it to include missing dimensions
@@ -148,7 +176,7 @@ class MicromanagerOmeTiffReader:
             target[0, 0, 0, :, :] = zar
 
         else:
-            raise ValueError("")
+            raise ValueError("missing dims not properly identified")
 
         return target
 
@@ -198,7 +226,7 @@ class MicromanagerOmeTiffReader:
         with TiffFile(master_ome) as tif:
             for idx, tiffpageseries in enumerate(tif.series):
                 z = zarr.open(tiffpageseries.aszarr(), mode='r')
-                # todo: zarr.open loads as (T, Z, C, Y, X)  Must flip Z-C
+                z = self._reshape_zarr(z)
                 z = self._expand_zarr(z)
                 self.positions[idx] = z
 
