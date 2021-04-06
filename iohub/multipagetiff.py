@@ -39,7 +39,7 @@ class MicromanagerOmeTiffReader:
         self.channels = 0
         self.channel_names = []
 
-        self._missing_dims = []
+        self._missing_dims = None
 
         self.master_ome_tiff = self._get_master_ome_tiff(folder)
         self._set_mm_meta()
@@ -86,39 +86,71 @@ class MicromanagerOmeTiffReader:
             self._check_missing_dims()
 
     def _check_missing_dims(self):
+        """
+        establishes which dimensions are not present in the data
+        :return:
+        """
+        missing_coords = []
         if self.frames == 1:
-            self._missing_dims.append('T')
+            missing_coords.append('T')
         if self.slices == 1:
-            self._missing_dims.append('Z')
+            missing_coords.append('Z')
         if self.channels == 1:
-            self._missing_dims.append('C')
-        # consider converting list to tuple here
+            missing_coords.append('C')
+        if bool(missing_coords) is True:
+            self._missing_dims = set(missing_coords)
 
     def _expand_zarr(self, zar):
-        # change to enums
-        # or use tuples / sets and ('T') == self._missing_dims
-        if 'T' in self._missing_dims and len(self._missing_dims) == 1:
+        """
+        takes a zarr array and, if necessary, expands it to include missing dimensions
+        returns zarr array of dims (T, C, Z, Y, X)
+        :param zar: zarr.array
+        :return: zarr.array
+            zarr array with standardized shape
+        """
+        # major assumption -- that supplied zar is always shaped as (T, C, Z, Y, X)
+        if self._missing_dims is None:
+            return zar
+
+        elif {'T'} == self._missing_dims:
             target = zarr.empty(shape=(1, self.channels, self.slices, self.height, self.width),
                                 chunks=(1, 1, 1, self.height, self.width))
-            target[0,:,:,:,:] = zar
-        elif 'T' in self._missing_dims and len(self._missing_dims) == 1:
-            pass
-        elif 'T' in self._missing_dims and len(self._missing_dims) == 1:
-            pass
-        elif 'T' in self._missing_dims and 'C' in self._missing_dims and len(self._missing_dims) == 2:
-            pass
-        elif 'T' in self._missing_dims and 'Z' in self._missing_dims and len(self._missing_dims) == 2:
-            pass
-        elif 'C' in self._missing_dims and 'Z' in self._missing_dims and len(self._missing_dims) == 2:
-            pass
-        elif 'T' in self._missing_dims and 'C' in self._missing_dims and 'Z' in self._missing_dims and \
-                len(self._missing_dims) == 3:
-            pass
+            target[0, :, :, :, :] = zar
+
+        elif {'C'} == self._missing_dims:
+            target = zarr.empty(shape=(self.frames, 1, self.slices, self.height, self.width),
+                                chunks=(1, 1, 1, self.height, self.width))
+            target[:, 0, :, :, :] = zar
+
+        elif {'Z'} == self._missing_dims:
+            target = zarr.empty(shape=(self.frames, self.channels, 1, self.height, self.width),
+                                chunks=(1, 1, 1, self.height, self.width))
+            target[:, :, 0, :, :] = zar
+
+        elif {'T', 'C'} == self._missing_dims:
+            target = zarr.empty(shape=(1, 1, self.slices, self.height, self.width),
+                                chunks=(1, 1, 1, self.height, self.width))
+            target[0, 0, :, :, :] = zar
+
+        elif {'T', 'Z'} == self._missing_dims:
+            target = zarr.empty(shape=(1, self.channels, 1, self.height, self.width),
+                                chunks=(1, 1, 1, self.height, self.width))
+            target[0, :, 0, :, :] = zar
+
+        elif {'C', 'Z'} == self._missing_dims:
+            target = zarr.empty(shape=(self.frames, 1, 1, self.height, self.width),
+                                chunks=(1, 1, 1, self.height, self.width))
+            target[:, 0, 0, :, :] = zar
+
+        elif {'T', 'C', 'Z'} == self._missing_dims:
+            target = zarr.empty(shape=(1, 1, 1, self.height, self.width),
+                                chunks=(1, 1, 1, self.height, self.width))
+            target[0, 0, 0, :, :] = zar
+
         else:
-            raise ValueError()
+            raise ValueError("")
 
         return target
-
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
@@ -166,7 +198,7 @@ class MicromanagerOmeTiffReader:
         with TiffFile(master_ome) as tif:
             for idx, tiffpageseries in enumerate(tif.series):
                 z = zarr.open(tiffpageseries.aszarr(), mode='r')
-                # todo: before assignment to self.positions, reassign into full size target zarr array
+                # todo: zarr.open loads as (T, Z, C, Y, X)  Must flip Z-C
                 z = self._expand_zarr(z)
                 self.positions[idx] = z
 

@@ -1,6 +1,6 @@
 
-from .singlepagetiff import MicromanagerSequenceReader
-from .multipagetiff import MicromanagerOmeTiffReader
+from waveorder.io.singlepagetiff import MicromanagerSequenceReader
+from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
 import logging
 
 
@@ -130,12 +130,12 @@ def main():
     mm2_c = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_1c_2k_1'
     mm2_t_c = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_50tp_2c_2k_1'
 
-    r = MicromanagerReader(mm2_t_c,
+    r = MicromanagerReader(non_master_new_large_folder,
                            # data_type='singlepagetiff',
                            data_type='ometiff',
                            extract_data=True)
     print(r.get_zarr(0))
-    print(r.get_zarr(1))
+    # print(r.get_zarr(1))
     # print(r.get_master_ome())
     print(r.get_num_positions())
 
