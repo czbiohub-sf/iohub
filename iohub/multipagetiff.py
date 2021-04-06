@@ -1,0 +1,264 @@
+import numpy as np
+import os
+import zarr
+from tifffile import TiffFile
+from copy import copy
+import logging
+
+
+class MicromanagerOmeTiffReader:
+
+    def __init__(self,
+                 folder: str,
+                 extract_data: bool = False):
+        """
+        reads ome-tiff files into zarr or numpy arrays
+        Strategy:
+            1. search the file's omexml metadata for the "master file" location
+            2. load the master file
+            3. read micro-manager metadata into class attributes
+
+        :param folder: str
+            folder or file containing all ome-tiff files
+        :param extract_data: bool
+            True if ome_series should be extracted immediately
+        :param log_level: int
+            One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
+
+        """
+
+        self.log = logging.getLogger(__name__)
+
+        self.positions = {}
+        self.mm_meta = None
+        self.stage_positions = 0
+        self.height = 0
+        self.width = 0
+        self.frames = 0
+        self.slices = 0
+        self.channels = 0
+        self.channel_names = []
+
+        self._missing_dims = []
+
+        self.master_ome_tiff = self._get_master_ome_tiff(folder)
+        self._set_mm_meta()
+
+        if extract_data:
+            self._create_stores(self.master_ome_tiff)
+
+    def _set_mm_meta(self):
+        """
+        assign image metadata from summary metadata
+        :return:
+        """
+        with TiffFile(self.master_ome_tiff) as tif:
+            self.mm_meta = tif.micromanager_metadata
+
+            if 'beta' in self.mm_meta['Summary']['MicroManagerVersion']:
+
+                if self.mm_meta['Summary']['Positions'] > 1:
+                    self.stage_positions = []
+
+                    for p in range(len(self.mm_meta['Summary']['StagePositions'])):
+                        pos = self._simplify_stage_position_beta(self.mm_meta['Summary']['StagePositions'][p])
+                        self.stage_positions.append(pos)
+
+                # self.channel_names = 'Not Listed'
+
+            else:
+                if self.mm_meta['Summary']['Positions'] > 1:
+                    self.stage_positions = []
+
+                    for p in range(self.mm_meta['Summary']['Positions']):
+                        pos = self._simplify_stage_position(self.mm_meta['Summary']['StagePositions'][p])
+                        self.stage_positions.append(pos)
+
+                for ch in self.mm_meta['Summary']['ChNames']:
+                    self.channel_names.append(ch)
+
+            self.height = self.mm_meta['Summary']['Height']
+            self.width = self.mm_meta['Summary']['Width']
+            self.frames = self.mm_meta['Summary']['Frames']
+            self.slices = self.mm_meta['Summary']['Slices']
+            self.channels = self.mm_meta['Summary']['Channels']
+
+            self._check_missing_dims()
+
+    def _check_missing_dims(self):
+        if self.frames == 1:
+            self._missing_dims.append('T')
+        if self.slices == 1:
+            self._missing_dims.append('Z')
+        if self.channels == 1:
+            self._missing_dims.append('C')
+        # consider converting list to tuple here
+
+    def _expand_zarr(self, zar):
+        # change to enums
+        # or use tuples / sets and ('T') == self._missing_dims
+        if 'T' in self._missing_dims and len(self._missing_dims) == 1:
+            target = zarr.empty(shape=(1, self.channels, self.slices, self.height, self.width),
+                                chunks=(1, 1, 1, self.height, self.width))
+            target[0,:,:,:,:] = zar
+        elif 'T' in self._missing_dims and len(self._missing_dims) == 1:
+            pass
+        elif 'T' in self._missing_dims and len(self._missing_dims) == 1:
+            pass
+        elif 'T' in self._missing_dims and 'C' in self._missing_dims and len(self._missing_dims) == 2:
+            pass
+        elif 'T' in self._missing_dims and 'Z' in self._missing_dims and len(self._missing_dims) == 2:
+            pass
+        elif 'C' in self._missing_dims and 'Z' in self._missing_dims and len(self._missing_dims) == 2:
+            pass
+        elif 'T' in self._missing_dims and 'C' in self._missing_dims and 'Z' in self._missing_dims and \
+                len(self._missing_dims) == 3:
+            pass
+        else:
+            raise ValueError()
+
+        return target
+
+
+    def _simplify_stage_position(self, stage_pos: dict):
+        """
+        flattens the nested dictionary structure of stage_pos and removes superfluous keys
+        :param stage_pos: dictionary containing a single position's device info
+        :return:
+        """
+        out = copy(stage_pos)
+        out.pop('DevicePositions')
+        for dev_pos in stage_pos['DevicePositions']:
+            out.update({dev_pos['Device']: dev_pos['Position_um']})
+        return out
+
+    def _simplify_stage_position_beta(self, stage_pos: dict):
+        """
+        flattens the nested dictionary structure of stage_pos and removes superfluous keys
+        for MM2.0 Beta versions
+        :param stage_pos: dictionary containing a single position's device info
+        :return:
+        """
+        new_dict = {}
+        new_dict['Label'] = stage_pos['label']
+        new_dict['GridRow'] = stage_pos['gridRow']
+        new_dict['GridCol'] = stage_pos['gridCol']
+
+        for sub in stage_pos['subpositions']:
+            values = []
+            for field in ['x', 'y', 'z']:
+                if sub[field] != 0:
+                    values.append(sub[field])
+            if len(values) == 1:
+                new_dict[sub['stageName']] = values[0]
+            else:
+                new_dict[sub['stageName']] = values
+
+        return new_dict
+
+    def _create_stores(self, master_ome):
+        """
+        extract all series from ome-tiff and place into dict of (pos: zarr)
+        :param master_ome: full path to master OME-tiff
+        :return:
+        """
+        self.log.info(f"extracting data from {master_ome}")
+        with TiffFile(master_ome) as tif:
+            for idx, tiffpageseries in enumerate(tif.series):
+                z = zarr.open(tiffpageseries.aszarr(), mode='r')
+                # todo: before assignment to self.positions, reassign into full size target zarr array
+                z = self._expand_zarr(z)
+                self.positions[idx] = z
+
+    def _get_master_ome_tiff(self, folder_):
+        """
+        given either a single ome.tiff or a folder of ome.tiffs
+            load the omexml metadata for a single file and
+            search for the element attribute corresponding to the master file
+
+        :param folder_: full path to folder containing images
+        :return: full path to master-ome tiff
+        """
+
+        from xml.etree import ElementTree as etree  # delayed import
+
+        ome_master = None
+
+        if os.path.isdir(folder_):
+            dirname = folder_
+            file = [f for f in os.listdir(folder_) if ".ome.tif" in f][0]
+        elif os.path.isfile(folder_) and folder_.endswith('.ome.tif'):
+            dirname = os.path.dirname(folder_)
+            file = folder_
+        else:
+            raise ValueError("supplied path contains no ome.tif or is itself not an ome.tif")
+
+        self.log.info(f"checking {file} for ome-master records")
+
+        with TiffFile(os.path.join(dirname, file)) as tiff:
+            omexml = tiff.pages[0].description
+            # get omexml root from first page
+            try:
+                root = etree.fromstring(omexml)
+            except etree.ParseError as exc:
+                try:
+                    omexml = omexml.decode(errors='ignore').encode()
+                    root = etree.fromstring(omexml)
+                except Exception as ex:
+                    self.log.error(f"Exception while parsing root from omexml: {ex}")
+
+            # search all elements for tags that identify ome-master tiff
+            for element in root:
+                # MetadataFile attribute identifies master-ome from a BinaryOnly non-master file
+                if element.tag.endswith('BinaryOnly'):
+                    self.log.warning(f'OME series: BinaryOnly: not an ome-tiff master file')
+                    ome_master = element.attrib['MetadataFile']
+                    return os.path.join(dirname, ome_master)
+                # Name attribute identifies master-ome from a master-ome file.
+                elif element.tag.endswith("Image"):
+                    self.log.warning(f'OME series: Master-ome found')
+                    ome_master = element.attrib['Name'] + ".ome.tif"
+                    return os.path.join(dirname, ome_master)
+
+            if not ome_master:
+                raise AttributeError("no ome-master file found")
+
+    def get_zarr(self, position):
+        """
+        return a zarr array for a given position
+        :param position: int
+            position (aka ome-tiff scene)
+        :return: zarr.array
+        """
+        if not self.positions:
+            self._create_stores(self.master_ome_tiff)
+        return self.positions[position]
+
+    def get_array(self, position):
+        """
+        return a numpy array for a given position
+        :param position: int
+            position (aka ome-tiff scene)
+        :return: np.ndarray
+        """
+        if not self.positions:
+            self._create_stores(self.master_ome_tiff)
+        return np.array(self.positions[position])
+
+    def get_num_positions(self):
+        """
+        get total number of scenes referenced in ome-tiff metadata
+        :return: int
+        """
+        if self.positions:
+            return len(self.positions)
+        else:
+            self.log.error("ome-tiff scenes not read.")
+
+    @property
+    def shape(self):
+        """
+        return the underlying data shape as a tuple
+        :return: tuple
+        """
+        return self.frames, self.slices, self.channels, self.height, self.width
