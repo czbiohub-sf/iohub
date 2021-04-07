@@ -34,8 +34,8 @@ class WaveorderWriter:
 
     """
     __builder = None
-    save_dir = None
-    store_path = None
+    __save_dir = None
+    __store_path = None
     store = None
     current_position = None
 
@@ -59,47 +59,47 @@ class WaveorderWriter:
         # Upon init, check to make sure save path is a directory,
         # if not, create that directory
         if os.path.isdir(path):
-            self.save_dir = path
+            self.__save_dir = path
         else:
             os.mkdir(path)
-            self.save_dir = path
+            self.__save_dir = path
 
     def _check_and_create_position(self, pos):
 
-        position_path = os.path.join(self.save_dir, f'Pos_{03:d}')
-        if os.path.exists(self.position_path):
+        position_path = os.path.join(self.save_dir, f'Pos_{pos:03d}')
+        if os.path.exists(position_path):
             self.position_dir = position_path
         else:
             os.mkdir(position_path)
             self.position_dir = position_path
 
-    #TODO: Change this or delete this
-    def create_zarr(self):
+    def create_zarr(self, name=None):
         # Call the builder's init zarr function
+        self.__builder.init_zarr(self.position_dir, name)
+        self.store = self.get_zarr()
 
-        self.__builder.init_zarr(self.position_dir)
+    def init_array(self, data_shape, chunk_size, dtype):
+        self.__builder.init_array(self.store, data_shape, chunk_size, dtype)
 
+    def set_channel_attributes(self, chan_names: tuple):
 
-        # if not path.endswith('.zarr'):
-        #     path += '.zarr'
-        # try:
-        #     self.set_zarr(path)
-        # except:
-        #     print(f'Opening New Zarr Store at {path}')
-        #     self.store = zarr.open(path)
-        #     self.store_path = path
+        if len(chan_names) != self.store['array'].shape[1]:
+            raise ValueError('Number of Channel Names does not equal number of channels \
+                                in the array')
+        else:
+            multiscale_dict = [{'datasets': [{'path': "array"}],
+                                'version': '0.1'}]
+            dict_list = []
+            for i in range(len(chan_names)):
+                dict_list.append(self._create_channel_dict(chan_names[i]))
 
-    def set_zarr_parameters(self, shape, chunks, **kwargs):
-        # use kwargs to assign zarr array parameters
-        # self.__builder.init_zarr()
-        pass
+            full_dict = {'multiscales': multiscale_dict,
+                    'omero': {'channels': dict_list}}
 
-    def set_mm_metadata(self, meta):
-        # self.__builder.init_meta()
-        pass
+            self.store.attrs.put(full_dict)
 
-    def set_save_dir(self, path):
-        self._check_is_dir(path)
+    def set_compressor(self, compressor):
+        self.__builder.init_compressor(compressor)
 
     def set_position(self, position):
 
@@ -117,35 +117,12 @@ class WaveorderWriter:
 
         if os.path.exists(path):
             print(f'Opening existing store at {path}')
-            self.store_path = path
+            self.__store_path = path
             self.store = zarr.open(path)
         else:
             raise ValueError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
-    def init_array(self, data_shape, chunk_size, dtype):
-        self.__builder.init_array(self.store, data_shape, chunk_size, dtype)
-
-    # def set_stokes(self, stokes_data: np.ndarray):
-    #     # assign class attribute data
-    #     # call self.__builder attributes
-    #     self.__builder.init_arrays()
-    #     pass
-    #
-    # def set_physical(self, physical_data: np.ndarray):
-    #     # assign class attribute data
-    #     # desired keyword args:
-    #     #   data, channel, chunks, compressor
-    #     # can be learned from supplied keywords:
-    #     #   data.shape, chunk compatibility,
-    #     self.__builder.init_arrays()
-
-    # def write_stokes(self):
-    #     pass
-    #
-    # def write_physical(self):
-    #     pass
-
-    def write(self, data, P, T, Z):
+    def write(self, data, T, C, Z):
         """
         Wrapper that calls the builder's write function.
         Will write to existing array of zeros and place
@@ -159,7 +136,7 @@ class WaveorderWriter:
         """
 
         self.__builder.set_zarr(self.store)
-        self.__builder.write(data, P, T, Z)
+        self.__builder.write(data, T, C, Z)
         pass
 
 
@@ -167,8 +144,7 @@ class Builder:
     # interface for all builders
 
     # create zarr memory store
-    def init_zarr(self):
-
+    def init_zarr(self): pass
 
     # create subarrays named after the channel
     def init_arrays(self): pass
@@ -229,7 +205,7 @@ class PhysicalZarr(Builder):
             self.__pzarr['array'][T[0], C[0]:C[1], Z[0]] = data
 
 
-    def __check_if_zarr_exists(self, path):
+    def check_if_zarr_exists(self, path):
         if os.path.exists(path):
             print(f'Found existing store at {path}')
             # return True
@@ -263,12 +239,15 @@ class PhysicalZarr(Builder):
             if not path.endswith('.zarr'):
                 path += '.zarr'
 
-        self.__check_if_zarr_exists(path)
+        self.check_if_zarr_exists(path)
         store = zarr.open(path)
-        self.__set_zarr(store)
+        self.set_zarr(store)
 
-    def __set_zarr(self, store):
+    def set_zarr(self, store):
         self.__pzarr = store
+
+    def get_zarr(self):
+        return self.__pzarr
 
 
 class StokesZarr(Builder):
@@ -319,7 +298,7 @@ class StokesZarr(Builder):
         elif len(C) == 2 and len(T) == 1 and len(Z) == 1:
             self.__szarr['array'][T[0], C[0]:C[1],  Z[0]] = data
 
-    def __check_if_zarr_exists(self, path):
+    def check_if_zarr_exists(self, path):
         if os.path.exists(path):
             print(f'Found existing store at {path}')
             # return True
@@ -349,9 +328,12 @@ class StokesZarr(Builder):
             if not path.endswith('.zarr'):
                 path += '.zarr'
 
-        self.__check_if_zarr_exists(path)
+        self.check_if_zarr_exists(path)
         store = zarr.open(path)
-        self.__set_zarr(store)
+        self.set_zarr(store)
 
-    def __set_zarr(self, store):
+    def set_zarr(self, store):
         self.__szarr = store
+
+    def get_zarr(self):
+        return self.__pzarr
