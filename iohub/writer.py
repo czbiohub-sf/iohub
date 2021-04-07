@@ -37,6 +37,7 @@ class WaveorderWriter:
     save_dir = None
     store_path = None
     store = None
+    current_position = None
 
     def __init__(self, save_dir: str, datatype: str):
         """
@@ -63,20 +64,30 @@ class WaveorderWriter:
             os.mkdir(path)
             self.save_dir = path
 
-    def add_store(self, name: str):
-        # Add Zarr store to existing save directory,
-        # if store already exists, open that store
+    def _check_and_create_position(self, pos):
 
-        path = os.path.join(self.save_dir, name)
+        position_path = os.path.join(self.save_dir, f'Pos_{03:d}')
+        if os.path.exists(self.position_path):
+            self.position_dir = position_path
+        else:
+            os.mkdir(position_path)
+            self.position_dir = position_path
 
-        if not path.endswith('.zarr'):
-            path += '.zarr'
-        try:
-            self.set_store(path)
-        except:
-            print(f'Opening New Zarr Store at {path}')
-            self.store = zarr.open(path)
-            self.store_path = path
+    #TODO: Change this or delete this
+    def create_zarr(self):
+        # Call the builder's init zarr function
+
+        self.__builder.init_zarr(self.position_dir)
+
+
+        # if not path.endswith('.zarr'):
+        #     path += '.zarr'
+        # try:
+        #     self.set_zarr(path)
+        # except:
+        #     print(f'Opening New Zarr Store at {path}')
+        #     self.store = zarr.open(path)
+        #     self.store_path = path
 
     def set_zarr_parameters(self, shape, chunks, **kwargs):
         # use kwargs to assign zarr array parameters
@@ -90,7 +101,16 @@ class WaveorderWriter:
     def set_save_dir(self, path):
         self._check_is_dir(path)
 
-    def set_store(self, path):
+    def set_position(self, position):
+
+        # Check if new position folder exists
+        # if not create folder
+        # Update current position index
+
+        self._check_and_create_position(position)
+        self.current_position = position
+
+    def set_zarr(self, path):
 
         # Change to an existing store,
         # if store doesn't exist, raise error
@@ -100,7 +120,7 @@ class WaveorderWriter:
             self.store_path = path
             self.store = zarr.open(path)
         else:
-            raise ValueError(f'No store found at {path}, check spelling or create new store with add_store')
+            raise ValueError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
     def init_array(self, data_shape, chunk_size, dtype):
         self.__builder.init_array(self.store, data_shape, chunk_size, dtype)
@@ -138,7 +158,7 @@ class WaveorderWriter:
 
         """
 
-        self.__builder.init_zarr(self.store)
+        self.__builder.set_zarr(self.store)
         self.__builder.write(data, P, T, Z)
         pass
 
@@ -147,7 +167,8 @@ class Builder:
     # interface for all builders
 
     # create zarr memory store
-    def init_zarr(self): pass
+    def init_zarr(self):
+
 
     # create subarrays named after the channel
     def init_arrays(self): pass
@@ -163,53 +184,58 @@ class PhysicalZarr(Builder):
     __pzarr = None
     __compressor = None
 
-    def write(self, data, P, T, Z):
+    def write(self, data, T, C, Z):
         """
         Write data to specified index of initialized zarr array
 
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param P: (tuple or value), index or index range of the position dimension
         :param T: (tuple or value), index or index range of the time dimension
+        :param C: (tuple or value), index or index range of the channel dimension
         :param Z: (tuple or value), index or index range of the Z dimension
 
         """
 
         shape = np.shape(data)
 
-        # Check if the array of zeros has been initialized
         if self.__pzarr.__len__() == 0:
             raise ValueError('Array not initialized')
 
-        # Look through different indexing conditions
-        # and index accordingly
-        if len(P) == 1 and len(T) == 1 and len(Z) == 1:
+        if len(C) == 1 and len(T) == 1 and len(Z) == 1:
 
             if len(shape) > 2:
                 raise ValueError('Index dimensions do not match data dimensions')
             else:
-                self.__pzarr['array'][P[0], T[0], Z[0]] = data
+                self.__pzarr['array'][C[0], T[0], Z[0]] = data
 
-        elif len(P) == 1 and len(T) == 2 and len(Z) == 1:
-            self.__pzarr['array'][P[0], T[0]:T[1], Z[0]] = data
+        elif len(C) == 1 and len(T) == 2 and len(Z) == 1:
+            self.__pzarr['array'][T[0]:T[1], C[0], Z[0]] = data
 
-        elif len(P) == 1 and len(T) == 1 and len(Z) == 2:
-            self.__pzarr['array'][P[0], T[0], Z[0]:Z[1]] = data
+        elif len(C) == 1 and len(T) == 1 and len(Z) == 2:
+            self.__pzarr['array'][T[0], C[0], Z[0]:Z[1]] = data
 
-        elif len(P) == 1 and len(T) == 2 and len(Z) == 2:
-            self.__pzarr['array'][P[0], T[0]:T[1], Z[0]:Z[1]] = data
+        elif len(C) == 1 and len(T) == 2 and len(Z) == 2:
+            self.__pzarr['array'][T[0]:T[1], C[0], Z[0]:Z[1]] = data
 
-        elif len(P) == 2 and len(T) == 2 and len(Z) == 2:
-            self.__pzarr['array'][P[0]:P[1], T[0]:T[1], Z[0]:Z[1]] = data
+        elif len(C) == 2 and len(T) == 2 and len(Z) == 2:
+            self.__pzarr['array'][T[0]:T[1], C[0]:C[1], Z[0]:Z[1]] = data
 
-        elif len(P) == 2 and len(T) == 1 and len(Z) == 2:
-            self.__pzarr['array'][P[0]:P[1], T[0], Z[0]:Z[1]] = data
+        elif len(C) == 2 and len(T) == 1 and len(Z) == 2:
+            self.__pzarr['array'][T[0], C[0]:C[1], Z[0]:Z[1]] = data
 
-        elif len(P) == 2 and len(T) == 2 and len(Z) == 1:
-            self.__pzarr['array'][P[0]:P[1], T[0]:T[1], Z[0]] = data
+        elif len(C) == 2 and len(T) == 2 and len(Z) == 1:
+            self.__pzarr['array'][T[0]:T[1], C[0]:C[1], Z[0]] = data
 
-        elif len(P) == 2 and len(T) == 1 and len(Z) == 1:
-            self.__pzarr['array'][P[0]:P[1], T[0], Z[0]] = data
+        elif len(C) == 2 and len(T) == 1 and len(Z) == 1:
+            self.__pzarr['array'][T[0], C[0]:C[1], Z[0]] = data
 
+
+    def __check_if_zarr_exists(self, path):
+        if os.path.exists(path):
+            print(f'Found existing store at {path}')
+            # return True
+        else:
+            print(f'Creating new store at {path}')
+            # return False
 
     # Placeholder function for future compressor customization
     def init_compressor(self, **kwargs):
@@ -222,26 +248,40 @@ class PhysicalZarr(Builder):
 
         # Make sure data matches OME zarr structure
         if len(data_shape) != 5:
-            raise ValueError('Data shape must be (P, T, Z, Y, X)')
+            raise ValueError('Data shape must be (T, C, Z, Y, X)')
 
-        self.init_zarr(store)
-        self.__pzarr.zeros('array',shape=data_shape,chunks=chunk_size, dtype=dtype,
+        self.set_zarr(store)
+        self.__pzarr.zeros('array',shape=data_shape, chunks=chunk_size, dtype=dtype,
                            compressor=self.__compressor, overwrite=True)
 
-    def init_zarr(self, store):
+    def init_zarr(self, directory, name=None):
+
+        if name == None:
+            path = os.path.join(directory, 'physical_data.zarr')
+        else:
+            path = os.path.join(directory, name)
+            if not path.endswith('.zarr'):
+                path += '.zarr'
+
+        self.__check_if_zarr_exists(path)
+        store = zarr.open(path)
+        self.__set_zarr(store)
+
+    def __set_zarr(self, store):
         self.__pzarr = store
+
 
 class StokesZarr(Builder):
     __szarr = None
     __compressor = None
 
-    def write(self, data, P, T, Z):
+    def write(self, data, T, C, Z):
         """
         Write data to specified index of initialized zarr array
 
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param P: (tuple or value), index or index range of the position dimension
         :param T: (tuple or value), index or index range of the time dimension
+        :param C: (tuple or value), index or index range of the channel dimension
         :param Z: (tuple or value), index or index range of the Z dimension
 
         """
@@ -251,39 +291,43 @@ class StokesZarr(Builder):
         if self.__szarr.__len__() == 0:
             raise ValueError('Array not initialized')
 
-        if len(P) == 1 and len(T) == 1 and len(Z) == 1:
+        if len(C) == 1 and len(T) == 1 and len(Z) == 1:
 
             if len(shape) > 2:
                 raise ValueError('Index dimensions do not match data dimensions')
             else:
-                self.__szarr['array'][P[0], T[0], Z[0]] = data
+                self.__szarr['array'][C[0], T[0], Z[0]] = data
 
-        elif len(P) == 1 and len(T) == 2 and len(Z) == 1:
-            self.__szarr['array'][P[0], T[0]:T[1], Z[0]] = data
+        elif len(C) == 1 and len(T) == 2 and len(Z) == 1:
+            self.__szarr['array'][T[0]:T[1], C[0], Z[0]] = data
 
-        elif len(P) == 1 and len(T) == 1 and len(Z) == 2:
-            self.__szarr['array'][P[0], T[0], Z[0]:Z[1]] = data
+        elif len(C) == 1 and len(T) == 1 and len(Z) == 2:
+            self.__szarr['array'][T[0], C[0], Z[0]:Z[1]] = data
 
-        elif len(P) == 1 and len(T) == 2 and len(Z) == 2:
-            self.__szarr['array'][P[0], T[0]:T[1], Z[0]:Z[1]] = data
+        elif len(C) == 1 and len(T) == 2 and len(Z) == 2:
+            self.__szarr['array'][T[0]:T[1], C[0], Z[0]:Z[1]] = data
 
-        elif len(P) == 2 and len(T) == 2 and len(Z) == 2:
-            self.__szarr['array'][P[0]:P[1], T[0]:T[1], Z[0]:Z[1]] = data
+        elif len(C) == 2 and len(T) == 2 and len(Z) == 2:
+            self.__szarr['array'][T[0]:T[1], C[0]:C[1], Z[0]:Z[1]] = data
 
-        elif len(P) == 2 and len(T) == 1 and len(Z) == 2:
-            self.__szarr['array'][P[0]:P[1], T[0], Z[0]:Z[1]] = data
+        elif len(C) == 2 and len(T) == 1 and len(Z) == 2:
+            self.__szarr['array'][T[0], C[0]:C[1], Z[0]:Z[1]] = data
 
-        elif len(P) == 2 and len(T) == 2 and len(Z) == 1:
-            self.__szarr['array'][P[0]:P[1], T[0]:T[1], Z[0]] = data
+        elif len(C) == 2 and len(T) == 2 and len(Z) == 1:
+            self.__szarr['array'][T[0]:T[1], C[0]:C[1], Z[0]] = data
 
-        elif len(P) == 2 and len(T) == 1 and len(Z) == 1:
-            self.__szarr['array'][P[0]:P[1], T[0], Z[0]] = data
+        elif len(C) == 2 and len(T) == 1 and len(Z) == 1:
+            self.__szarr['array'][T[0], C[0]:C[1],  Z[0]] = data
+
+    def __check_if_zarr_exists(self, path):
+        if os.path.exists(path):
+            print(f'Found existing store at {path}')
+            # return True
+        else:
+            print(f'Creating new store at {path}')
 
     def init_compressor(self, **kwargs):
         self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
-
-    def init_zarr(self, store):
-        self.__szarr = store
 
     def init_array(self, store, data_shape, chunk_size, dtype):
         if self.__compressor == None:
@@ -295,3 +339,19 @@ class StokesZarr(Builder):
         self.init_zarr(store)
         self.__szarr.zeros('array', shape=data_shape, chunks=chunk_size, dtype=dtype,
                            compressor=self.__compressor, overwrite=True)
+
+    def init_zarr(self, directory, name=None):
+
+        if name == None:
+            path = os.path.join(directory, 'physical_data.zarr')
+        else:
+            path = os.path.join(directory, name)
+            if not path.endswith('.zarr'):
+                path += '.zarr'
+
+        self.__check_if_zarr_exists(path)
+        store = zarr.open(path)
+        self.__set_zarr(store)
+
+    def __set_zarr(self, store):
+        self.__szarr = store
