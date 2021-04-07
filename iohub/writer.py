@@ -101,7 +101,7 @@ class WaveorderWriter:
         self.store = self.__builder.get_zarr()
 
     #TODO: Default datatype?
-    def init_array(self, data_shape: tuple, chunk_size: tuple, dtype):
+    def init_array(self, data_shape: tuple, chunk_size: tuple, dtype, overwrite=False):
         """
         Parameters
         ----------
@@ -114,7 +114,7 @@ class WaveorderWriter:
         -------
 
         """
-        self.__builder.init_array(self.store, data_shape, chunk_size, dtype)
+        self.__builder.init_array(self.store, data_shape, chunk_size, dtype, overwrite)
 
     #TODO: Add user-defined contrast limits
     def set_channel_attributes(self, chan_names: list):
@@ -216,6 +216,8 @@ class Builder:
     # create a directory store and write the memory store to that
     def to_disk(self): pass
 
+    def write(self): pass
+
 
 class PhysicalZarr(Builder):
     __pzarr = None
@@ -283,7 +285,7 @@ class PhysicalZarr(Builder):
         self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
 
     # Initialize zero array
-    def init_array(self, store, data_shape, chunk_size, dtype):
+    def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
         if self.__compressor == None:
             self.init_compressor()
 
@@ -293,7 +295,7 @@ class PhysicalZarr(Builder):
 
         self.set_zarr(store)
         self.__pzarr.zeros('array',shape=data_shape, chunks=chunk_size, dtype=dtype,
-                           compressor=self.__compressor, overwrite=True)
+                           compressor=self.__compressor, overwrite=overwrite)
 
     def init_zarr(self, directory, name=None):
 
@@ -373,21 +375,21 @@ class StokesZarr(Builder):
     def init_compressor(self, **kwargs):
         self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
 
-    def init_array(self, store, data_shape, chunk_size, dtype):
+    def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
         if self.__compressor == None:
             self.init_compressor()
 
         if len(data_shape) != 5:
             raise ValueError('Data shape must be (P, T, Z, Y, X)')
 
-        self.init_zarr(store)
+        self.set_zarr(store)
         self.__szarr.zeros('array', shape=data_shape, chunks=chunk_size, dtype=dtype,
-                           compressor=self.__compressor, overwrite=True)
+                           compressor=self.__compressor, overwrite=overwrite)
 
     def init_zarr(self, directory, name=None):
 
         if name == None:
-            path = os.path.join(directory, 'physical_data.zarr')
+            path = os.path.join(directory, 'stokes_data.zarr')
         else:
             path = os.path.join(directory, name)
             if not path.endswith('.zarr'):
@@ -401,4 +403,4 @@ class StokesZarr(Builder):
         self.__szarr = store
 
     def get_zarr(self):
-        return self.__pzarr
+        return self.__szarr
