@@ -66,27 +66,80 @@ class WaveorderWriter:
 
     def _check_and_create_position(self, pos):
 
-        position_path = os.path.join(self.save_dir, f'Pos_{pos:03d}')
+        position_path = os.path.join(self.__save_dir, f'Pos_{pos:03d}')
         if os.path.exists(position_path):
             self.position_dir = position_path
         else:
             os.mkdir(position_path)
             self.position_dir = position_path
 
-    def create_zarr(self, name=None):
-        # Call the builder's init zarr function
-        self.__builder.init_zarr(self.position_dir, name)
-        self.store = self.get_zarr()
+    #TODO: adjust min/max contrast limits based on data type
+    def _create_channel_dict(self, chan_name):
+        dict = {'active': True,
+                'coefficient': 1.0,
+                'color': '808080',
+                'family': 'linear',
+                'inverted': False,
+                'label': chan_name,
+                'window': {'end': 65535.0, 'max': 65535.0, 'min': 0.0, 'start': 0.0}}
+        return dict
 
-    def init_array(self, data_shape, chunk_size, dtype):
+    def create_zarr(self, name=None):
+        """
+        Method for creating a zarr store.
+        If the store already exists, it will open that store.
+        If no name is supplied, the default builder name will
+        be used ('stokes_data' or 'physical_data')
+
+        Parameters
+        ----------
+        name:       (string) Optional. Name of the zarr store.
+
+        """
+
+        self.__builder.init_zarr(self.position_dir, name)
+        self.store = self.__builder.get_zarr()
+
+    #TODO: Default datatype?
+    def init_array(self, data_shape: tuple, chunk_size: tuple, dtype):
+        """
+        Parameters
+        ----------
+        data_shape:     (tuple) Shape of the position dataset (T, C, Z, Y, X)
+        chunk_size:     (tuple) Chunks to save, (T, C, Z, Y, X)
+                                i.e. to chunk along z chunk_size = (1, 1, 1, Y, X)
+        dtype:          (string) data type of the array
+
+        Returns
+        -------
+
+        """
         self.__builder.init_array(self.store, data_shape, chunk_size, dtype)
 
-    def set_channel_attributes(self, chan_names: tuple):
+    #TODO: Add user-defined contrast limits
+    def set_channel_attributes(self, chan_names: list):
+        """
+        A method for creating ome-zarr metadata dictionary.
+        Channel names are defined by the user, everything else
+        is pre-defined.
+
+        Parameters
+        ----------
+        chan_names:     (list) List of channel names in the order of the channel dimensions
+                                i.e. if 3D Phase is C = 0, list '3DPhase' first.
+
+        """
 
         if len(chan_names) != self.store['array'].shape[1]:
             raise ValueError('Number of Channel Names does not equal number of channels \
                                 in the array')
         else:
+
+            rdefs = {'defaultT': 0,
+                     'model': 'color',
+                     'projection': 'normal',
+                     'defaultZ': 0}
+
             multiscale_dict = [{'datasets': [{'path': "array"}],
                                 'version': '0.1'}]
             dict_list = []
@@ -94,7 +147,8 @@ class WaveorderWriter:
                 dict_list.append(self._create_channel_dict(chan_names[i]))
 
             full_dict = {'multiscales': multiscale_dict,
-                    'omero': {'channels': dict_list}}
+                         'omero': {'channels': dict_list},
+                         'rdefs': rdefs}
 
             self.store.attrs.put(full_dict)
 
@@ -129,16 +183,23 @@ class WaveorderWriter:
         data over the specified indicies
 
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param P: (tuple or value), index or index range of the position dimension
-        :param T: (tuple or value), index or index range of the time dimension
-        :param Z: (tuple or value), index or index range of the Z dimension
+        :param C: (list or value), index or index range of the position dimension
+        :param T: (list or value), index or index range of the time dimension
+        :param Z: (list or value), index or index range of the Z dimension
 
         """
 
+        if isinstance(T, int):
+            T = [T]
+
+        if isinstance(C, int):
+            C = [C]
+
+        if isinstance(Z, int):
+            Z = [Z]
+
         self.__builder.set_zarr(self.store)
         self.__builder.write(data, T, C, Z)
-        pass
-
 
 class Builder:
     # interface for all builders
@@ -165,9 +226,9 @@ class PhysicalZarr(Builder):
         Write data to specified index of initialized zarr array
 
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param T: (tuple or value), index or index range of the time dimension
-        :param C: (tuple or value), index or index range of the channel dimension
-        :param Z: (tuple or value), index or index range of the Z dimension
+        :param T: (list), index or index range of the time dimension
+        :param C: (list), index or index range of the channel dimension
+        :param Z: (list), index or index range of the Z dimension
 
         """
 
@@ -187,6 +248,7 @@ class PhysicalZarr(Builder):
             self.__pzarr['array'][T[0]:T[1], C[0], Z[0]] = data
 
         elif len(C) == 1 and len(T) == 1 and len(Z) == 2:
+            print('here')
             self.__pzarr['array'][T[0], C[0], Z[0]:Z[1]] = data
 
         elif len(C) == 1 and len(T) == 2 and len(Z) == 2:
@@ -203,6 +265,9 @@ class PhysicalZarr(Builder):
 
         elif len(C) == 2 and len(T) == 1 and len(Z) == 1:
             self.__pzarr['array'][T[0], C[0]:C[1], Z[0]] = data
+
+        else:
+            raise ValueError('Did not understand data formatting')
 
 
     def check_if_zarr_exists(self, path):
@@ -259,9 +324,9 @@ class StokesZarr(Builder):
         Write data to specified index of initialized zarr array
 
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param T: (tuple or value), index or index range of the time dimension
-        :param C: (tuple or value), index or index range of the channel dimension
-        :param Z: (tuple or value), index or index range of the Z dimension
+        :param T: (list), index or index range of the time dimension
+        :param C: (list), index or index range of the channel dimension
+        :param Z: (list), index or index range of the Z dimension
 
         """
 
