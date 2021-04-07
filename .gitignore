@@ -3,6 +3,7 @@ waveorder.egg-info/
 .ipynb_checkpoints/
 .idea/
 waveorder/__pycache__/
+waveorder/io/__pycache__/
 build/
 dist/
 *.npz
