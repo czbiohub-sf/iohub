@@ -38,6 +38,7 @@ class WaveorderWriter:
     __store_path = None
     store = None
     current_position = None
+    position_dir = None
 
     def __init__(self, save_dir: str, datatype: str):
         """
@@ -72,17 +73,6 @@ class WaveorderWriter:
         else:
             os.mkdir(position_path)
             self.position_dir = position_path
-
-    #TODO: adjust min/max contrast limits based on data type
-    def _create_channel_dict(self, chan_name):
-        dict = {'active': True,
-                'coefficient': 1.0,
-                'color': '808080',
-                'family': 'linear',
-                'inverted': False,
-                'label': chan_name,
-                'window': {'end': 65535.0, 'max': 65535.0, 'min': 0.0, 'start': 0.0}}
-        return dict
 
     def create_zarr(self, name=None):
         """
@@ -144,7 +134,7 @@ class WaveorderWriter:
                                 'version': '0.1'}]
             dict_list = []
             for i in range(len(chan_names)):
-                dict_list.append(self._create_channel_dict(chan_names[i]))
+                dict_list.append(self.__builder.create_channel_dict(chan_names[i]))
 
             full_dict = {'multiscales': multiscale_dict,
                          'omero': {'channels': dict_list},
@@ -173,6 +163,7 @@ class WaveorderWriter:
             print(f'Opening existing store at {path}')
             self.__store_path = path
             self.store = zarr.open(path)
+            self.__builder.set_zarr(self.store)
         else:
             raise ValueError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
@@ -250,7 +241,6 @@ class PhysicalZarr(Builder):
             self.__pzarr['array'][T[0]:T[1], C[0], Z[0]] = data
 
         elif len(C) == 1 and len(T) == 1 and len(Z) == 2:
-            print('here')
             self.__pzarr['array'][T[0], C[0], Z[0]:Z[1]] = data
 
         elif len(C) == 1 and len(T) == 2 and len(Z) == 2:
@@ -271,6 +261,47 @@ class PhysicalZarr(Builder):
         else:
             raise ValueError('Did not understand data formatting')
 
+    # TODO: adjust min/max contrast limits based on data type
+    def create_channel_dict(self, chan_name):
+
+        if chan_name == 'Retardance':
+            max = 100.0
+            min = 0.0
+            start = 0.0
+            end = 8.0
+        elif chan_name == 'Orientation':
+            max = 4.0
+            min = 0.0
+            start = 0.0
+            end = 3.141593
+
+        elif chan_name == 'Phase3D':
+            min = -1.0
+            max = 1.0
+            start = -0.2
+            end = 0.2
+
+        elif chan_name == 'BF':
+            min = 0.0
+            max = 100
+            start = 0.0
+            end = 5.0
+
+        else:
+            min = 0.0
+            max = 10000.0
+            start = 0.0
+            end = 1000.0
+
+        dict = {'active': True,
+                'coefficient': 1.0,
+                'color': '808080',
+                'family': 'linear',
+                'inverted': False,
+                'label': chan_name,
+                'window': {'end': end, 'max': max, 'min': min, 'start': start}
+
+        return dict
 
     def check_if_zarr_exists(self, path):
         if os.path.exists(path):
@@ -364,6 +395,48 @@ class StokesZarr(Builder):
 
         elif len(C) == 2 and len(T) == 1 and len(Z) == 1:
             self.__szarr['array'][T[0], C[0]:C[1],  Z[0]] = data
+
+
+    def create_channel_dict(self, chan_name):
+
+        if chan_name == 'S0':
+            max = 10
+            min = 0.0
+            start = 0.0
+            end = 1.0
+        elif chan_name == 'S1':
+            max = 1.0
+            min = -1.0
+            start = -0.5
+            end = 0.5
+
+        elif chan_name == 'S2':
+            max = 1.0
+            min = -1.0
+            start = -0.5
+            end = 0.5
+
+        elif chan_name == 'S3':
+            max = 1.0
+            min = -1.0
+            start = -1.0
+            end = 1.0
+
+        else:
+            min = 0.0
+            max = 1.0
+            start = 0.0
+            end = 1.0
+
+        dict = {'active': True,
+                'coefficient': 1.0,
+                'color': '808080',
+                'family': 'linear',
+                'inverted': False,
+                'label': chan_name,
+                'window': {'end': end, 'max': max, 'min': min, 'start': start}
+
+        return dict
 
     def check_if_zarr_exists(self, path):
         if os.path.exists(path):
