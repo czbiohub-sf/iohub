@@ -90,8 +90,7 @@ class WaveorderWriter:
         self.__builder.init_zarr(self.position_dir, name)
         self.store = self.__builder.get_zarr()
 
-    #TODO: Default datatype?
-    def init_array(self, data_shape: tuple, chunk_size: tuple, dtype, overwrite=False):
+    def init_array(self, data_shape: tuple, chunk_size: tuple, dtype='float32', overwrite=False):
         """
         Parameters
         ----------
