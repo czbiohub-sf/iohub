@@ -2,18 +2,8 @@ import numpy as np
 import zarr
 import os
 from numcodecs import Blosc
-
-"""
-Method:
-
-create zarr memorystore
-construct hierarchy there
-place arrays into this memory store
-
-at save time, create a target store that is zarr directoryStore
-use zarr.copy_store to copy memory store to directory store
-
-"""
+from typing import Union
+from zarr import Array, Group
 
 # todo: implement hierarchies / groups
 # todo: add checks for inconsistent data shapes
@@ -40,7 +30,9 @@ class WaveorderWriter:
     current_position = None
     position_dir = None
 
-    def __init__(self, save_dir: str, datatype: str):
+    def __init__(self,
+                 save_dir: str,
+                 datatype: str):
         """
         datatype is one of "stokes" or "physical"
         :param save_dir:
@@ -201,30 +193,30 @@ class WaveorderWriter:
     def set_compressor(self, compressor):
         self.__builder.init_compressor(compressor)
 
-    def write(self, data, T, C, Z):
+    def write(self, data, t, c, z):
         """
         Wrapper that calls the builder's write function.
         Will write to existing array of zeros and place
         data over the specified indicies
 
-        :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param C: (list or value), index or index range of the position dimension
-        :param T: (list or value), index or index range of the time dimension
-        :param Z: (list or value), index or index range of the Z dimension
+        :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
+        :param t: (list or value), index or index range of the time dimension
+        :param c: (list or value), index or index range of the channel dimension
+        :param z: (list or value), index or index range of the Z-slice dimension
 
         """
 
-        if isinstance(T, int):
-            T = [T]
+        if isinstance(t, int):
+            t = [t]
 
-        if isinstance(C, int):
-            C = [C]
+        if isinstance(c, int):
+            c = [c]
 
-        if isinstance(Z, int):
-            Z = [Z]
+        if isinstance(z, int):
+            z = [z]
 
         self.__builder.set_zarr(self.store)
-        self.__builder.write(data, T, C, Z)
+        self.__builder.write(data, t, c, z)
 
 
 class Builder:
@@ -239,7 +231,7 @@ class Builder:
 
     # create subarrays named after the channel
     def init_array(self,
-                   store: zarr.DirectoryStore,
+                   store: Union[Array, Group],
                    data_shape: tuple,
                    chunk_size: tuple,
                    dtype: str,
@@ -261,14 +253,14 @@ class PhysicalZarr(Builder):
     __pzarr = None
     __compressor = None
 
-    def write(self, data, T, C, Z):
+    def write(self, data, t, c, z):
         """
         Write data to specified index of initialized zarr array
 
-        :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param T: (list), index or index range of the time dimension
-        :param C: (list), index or index range of the channel dimension
-        :param Z: (list), index or index range of the Z dimension
+        :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
+        :param t: (list), index or index range of the time dimension
+        :param c: (list), index or index range of the channel dimension
+        :param z: (list), index or index range of the z dimension
 
         """
 
@@ -277,33 +269,33 @@ class PhysicalZarr(Builder):
         if self.__pzarr.__len__() == 0:
             raise ValueError('Array not initialized')
 
-        if len(C) == 1 and len(T) == 1 and len(Z) == 1:
+        if len(c) == 1 and len(t) == 1 and len(z) == 1:
 
             if len(shape) > 2:
                 raise ValueError('Index dimensions do not match data dimensions')
             else:
-                self.__pzarr['array'][C[0], T[0], Z[0]] = data
+                self.__pzarr['array'][c[0], t[0], z[0]] = data
 
-        elif len(C) == 1 and len(T) == 2 and len(Z) == 1:
-            self.__pzarr['array'][T[0]:T[1], C[0], Z[0]] = data
+        elif len(c) == 1 and len(t) == 2 and len(z) == 1:
+            self.__pzarr['array'][t[0]:t[1], c[0], z[0]] = data
 
-        elif len(C) == 1 and len(T) == 1 and len(Z) == 2:
-            self.__pzarr['array'][T[0], C[0], Z[0]:Z[1]] = data
+        elif len(c) == 1 and len(t) == 1 and len(z) == 2:
+            self.__pzarr['array'][t[0], c[0], z[0]:z[1]] = data
 
-        elif len(C) == 1 and len(T) == 2 and len(Z) == 2:
-            self.__pzarr['array'][T[0]:T[1], C[0], Z[0]:Z[1]] = data
+        elif len(c) == 1 and len(t) == 2 and len(z) == 2:
+            self.__pzarr['array'][t[0]:t[1], c[0], z[0]:z[1]] = data
 
-        elif len(C) == 2 and len(T) == 2 and len(Z) == 2:
-            self.__pzarr['array'][T[0]:T[1], C[0]:C[1], Z[0]:Z[1]] = data
+        elif len(c) == 2 and len(t) == 2 and len(z) == 2:
+            self.__pzarr['array'][t[0]:t[1], c[0]:c[1], z[0]:z[1]] = data
 
-        elif len(C) == 2 and len(T) == 1 and len(Z) == 2:
-            self.__pzarr['array'][T[0], C[0]:C[1], Z[0]:Z[1]] = data
+        elif len(c) == 2 and len(t) == 1 and len(z) == 2:
+            self.__pzarr['array'][t[0], c[0]:c[1], z[0]:z[1]] = data
 
-        elif len(C) == 2 and len(T) == 2 and len(Z) == 1:
-            self.__pzarr['array'][T[0]:T[1], C[0]:C[1], Z[0]] = data
+        elif len(c) == 2 and len(t) == 2 and len(z) == 1:
+            self.__pzarr['array'][t[0]:t[1], c[0]:c[1], z[0]] = data
 
-        elif len(C) == 2 and len(T) == 1 and len(Z) == 1:
-            self.__pzarr['array'][T[0], C[0]:C[1], Z[0]] = data
+        elif len(c) == 2 and len(t) == 1 and len(z) == 1:
+            self.__pzarr['array'][t[0], c[0]:c[1], z[0]] = data
 
         else:
             raise ValueError('Did not understand data formatting')
@@ -418,14 +410,14 @@ class StokesZarr(Builder):
     __szarr = None
     __compressor = None
 
-    def write(self, data, T, C, Z):
+    def write(self, data, t, c, z):
         """
         Write data to specified index of initialized zarr array
 
-        :param data: (nd-array), data to be saved. Must be the shape that matches indices (P, T, Z, Y, X)
-        :param T: (list), index or index range of the time dimension
-        :param C: (list), index or index range of the channel dimension
-        :param Z: (list), index or index range of the Z dimension
+        :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
+        :param t: (list), index or index range of the time dimension
+        :param c: (list), index or index range of the channel dimension
+        :param z: (list), index or index range of the Z dimension
 
         """
 
@@ -434,34 +426,33 @@ class StokesZarr(Builder):
         if self.__szarr.__len__() == 0:
             raise ValueError('Array not initialized')
 
-        if len(C) == 1 and len(T) == 1 and len(Z) == 1:
+        if len(c) == 1 and len(t) == 1 and len(z) == 1:
 
             if len(shape) > 2:
                 raise ValueError('Index dimensions do not match data dimensions')
             else:
-                self.__szarr['array'][C[0], T[0], Z[0]] = data
+                self.__szarr['array'][c[0], t[0], z[0]] = data
 
-        elif len(C) == 1 and len(T) == 2 and len(Z) == 1:
-            self.__szarr['array'][T[0]:T[1], C[0], Z[0]] = data
+        elif len(c) == 1 and len(t) == 2 and len(z) == 1:
+            self.__szarr['array'][t[0]:t[1], c[0], z[0]] = data
 
-        elif len(C) == 1 and len(T) == 1 and len(Z) == 2:
-            self.__szarr['array'][T[0], C[0], Z[0]:Z[1]] = data
+        elif len(c) == 1 and len(t) == 1 and len(z) == 2:
+            self.__szarr['array'][t[0], c[0], z[0]:z[1]] = data
 
-        elif len(C) == 1 and len(T) == 2 and len(Z) == 2:
-            self.__szarr['array'][T[0]:T[1], C[0], Z[0]:Z[1]] = data
+        elif len(c) == 1 and len(t) == 2 and len(z) == 2:
+            self.__szarr['array'][t[0]:t[1], c[0], z[0]:z[1]] = data
 
-        elif len(C) == 2 and len(T) == 2 and len(Z) == 2:
-            self.__szarr['array'][T[0]:T[1], C[0]:C[1], Z[0]:Z[1]] = data
+        elif len(c) == 2 and len(t) == 2 and len(z) == 2:
+            self.__szarr['array'][t[0]:t[1], c[0]:c[1], z[0]:z[1]] = data
 
-        elif len(C) == 2 and len(T) == 1 and len(Z) == 2:
-            self.__szarr['array'][T[0], C[0]:C[1], Z[0]:Z[1]] = data
+        elif len(c) == 2 and len(t) == 1 and len(z) == 2:
+            self.__szarr['array'][t[0], c[0]:c[1], z[0]:z[1]] = data
 
-        elif len(C) == 2 and len(T) == 2 and len(Z) == 1:
-            self.__szarr['array'][T[0]:T[1], C[0]:C[1], Z[0]] = data
+        elif len(c) == 2 and len(t) == 2 and len(z) == 1:
+            self.__szarr['array'][t[0]:t[1], c[0]:c[1], z[0]] = data
 
-        elif len(C) == 2 and len(T) == 1 and len(Z) == 1:
-            self.__szarr['array'][T[0], C[0]:C[1],  Z[0]] = data
-
+        elif len(c) == 2 and len(t) == 1 and len(z) == 1:
+            self.__szarr['array'][t[0], c[0]:c[1],  z[0]] = data
 
     def create_channel_dict(self, chan_name):
 
@@ -538,7 +529,7 @@ class StokesZarr(Builder):
             self.init_compressor("Blosc")
 
         if len(data_shape) != 5:
-            raise ValueError('Data shape must be (P, T, Z, Y, X)')
+            raise ValueError('Data shape must be (T, C, Z, Y, X)')
 
         self.set_zarr(store)
         self.__szarr.zeros('array', shape=data_shape, chunks=chunk_size, dtype=dtype,
