@@ -57,8 +57,17 @@ class WaveorderWriter:
             raise NotImplementedError()
 
     def _check_is_dir(self, path):
-        # Upon init, check to make sure save path is a directory,
-        # if not, create that directory
+        """
+        directory verification
+
+        Parameters
+        ----------
+        path (str):
+
+        Returns
+        -------
+
+        """
         if os.path.isdir(path):
             self.__save_dir = path
         else:
@@ -66,6 +75,17 @@ class WaveorderWriter:
             self.__save_dir = path
 
     def _check_and_create_position(self, pos):
+        """
+        modifies the underlying zarr path based on position subfolder
+
+        Parameters
+        ----------
+        pos:    (int):
+
+        Returns
+        -------
+
+        """
 
         position_path = os.path.join(self.__save_dir, f'Pos_{pos:03d}')
         if os.path.exists(position_path):
@@ -73,6 +93,22 @@ class WaveorderWriter:
         else:
             os.mkdir(position_path)
             self.position_dir = position_path
+
+    def set_position(self, position):
+        """
+        append file paths for zarr store
+
+        Parameters
+        ----------
+        position: (int) position subfolder that will contain .zarr array
+
+        Returns
+        -------
+
+        """
+
+        self._check_and_create_position(position)
+        self.current_position = position
 
     def create_zarr(self, name=None):
         """
@@ -89,6 +125,27 @@ class WaveorderWriter:
 
         self.__builder.init_zarr(self.position_dir, name)
         self.store = self.__builder.get_zarr()
+
+    def set_zarr(self, path):
+        """
+        Change current zarr to an existing store
+        if zarr doesn't exist, raise error
+
+        Parameters
+        ----------
+        path:       (str) path to
+
+        Returns
+        -------
+
+        """
+        if os.path.exists(path):
+            print(f'Opening existing store at {path}')
+            self.__store_path = path
+            self.store = zarr.open(path)
+            self.__builder.set_zarr(self.store)
+        else:
+            raise ValueError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
     def init_array(self, data_shape: tuple, chunk_size: tuple, dtype='float32', overwrite=False):
         """
@@ -144,28 +201,6 @@ class WaveorderWriter:
     def set_compressor(self, compressor):
         self.__builder.init_compressor(compressor)
 
-    def set_position(self, position):
-
-        # Check if new position folder exists
-        # if not create folder
-        # Update current position index
-
-        self._check_and_create_position(position)
-        self.current_position = position
-
-    def set_zarr(self, path):
-
-        # Change to an existing store,
-        # if store doesn't exist, raise error
-
-        if os.path.exists(path):
-            print(f'Opening existing store at {path}')
-            self.__store_path = path
-            self.store = zarr.open(path)
-            self.__builder.set_zarr(self.store)
-        else:
-            raise ValueError(f'No store found at {path}, check spelling or create new store with create_zarr')
-
     def write(self, data, T, C, Z):
         """
         Wrapper that calls the builder's write function.
@@ -193,7 +228,9 @@ class WaveorderWriter:
 
 
 class Builder:
-    # interface for all builders
+    """
+    ABC for all builders
+    """
 
     # create zarr memory store
     def init_zarr(self,
@@ -326,12 +363,18 @@ class PhysicalZarr(Builder):
     def init_compressor(self, compressor_: str):
         """
         Zarr supports a variety of compressor libraries:
-            from NumCodes:
+            from NumCodecs:
                 Blosc, Zstandard, LZ4, Zlib, BZ2, LZMA
         Blosc library supports many algorithms:
                 zstd, blosclz, lz4, lz4hc, zlib, snappy
-        :param compressor_:
-        :return:
+
+        Parameters
+        ----------
+        compressor_:    (str) one of the compressor libraries from NumCodecs
+
+        Returns
+        -------
+
         """
         if compressor_ is "Blosc":
             self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
@@ -472,12 +515,18 @@ class StokesZarr(Builder):
     def init_compressor(self, compressor_: str):
         """
         Zarr supports a variety of compressor libraries:
-            from NumCodes:
+            from NumCodecs:
                 Blosc, Zstandard, LZ4, Zlib, BZ2, LZMA
         Blosc library supports many algorithms:
                 zstd, blosclz, lz4, lz4hc, zlib, snappy
-        :param compressor_:
-        :return:
+
+        Parameters
+        ----------
+        compressor_:    (str) one of the compressor libraries from NumCodecs
+
+        Returns
+        -------
+
         """
         if compressor_ is "Blosc":
             self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
