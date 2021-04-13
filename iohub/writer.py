@@ -191,22 +191,33 @@ class WaveorderWriter:
         self.__builder.set_zarr(self.store)
         self.__builder.write(data, T, C, Z)
 
+
 class Builder:
     # interface for all builders
 
     # create zarr memory store
-    def init_zarr(self): pass
+    def init_zarr(self,
+                  directory: str,
+                  name: str): pass
 
     # create subarrays named after the channel
-    def init_arrays(self): pass
+    def init_array(self,
+                   store: zarr.DirectoryStore,
+                   data_shape: tuple,
+                   chunk_size: tuple,
+                   dtype: str,
+                   overwrite: bool
+                   ): pass
 
     # assign group and array attributes
     def init_meta(self): pass
 
-    # create a directory store and write the memory store to that
-    def to_disk(self): pass
-
-    def write(self): pass
+    # write data to t, c, z slice
+    def write(self,
+              data,
+              t,
+              c,
+              z): pass
 
 
 class PhysicalZarr(Builder):
@@ -299,10 +310,11 @@ class PhysicalZarr(Builder):
                 'inverted': False,
                 'label': chan_name,
                 'window': {'end': end, 'max': max, 'min': min, 'start': start}
+                }
 
         return dict
 
-    def check_if_zarr_exists(self, path):
+    def _check_if_zarr_exists(self, path):
         if os.path.exists(path):
             print(f'Found existing store at {path}')
             # return True
@@ -311,12 +323,24 @@ class PhysicalZarr(Builder):
             # return False
 
     # Placeholder function for future compressor customization
-    def init_compressor(self, **kwargs):
-        self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
+    def init_compressor(self, compressor_: str):
+        """
+        Zarr supports a variety of compressor libraries:
+            from NumCodes:
+                Blosc, Zstandard, LZ4, Zlib, BZ2, LZMA
+        Blosc library supports many algorithms:
+                zstd, blosclz, lz4, lz4hc, zlib, snappy
+        :param compressor_:
+        :return:
+        """
+        if compressor_ is "Blosc":
+            self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
+        else:
+            raise NotImplementedError("only Blosc library with zstd algorithm is supported")
 
     # Initialize zero array
     def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
-        if self.__compressor == None:
+        if self.__compressor is None:
             self.init_compressor()
 
         # Make sure data matches OME zarr structure
@@ -336,7 +360,7 @@ class PhysicalZarr(Builder):
             if not path.endswith('.zarr'):
                 path += '.zarr'
 
-        self.check_if_zarr_exists(path)
+        self._check_if_zarr_exists(path)
         store = zarr.open(path)
         self.set_zarr(store)
 
@@ -434,6 +458,7 @@ class StokesZarr(Builder):
                 'inverted': False,
                 'label': chan_name,
                 'window': {'end': end, 'max': max, 'min': min, 'start': start}
+                }
 
         return dict
 
@@ -444,12 +469,24 @@ class StokesZarr(Builder):
         else:
             print(f'Creating new store at {path}')
 
-    def init_compressor(self, **kwargs):
-        self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
+    def init_compressor(self, compressor_: str):
+        """
+        Zarr supports a variety of compressor libraries:
+            from NumCodes:
+                Blosc, Zstandard, LZ4, Zlib, BZ2, LZMA
+        Blosc library supports many algorithms:
+                zstd, blosclz, lz4, lz4hc, zlib, snappy
+        :param compressor_:
+        :return:
+        """
+        if compressor_ is "Blosc":
+            self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.SHUFFLE)
+        else:
+            raise NotImplementedError("only Blosc library with zstd algorithm is supported")
 
     def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
-        if self.__compressor == None:
-            self.init_compressor()
+        if self.__compressor is None:
+            self.init_compressor("Blosc")
 
         if len(data_shape) != 5:
             raise ValueError('Data shape must be (P, T, Z, Y, X)')
