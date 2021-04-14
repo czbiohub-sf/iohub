@@ -32,25 +32,28 @@ class WaveorderWriter:
 
     def __init__(self,
                  save_dir: str,
-                 datatype: str):
+                 datatype: str = None):
         """
         datatype is one of "stokes" or "physical"
         :param save_dir:
         :param datatype:
         """
 
+        self.datatype = datatype
+
         self._check_is_dir(save_dir)
 
-        if datatype == 'stokes':
-            self.__builder = StokesZarr()
-        elif datatype == 'physical':
-            self.__builder = PhysicalZarr()
-        else:
-            raise NotImplementedError()
+        # if datatype == 'stokes':
+        #     self.__builder = StokesZarr()
+        # elif datatype == 'physical':
+        #     self.__builder = PhysicalZarr()
+        # else:
+        #     raise NotImplementedError()
 
     def _check_is_dir(self, path):
         """
         directory verification
+        assigns self.__save_dir
 
         Parameters
         ----------
@@ -86,6 +89,20 @@ class WaveorderWriter:
             os.mkdir(position_path)
             self.position_dir = position_path
 
+    def set_type(self, datatype):
+        """
+        one of "physical" or "stokes"
+
+        Parameters
+        ----------
+        datatype:   (str) one of "physical" or "stokes"
+
+        Returns
+        -------
+
+        """
+        self.datatype = datatype
+
     def set_position(self, position):
         """
         append file paths for zarr store
@@ -115,6 +132,15 @@ class WaveorderWriter:
 
         """
 
+        if self.datatype is None:
+            raise AttributeError("datatype is not set.  Must be one of 'stokes' or 'physical'")
+        elif self.datatype == 'stokes':
+            self.__builder = StokesZarr()
+        elif self.datatype == 'physical':
+            self.__builder = PhysicalZarr()
+        else:
+            raise NotImplementedError("datatype must be one of 'stokes' or 'physical'")
+
         self.__builder.init_zarr(self.position_dir, name)
         self.store = self.__builder.get_zarr()
 
@@ -137,7 +163,7 @@ class WaveorderWriter:
             self.store = zarr.open(path)
             self.__builder.set_zarr(self.store)
         else:
-            raise ValueError(f'No store found at {path}, check spelling or create new store with create_zarr')
+            raise FileNotFoundError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
     def init_array(self, data_shape: tuple, chunk_size: tuple, dtype='float32', overwrite=False):
         """
@@ -250,8 +276,15 @@ class Builder:
 
 
 class PhysicalZarr(Builder):
-    __pzarr = None
-    __compressor = None
+    # __pzarr = None
+    # __compressor = None
+
+    def __init__(self):
+        """
+
+        """
+        self.__pzarr = None
+        self.__compressor = None
 
     def write(self, data, t, c, z):
         """
@@ -343,13 +376,13 @@ class PhysicalZarr(Builder):
 
         return dict
 
-    def _check_if_zarr_exists(self, path):
+    def _zarr_exists(self, path):
         if os.path.exists(path):
             print(f'Found existing store at {path}')
-            # return True
+            return True
         else:
-            print(f'Creating new store at {path}')
-            # return False
+            # print(f'Creating new store at {path}')
+            return False
 
     # Placeholder function for future compressor customization
     def init_compressor(self, compressor_: str):
@@ -375,8 +408,22 @@ class PhysicalZarr(Builder):
 
     # Initialize zero array
     def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
+        """
+
+        Parameters
+        ----------
+        store
+        data_shape
+        chunk_size
+        dtype
+        overwrite
+
+        Returns
+        -------
+
+        """
         if self.__compressor is None:
-            self.init_compressor()
+            self.init_compressor('Blosc')
 
         # Make sure data matches OME zarr structure
         if len(data_shape) != 5:
@@ -387,19 +434,48 @@ class PhysicalZarr(Builder):
                            compressor=self.__compressor, overwrite=overwrite)
 
     def init_zarr(self, directory, name=None):
+        """
+        create a zarr.DirectoryStore at the supplied directory
 
-        if name == None:
-            path = os.path.join(directory, 'physical_data.zarr')
+        Parameters
+        ----------
+        directory:  (str) path to directory store
+        name:   (str) name of zarr array, with extension '.zarr'.  Defaults to 'physical_data.zarr'
+
+        Returns
+        -------
+
+        """
+        if name is None:
+            name = 'physical_data.zarr'
+        if not name.endswith('.zarr'):
+            name += '.zarr'
+        path = os.path.join(directory, name)
+
+        # if name is None:
+        #     path = os.path.join(directory, 'physical_data.zarr')
+        # else:
+        #     path = os.path.join(directory, name)
+        #     if not path.endswith('.zarr'):
+        #         path += '.zarr'
+
+        if not os.path.exists(path):
+            store = zarr.open(path)
+            self.set_zarr(store)
         else:
-            path = os.path.join(directory, name)
-            if not path.endswith('.zarr'):
-                path += '.zarr'
-
-        self._check_if_zarr_exists(path)
-        store = zarr.open(path)
-        self.set_zarr(store)
+            raise FileExistsError(f"zarr already exists at {path}")
 
     def set_zarr(self, store):
+        """
+        set this object's zarr store
+        Parameters
+        ----------
+        store
+
+        Returns
+        -------
+
+        """
         self.__pzarr = store
 
     def get_zarr(self):
@@ -496,7 +572,7 @@ class StokesZarr(Builder):
 
         return dict
 
-    def check_if_zarr_exists(self, path):
+    def _zarr_exists(self, path):
         if os.path.exists(path):
             print(f'Found existing store at {path}')
             # return True
@@ -525,6 +601,20 @@ class StokesZarr(Builder):
             raise NotImplementedError("only Blosc library with zstd algorithm is supported")
 
     def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
+        """
+
+        Parameters
+        ----------
+        store
+        data_shape
+        chunk_size
+        dtype
+        overwrite
+
+        Returns
+        -------
+
+        """
         if self.__compressor is None:
             self.init_compressor("Blosc")
 
@@ -536,17 +626,41 @@ class StokesZarr(Builder):
                            compressor=self.__compressor, overwrite=overwrite)
 
     def init_zarr(self, directory, name=None):
+        """
 
-        if name == None:
-            path = os.path.join(directory, 'stokes_data.zarr')
+        create a zarr.DirectoryStore at the supplied directory
+
+        Parameters
+        ----------
+        directory:  (str) path to directory store
+        name:   (str) name of zarr array, with extension '.zarr'.  Defaults to 'physical_data.zarr'
+
+        Returns
+        -------
+
+        """
+
+        if name is None:
+            name = 'stokes_data.zarr'
+        if not name.endswith('.zarr'):
+            name += '.zarr'
+        path = os.path.join(directory, name)
+
+        if not os.path.exists(path):
+            store = zarr.open(path)
+            self.set_zarr(store)
         else:
-            path = os.path.join(directory, name)
-            if not path.endswith('.zarr'):
-                path += '.zarr'
+            raise FileExistsError(f"zarr already exists at {path}")
 
-        self.check_if_zarr_exists(path)
-        store = zarr.open(path)
-        self.set_zarr(store)
+        # if name == None:
+        #     path = os.path.join(directory, 'stokes_data.zarr')
+        # else:
+        #     path = os.path.join(directory, name)
+        #     if not path.endswith('.zarr'):
+        #         path += '.zarr'
+        # self._zarr_exists(path)
+        # store = zarr.open(path)
+        # self.set_zarr(store)
 
     def set_zarr(self, store):
         self.__szarr = store
