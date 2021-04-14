@@ -212,10 +212,11 @@ class WaveorderWriter:
 
             full_dict = {'multiscales': multiscale_dict,
                          'omero':{
-                             {'channels': dict_list},
-                             {'rdefs': rdefs},
-                             {'version': 0.1}}
-                        }
+                             'channels': dict_list,
+                             'rdefs': rdefs,
+                             'version': 0.1}
+                         }
+
 
 
             self.store.attrs.put(full_dict)
