@@ -363,7 +363,7 @@ class PhysicalZarr(Builder):
             min = 0.0
             max = 10000.0
             start = 0.0
-            end = 1000.0
+            end = 10000.0
 
         dict = {'active': True,
                 'coefficient': 1.0,
