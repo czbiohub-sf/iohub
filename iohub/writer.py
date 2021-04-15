@@ -157,6 +157,16 @@ class WaveorderWriter:
         -------
 
         """
+
+        if self.datatype is None:
+            raise AttributeError("datatype is not set.  Must be one of 'stokes' or 'physical'")
+        elif self.datatype == 'stokes':
+            self.__builder = StokesZarr()
+        elif self.datatype == 'physical':
+            self.__builder = PhysicalZarr()
+        else:
+            raise NotImplementedError("datatype must be one of 'stokes' or 'physical'")
+
         if os.path.exists(path):
             print(f'Opening existing store at {path}')
             self.__store_path = path
