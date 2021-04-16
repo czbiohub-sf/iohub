@@ -18,12 +18,10 @@ class MicromanagerOmeTiffReader:
             2. load the master file
             3. read micro-manager metadata into class attributes
 
-        :param folder: str
-            folder or file containing all ome-tiff files
-        :param extract_data: bool
-            True if ome_series should be extracted immediately
-        :param log_level: int
-            One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
+        Parameters
+        ----------
+        folder:         (str) folder or file containing all ome-tiff files
+        extract_data:   (bool) True if ome_series should be extracted immediately
 
         """
 

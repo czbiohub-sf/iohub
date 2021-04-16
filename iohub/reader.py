@@ -31,21 +31,15 @@ class MicromanagerReader:
                  extract_data: bool = False,
                  log_level: int = logging.ERROR):
         """
-        reads ome-tiff files into zarr or numpy arrays
-        Strategy:
-            1. search the file's omexml metadata for the "master file" location
-            2. load the master file
-            3. read micro-manager metadata into class attributes
+        reads data output from micro-manager and returns a zarr array or numpy array
+        supports singlepage tiff sequences or ome-tiffs
 
-        :param src: str
-            folder or file containing all ome-tiff files
-        :param data_type: str
-            whether data is 'ometiff', 'singlepagetiff', 'zarr'
-        :param extract_data: bool
-            True if ome_series should be extracted immediately
-        :param log_level: int
-            One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
-
+        Parameters
+        ----------
+        src:            (str) folder or file containing all ome-tiff files
+        data_type:      (str) whether data is 'ometiff', 'singlepagetiff', 'zarr'
+        extract_data:   (bool) True if ome_series should be extracted immediately
+        log_level:      (int) One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
         """
 
         logging.basicConfig(
@@ -74,25 +68,38 @@ class MicromanagerReader:
     def get_zarr(self, position):
         """
         return a zarr array for a given position
-        :param position: int
-            position (aka ome-tiff scene)
-        :return: zarr.array
+
+        Parameters
+        ----------
+        position:   (int) position (aka ome-tiff scene)
+
+        Returns
+        -------
+        zarr.array for the provided position
         """
         return self.reader.get_zarr(position)
 
     def get_array(self, position):
         """
         return a numpy array for a given position
-        :param position: int
-            position (aka ome-tiff scene)
-        :return: np.ndarray
+
+        Parameters
+        ----------
+        position:   (int) position (aka ome-tiff scene)
+
+        Returns
+        -------
+        np.array for the provided position
         """
         return self.reader.get_array(position)
 
     def get_num_positions(self):
         """
         get total number of scenes referenced in ome-tiff metadata
-        :return: int
+
+        Returns:
+        -------
+        int of number of positions
         """
         return self.reader.get_num_positions()
 
@@ -100,7 +107,11 @@ class MicromanagerReader:
     def shape(self):
         """
         return the underlying data shape as a tuple
-        :return: tuple
+
+        Returns:
+        -------
+        tuple of (frames, slices, channels, height, width)
+
         """
         return self.frames, self.slices, self.channels, self.height, self.width
 
@@ -135,7 +146,7 @@ class MicromanagerReader:
 #     mm2_p_t = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_4p_2t_2k_1'
 #     mm2_p_c = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_4p_3c_2k_1'
 #     mm2_p_z = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_4p_5z_2k_1'
-# 
+#
 #     # without position
 #     mm2_t_z_c = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_1t_5z_3c_2k_1'
 #     mm2_t_z = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_1t_5z_2k_1'
