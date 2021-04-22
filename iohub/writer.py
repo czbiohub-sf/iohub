@@ -8,7 +8,7 @@ from zarr import Array, Group
 # todo: implement hierarchies / groups
 # todo: add checks for inconsistent data shapes
 # todo: change to persistent arrays?
-
+# todo: figure out if we should have physical/stokes data above or below position level.
 
 # initialize upfront -- with file path and dimensions -- use zeros and replace later
 #       initial dimensions are just (p, t, z, y, x) = (1, 1, 1, 512, 512) ==> (file) 2.0.0._._
@@ -25,30 +25,37 @@ class WaveorderWriter:
     """
     __builder = None
     __save_dir = None
-    __store_path = None
+    __root_store_path = None
+    __builder_name = None
+    __current_zarr_group = None
+    __current_zarr_dir = None
     store = None
+
+    current_group_name = None
     current_position = None
-    position_dir = None
 
     def __init__(self,
-                 save_dir: str,
-                 datatype: str = None):
+                 save_dir: str = None,
+                 datatype: str = None,
+                 alt_name: str = None):
         """
-        datatype is one of "stokes" or "physical"
+        datatype is one of "stokes" or "physical".
+        Alt name specifies alternative name for the builder. i.e.'stokes denoised'
+
         :param save_dir:
         :param datatype:
+        :param alt_name:
         """
 
         self.datatype = datatype
+        self.__builder_name = alt_name
 
-        self._check_is_dir(save_dir)
+        if os.path.exists(save_dir) and save_dir.endswith('.zarr'):
+            print(f'Opening existing store at {save_dir}')
+            self._open_zarr_root(save_dir)
 
-        # if datatype == 'stokes':
-        #     self.__builder = StokesZarr()
-        # elif datatype == 'physical':
-        #     self.__builder = PhysicalZarr()
-        # else:
-        #     raise NotImplementedError()
+        else:
+            self._check_is_dir(save_dir)
 
     def _check_is_dir(self, path):
         """
@@ -69,25 +76,8 @@ class WaveorderWriter:
             os.mkdir(path)
             self.__save_dir = path
 
-    def _check_and_create_position(self, pos):
-        """
-        modifies the underlying zarr path based on position subfolder
-
-        Parameters
-        ----------
-        pos:    (int):
-
-        Returns
-        -------
-
-        """
-
-        position_path = os.path.join(self.__save_dir, f'Pos_{pos:03d}')
-        if os.path.exists(position_path):
-            self.position_dir = position_path
-        else:
-            os.mkdir(position_path)
-            self.position_dir = position_path
+    def get_current_group(self):
+        return self.current_group_name
 
     def set_type(self, datatype):
         """
@@ -101,9 +91,10 @@ class WaveorderWriter:
         -------
 
         """
+        self.__builder_name = alt_name
         self.datatype = datatype
 
-    def set_position(self, position):
+    def create_position(self, position, prefix=None):
         """
         append file paths for zarr store
 
@@ -116,42 +107,82 @@ class WaveorderWriter:
 
         """
 
-        self._check_and_create_position(position)
-        self.current_position = position
+        grp_name = f'{prefix}_Pos_{position:03d}' if prefix else f'Pos_{position:03d}'
+        grp_path = os.path.join(self.__root_store_path, grp_name)
 
-    def create_zarr(self, name=None):
+        if os.path.exists(grp_path):
+            raise FileExistsError('A position subgroup with this name already exists')
+        else:
+            print(f'Creating and opening subgroup {grp_name}')
+            self.store.create_group(grp_name)
+            self.__current_zarr_group = self.store[grp_name]
+            self.current_group_name = grp_name
+            self.current_position = position
+
+    def open_position(self, position, prefix=None):
+
+        grp_name = f'{prefix}_Pos_{position:03d}' if prefix else f'Pos_{position:03d}'
+        grp_path = os.path.join(self.__root_store_path, grp_name)
+
+        #TODO: Find fancy way to search for prefix
+        if os.path.exists(grp_path):
+            print(f'Opening subgroup {grp_name}')
+            self.group_name = grp_name
+            self.__current_zarr_group = self.store[grp_name]
+            self.current_group_name = grp_name
+            self.current_position = position
+
+            groups = list(self.__current_zarr_group.group_keys())
+            if len(groups) != 0 and self.__builder.name in groups:
+                __current_zarr_dir = self.__current_zarr_group[self.__builder.name]
+            else:
+                __current_zarr_dir = self.__current_zarr_group
+
+        else:
+            raise FileNotFoundError(f'Could not find zarr position subgroup at {grp_path}\
+                                    Check spelling or create position subgroup with create_position')
+
+    def create_zarr_root(self, name):
         """
-        Method for creating a zarr store.
+        Method for creating the root zarr store.
         If the store already exists, it will open that store.
         If no name is supplied, the default builder name will
         be used ('stokes_data' or 'physical_data')
 
         Parameters
         ----------
-        name:       (string) Optional. Name of the zarr store.
+        name:       (string) Name of the zarr store.
 
         """
 
         if self.datatype is None:
             raise AttributeError("datatype is not set.  Must be one of 'stokes' or 'physical'")
         elif self.datatype == 'stokes':
-            self.__builder = StokesZarr()
+            self.__builder = StokesZarr(self.__builder_name)
         elif self.datatype == 'physical':
-            self.__builder = PhysicalZarr()
+            self.__builder = PhysicalZarr(self.__builder_name)
         else:
             raise NotImplementedError("datatype must be one of 'stokes' or 'physical'")
 
-        self.__builder.init_zarr(self.position_dir, name)
-        self.store = self.__builder.get_zarr()
+        if not name.endswith('.zarr'):
+            name = name+'.zarr'
 
-    def set_zarr(self, path):
+        zarr_path = os.path.join(self.__save_dir, name)
+        if os.path.exists(zarr_path):
+            raise FileExistsError('A zarr store with this name already exists')
+
+        print(f'Creating new zarr store at {zarr_path}')
+        self.store = zarr.open(zarr_path)
+        self.__root_store_path = zarr_path
+
+    def _open_zarr_root(self, path):
         """
         Change current zarr to an existing store
         if zarr doesn't exist, raise error
 
         Parameters
         ----------
-        path:       (str) path to
+        path:       (str) path to store. Must end in .zarr
 
         Returns
         -------
@@ -161,75 +192,41 @@ class WaveorderWriter:
         if self.datatype is None:
             raise AttributeError("datatype is not set.  Must be one of 'stokes' or 'physical'")
         elif self.datatype == 'stokes':
-            self.__builder = StokesZarr()
+            self.__builder = StokesZarr(self.__builder_name)
         elif self.datatype == 'physical':
-            self.__builder = PhysicalZarr()
+            self.__builder = PhysicalZarr(self.__builder_name)
         else:
             raise NotImplementedError("datatype must be one of 'stokes' or 'physical'")
 
         if os.path.exists(path):
-            print(f'Opening existing store at {path}')
-            self.__store_path = path
             self.store = zarr.open(path)
-            self.__builder.set_zarr(self.store)
+            self.__root_store_path = path
         else:
             raise FileNotFoundError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
-    def init_array(self, data_shape: tuple, chunk_size: tuple, dtype='float32', overwrite=False):
+    def init_array(self, data_shape: tuple, chunk_size: tuple, chan_names, clims = None, dtype='float32', overwrite=False):
         """
         Parameters
         ----------
         data_shape:     (tuple) Shape of the position dataset (T, C, Z, Y, X)
         chunk_size:     (tuple) Chunks to save, (T, C, Z, Y, X)
                                 i.e. to chunk along z chunk_size = (1, 1, 1, Y, X)
+        chan_names:     (list) List of channel names in the order of the channel dimensions
+                                i.e. if 3D Phase is C = 0, list '3DPhase' first.
+        clims:          (list of tuples) contrast limits to display for each channel
+                                in visualization tools
         dtype:          (string) data type of the array
 
         Returns
         -------
 
         """
-        self.__builder.init_array(self.store, data_shape, chunk_size, dtype, overwrite)
-
-    #TODO: Add user-defined contrast limits
-    def set_channel_attributes(self, chan_names: list):
-        """
-        A method for creating ome-zarr metadata dictionary.
-        Channel names are defined by the user, everything else
-        is pre-defined.
-
-        Parameters
-        ----------
-        chan_names:     (list) List of channel names in the order of the channel dimensions
-                                i.e. if 3D Phase is C = 0, list '3DPhase' first.
-
-        """
-
-        if len(chan_names) != self.store['array'].shape[1]:
+        if len(chan_names) != data_shape[1]:
             raise ValueError('Number of Channel Names does not equal number of channels \
                                 in the array')
-        else:
 
-            rdefs = {'defaultT': 0,
-                     'model': 'color',
-                     'projection': 'normal',
-                     'defaultZ': 0}
-
-            multiscale_dict = [{'datasets': [{'path': "array"}],
-                                'version': '0.1'}]
-            dict_list = []
-            for i in range(len(chan_names)):
-                dict_list.append(self.__builder.create_channel_dict(chan_names[i]))
-
-            full_dict = {'multiscales': multiscale_dict,
-                         'omero':{
-                             'channels': dict_list,
-                             'rdefs': rdefs,
-                             'version': 0.1}
-                         }
-
-
-
-            self.store.attrs.put(full_dict)
+        self.__builder.init_array(self.__current_zarr_group, data_shape, chunk_size, dtype, chan_names, clims, overwrite)
+        self.__current_zarr_dir = self.__current_zarr_group[self.__builder.name]
 
     def set_compressor(self, compressor):
         self.__builder.init_compressor(compressor)
@@ -256,9 +253,8 @@ class WaveorderWriter:
         if isinstance(z, int):
             z = [z]
 
-        self.__builder.set_zarr(self.store)
+        self.__builder.set_zarr(self.__current_zarr_dir)
         self.__builder.write(data, t, c, z)
-
 
 class Builder:
     """
@@ -276,6 +272,8 @@ class Builder:
                    data_shape: tuple,
                    chunk_size: tuple,
                    dtype: str,
+                   pos: int,
+                   prefix: str,
                    overwrite: bool
                    ): pass
 
@@ -291,15 +289,20 @@ class Builder:
 
 
 class PhysicalZarr(Builder):
-    # __pzarr = None
-    # __compressor = None
+    name = None
 
-    def __init__(self):
+    def __init__(self, name=None):
         """
 
         """
         self.__pzarr = None
         self.__compressor = None
+
+        if name:
+            self.name = name
+        else:
+            self.name = 'physical_data'
+
 
     def write(self, data, t, c, z):
         """
@@ -348,37 +351,37 @@ class PhysicalZarr(Builder):
         else:
             raise ValueError('Did not understand data formatting')
 
-    # TODO: adjust min/max contrast limits based on data type
-    def create_channel_dict(self, chan_name):
+    def create_channel_dict(self, chan_name, clim=None):
 
         if chan_name == 'Retardance':
-            max = 100.0
             min = 0.0
-            start = 0.0
-            end = 8.0
+            max = 1000.0
+            start = clim[0] if clim else 0.0
+            end = clim[1] if clim else 100.0
         elif chan_name == 'Orientation':
-            max = 4.0
             min = 0.0
-            start = 0.0
-            end = 3.141593
+            max = 180.0
+            start = clim[0] if clim else 0.0
+            end = clim[1] if clim else 180.0
 
         elif chan_name == 'Phase3D':
-            min = -1.0
-            max = 1.0
-            start = -0.2
-            end = 0.2
+            min = -10.0
+            max = 10.0
+            start = clim[0] if clim else -0.2
+            end = clim[1] if clim else 0.2
+
 
         elif chan_name == 'BF':
             min = 0.0
-            max = 100
-            start = 0.0
-            end = 5.0
+            max = 65535.0
+            start = clim[0] if clim else 0.0
+            end = clim[1] if clim else 5.0
 
         else:
             min = 0.0
-            max = 10000.0
-            start = 0.0
-            end = 10000.0
+            max = 65535.0
+            start = clim[0] if clim else 0.0
+            end = clim[1] if clim else 65535.0
 
         dict = {'active': True,
                 'coefficient': 1.0,
@@ -390,6 +393,46 @@ class PhysicalZarr(Builder):
                 }
 
         return dict
+
+    def set_channel_attributes(self, chan_names: list, clims: list):
+        """
+        A method for creating ome-zarr metadata dictionary.
+        Channel names are defined by the user, everything else
+        is pre-defined.
+
+        Parameters
+        ----------
+        chan_names:     (list) List of channel names in the order of the channel dimensions
+                                i.e. if 3D Phase is C = 0, list '3DPhase' first.
+
+        clims:          (list of tuples) contrast limits to display for every channel
+
+        """
+
+        rdefs = {'defaultT': 0,
+                 'model': 'color',
+                 'projection': 'normal',
+                 'defaultZ': 0}
+
+        multiscale_dict = [{'datasets': [{'path': "array"}],
+                            'version': '0.1'}]
+        dict_list = []
+
+        for i in range(len(chan_names)):
+            if clims == None:
+                dict_list.append(self.create_channel_dict(chan_names[i]))
+            else:
+                #TODO: Check if clims length matches channel length
+                dict_list.append(self.create_channel_dict(chan_names[i], clims[i]))
+
+        full_dict = {'multiscales': multiscale_dict,
+                     'omero': {
+                         'channels': dict_list,
+                         'rdefs': rdefs,
+                         'version': 0.1}
+                     }
+
+        self.__pzarr.attrs.put(full_dict)
 
     def _zarr_exists(self, path):
         if os.path.exists(path):
@@ -422,7 +465,7 @@ class PhysicalZarr(Builder):
             raise NotImplementedError("only Blosc library with zstd algorithm is supported")
 
     # Initialize zero array
-    def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
+    def init_array(self, store, data_shape, chunk_size, dtype, chan_names, clims, overwrite):
         """
 
         Parameters
@@ -431,6 +474,8 @@ class PhysicalZarr(Builder):
         data_shape
         chunk_size
         dtype
+        chan_names
+        clims
         overwrite
 
         Returns
@@ -444,8 +489,15 @@ class PhysicalZarr(Builder):
         if len(data_shape) != 5:
             raise ValueError('Data shape must be (T, C, Z, Y, X)')
 
-        self.set_zarr(store)
-        self.__pzarr.zeros('array',shape=data_shape, chunks=chunk_size, dtype=dtype,
+        #TODO: GET RID OF THIS?
+        try:
+            self.set_zarr(store[self.name])
+        except:
+            store.create_group(self.name)
+            self.set_zarr(store[self.name])
+
+        self.set_channel_attributes(chan_names, clims)
+        self.__pzarr.zeros('array', shape=data_shape, chunks=chunk_size, dtype=dtype,
                            compressor=self.__compressor, overwrite=overwrite)
 
     def init_zarr(self, directory, name=None):
@@ -498,8 +550,20 @@ class PhysicalZarr(Builder):
 
 
 class StokesZarr(Builder):
-    __szarr = None
-    __compressor = None
+    name = None
+
+    def __init__(self, name=None):
+        """
+
+        """
+        self.__szarr = None
+        self.__compressor = None
+
+        if name:
+            self.name = name
+        else:
+            self.name = 'physical_data'
+
 
     def write(self, data, t, c, z):
         """
@@ -508,7 +572,7 @@ class StokesZarr(Builder):
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
         :param t: (list), index or index range of the time dimension
         :param c: (list), index or index range of the channel dimension
-        :param z: (list), index or index range of the Z dimension
+        :param z: (list), index or index range of the z dimension
 
         """
 
@@ -543,38 +607,42 @@ class StokesZarr(Builder):
             self.__szarr['array'][t[0]:t[1], c[0]:c[1], z[0]] = data
 
         elif len(c) == 2 and len(t) == 1 and len(z) == 1:
-            self.__szarr['array'][t[0], c[0]:c[1],  z[0]] = data
+            self.__szarr['array'][t[0], c[0]:c[1], z[0]] = data
 
-    def create_channel_dict(self, chan_name):
+        else:
+            raise ValueError('Did not understand data formatting')
+
+    def create_channel_dict(self, chan_name, clim=None):
 
         if chan_name == 'S0':
-            max = 10
             min = 0.0
-            start = 0.0
-            end = 1.0
+            max = 65535
+            start = clim[0] if clim else 0.0
+            end = clim[1] if clim else 1.0
+
         elif chan_name == 'S1':
-            max = 1.0
-            min = -1.0
-            start = -0.5
-            end = 0.5
+            min = 10.0
+            max = -10.0
+            start = clim[0] if clim else -0.5
+            end = clim[1] if clim else 0.5
 
         elif chan_name == 'S2':
-            max = 1.0
-            min = -1.0
-            start = -0.5
-            end = 0.5
+            min = -10.0
+            max = 10.0
+            start = clim[0] if clim else -0.5
+            end = clim[1] if clim else 0.5
 
         elif chan_name == 'S3':
-            max = 1.0
-            min = -1.0
-            start = -1.0
-            end = 1.0
+            min = -10
+            max = 10
+            start = clim[0] if clim else -1.0
+            end = clim[1] if clim else 1.0
 
         else:
             min = 0.0
-            max = 1.0
-            start = 0.0
-            end = 1.0
+            max = 65535.0
+            start = clim[0] if clim else 0.0
+            end = clim[1] if clim else 65535.0
 
         dict = {'active': True,
                 'coefficient': 1.0,
@@ -587,13 +655,55 @@ class StokesZarr(Builder):
 
         return dict
 
+    def set_channel_attributes(self, chan_names: list, clims: list):
+        """
+        A method for creating ome-zarr metadata dictionary.
+        Channel names are defined by the user, everything else
+        is pre-defined.
+
+        Parameters
+        ----------
+        chan_names:     (list) List of channel names in the order of the channel dimensions
+                                i.e. if 3D Phase is C = 0, list '3DPhase' first.
+
+        clims:          (list of tuples) contrast limits to display for every channel
+
+        """
+
+        rdefs = {'defaultT': 0,
+                 'model': 'color',
+                 'projection': 'normal',
+                 'defaultZ': 0}
+
+        multiscale_dict = [{'datasets': [{'path': "array"}],
+                            'version': '0.1'}]
+        dict_list = []
+
+        for i in range(len(chan_names)):
+            if clims == None:
+                dict_list.append(self.create_channel_dict(chan_names[i]))
+            else:
+                #TODO: Check if clims length matches channel length
+                dict_list.append(self.create_channel_dict(chan_names[i], clims[i]))
+
+        full_dict = {'multiscales': multiscale_dict,
+                     'omero': {
+                         'channels': dict_list,
+                         'rdefs': rdefs,
+                         'version': 0.1}
+                     }
+
+        self.__pzarr.attrs.put(full_dict)
+
     def _zarr_exists(self, path):
         if os.path.exists(path):
             print(f'Found existing store at {path}')
-            # return True
+            return True
         else:
-            print(f'Creating new store at {path}')
+            # print(f'Creating new store at {path}')
+            return False
 
+    # Placeholder function for future compressor customization
     def init_compressor(self, compressor_: str):
         """
         Zarr supports a variety of compressor libraries:
@@ -615,7 +725,8 @@ class StokesZarr(Builder):
         else:
             raise NotImplementedError("only Blosc library with zstd algorithm is supported")
 
-    def init_array(self, store, data_shape, chunk_size, dtype, overwrite):
+    # Initialize zero array
+    def init_array(self, store, data_shape, chunk_size, dtype, chan_names, clims, overwrite):
         """
 
         Parameters
@@ -624,6 +735,8 @@ class StokesZarr(Builder):
         data_shape
         chunk_size
         dtype
+        chan_names
+        clims
         overwrite
 
         Returns
@@ -631,18 +744,24 @@ class StokesZarr(Builder):
 
         """
         if self.__compressor is None:
-            self.init_compressor("Blosc")
+            self.init_compressor('Blosc')
 
+        # Make sure data matches OME zarr structure
         if len(data_shape) != 5:
             raise ValueError('Data shape must be (T, C, Z, Y, X)')
 
-        self.set_zarr(store)
+        try:
+            self.set_zarr(store[self.name])
+        except:
+            store.create_group(self.name)
+            self.set_zarr(store[self.name])
+
+        self.set_channel_attributes(chan_names, clims)
         self.__szarr.zeros('array', shape=data_shape, chunks=chunk_size, dtype=dtype,
                            compressor=self.__compressor, overwrite=overwrite)
 
     def init_zarr(self, directory, name=None):
         """
-
         create a zarr.DirectoryStore at the supplied directory
 
         Parameters
@@ -654,9 +773,8 @@ class StokesZarr(Builder):
         -------
 
         """
-
         if name is None:
-            name = 'stokes_data.zarr'
+            name = 'physical_data.zarr'
         if not name.endswith('.zarr'):
             name += '.zarr'
         path = os.path.join(directory, name)
@@ -667,17 +785,17 @@ class StokesZarr(Builder):
         else:
             raise FileExistsError(f"zarr already exists at {path}")
 
-        # if name == None:
-        #     path = os.path.join(directory, 'stokes_data.zarr')
-        # else:
-        #     path = os.path.join(directory, name)
-        #     if not path.endswith('.zarr'):
-        #         path += '.zarr'
-        # self._zarr_exists(path)
-        # store = zarr.open(path)
-        # self.set_zarr(store)
-
     def set_zarr(self, store):
+        """
+        set this object's zarr store
+        Parameters
+        ----------
+        store
+
+        Returns
+        -------
+
+        """
         self.__szarr = store
 
     def get_zarr(self):
