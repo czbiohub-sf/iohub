@@ -22,10 +22,10 @@ class MicromanagerSequenceReader:
             2. Build a map between image coordinates and image file names
             3. Upon call to extract data, assign each scene to self.positions (similar to OmeTiffReader)
 
-        :param folder: str
-            folder containing position subdirectories, which contain singlepage tiff sequences
-        :param extract_data: bool
-            True if zarr arrays should be extracted immediately
+        Parameters
+        ----------
+        folder:         (str) folder containing position subdirectories, which contain singlepage tiff sequences
+        extract_data    (bool) True if zarr arrays should be extracted immediately
         """
 
         if not os.path.isdir(folder):
@@ -74,17 +74,49 @@ class MicromanagerSequenceReader:
         if extract_data:
             self._create_stores(0)
 
-    def get_zarr(self, position_):
-        if position_ not in self.positions.keys():
-            self._create_stores(position_)
-        return self.positions[position_]
+    def get_zarr(self, position):
+        """
+        return a zarr array for a given position
 
-    def get_array(self, position_):
-        if position_ not in self.positions.keys():
-            self._create_stores(position_)
-        return np.array(self.positions[position_])
+        Parameters
+        ----------
+        position:       (int) position (aka ome-tiff scene)
+
+        Returns
+        -------
+        position:       (zarr.array)
+
+        """
+        if position not in self.positions.keys():
+            self._create_stores(position)
+        return self.positions[position]
+
+    def get_array(self, position):
+        """
+        return a numpy array for a given position
+
+        Parameters
+        ----------
+        position:   (int) position (aka ome-tiff scene)
+
+        Returns
+        -------
+        position:   (np.ndarray)
+
+        """
+        if position not in self.positions.keys():
+            self._create_stores(position)
+        return np.array(self.positions[position])
 
     def get_num_positions(self):
+        """
+        get total number of scenes referenced in ome-tiff metadata
+
+        Returns
+        -------
+        number of positions     (int)
+
+        """
         self.log.warning("num positions for singlepage tiff reader is ambiguous.  only loaded positions are reported")
         if self.positions:
             return len(self.positions)
@@ -95,8 +127,17 @@ class MicromanagerSequenceReader:
         """
         extract all singlepage tiffs at each coordinate and place them in a zarr array
         coordinates are of shape = (pos, time, channel, z)
-        :return:
+        arrays are of shape = (time, channel, z, height, width)
+
+        Parameters
+        ----------
+        p:      (int) position (aka ome-tiff scene) to extract
+
+        Returns
+        -------
+
         """
+
         self.log.info("")
         z = zarr.zeros(shape=(self.frames,
                               self.channels,
@@ -117,12 +158,19 @@ class MicromanagerSequenceReader:
     def read_tiff_series(self, folder: str):
         """
         given a folder containing position subfolders, each of which contains
-            single-page-tiff series acquired in mm2.0 gamma, parse the metadata
+            single-page-tiff series acquired using micro-manager, parse the metadata
             to map image coordinates to filepaths/names
-        :param folder: str
-        :return: dict
-            keys are coordinates and values are filenames.  Coordinates follow (p, t, c, z) indexing.
+
+        Parameters
+        ----------
+        folder:             (str) project folder containing all position subfolders
+
+        Returns
+        -------
+        coord_filename_map  (dict) keys are coordinates and values are filenames.
+                            Coordinates follow (p, t, c, z) indexing.
         """
+
         positions = [p for p in os.listdir(folder) if os.path.isdir(os.path.join(folder, p))]
         if not positions:
             raise FileNotFoundError("no position subfolder found in supplied folder")
@@ -144,18 +192,25 @@ class MicromanagerSequenceReader:
     def _extract_coord_to_filename(self,
                                    json_,
                                    parent_folder,
-                                   position=None):
+                                   position):
         """
         given a micro-manager generated metadata json, extract image coordinates and their corresponding image filepaths
         build a mapping between the two.
-        :param json_: dict
-            dict generated from json.load
-        :param parent_folder: str
-            full path to file
-        :param position: str
-            mm1.4.22 metadata does not associate positions with images in the metadata.  This has to be provided.
-        :return:
+
+        Parameters
+        ----------
+        json_:              (dict) dict generated from json.load of mm metadata
+        parent_folder:      (str) full path to file
+        position:           (str) mm1.4.22 metadata does not associate positions with images in the metadata.
+                            This has to be provided.
+                            This parameter is not used for mm2.0 metadata, which already provides positions
+
+        Returns
+        -------
+        coord_to_filename   (dict) dictionary mapping of (key, value) = (coordinate, filepath)
+                            where coordinate = (position, time, channel, z-slice)
         """
+
         coords = set()
         meta = dict()
 
@@ -206,9 +261,15 @@ class MicromanagerSequenceReader:
         subdir walk
         from https://github.com/mehta-lab/reconstruct-order
 
-        :param f: str
-        :return: list
+        Parameters
+        ----------
+        f:              (str)
+
+        Returns
+        -------
+        sub_dir_name    (list) natsorted list of subdirectories
         """
+
         sub_dir_path = glob.glob(os.path.join(f, '*/'))
         sub_dir_name = [os.path.split(subdir[:-1])[1] for subdir in sub_dir_path]
         #    assert subDirName, 'No sub directories found'
@@ -219,7 +280,9 @@ class MicromanagerSequenceReader:
         set image metadata.
         from https://github.com/mehta-lab/reconstruct-order
 
-        :return:
+        Returns
+        -------
+
         """
         self.width = self.mm_meta['Summary']['Width']
         self.height = self.mm_meta['Summary']['Height']
@@ -231,7 +294,10 @@ class MicromanagerSequenceReader:
         """
         set image metadata
         from https://github.com/mehta-lab/reconstruct-order
-        :return:
+
+        Returns
+        -------
+
         """
         self.width = int(self.mm_meta['Summary']['UserData']['Width']['PropVal'])
         self.height = int(self.mm_meta['Summary']['UserData']['Height']['PropVal'])
@@ -241,7 +307,10 @@ class MicromanagerSequenceReader:
         """
         set image metadata
         from https://github.com/mehta-lab/reconstruct-order
-        :return:
+
+        Returns
+        -------
+
         """
         keys_list = list(self.mm_meta.keys())
         if 'FrameKey-0-0-0' in keys_list[1]:
@@ -256,3 +325,15 @@ class MicromanagerSequenceReader:
         self.frames = self.mm_meta['Summary']['Frames']
         self.slices = self.mm_meta['Summary']['Slices']
         self.channels = self.mm_meta['Summary']['Channels']
+
+    @property
+    def shape(self):
+        """
+        return the underlying data shape as a tuple
+
+        Returns
+        -------
+        (tuple) five elements of (frames, slices, channels, height, width)
+
+        """
+        return self.frames, self.slices, self.channels, self.height, self.width

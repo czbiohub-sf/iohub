@@ -48,7 +48,10 @@ class MicromanagerOmeTiffReader:
     def _set_mm_meta(self):
         """
         assign image metadata from summary metadata
-        :return:
+
+        Returns
+        -------
+
         """
         with TiffFile(self.master_ome_tiff) as tif:
             self.mm_meta = tif.micromanager_metadata
@@ -86,8 +89,12 @@ class MicromanagerOmeTiffReader:
     def _check_missing_dims(self):
         """
         establishes which dimensions are not present in the data
-        :return:
+
+        Returns
+        -------
+
         """
+
         missing_coords = []
         if self.frames == 1:
             missing_coords.append('T')
@@ -103,8 +110,15 @@ class MicromanagerOmeTiffReader:
         reshape zarr arrays to match (T, C, Z, Y, X)
         if zarr array is lower dimensional, reshape to match the target
         if zarr array is purely 2 or 3 dimensional, no need to reshape
-        :param zar: zarr.array
-        :return: zarr.array
+
+        Parameters
+        ----------
+        zar:        (zarr.array)
+
+        Returns
+        -------
+        zar:        (zarr.array)
+
         """
 
         if self._missing_dims is None:
@@ -130,10 +144,16 @@ class MicromanagerOmeTiffReader:
         """
         takes a zarr array and, if necessary, expands it to include missing dimensions
         returns zarr array of dims (T, C, Z, Y, X)
-        :param zar: zarr.array
-        :return: zarr.array
-            zarr array with standardized shape
+
+        Parameters
+        ----------
+        zar:        (zarr.array)
+
+        Returns
+        -------
+        target:     (zarr.array)
         """
+
         # major assumption -- that supplied zar is always shaped as (T, C, Z, Y, X)
         if self._missing_dims is None:
             return zar
@@ -181,9 +201,16 @@ class MicromanagerOmeTiffReader:
     def _simplify_stage_position(self, stage_pos: dict):
         """
         flattens the nested dictionary structure of stage_pos and removes superfluous keys
-        :param stage_pos: dictionary containing a single position's device info
-        :return:
+
+        Parameters
+        ----------
+        stage_pos:      (dict) dictionary containing a single position's device info
+
+        Returns
+        -------
+        out:            (dict) flattened dictionary
         """
+
         out = copy(stage_pos)
         out.pop('DevicePositions')
         for dev_pos in stage_pos['DevicePositions']:
@@ -194,9 +221,17 @@ class MicromanagerOmeTiffReader:
         """
         flattens the nested dictionary structure of stage_pos and removes superfluous keys
         for MM2.0 Beta versions
-        :param stage_pos: dictionary containing a single position's device info
-        :return:
+
+        Parameters
+        ----------
+        stage_pos:      (dict) dictionary containing a single position's device info
+
+        Returns
+        -------
+        new_dict:       (dict) flattened dictionary
+
         """
+
         new_dict = {}
         new_dict['Label'] = stage_pos['label']
         new_dict['GridRow'] = stage_pos['gridRow']
@@ -217,9 +252,16 @@ class MicromanagerOmeTiffReader:
     def _create_stores(self, master_ome):
         """
         extract all series from ome-tiff and place into dict of (pos: zarr)
-        :param master_ome: full path to master OME-tiff
-        :return:
+
+        Parameters
+        ----------
+        master_ome:     (str): full path to master OME-tiff
+
+        Returns
+        -------
+
         """
+
         self.log.info(f"extracting data from {master_ome}")
         with TiffFile(master_ome) as tif:
             for idx, tiffpageseries in enumerate(tif.series):
@@ -234,8 +276,13 @@ class MicromanagerOmeTiffReader:
             load the omexml metadata for a single file and
             search for the element attribute corresponding to the master file
 
-        :param folder_: full path to folder containing images
-        :return: full path to master-ome tiff
+        Parameters
+        ----------
+        folder_:        (str) full path to folder containing images
+
+        Returns
+        -------
+        path:           (str) full path to master-ome tiff
         """
 
         from xml.etree import ElementTree as etree  # delayed import
@@ -284,9 +331,15 @@ class MicromanagerOmeTiffReader:
     def get_zarr(self, position):
         """
         return a zarr array for a given position
-        :param position: int
-            position (aka ome-tiff scene)
-        :return: zarr.array
+
+        Parameters
+        ----------
+        position:       (int) position (aka ome-tiff scene)
+
+        Returns
+        -------
+        position:       (zarr.array)
+
         """
         if not self.positions:
             self._create_stores(self.master_ome_tiff)
@@ -295,10 +348,17 @@ class MicromanagerOmeTiffReader:
     def get_array(self, position):
         """
         return a numpy array for a given position
-        :param position: int
-            position (aka ome-tiff scene)
-        :return: np.ndarray
+
+        Parameters
+        ----------
+        position:   (int) position (aka ome-tiff scene)
+
+        Returns
+        -------
+        position:   (np.ndarray)
+
         """
+
         if not self.positions:
             self._create_stores(self.master_ome_tiff)
         return np.array(self.positions[position])
@@ -306,7 +366,11 @@ class MicromanagerOmeTiffReader:
     def get_num_positions(self):
         """
         get total number of scenes referenced in ome-tiff metadata
-        :return: int
+
+        Returns
+        -------
+        number of positions     (int)
+
         """
         if self.positions:
             return len(self.positions)
@@ -317,6 +381,10 @@ class MicromanagerOmeTiffReader:
     def shape(self):
         """
         return the underlying data shape as a tuple
-        :return: tuple
+
+        Returns
+        -------
+        (tuple) five elements of (frames, slices, channels, height, width)
+
         """
         return self.frames, self.slices, self.channels, self.height, self.width
