@@ -562,7 +562,7 @@ class StokesZarr(Builder):
         if name:
             self.name = name
         else:
-            self.name = 'physical_data'
+            self.name = 'stokes_data'
 
 
     def write(self, data, t, c, z):
@@ -693,7 +693,7 @@ class StokesZarr(Builder):
                          'version': 0.1}
                      }
 
-        self.__pzarr.attrs.put(full_dict)
+        self.__szarr.attrs.put(full_dict)
 
     def _zarr_exists(self, path):
         if os.path.exists(path):
