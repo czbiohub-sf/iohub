@@ -5,16 +5,8 @@ from numcodecs import Blosc
 from typing import Union
 from zarr import Array, Group
 
-# todo: implement hierarchies / groups
 # todo: add checks for inconsistent data shapes
 # todo: change to persistent arrays?
-# todo: figure out if we should have physical/stokes data above or below position level.
-
-# initialize upfront -- with file path and dimensions -- use zeros and replace later
-#       initial dimensions are just (p, t, z, y, x) = (1, 1, 1, 512, 512) ==> (file) 2.0.0._._
-#       Initial chunks are important, must determine this first.
-# as data is reconstructed, replace zeros using same zarr reference.
-#
 
 
 class WaveorderWriter:
@@ -79,13 +71,14 @@ class WaveorderWriter:
     def get_current_group(self):
         return self.current_group_name
 
-    def set_type(self, datatype):
+    def set_type(self, datatype, alt_name=None):
         """
         one of "physical" or "stokes"
 
         Parameters
         ----------
         datatype:   (str) one of "physical" or "stokes"
+        alt_name:   (str) alternative name for the builder.  Changes the name of the directory below pos directory
 
         Returns
         -------
@@ -101,6 +94,7 @@ class WaveorderWriter:
         Parameters
         ----------
         position: (int) position subfolder that will contain .zarr array
+        prefix:   (str) prefix to put before the name of position subdirectory i.e. {Prefix}_Pos_000
 
         Returns
         -------
@@ -120,6 +114,19 @@ class WaveorderWriter:
             self.current_position = position
 
     def open_position(self, position, prefix=None):
+
+        """
+        Opens existing position sub-group.  Prefix must be specified to find the subgroup correctly
+
+        Parameters
+        ----------
+        position: (int) position subfolder that will contain .zarr array
+        prefix:   (str) prefix to put before the name of position subdirectory i.e. {Prefix}_Pos_000
+
+        Returns
+        -------
+
+        """
 
         grp_name = f'{prefix}_Pos_{position:03d}' if prefix else f'Pos_{position:03d}'
         grp_path = os.path.join(self.__root_store_path, grp_name)
@@ -145,9 +152,8 @@ class WaveorderWriter:
     def create_zarr_root(self, name):
         """
         Method for creating the root zarr store.
-        If the store already exists, it will open that store.
-        If no name is supplied, the default builder name will
-        be used ('stokes_data' or 'physical_data')
+        If the store already exists, it will raise an error.
+        Name corresponds to the root directory name (highest level) zarr store.
 
         Parameters
         ----------
@@ -206,6 +212,9 @@ class WaveorderWriter:
 
     def init_array(self, data_shape: tuple, chunk_size: tuple, chan_names, clims = None, dtype='float32', overwrite=False):
         """
+        Initializes the array and metadata for the array.  It will create the builder subgroup (ie. 'physical_data')
+        under the current position subgroup.  The metadata lives in the builder subgroup with the array underneath
+
         Parameters
         ----------
         data_shape:     (tuple) Shape of the position dataset (T, C, Z, Y, X)
@@ -229,18 +238,34 @@ class WaveorderWriter:
         self.__current_zarr_dir = self.__current_zarr_group[self.__builder.name]
 
     def set_compressor(self, compressor):
+        """
+        Placeholder function for future user-specified compressors.
+
+        Parameters
+        ----------
+        compressor: (object) compressor to use for data saving.
+
+        Returns
+        -------
+
+        """
         self.__builder.init_compressor(compressor)
 
     def write(self, data, t, c, z):
         """
         Wrapper that calls the builder's write function.
         Will write to existing array of zeros and place
-        data over the specified indicies
+        data over the specified indicies.
 
-        :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
-        :param t: (list or value), index or index range of the time dimension
-        :param c: (list or value), index or index range of the channel dimension
-        :param z: (list or value), index or index range of the Z-slice dimension
+        Parameters
+        ----------
+        data:   (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
+        t:      (list or value), index or index range of the time dimension
+        c:      (list or value), index or index range of the channel dimension
+        z:      (list or value), index or index range of the Z-slice dimension
+
+        Returns
+        -------
 
         """
 
