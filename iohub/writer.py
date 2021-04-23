@@ -143,7 +143,6 @@ class WaveorderWriter:
             if len(groups) != 0 and self.__builder.name in groups:
                 self.__current_zarr_dir = self.__current_zarr_group[self.__builder.name]
             else:
-                print('here')
                 self.__current_zarr_dir = self.__current_zarr_group
 
         else:
@@ -280,7 +279,6 @@ class WaveorderWriter:
             z = [z]
 
         self.__builder.set_zarr(self.__current_zarr_dir)
-
         self.__builder.write(data, t, c, z)
 
 class Builder:
@@ -343,8 +341,6 @@ class PhysicalZarr(Builder):
         """
 
         shape = np.shape(data)
-
-        print(self.__pzarr.name)
 
         if self.__pzarr.__len__() == 0:
             raise ValueError('Array not initialized')
