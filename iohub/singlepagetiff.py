@@ -33,6 +33,7 @@ class MicromanagerSequenceReader:
 
         self.log = logging.getLogger(__name__)
         self.positions = {}
+        self.num_positions = None
         self.mm_meta = None
         self.stage_positions = 0
         self.height = 0
@@ -105,6 +106,7 @@ class MicromanagerSequenceReader:
 
         """
         if position not in self.positions.keys():
+            self.log.info(f"position {position} not yet extracted, extracting ...")
             self._create_stores(position)
         return np.array(self.positions[position])
 
@@ -153,6 +155,12 @@ class MicromanagerSequenceReader:
             if c[0] == p:
                 self.log.info(f"reading coord = {c} from filename = {fn}")
                 z[c[1], c[2], c[3]] = zarr.open(tiff.imread(fn, aszarr=True))
+
+        # check that the array was assigned
+        if z == zarr.zeros(shape=(self.frames, self.channels, self.slices, self.height, self.width),
+                           chunks=(1, 1, 1, self.height, self.width)):
+            raise IOError(f"array at position {p} can not be found")
+
         self.positions[p] = z
 
     def read_tiff_series(self, folder: str):
@@ -186,6 +194,7 @@ class MicromanagerSequenceReader:
                 coord_filename_map.update(self._extract_coord_to_filename(j,
                                                                           folder,
                                                                           positions[idx]))
+        self.num_positions = len(positions)
 
         return coord_filename_map
 
