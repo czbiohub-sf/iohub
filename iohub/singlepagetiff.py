@@ -119,9 +119,10 @@ class MicromanagerSequenceReader:
         number of positions     (int)
 
         """
-        self.log.warning("num positions for singlepage tiff reader is ambiguous.  only loaded positions are reported")
+        # self.log.warning("num positions for singlepage tiff reader is ambiguous.  only loaded positions are reported")
         if self.positions:
-            return len(self.positions)
+            return self.num_positions
+            # return len(self.positions)
         else:
             self.log.error("singlepage tiffs not loaded")
 
@@ -191,9 +192,7 @@ class MicromanagerSequenceReader:
         for idx, metadata in enumerate(metadatas):
             with open(metadata, 'r+') as m:
                 j = json.load(m)
-                coord_filename_map.update(self._extract_coord_to_filename(j,
-                                                                          folder,
-                                                                          positions[idx]))
+                coord_filename_map.update(self._extract_coord_to_filename(j, folder, positions[idx]))
         self.num_positions = len(positions)
 
         return coord_filename_map
@@ -249,13 +248,13 @@ class MicromanagerSequenceReader:
 
             # extract filepath for this coordinate
             try:
-                # for mm2-gamma. filename contains position folder
+                # for mm2-gamma. 'FileName' key contains position folder
                 if c.split('-')[2] in meta:
                     filepath = json_[meta[c.split('-')[2]]]['FileName']
-                # for mm1, file name does not contain position folder
+                # for mm1, 'FileName' key does not contain position folder
                 else:
                     filepath = json_[c]['FileName']
-                    filepath = os.path.join(position, filepath)  # position name is not present in metadata
+                    filepath = os.path.join(position, filepath)  # position name is explicitly supplied
             except KeyError as ke:
                 self.log.error(f"metadata for supplied image coordinate {c} not found")
                 raise ke
