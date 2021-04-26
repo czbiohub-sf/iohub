@@ -62,9 +62,10 @@ class WaveorderWriter:
         -------
 
         """
-        if os.path.isdir(path):
+        if os.path.isdir(path) and os.path.exists(path):
             self.__save_dir = path
         else:
+            print(f'No existing directory found. Creating new directory at {path}')
             os.mkdir(path)
             self.__save_dir = path
 
