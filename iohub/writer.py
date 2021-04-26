@@ -101,7 +101,7 @@ class WaveorderWriter:
 
         """
 
-        grp_name = f'{prefix}_Pos_{position:03d}' if prefix else f'Pos_{position:03d}'
+        grp_name = f'{prefix}_Pos_{position:03d}.zarr' if prefix else f'Pos_{position:03d}.zarr'
         grp_path = os.path.join(self.__root_store_path, grp_name)
 
         if os.path.exists(grp_path):
@@ -128,7 +128,7 @@ class WaveorderWriter:
 
         """
 
-        grp_name = f'{prefix}_Pos_{position:03d}' if prefix else f'Pos_{position:03d}'
+        grp_name = f'{prefix}_Pos_{position:03d}.zarr' if prefix else f'Pos_{position:03d}.zarr'
         grp_path = os.path.join(self.__root_store_path, grp_name)
 
         #TODO: Find fancy way to search for prefix
