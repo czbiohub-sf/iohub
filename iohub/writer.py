@@ -409,7 +409,7 @@ class PhysicalZarr(Builder):
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 65535.0
 
-        dict = {'active': True,
+        dict_ = {'active': True,
                 'coefficient': 1.0,
                 'color': '808080',
                 'family': 'linear',
@@ -418,7 +418,7 @@ class PhysicalZarr(Builder):
                 'window': {'end': end, 'max': max, 'min': min, 'start': start}
                 }
 
-        return dict
+        return dict_
 
     def set_channel_attributes(self, chan_names: list, clims: list):
         """
@@ -670,7 +670,7 @@ class StokesZarr(Builder):
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 65535.0
 
-        dict = {'active': True,
+        dict_ = {'active': True,
                 'coefficient': 1.0,
                 'color': '808080',
                 'family': 'linear',
@@ -679,7 +679,7 @@ class StokesZarr(Builder):
                 'window': {'end': end, 'max': max, 'min': min, 'start': start}
                 }
 
-        return dict
+        return dict_
 
     def set_channel_attributes(self, chan_names: list, clims: list):
         """
