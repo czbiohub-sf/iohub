@@ -74,16 +74,16 @@ def test_init_array(setup_folder):
     writer.create_zarr_root('test_zarr_root')
     writer.create_position(0)
 
-    data = np.random.rand(3, 2, 65, 128, 128)
+    data = np.random.rand(3, 3, 65, 128, 128)
 
     data_shape = data.shape
     chunk_size = (1,1,1,128,128)
     chan_names = ['Phase3D', 'Retardance', 'Other']
     clims = [(-0.5, 0.5), (0,25), (0,10000)]
 
-    writer.init_array(data_shape, chunk_size, chan_names)
+    writer.init_array(data_shape, chunk_size, chan_names, clims)
 
-    meta_folder = writer.store['Test']['Pos_000.zarr']['physical_data']
+    meta_folder = writer.store['Pos_000.zarr']['physical_data']
     meta = meta_folder.attrs.asdict()
     array = meta_folder['array']
 
@@ -98,14 +98,13 @@ def test_init_array(setup_folder):
     assert('omero' in meta)
     assert('rdefs' in meta['omero'])
 
-    ## Test Chan Names and clims
-    assert()
+    # Test Chan Names and clims
+    for i in range(len(meta['omero']['channels'])):
+        assert(meta['omero']['channels'][i]['label'] == chan_names[i])
+        assert(meta['omero']['channels'][i]['window']['start'] == clims[i][0])
+        assert(meta['omero']['channels'][i]['window']['end'] == clims[i][1])
 
 
-
-    ## Check for contrast limits
-    writer.create_position(1)
-    writer.init_array(data_shape, chunk_size, chan_names, clims)
 
 
 
