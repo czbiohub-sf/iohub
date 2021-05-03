@@ -19,6 +19,17 @@ def test_constructor(setup_folder):
     assert(writer.datatype == 'physical')
 
 def test_constructor_existing(setup_folder):
+    """
+    Test isntantiating the writer into an existing zarr directory
+
+    Parameters
+    ----------
+    setup_folder
+
+    Returns
+    -------
+
+    """
 
     folder = setup_folder
 
@@ -34,6 +45,18 @@ def test_constructor_existing(setup_folder):
     assert(writer_existing._WaveorderWriter__builder.name == 'test_alt')
 
 def test_create_functions(setup_folder):
+    """
+    Test create root zarr, create position subfolders, and switching between
+    position substores
+
+    Parameters
+    ----------
+    setup_folder
+
+    Returns
+    -------
+
+    """
 
     folder = setup_folder
 
@@ -68,6 +91,18 @@ def test_create_functions(setup_folder):
     assert (writer.current_position == 0)
 
 def test_init_array(setup_folder):
+    """
+    Test the correct initialization of desired array and the associated
+    metadata
+
+    Parameters
+    ----------
+    setup_folder
+
+    Returns
+    -------
+
+    """
 
     folder = setup_folder
     writer = WaveorderWriter(folder + '/Test', 'physical')
@@ -105,6 +140,17 @@ def test_init_array(setup_folder):
         assert(meta['omero']['channels'][i]['window']['end'] == clims[i][1])
 
 def test_write(setup_folder):
+    """
+    Test the write function of the writer
+
+    Parameters
+    ----------
+    setup_folder
+
+    Returns
+    -------
+
+    """
 
     folder = setup_folder
     writer = WaveorderWriter(folder + '/Test', 'physical')
