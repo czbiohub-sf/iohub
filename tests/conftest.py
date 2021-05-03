@@ -2,7 +2,7 @@ import pytest
 import os
 import shutil
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope='function')
 def setup_folder():
     temp_folder = os.getcwd() + '/pytest_temp'
     if not os.path.isdir(temp_folder):
