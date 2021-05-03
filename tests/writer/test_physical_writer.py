@@ -104,6 +104,33 @@ def test_init_array(setup_folder):
         assert(meta['omero']['channels'][i]['window']['start'] == clims[i][0])
         assert(meta['omero']['channels'][i]['window']['end'] == clims[i][1])
 
+def test_write(setup_folder):
+
+    folder = setup_folder
+    writer = WaveorderWriter(folder + '/Test', 'physical')
+    writer.create_zarr_root('test_zarr_root')
+    writer.create_position(0)
+
+    data = np.random.rand(3, 3, 65, 128, 128)
+
+    data_shape = data.shape
+    chunk_size = (1, 1, 1, 128, 128)
+    chan_names = ['Phase3D', 'Retardance', 'Other']
+    clims = [(-0.5, 0.5), (0, 25), (0, 10000)]
+
+    writer.init_array(data_shape, chunk_size, chan_names, clims)
+
+    # Write single index for each channel
+    writer.write(data[0,0,0], t=0, c=0, z=0)
+
+    # Write full data
+    writer.write(data, t=[0,3], c=[0,3], z=[0,65])
+
+
+
+
+
+
 
 
 
