@@ -34,10 +34,15 @@ def setup_mm2gamma_ome_tiffs():
         os.mkdir(temp_folder)
         print("\nsetting up temp folder")
 
+    # comp.micro account
     # 'https://drive.google.com/file/d/1WSu1CaFQKIipMproxPInYs6ljh17JM7K/view?usp=sharing'
 
+    # shared gdrive
+    # 'https://drive.google.com/file/d/1UWSr4GQ6Kpj5irq2TicvDLULfWjKhh0b/view?usp=sharing'
+
     # DO NOT ADJUST THIS VALUE
-    mm2gamma_ometiffs = '1WSu1CaFQKIipMproxPInYs6ljh17JM7K'
+    # mm2gamma_ometiffs = '1WSu1CaFQKIipMproxPInYs6ljh17JM7K'
+    mm2gamma_ometiffs = '1UWSr4GQ6Kpj5irq2TicvDLULfWjKhh0b'
 
     # download files to temp folder
     output = temp_gamma + "/mm2gamma_ometiffs.zip"
@@ -72,10 +77,15 @@ def setup_mm2gamma_singlepage_tiffs():
         os.mkdir(temp_folder)
         print("\nsetting up temp folder")
 
+    # comp.micro account
     # 'https://drive.google.com/file/d/1qQys8r0_HIsVqLrMfUzsndTgTtyPhZes/view?usp=sharing'
 
+    # shared gdrive
+    # 'https://drive.google.com/file/d/1UpslH393sJ2GodaM6XgqKBzWwQ39-Dc-/view?usp=sharing'
+
     # DO NOT ADJUST THIS VALUE
-    mm2gamma_singlepage_tiffs = '1qQys8r0_HIsVqLrMfUzsndTgTtyPhZes'
+    # mm2gamma_singlepage_tiffs = '1qQys8r0_HIsVqLrMfUzsndTgTtyPhZes'
+    mm2gamma_singlepage_tiffs = '1UpslH393sJ2GodaM6XgqKBzWwQ39-Dc-'
 
     # download files to temp folder
     output = temp_gamma + "/mm2gamma_singlepage_tiffs.zip"
