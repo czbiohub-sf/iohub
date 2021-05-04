@@ -170,7 +170,7 @@ def test_write(setup_folder):
     writer.write(data[0,0,0], t=0, c=0, z=0)
 
     # Write full data
-    writer.write(data, t=[0,3], c=[0,3], z=[0,65])
+    writer.write(data)
 
 
 

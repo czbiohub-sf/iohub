@@ -9,7 +9,6 @@ def setup_folder():
         os.mkdir(temp_folder)
         print("\nsetting up temp folder")
 
-
     yield temp_folder
 
     try:
@@ -17,6 +16,3 @@ def setup_folder():
         shutil.rmtree(temp_folder)
     except OSError as e:
         print(f"Error while deleting temp folder: {e.strerror}")
-
-
-

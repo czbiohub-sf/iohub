@@ -252,7 +252,7 @@ class WaveorderWriter:
         """
         self.__builder.init_compressor(compressor)
 
-    def write(self, data, t, c, z):
+    def write(self, data, t=None, c=None, z=None):
         """
         Wrapper that calls the builder's write function.
         Will write to existing array of zeros and place
@@ -269,6 +269,14 @@ class WaveorderWriter:
         -------
 
         """
+        if t is None:
+            t = [0,data.shape[0]]
+
+        if c is None:
+            c = [0,data.shape[1]]
+
+        if z is None:
+            z = [0,data.shape[2]]
 
         if isinstance(t, int):
             t = [t]
