@@ -9,3 +9,4 @@ dist/
 *.npz
 *.png
 *.tif[f]
+.DS_Store
