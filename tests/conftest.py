@@ -26,6 +26,22 @@ MM2GAMMA_OMETIFF_SUBFOLDERS = \
     }
 
 
+@pytest.fixture(scope='function')
+def setup_folder():
+    temp_folder = os.getcwd() + '/pytest_temp'
+    if not os.path.isdir(temp_folder):
+        os.mkdir(temp_folder)
+        print("\nsetting up temp folder")
+
+    yield temp_folder
+
+    try:
+        # remove temp folder
+        shutil.rmtree(temp_folder)
+    except OSError as e:
+        print(f"Error while deleting temp folder: {e.strerror}")
+
+
 @pytest.fixture(scope="session")
 def setup_mm2gamma_ome_tiffs():
     temp_folder = os.getcwd() + '/pytest_temp'

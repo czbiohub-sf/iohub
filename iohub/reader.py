@@ -131,13 +131,15 @@ class MicromanagerReader:
 #     ivan_dataset = '/Volumes/comp_micro/rawdata/falcon/Ivan/20210128 HEK CAAX SiRActin/FOV1_1'
 #     ivan_file = 'FOV1_1_MMStack_Default_23.ome.tif'
 #
-#     # singlepage tiffs
+#     # singlepage tiffs (1422)
 #     mm1_single = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_one_position/mm1422_kazansky_one_position'
 #     mm1_multi_snake = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_HCS_snake/mm1422_kazansky_HCS_snake'
 #     mm1_multi_grid = '/Users/bryant.chhun/Desktop/mm2_sampledata/packaged for gdd/mm1422_kazansky_grid/mm1422_kazansky_grid'
-#     mm1_multi_large = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm1422/autosave_mm1422_50tp_4p_3c_2k_1'
 #
-#     # ome tiffs
+#     # ome tiffs (1422)
+#     mm1_multi_pos = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm1422/ome-tiffs/mm1422_4p_2t_5z_3c_512_1'
+#
+#     # ome tiffs (2.0)
 #     # with position
 #     mm2_p_t_z_c = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_4p_2t_5z_1c_2k_1'
 #     mm2_p_t_z = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_4p_2t_5z_2k_1'
@@ -159,9 +161,9 @@ class MicromanagerReader:
 #     mm2_c = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_1c_2k_1'
 #     mm2_z = '/Users/bryant.chhun/Desktop/Data/reconstruct-order-2/mm2.0_20201113_5z_2k_1'
 #
-#     r = MicromanagerReader(mm1_multi_large,
-#                            data_type='singlepagetiff',
-#                            # data_type='ometiff',
+#     r = MicromanagerReader(multipositions,
+#                            # data_type='singlepagetiff',
+#                            data_type='ometiff',
 #                            extract_data=True)
 #     print(r.get_zarr(0))
 #     # print(r.get_zarr(1))
