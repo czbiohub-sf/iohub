@@ -160,7 +160,15 @@ def setup_mm1422_ome_tiffs():
                                         overwrite=True)
 
     # return path to unzipped folder containing test images
-    yield os.path.join(temp_1422, 'ome-tiffs')
+    src = os.path.join(temp_1422, 'ome-tiffs')
+    subfolders = [f for f in os.listdir(src) if os.path.isdir(join(src, f))]
+
+    # specific folder
+    one_folder = join(src, subfolders[0])
+    # random folder
+    rand_folder = join(src, random.choice(subfolders))
+    # return path to unzipped folder containing test images as well as specific folder paths
+    yield src, one_folder, rand_folder
 
     # breakdown files
     try:

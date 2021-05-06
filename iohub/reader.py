@@ -113,7 +113,7 @@ class MicromanagerReader:
         tuple of (frames, slices, channels, height, width)
 
         """
-        return self.frames, self.slices, self.channels, self.height, self.width
+        return self.frames, self.channels, self.slices, self.height, self.width
 
 
 # def main():
