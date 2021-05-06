@@ -1,4 +1,5 @@
-
+import zarr
+import numpy as np
 from waveorder.io.singlepagetiff import MicromanagerSequenceReader
 
 
@@ -42,6 +43,7 @@ def test_get_zarr_mm2gamma(setup_mm2gamma_singlepage_tiffs):
     for i in range(mmr.get_num_positions()):
         z = mmr.get_zarr(i)
         assert(z.shape == mmr.shape)
+        assert(isinstance(z, zarr.core.Array))
 
 
 def test_get_array_mm2gamma(setup_mm2gamma_singlepage_tiffs):
@@ -50,6 +52,7 @@ def test_get_array_mm2gamma(setup_mm2gamma_singlepage_tiffs):
     for i in range(mmr.get_num_positions()):
         z = mmr.get_array(i)
         assert(z.shape == mmr.shape)
+        assert(isinstance(z, np.ndarray))
 
 
 def test_get_num_positions_mm2gamma(setup_mm2gamma_singlepage_tiffs):
@@ -100,6 +103,7 @@ def test_get_zarr_mm1422(setup_mm1422_singlepage_tiffs):
     for i in range(mmr.get_num_positions()):
         z = mmr.get_zarr(i)
         assert(z.shape == mmr.shape)
+        assert(isinstance(z, zarr.core.Array))
 
 
 def test_get_array_mm1422(setup_mm1422_singlepage_tiffs):
@@ -108,6 +112,7 @@ def test_get_array_mm1422(setup_mm1422_singlepage_tiffs):
     for i in range(mmr.get_num_positions()):
         z = mmr.get_array(i)
         assert(z.shape == mmr.shape)
+        assert(isinstance(z, np.ndarray))
 
 
 def test_get_num_positions_mm1422(setup_mm1422_singlepage_tiffs):

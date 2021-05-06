@@ -8,5 +8,5 @@ dist/
 *.npz
 *.png
 *.tif[f]
-.DS_Store
 eggs
+.DS_Store
