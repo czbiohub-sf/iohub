@@ -242,7 +242,7 @@ class MicromanagerSequenceReader:
             if "Coords" in element:
                 coords.add(element)
             if "Metadata" in element:
-                meta[element.split('-')[2]] = element
+                meta['-'.join(element.split('-')[1:])] = element
 
             # present in mm1.4.22 metadata
             if "FrameKey" in element:
@@ -263,8 +263,8 @@ class MicromanagerSequenceReader:
             # extract filepath for this coordinate
             try:
                 # for mm2-gamma. 'FileName' key contains position folder
-                if c.split('-')[2] in meta:
-                    filepath = json_[meta[c.split('-')[2]]]['FileName']
+                if '-'.join(c.split('-')[1:]) in meta:
+                    filepath = json_[meta['-'.join(c.split('-')[1:])]]['FileName']
                 # for mm1, 'FileName' key does not contain position folder
                 else:
                     filepath = json_[c]['FileName']
@@ -358,4 +358,4 @@ class MicromanagerSequenceReader:
         (tuple) five elements of (frames, slices, channels, height, width)
 
         """
-        return self.frames, self.slices, self.channels, self.height, self.width
+        return self.frames, self.channels, self.slices, self.height, self.width

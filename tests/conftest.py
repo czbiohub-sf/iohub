@@ -1,6 +1,7 @@
 import pytest
-import os
 import shutil
+import os
+import random
 
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
@@ -24,6 +25,8 @@ MM2GAMMA_OMETIFF_SUBFOLDERS = \
         'mm2.0-20201209_100t_5z_3c_512k_1_nopositions',
         'mm2.0-20201209_4p_20t_5z_3c_512k_1_multipositions',
     }
+
+join = os.path.join
 
 
 @pytest.fixture(scope='function')
@@ -50,14 +53,10 @@ def setup_mm2gamma_ome_tiffs():
         os.mkdir(temp_folder)
         print("\nsetting up temp folder")
 
-    # comp.micro account
-    # 'https://drive.google.com/file/d/1WSu1CaFQKIipMproxPInYs6ljh17JM7K/view?usp=sharing'
-
     # shared gdrive
     # 'https://drive.google.com/file/d/1UWSr4GQ6Kpj5irq2TicvDLULfWjKhh0b/view?usp=sharing'
 
     # DO NOT ADJUST THIS VALUE
-    # mm2gamma_ometiffs = '1WSu1CaFQKIipMproxPInYs6ljh17JM7K'
     mm2gamma_ometiffs = '1UWSr4GQ6Kpj5irq2TicvDLULfWjKhh0b'
 
     # download files to temp folder
@@ -68,8 +67,15 @@ def setup_mm2gamma_ome_tiffs():
                                         showsize=True,
                                         overwrite=True)
 
-    # return path to unzipped folder containing test images
-    yield os.path.join(temp_gamma, 'ome-tiffs')
+    src = os.path.join(temp_gamma, 'ome-tiffs')
+    subfolders = [f for f in os.listdir(src) if os.path.isdir(join(src, f))]
+
+    # specific folder
+    one_folder = join(src, subfolders[0])
+    # random folder
+    rand_folder = join(src, random.choice(subfolders))
+    # return path to unzipped folder containing test images as well as specific folder paths
+    yield src, one_folder, rand_folder
 
     # breakdown files
     try:
@@ -93,14 +99,10 @@ def setup_mm2gamma_singlepage_tiffs():
         os.mkdir(temp_folder)
         print("\nsetting up temp folder")
 
-    # comp.micro account
-    # 'https://drive.google.com/file/d/1qQys8r0_HIsVqLrMfUzsndTgTtyPhZes/view?usp=sharing'
-
     # shared gdrive
     # 'https://drive.google.com/file/d/1UpslH393sJ2GodaM6XgqKBzWwQ39-Dc-/view?usp=sharing'
 
     # DO NOT ADJUST THIS VALUE
-    # mm2gamma_singlepage_tiffs = '1qQys8r0_HIsVqLrMfUzsndTgTtyPhZes'
     mm2gamma_singlepage_tiffs = '1UpslH393sJ2GodaM6XgqKBzWwQ39-Dc-'
 
     # download files to temp folder
@@ -111,8 +113,15 @@ def setup_mm2gamma_singlepage_tiffs():
                                         showsize=True,
                                         overwrite=True)
 
-    # return path to folder with images
-    yield os.path.join(temp_gamma, 'singlepage-tiffs')
+    src = os.path.join(temp_gamma, 'singlepage-tiffs')
+    subfolders = [f for f in os.listdir(src) if os.path.isdir(join(src, f))]
+
+    # specific folder
+    one_folder = join(src, subfolders[0])
+    # random folder
+    rand_folder = join(src, random.choice(subfolders))
+    # return path to unzipped folder containing test images as well as specific folder paths
+    yield src, one_folder, rand_folder
 
     # breakdown files
     try:
@@ -120,7 +129,92 @@ def setup_mm2gamma_singlepage_tiffs():
         os.remove(output)
 
         # remove unzipped folder
-        shutil.rmtree(os.path.join(temp_gamma, 'ome-tiffs'))
+        shutil.rmtree(os.path.join(temp_gamma, 'singlepage-tiffs'))
+
+        # remove temp folder
+        shutil.rmtree(temp_folder)
+    except OSError as e:
+        print(f"Error while deleting temp folder: {e.strerror}")
+
+
+@pytest.fixture(scope="session")
+def setup_mm1422_ome_tiffs():
+    temp_folder = os.getcwd() + '/pytest_temp'
+    temp_1422 = os.path.join(temp_folder, 'mm1422')
+    if not os.path.isdir(temp_folder):
+        os.mkdir(temp_folder)
+        print("\nsetting up temp folder")
+
+    # shared gdrive
+    # 'https://drive.google.com/file/d/1N94AT2YGJDxgjTVIgYA048SQkKvbPqyo/view?usp=sharing'
+
+    # DO NOT ADJUST THIS VALUE
+    mm1422_ometiffs = '1N94AT2YGJDxgjTVIgYA048SQkKvbPqyo'
+
+    # download files to temp folder
+    output = temp_1422 + "/mm1422_ometiffs.zip"
+    gdd.download_file_from_google_drive(file_id=mm1422_ometiffs,
+                                        dest_path=output,
+                                        unzip=True,
+                                        showsize=True,
+                                        overwrite=True)
+
+    # return path to unzipped folder containing test images
+    yield os.path.join(temp_1422, 'ome-tiffs')
+
+    # breakdown files
+    try:
+        # remove zip file
+        os.remove(output)
+
+        # remove unzipped folder
+        shutil.rmtree(os.path.join(temp_1422, 'ome-tiffs'))
+
+        # remove temp folder
+        shutil.rmtree(temp_folder)
+    except OSError as e:
+        print(f"Error while deleting temp folder: {e.strerror}")
+
+
+@pytest.fixture(scope="session")
+def setup_mm1422_singlepage_tiffs():
+    temp_folder = os.getcwd() + '/pytest_temp'
+    temp_1422 = os.path.join(temp_folder, 'mm1422')
+    if not os.path.isdir(temp_folder):
+        os.mkdir(temp_folder)
+        print("\nsetting up temp folder")
+
+    # shared gdrive
+    # 'https://drive.google.com/file/d/1HWx8cja3cBeGPJJoyK3SMYRE6wcjSsnb/view?usp=sharing'
+
+    # DO NOT ADJUST THIS VALUE
+    mm1422_singlepage_tiffs = '1HWx8cja3cBeGPJJoyK3SMYRE6wcjSsnb'
+
+    # download files to temp folder
+    output = temp_1422 + "/mm1422_singlepage_tiffs.zip"
+    gdd.download_file_from_google_drive(file_id=mm1422_singlepage_tiffs,
+                                        dest_path=output,
+                                        unzip=True,
+                                        showsize=True,
+                                        overwrite=True)
+
+    src = os.path.join(temp_1422, 'singlepage-tiffs')
+    subfolders = [f for f in os.listdir(src) if os.path.isdir(join(src, f))]
+
+    # specific folder
+    one_folder = join(src, subfolders[0])
+    # random folder
+    rand_folder = join(src, random.choice(subfolders))
+    # return path to unzipped folder containing test images as well as specific folder paths
+    yield src, one_folder, rand_folder
+
+    # breakdown files
+    try:
+        # remove zip file
+        os.remove(output)
+
+        # remove unzipped folder
+        shutil.rmtree(os.path.join(temp_1422, 'singlepage-tiffs'))
 
         # remove temp folder
         shutil.rmtree(temp_folder)

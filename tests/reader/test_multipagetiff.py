@@ -18,12 +18,9 @@ def test_constructor(setup_mm2gamma_ome_tiffs):
     -------
 
     """
-    join = os.path.join
-    folder = setup_mm2gamma_ome_tiffs
-    subfolders = [f for f in os.listdir(folder) if os.path.isdir(join(folder, f))]
 
-    # choose a specific subfolder
-    one_folder = join(folder, subfolders[0])
+    # choose a specific folder
+    _, one_folder, _ = setup_mm2gamma_ome_tiffs
     mmr = MicromanagerOmeTiffReader(one_folder, extract_data=False)
 
     assert(mmr.mm_meta is not None)
@@ -46,13 +43,10 @@ def test_output_dims(setup_mm2gamma_ome_tiffs):
     -------
 
     """
-    join = os.path.join
-    folder = setup_mm2gamma_ome_tiffs
-    subfolders = [f for f in os.listdir(folder) if os.path.isdir(join(folder, f))]
 
-    # choose random subfolder
-    one_folder = join(folder, random.choice(subfolders))
-    mmr = MicromanagerOmeTiffReader(one_folder, extract_data=True)
+    # choose a random folder
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerOmeTiffReader(rand_folder, extract_data=True)
 
     assert(mmr.get_zarr(0).shape[0] == mmr.frames)
     assert(mmr.get_zarr(0).shape[1] == mmr.channels)
