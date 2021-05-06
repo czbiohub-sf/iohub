@@ -37,7 +37,7 @@ class MicromanagerReader:
         Parameters
         ----------
         src:            (str) folder or file containing all ome-tiff files
-        data_type:      (str) whether data is 'ometiff', 'singlepagetiff', 'zarr'
+        data_type:      (str) whether data is 'ometiff', 'singlepagetiff'
         extract_data:   (bool) True if ome_series should be extracted immediately
         log_level:      (int) One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
         """
@@ -113,7 +113,7 @@ class MicromanagerReader:
         tuple of (frames, slices, channels, height, width)
 
         """
-        return self.frames, self.slices, self.channels, self.height, self.width
+        return self.frames, self.channels, self.slices, self.height, self.width
 
 
 # def main():

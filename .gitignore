@@ -1,4 +1,3 @@
-waverder.egg-info/
 waveorder.egg-info/
 .ipynb_checkpoints/
 .idea/
@@ -9,4 +8,5 @@ dist/
 *.npz
 *.png
 *.tif[f]
+eggs
 .DS_Store
