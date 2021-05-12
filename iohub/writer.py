@@ -394,9 +394,9 @@ class PhysicalZarr(Builder):
             end = clim[1] if clim else 100.0
         elif chan_name == 'Orientation':
             min = 0.0
-            max = 180.0
+            max = np.pi
             start = clim[0] if clim else 0.0
-            end = clim[1] if clim else 180.0
+            end = clim[1] if clim else np.pi
 
         elif chan_name == 'Phase3D':
             min = -10.0
