@@ -17,6 +17,7 @@ def test_datatype(setup_mm2gamma_ome_tiffs):
                                  extract_data=False)
 
 
+# ===== test mm2gamma =========== #
 def test_ometiff_constructor_mm2gamma(setup_mm2gamma_ome_tiffs):
     # choose a specific folder
     _, one_folder, _ = setup_mm2gamma_ome_tiffs
@@ -92,7 +93,7 @@ def test_sequence_array_zarr_mm2gamma(setup_mm2gamma_singlepage_tiffs):
         assert(isinstance(z, np.ndarray))
 
 
-# tests for 1.4.22 data
+# ===== test mm1.4.22  =========== #
 def test_ometiff_constructor_mm1422(setup_mm1422_ome_tiffs):
     # choose a specific folder
     _, one_folder, _ = setup_mm1422_ome_tiffs
@@ -166,3 +167,83 @@ def test_sequence_array_zarr_mm1422(setup_mm1422_singlepage_tiffs):
         z = mmr.get_array(i)
         assert(z.shape == mmr.shape)
         assert(isinstance(z, np.ndarray))
+
+
+# ===== test property setters =========== #
+def test_height(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.height = 100
+    assert(mmr.height == mmr.reader.height)
+
+
+def test_width(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.width = 100
+    assert (mmr.width == mmr.reader.width)
+
+
+def test_frames(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.frames = 100
+    assert (mmr.frames == mmr.reader.frames)
+
+
+def test_slices(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.slices = 100
+    assert (mmr.slices == mmr.reader.slices)
+
+
+def test_channels(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.channels = 100
+    assert (mmr.channels == mmr.reader.channels)
+
+
+def test_channel_names(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.channel_names = 100
+    assert (mmr.channel_names == mmr.reader.channel_names)
+
+
+def test_mm_meta(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.mm_meta = {'newkey': 'newval'}
+    assert (mmr.mm_meta == mmr.reader.mm_meta)
+
+    with pytest.raises(AssertionError):
+        mmr.mm_meta = 1
+
+
+def test_stage_positions(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.stage_positions = ['pos one']
+    assert (mmr.stage_positions == mmr.reader.stage_positions)
+
+    with pytest.raises(AssertionError):
+        mmr.stage_positions = 1
+
