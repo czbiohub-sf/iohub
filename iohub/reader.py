@@ -112,6 +112,7 @@ class MicromanagerReader:
 
     @mm_meta.setter
     def mm_meta(self, value):
+        assert(type(value) is dict)
         self.reader.mm_meta = value
 
     @property
@@ -120,6 +121,7 @@ class MicromanagerReader:
 
     @stage_positions.setter
     def stage_positions(self, value):
+        assert(type(value) is list)
         self.reader.stage_positions = value
 
     @property
