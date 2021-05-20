@@ -56,16 +56,19 @@ class MicromanagerOmeTiffReader:
         with TiffFile(self.master_ome_tiff) as tif:
             self.mm_meta = tif.micromanager_metadata
 
-            if 'beta' in self.mm_meta['Summary']['MicroManagerVersion']:
-
+            mm_version = self.mm_meta['Summary']['MicroManagerVersion']
+            if 'beta' in mm_version:
                 if self.mm_meta['Summary']['Positions'] > 1:
                     self.stage_positions = []
 
                     for p in range(len(self.mm_meta['Summary']['StagePositions'])):
                         pos = self._simplify_stage_position_beta(self.mm_meta['Summary']['StagePositions'][p])
                         self.stage_positions.append(pos)
-
                 # self.channel_names = 'Not Listed'
+
+            elif mm_version == '1.4.22':
+                for ch in self.mm_meta['Summary']['ChNames']:
+                    self.channel_names.append(ch)
 
             else:
                 if self.mm_meta['Summary']['Positions'] > 1:
@@ -387,4 +390,4 @@ class MicromanagerOmeTiffReader:
         (tuple) five elements of (frames, slices, channels, height, width)
 
         """
-        return self.frames, self.slices, self.channels, self.height, self.width
+        return self.frames, self.channels, self.slices, self.height, self.width

@@ -52,21 +52,7 @@ class MicromanagerSequenceReader:
         else:
             raise AttributeError("supplied folder does not contain position or default subdirectories")
 
-        # pull one metadata sample and extract experiment dimensions
-        metadata_path = os.path.join(pos_path, 'metadata.txt')
-        with open(metadata_path, 'r') as f:
-            self.mm_meta = json.load(f)
-
-        self.mm_version = self.mm_meta['Summary']['MicroManagerVersion']
-        if self.mm_version == '1.4.22':
-            self._mm1_meta_parser()
-        elif 'beta' in self.mm_version:
-            self._mm2beta_meta_parser()
-        elif 'gamma' in self.mm_version:
-            self._mm2gamma_meta_parser()
-        else:
-            raise NotImplementedError(
-                f'Current MicroManager reader only supports version 1.4.22 and 2.0 but {self.mm_version} was detected')
+        self._set_mm_meta(pos_path)
 
         # create coordinate to filename maps
         self.coord_to_filename = self.read_tiff_series(folder)
@@ -74,6 +60,34 @@ class MicromanagerSequenceReader:
         # todo: consider iterating over all positions.  Doable once we add a metadata search for stage positions
         if extract_data:
             self._create_stores(0)
+
+    def _set_mm_meta(self, one_pos):
+        """
+        assign image metadata from summary metadata
+
+        Parameters
+        ----------
+        one_pos:        (str) path to one position subfolder
+
+        Returns
+        -------
+
+        """
+        # pull one metadata sample and extract experiment dimensions
+        metadata_path = os.path.join(one_pos, 'metadata.txt')
+        with open(metadata_path, 'r') as f:
+            self.mm_meta = json.load(f)
+
+        mm_version = self.mm_meta['Summary']['MicroManagerVersion']
+        if mm_version == '1.4.22':
+            self._mm1_meta_parser()
+        elif 'beta' in mm_version:
+            self._mm2beta_meta_parser()
+        elif 'gamma' in mm_version:
+            self._mm2gamma_meta_parser()
+        else:
+            raise NotImplementedError(
+                f'Current MicroManager reader only supports version 1.4.22 and 2.0 but {mm_version} was detected')
 
     def get_zarr(self, position):
         """
@@ -228,7 +242,7 @@ class MicromanagerSequenceReader:
             if "Coords" in element:
                 coords.add(element)
             if "Metadata" in element:
-                meta[element.split('-')[2]] = element
+                meta['-'.join(element.split('-')[1:])] = element
 
             # present in mm1.4.22 metadata
             if "FrameKey" in element:
@@ -249,8 +263,8 @@ class MicromanagerSequenceReader:
             # extract filepath for this coordinate
             try:
                 # for mm2-gamma. 'FileName' key contains position folder
-                if c.split('-')[2] in meta:
-                    filepath = json_[meta[c.split('-')[2]]]['FileName']
+                if '-'.join(c.split('-')[1:]) in meta:
+                    filepath = json_[meta['-'.join(c.split('-')[1:])]]['FileName']
                 # for mm1, 'FileName' key does not contain position folder
                 else:
                     filepath = json_[c]['FileName']
@@ -344,4 +358,4 @@ class MicromanagerSequenceReader:
         (tuple) five elements of (frames, slices, channels, height, width)
 
         """
-        return self.frames, self.slices, self.channels, self.height, self.width
+        return self.frames, self.channels, self.slices, self.height, self.width
