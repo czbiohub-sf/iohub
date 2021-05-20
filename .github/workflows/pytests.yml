@@ -43,9 +43,10 @@ jobs:
         pip install -r ./requirements/test.txt
         pytest -v
         pytest --cov=./ --cov-report=xml
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
-      with:
-        flags: unittest
-        name: codecov-umbrella
-        fail_ci_if_error: true
+
+#    - name: Upload coverage to Codecov
+#      uses: codecov/codecov-action@v1
+#      with:
+#        flags: unittest
+#        name: codecov-umbrella
+#        fail_ci_if_error: true
