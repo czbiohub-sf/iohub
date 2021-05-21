@@ -56,15 +56,6 @@ class MicromanagerReader:
         else:
             raise NotImplementedError(f"reader of type {data_type} is not implemented")
 
-        self.mm_meta = self.reader.mm_meta
-        self.stage_positions = self.reader.stage_positions
-        self.height = self.reader.height
-        self.width = self.reader.width
-        self.frames = self.reader.frames
-        self.slices = self.reader.slices
-        self.channels = self.reader.channels
-        self.channel_names = self.reader.channel_names
-
     def get_zarr(self, position):
         """
         return a zarr array for a given position
@@ -114,6 +105,72 @@ class MicromanagerReader:
 
         """
         return self.frames, self.channels, self.slices, self.height, self.width
+
+    @property
+    def mm_meta(self):
+        return self.reader.mm_meta
+
+    @mm_meta.setter
+    def mm_meta(self, value):
+        assert(type(value) is dict)
+        self.reader.mm_meta = value
+
+    @property
+    def stage_positions(self):
+        return self.reader.stage_positions
+
+    @stage_positions.setter
+    def stage_positions(self, value):
+        assert(type(value) is list)
+        self.reader.stage_positions = value
+
+    @property
+    def height(self):
+        return self.reader.height
+
+    @height.setter
+    def height(self, value):
+        self.reader.height = value
+
+    @property
+    def width(self):
+        return self.reader.width
+
+    @width.setter
+    def width(self, value):
+        self.reader.width = value
+
+    @property
+    def frames(self):
+        return self.reader.frames
+
+    @frames.setter
+    def frames(self, value):
+        self.reader.frames = value
+
+    @property
+    def slices(self):
+        return self.reader.slices
+
+    @slices.setter
+    def slices(self, value):
+        self.reader.slices = value
+
+    @property
+    def channels(self):
+        return self.reader.channels
+
+    @channels.setter
+    def channels(self, value):
+        self.reader.channels = value
+
+    @property
+    def channel_names(self):
+        return self.reader.channel_names
+
+    @channel_names.setter
+    def channel_names(self, value):
+        self.reader.channel_names = value
 
 
 # def main():
