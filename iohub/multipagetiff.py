@@ -89,12 +89,6 @@ class MicromanagerOmeTiffReader:
             # self.slices = self.mm_meta['Summary']['Slices']
             # self.channels = self.mm_meta['Summary']['Channels']
 
-            # self.height = self.mm_meta['Summary']['Height']
-            # self.width = self.mm_meta['Summary']['Width']
-            # self.frames = self.mm_meta['Summary']['Frames']
-            # self.slices = self.mm_meta['Summary']['Slices']
-            # self.channels = self.mm_meta['Summary']['Channels']
-
             self._check_missing_dims()
 
     def _check_missing_dims(self):
