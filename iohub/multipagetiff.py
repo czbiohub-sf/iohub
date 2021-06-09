@@ -30,11 +30,11 @@ class MicromanagerOmeTiffReader:
         self.positions = {}
         self.mm_meta = None
         self.stage_positions = 0
-        self.height = None
-        self.width = None
-        self.frames = None
-        self.slices = None
-        self.channels = None
+        self.height = -1
+        self.width = -1
+        self.frames = -1
+        self.slices = -1
+        self.channels = -1
         self.channel_names = []
 
         self._missing_dims = None
