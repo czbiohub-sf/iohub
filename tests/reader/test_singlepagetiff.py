@@ -35,6 +35,23 @@ def test_output_dims_mm2gamma(setup_mm2gamma_singlepage_tiffs):
     assert(mmr.get_zarr(0).shape[2] == mmr.slices)
     assert(mmr.get_zarr(0).shape[3] == mmr.height)
     assert(mmr.get_zarr(0).shape[4] == mmr.width)
+    assert (mmr.get_zarr(0).shape[0] < 11)
+
+
+def test_output_dims_mm2gamma_incomplete(setup_mm2gamma_singlepage_tiffs_incomplete):
+    """
+    test that output dimensions are correct for interrupted data
+    """
+
+    # choose a random folder
+    folder = setup_mm2gamma_singlepage_tiffs_incomplete
+    mmr = MicromanagerSequenceReader(folder, extract_data=True)
+
+    assert(mmr.get_zarr(0).shape[0] == mmr.frames)
+    assert(mmr.get_zarr(0).shape[1] == mmr.channels)
+    assert(mmr.get_zarr(0).shape[2] == mmr.slices)
+    assert(mmr.get_zarr(0).shape[3] == mmr.height)
+    assert(mmr.get_zarr(0).shape[4] == mmr.width)
 
 
 def test_get_zarr_mm2gamma(setup_mm2gamma_singlepage_tiffs):
