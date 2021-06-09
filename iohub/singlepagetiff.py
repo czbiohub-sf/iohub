@@ -35,12 +35,12 @@ class MicromanagerSequenceReader:
         self.positions = {}
         self.num_positions = None
         self.mm_meta = None
-        self.stage_positions = -1
-        self.height = -1
-        self.width = -1
-        self.frames = -1
-        self.slices = -1
-        self.channels = -1
+        self.stage_positions = 0
+        self.height = 0
+        self.width = 0
+        self.frames = 0
+        self.slices = 0
+        self.channels = 0
         self.channel_names = []
 
         self.coord_to_filename = {}
