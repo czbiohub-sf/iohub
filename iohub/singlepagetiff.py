@@ -36,7 +36,7 @@ class MicromanagerSequenceReader:
         self.num_positions = None
         self.mm_meta = None
         self.stage_positions = 0
-        self.z_step_size = 0
+        self.z_step_size = None
         self.height = 0
         self.width = 0
         self.frames = 0
