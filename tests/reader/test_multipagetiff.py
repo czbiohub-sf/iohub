@@ -14,6 +14,7 @@ def test_constructor_mm2gamma(setup_mm2gamma_ome_tiffs):
     mmr = MicromanagerOmeTiffReader(one_folder, extract_data=False)
 
     assert(mmr.mm_meta is not None)
+    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
@@ -75,6 +76,7 @@ def test_constructor_mm1422(setup_mm1422_ome_tiffs):
     mmr = MicromanagerOmeTiffReader(one_folder, extract_data=False)
 
     assert(mmr.mm_meta is not None)
+    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)

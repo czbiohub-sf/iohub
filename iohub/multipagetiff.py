@@ -30,6 +30,7 @@ class MicromanagerOmeTiffReader:
         self.positions = {}
         self.mm_meta = None
         self.stage_positions = 0
+        self.z_step_size = None
         self.height = 0
         self.width = 0
         self.frames = 0
@@ -81,6 +82,7 @@ class MicromanagerOmeTiffReader:
                 for ch in self.mm_meta['Summary']['ChNames']:
                     self.channel_names.append(ch)
 
+            self.z_step_size = self.mm_meta['Summary']['z-step_um']
             self.height = self.mm_meta['Summary']['Height']
             self.width = self.mm_meta['Summary']['Width']
             self.frames = self.mm_meta['Summary']['Frames']
