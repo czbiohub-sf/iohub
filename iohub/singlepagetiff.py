@@ -58,6 +58,9 @@ class MicromanagerSequenceReader:
         # create coordinate to filename maps
         self.coord_to_filename = self.read_tiff_series(folder)
 
+        # update coordinates if the acquisition finished early
+        self._dims_from_coordinates()
+
         # todo: consider iterating over all positions.  Doable once we add a metadata search for stage positions
         if extract_data:
             self._create_stores(0)
@@ -297,6 +300,27 @@ class MicromanagerSequenceReader:
         sub_dir_name = [os.path.split(subdir[:-1])[1] for subdir in sub_dir_path]
         #    assert subDirName, 'No sub directories found'
         return natsort.natsorted(sub_dir_name)
+
+    def _dims_from_coordinates(self):
+        """
+        read coordinates from self.coord_to_filename
+        parse the coordinates for the total number unique elements in each tuple position
+            this total number reflects the true dimensionality
+        coord = (pos, time, chan, z)
+        height and width are still read from mm metadata
+        Returns
+        -------
+
+        """
+        p, t, c, z = set(), set(), set(), set()
+        for coord in self.coord_to_filename.keys():
+            p.add(coord[0])
+            t.add(coord[1])
+            c.add(coord[2])
+            z.add(coord[3])
+        self.frames = len(t)
+        self.slices = len(z)
+        self.channels = len(c)
 
     def _mm1_meta_parser(self):
         """

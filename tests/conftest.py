@@ -92,6 +92,49 @@ def setup_mm2gamma_ome_tiffs():
 
 
 @pytest.fixture(scope="session")
+def setup_mm2gamma_ome_tiffs_incomplete():
+    """
+    This fixture returns a dataset with 11 timepoints
+    """
+    temp_folder = os.getcwd() + '/pytest_temp'
+    temp_gamma = os.path.join(temp_folder, 'mm2gamma')
+    if not os.path.isdir(temp_folder):
+        os.mkdir(temp_folder)
+        print("\nsetting up temp folder")
+
+    # shared gdrive
+    # 'https://drive.google.com/file/d/1OeKmJcZ_Pb8q36q9u_FIRd2AOvdn2_MP/view?usp=sharing'
+
+    # DO NOT ADJUST THIS VALUE
+    mm2gamma_singlepage_tiffs = '1OeKmJcZ_Pb8q36q9u_FIRd2AOvdn2_MP'
+
+    # download files to temp folder
+    output = temp_gamma + "/mm2.0-20201209_20t_5z_3c_512k_incomplete_1.zip"
+    gdd.download_file_from_google_drive(file_id=mm2gamma_singlepage_tiffs,
+                                        dest_path=output,
+                                        unzip=True,
+                                        showsize=True,
+                                        overwrite=True)
+
+    src = os.path.join(temp_gamma, 'mm2.0-20201209_20t_5z_3c_512k_incomplete_1')
+
+    yield src
+
+    # breakdown files
+    try:
+        # remove zip file
+        os.remove(output)
+
+        # remove unzipped folder
+        shutil.rmtree(os.path.join(temp_gamma, 'mm2.0-20201209_20t_5z_3c_512k_incomplete_1'))
+
+        # remove temp folder
+        shutil.rmtree(temp_folder)
+    except OSError as e:
+        print(f"Error while deleting temp folder: {e.strerror}")
+
+
+@pytest.fixture(scope="session")
 def setup_mm2gamma_singlepage_tiffs():
     temp_folder = os.getcwd() + '/pytest_temp'
     temp_gamma = os.path.join(temp_folder, 'mm2gamma')
@@ -130,6 +173,50 @@ def setup_mm2gamma_singlepage_tiffs():
 
         # remove unzipped folder
         shutil.rmtree(os.path.join(temp_gamma, 'singlepage-tiffs'))
+
+        # remove temp folder
+        shutil.rmtree(temp_folder)
+    except OSError as e:
+        print(f"Error while deleting temp folder: {e.strerror}")
+
+
+@pytest.fixture(scope="session")
+def setup_mm2gamma_singlepage_tiffs_incomplete():
+    """
+    This fixture returns a dataset with 11 timepoints
+    The MDA definition at start of the experiment specifies 20 timepoints
+    """
+    temp_folder = os.getcwd() + '/pytest_temp'
+    temp_gamma = os.path.join(temp_folder, 'mm2gamma')
+    if not os.path.isdir(temp_folder):
+        os.mkdir(temp_folder)
+        print("\nsetting up temp folder")
+
+    # shared gdrive
+    # 'https://drive.google.com/file/d/1CXNpohEUb4IUjAATGw5Wr_2Q8JzaXcaj/view?usp=sharing'
+
+    # DO NOT ADJUST THIS VALUE
+    mm2gamma_singlepage_tiffs = '1CXNpohEUb4IUjAATGw5Wr_2Q8JzaXcaj'
+
+    # download files to temp folder
+    output = temp_gamma + "/mm2.0-20201209_20t_5z_3c_512k_incomplete_1.zip"
+    gdd.download_file_from_google_drive(file_id=mm2gamma_singlepage_tiffs,
+                                        dest_path=output,
+                                        unzip=True,
+                                        showsize=True,
+                                        overwrite=True)
+
+    src = os.path.join(temp_gamma, 'mm2.0-20201209_20t_5z_3c_512k_incomplete_1')
+
+    yield src
+
+    # breakdown files
+    try:
+        # remove zip file
+        os.remove(output)
+
+        # remove unzipped folder
+        shutil.rmtree(os.path.join(temp_gamma, 'mm2.0-20201209_20t_5z_3c_512k_incomplete_1'))
 
         # remove temp folder
         shutil.rmtree(temp_folder)

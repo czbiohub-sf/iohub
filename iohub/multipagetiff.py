@@ -82,6 +82,8 @@ class MicromanagerOmeTiffReader:
                 for ch in self.mm_meta['Summary']['ChNames']:
                     self.channel_names.append(ch)
 
+            # dimensions based on mm metadata do not reflect final written dimensions
+            # these will change after data is loaded
             self.z_step_size = self.mm_meta['Summary']['z-step_um']
             self.height = self.mm_meta['Summary']['Height']
             self.width = self.mm_meta['Summary']['Width']
@@ -254,6 +256,32 @@ class MicromanagerOmeTiffReader:
 
         return new_dict
 
+    def _set_dims_ome_meta(self, tps):
+        """
+        read ome metadata from tiffpageseries and set class dims
+
+        Parameters
+        ----------
+        tps: (TiffPageSeries): generated from tifffile.TiffFile.series
+
+        Returns
+        -------
+
+        """
+        shp = tps.shape
+        # get_axes() returns strings like 'TCYX'
+        for idx, dim in enumerate(tps.get_axes()):
+            if 'T' in dim:
+                self.frames = shp[idx]
+            if 'C' in dim:
+                self.channels = shp[idx]
+            if 'Z' in dim:
+                self.slices = shp[idx]
+            if 'Y' in dim:
+                self.height = shp[idx]
+            if 'X' in dim:
+                self.width = shp[idx]
+
     def _create_stores(self, master_ome):
         """
         extract all series from ome-tiff and place into dict of (pos: zarr)
@@ -270,6 +298,7 @@ class MicromanagerOmeTiffReader:
         self.log.info(f"extracting data from {master_ome}")
         with TiffFile(master_ome) as tif:
             for idx, tiffpageseries in enumerate(tif.series):
+                self._set_dims_ome_meta(tiffpageseries)
                 z = zarr.open(tiffpageseries.aszarr(), mode='r')
                 z = self._reshape_zarr(z)
                 z = self._expand_zarr(z)
