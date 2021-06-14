@@ -36,6 +36,7 @@ class MicromanagerSequenceReader:
         self.num_positions = None
         self.mm_meta = None
         self.stage_positions = 0
+        self.z_step_size = None
         self.height = 0
         self.width = 0
         self.frames = 0
@@ -330,6 +331,7 @@ class MicromanagerSequenceReader:
         -------
 
         """
+        self.z_step_size = self.mm_meta['Summary']['z-step_um']
         self.width = self.mm_meta['Summary']['Width']
         self.height = self.mm_meta['Summary']['Height']
         self.frames = self.mm_meta['Summary']['Frames']
@@ -345,6 +347,7 @@ class MicromanagerSequenceReader:
         -------
 
         """
+        self.z_step_size = self.mm_meta['Summary']['z-step_um']
         self.width = int(self.mm_meta['Summary']['UserData']['Width']['PropVal'])
         self.height = int(self.mm_meta['Summary']['UserData']['Height']['PropVal'])
         self.time_stamp = self.mm_meta['Summary']['StartTime']
@@ -368,6 +371,8 @@ class MicromanagerSequenceReader:
             self.height = self.mm_meta[keys_list[2]]['Height']
         else:
             raise ValueError('Metadata file incompatible with metadata reader')
+
+        self.z_step_size = self.mm_meta['Summary']['z-step_um']
         self.frames = self.mm_meta['Summary']['Frames']
         self.slices = self.mm_meta['Summary']['Slices']
         self.channels = self.mm_meta['Summary']['Channels']
