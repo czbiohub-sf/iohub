@@ -93,6 +93,9 @@ def setup_mm2gamma_ome_tiffs():
 
 @pytest.fixture(scope="session")
 def setup_mm2gamma_ome_tiffs_incomplete():
+    """
+    This fixture returns a dataset with 11 timepoints
+    """
     temp_folder = os.getcwd() + '/pytest_temp'
     temp_gamma = os.path.join(temp_folder, 'mm2gamma')
     if not os.path.isdir(temp_folder):
@@ -114,13 +117,7 @@ def setup_mm2gamma_ome_tiffs_incomplete():
                                         overwrite=True)
 
     src = os.path.join(temp_gamma, 'mm2.0-20201209_20t_5z_3c_512k_incomplete_1')
-    # subfolders = [f for f in os.listdir(src) if os.path.isdir(join(src, f))]
 
-    # specific folder
-    # one_folder = join(src, subfolders[0])
-    # random folder
-    # rand_folder = join(src, random.choice(subfolders))
-    # return path to unzipped folder containing test images as well as specific folder paths
     yield src
 
     # breakdown files
@@ -185,6 +182,10 @@ def setup_mm2gamma_singlepage_tiffs():
 
 @pytest.fixture(scope="session")
 def setup_mm2gamma_singlepage_tiffs_incomplete():
+    """
+    This fixture returns a dataset with 11 timepoints
+    The MDA definition at start of the experiment specifies 20 timepoints
+    """
     temp_folder = os.getcwd() + '/pytest_temp'
     temp_gamma = os.path.join(temp_folder, 'mm2gamma')
     if not os.path.isdir(temp_folder):
@@ -206,13 +207,7 @@ def setup_mm2gamma_singlepage_tiffs_incomplete():
                                         overwrite=True)
 
     src = os.path.join(temp_gamma, 'mm2.0-20201209_20t_5z_3c_512k_incomplete_1')
-    # subfolders = [f for f in os.listdir(src) if os.path.isdir(join(src, f))]
 
-    # specific folder
-    # one_folder = join(src, subfolders[0])
-    # random folder
-    # rand_folder = join(src, random.choice(subfolders))
-    # return path to unzipped folder containing test images as well as specific folder paths
     yield src
 
     # breakdown files
