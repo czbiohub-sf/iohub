@@ -125,6 +125,14 @@ class MicromanagerReader:
         self.reader.stage_positions = value
 
     @property
+    def z_step_size(self):
+        return self.reader.z_step_size
+
+    @z_step_size.setter
+    def z_step_size(self, value):
+        self.reader.z_step_size = value
+
+    @property
     def height(self):
         return self.reader.height
 

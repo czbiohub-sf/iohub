@@ -27,6 +27,7 @@ def test_ometiff_constructor_mm2gamma(setup_mm2gamma_ome_tiffs):
 
     assert(mmr.mm_meta is not None)
     assert(mmr.stage_positions is not None)
+    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
@@ -64,6 +65,7 @@ def test_sequence_constructor_mm2gamma(setup_mm2gamma_singlepage_tiffs):
                              'singlepagetiff',
                              extract_data=False)
     assert(mmr.mm_meta is not None)
+    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
@@ -103,6 +105,7 @@ def test_ometiff_constructor_mm1422(setup_mm1422_ome_tiffs):
 
     assert(mmr.mm_meta is not None)
     assert(mmr.stage_positions is not None)
+    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
@@ -140,6 +143,7 @@ def test_sequence_constructor_mm1422(setup_mm1422_singlepage_tiffs):
                              'singlepagetiff',
                              extract_data=False)
     assert(mmr.mm_meta is not None)
+    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
@@ -247,3 +251,10 @@ def test_stage_positions(setup_mm2gamma_ome_tiffs):
     with pytest.raises(AssertionError):
         mmr.stage_positions = 1
 
+def test_z_step_size(setup_mm2gamma_ome_tiffs):
+    _, _, rand_folder = setup_mm2gamma_ome_tiffs
+    mmr = MicromanagerReader(rand_folder,
+                             'ometiff',
+                             extract_data=False)
+    mmr.z_step_size = 1.75
+    assert (mmr.z_step_size == mmr.reader.z_step_size)
