@@ -73,6 +73,8 @@ Install the git version control system git : [link](https://git-scm.com/book/en/
 >python setup.py develop
 >```
 
+The installation time is less than 10 minutes on a normal desktop computer.
+
 *`waveorder` supports NVIDIA GPU computation through cupy package, please follow [here](https://github.com/cupy/cupy) for installation (check cupy is properly installed by ```import cupy```). To enable gpu processing, set ```use_gpu=True``` when initializing the simulator/reconstructor class.*
 
 
@@ -94,7 +96,7 @@ In the following, we demonstrate how to run `waveorder` for simulation and recon
 >  ```buildoutcfg
 >  jupyter notebook
 >  ```
-We recommend installing `cupy` before running uPTI simulation because uPTI computation takes up more resources.
+We recommend installing `cupy` before running uPTI simulation because uPTI computation takes up more resources. 3D uPTI reconstruction with array size of (200, 200, 100) can take 5 minutes with GPU computing.
     
 ## License
 Chan Zuckerberg Biohub Software License
