@@ -96,7 +96,7 @@ In the following, we demonstrate how to run `waveorder` for simulation and recon
 >  ```buildoutcfg
 >  jupyter notebook
 >  ```
-We recommend installing `cupy` before running uPTI simulation because uPTI computation takes up more resources. 3D uPTI reconstruction with array size of (200, 200, 100) can take 5 minutes with GPU computing.
+We recommend installing `cupy` before running uPTI simulation because uPTI computation takes up more resources. 3D uPTI simulation with array size of (200, 200, 100) takes 20 minutes and the reconstruction of the same-size array takes 10 minutes on a NVIDIA Titan Xp GPU.
     
 ## License
 Chan Zuckerberg Biohub Software License
