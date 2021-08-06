@@ -9,8 +9,10 @@ import glob
 import json
 import natsort
 
+from waveorder.io.reader_interface import ReaderInterface
 
-class MicromanagerSequenceReader:
+
+class MicromanagerSequenceReader(ReaderInterface):
 
     def __init__(self,
                  folder,

@@ -1,6 +1,7 @@
 
 from waveorder.io.singlepagetiff import MicromanagerSequenceReader
 from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
+from waveorder.io.zarrfile import ZarrReader
 import logging
 
 
@@ -53,6 +54,8 @@ class MicromanagerReader:
             self.reader = MicromanagerOmeTiffReader(src, extract_data)
         elif data_type == 'singlepagetiff':
             self.reader = MicromanagerSequenceReader(src, extract_data)
+        elif data_type == 'zarr':
+            self.reader = ZarrReader(src)
         else:
             raise NotImplementedError(f"reader of type {data_type} is not implemented")
 
