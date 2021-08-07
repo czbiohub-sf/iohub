@@ -41,6 +41,7 @@ class ZarrReader(ReaderInterface):
 
         # hardcode some values for now
         self.channel_names = ['State0', 'State1', 'State2', 'State3']
+        self.z_step_size = 0.25
 
     def get_zarr(self, pt: tuple) -> zarr.array:
         # return self.positions[position]
