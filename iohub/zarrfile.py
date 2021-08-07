@@ -39,6 +39,9 @@ class ZarrReader(ReaderInterface):
         # for p in range(self.pos):
         #     self.positions[p] = self.z[p]
 
+        # hardcode some values for now
+        self.channel_names = ['State0', 'State1', 'State2', 'State3']
+
     def get_zarr(self, pt: tuple) -> zarr.array:
         # return self.positions[position]
         return self.z[pt[0], pt[1]].astype(np.uint16)
