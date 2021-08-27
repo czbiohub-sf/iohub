@@ -181,7 +181,7 @@ class Builder:
             # print(f'Creating new store at {path}')
             return False
 
-    def create_channel_dict(self, chan_names, clims): pass
+    def create_channel_dict(self, chan_names, clims):
         pass
 
     def init_compressor(self):
