@@ -1,6 +1,4 @@
-from typing import Union
 import os
-from zarr import Array, Group
 from numcodecs import Blosc
 import numpy as np
 

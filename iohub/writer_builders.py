@@ -1,8 +1,8 @@
-from waveorder.io.writer import Builder
+from waveorder.io.writer_ABC import Builder
 import numpy as np
 import os
-from numcodecs import Blosc
 import zarr
+
 
 class PhysicalZarr(Builder):
 
