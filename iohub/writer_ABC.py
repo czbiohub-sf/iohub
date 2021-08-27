@@ -8,7 +8,8 @@ class Builder:
     """
     def __init__(self):
         self.__zarr = None
-        self.__compressor = None
+        self.__compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
+
 
     # Initialize zero array
     def init_array(self, store, data_shape, chunk_size, dtype, chan_names, clims, overwrite):
@@ -28,8 +29,6 @@ class Builder:
         -------
 
         """
-        if self.__compressor is None:
-            self.init_compressor('Blosc')
 
         # Make sure data matches OME zarr structure
         if len(data_shape) != 5:
@@ -136,26 +135,6 @@ class Builder:
         self.__zarr.attrs.put(full_dict)
 
     # Placeholder function for future compressor customization
-    def init_compressor(self, compressor_: str):
-        """
-        Zarr supports a variety of compressor libraries:
-            from NumCodecs:
-                Blosc, Zstandard, LZ4, Zlib, BZ2, LZMA
-        Blosc library supports many algorithms:
-                zstd, blosclz, lz4, lz4hc, zlib, snappy
-
-        Parameters
-        ----------
-        compressor_:    (str) one of the compressor libraries from NumCodecs
-
-        Returns
-        -------
-
-        """
-        if compressor_ is "Blosc":
-            self.__compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
-        else:
-            raise NotImplementedError("only Blosc library with zstd algorithm is supported")
 
     def set_zarr(self, store):
         """

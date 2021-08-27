@@ -1,10 +1,6 @@
 import zarr
 import os
-from waveorder.io.writer_builders import PhysicalZarr, StokesZarr
-
-
-# todo: add checks for inconsistent data shapes
-# todo: change to persistent arrays?
+from waveorder.io.writer_builders import PhysicalZarr, StokesZarr, RawZarr
 
 
 class WaveorderWriter:
