@@ -23,7 +23,8 @@ class WaveorderWriter:
     def __init__(self,
                  save_dir: str = None,
                  datatype: str = None,
-                 alt_name: str = None):
+                 alt_name: str = None,
+                 silence: bool = False):
         """
         datatype is one of "stokes" or "physical".
         Alt name specifies alternative name for the builder. i.e.'stokes denoised'
@@ -35,6 +36,7 @@ class WaveorderWriter:
 
         self.datatype = datatype
         self.__builder_name = alt_name
+        self.silence = silence
 
         if os.path.exists(save_dir) and save_dir.endswith('.zarr'):
             print(f'Opening existing store at {save_dir}')
@@ -102,7 +104,7 @@ class WaveorderWriter:
         if os.path.exists(grp_path):
             raise FileExistsError('A position subgroup with this name already exists')
         else:
-            print(f'Creating and opening subgroup {grp_name}')
+            if not self.silence: print(f'Creating and opening subgroup {grp_name}')
             self.store.create_group(grp_name)
             self.__current_zarr_group = self.store[grp_name]
             self.current_group_name = grp_name
@@ -128,7 +130,7 @@ class WaveorderWriter:
 
         #TODO: Find fancy way to search for prefix
         if os.path.exists(grp_path):
-            print(f'Opening subgroup {grp_name}')
+            if not self.silence: print(f'Opening subgroup {grp_name}')
             self.group_name = grp_name
             self.__current_zarr_group = self.store[grp_name]
             self.current_group_name = grp_name
