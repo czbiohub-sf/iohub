@@ -70,7 +70,7 @@ class WaveorderWriter:
 
     def set_type(self, datatype, alt_name=None):
         """
-        one of "physical" or "stokes"
+        one of "physical" or "stokes" or "raw"
 
         Parameters
         ----------
