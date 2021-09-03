@@ -134,8 +134,6 @@ class Builder:
 
         self.__zarr.attrs.put(full_dict)
 
-    # Placeholder function for future compressor customization
-
     def set_zarr(self, store):
         """
         set this object's zarr store

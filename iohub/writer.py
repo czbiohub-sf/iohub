@@ -167,7 +167,7 @@ class WaveorderWriter:
         elif self.datatype == 'raw':
             self.__builder = RawZarr(self.__builder_name)
         else:
-            raise NotImplementedError("datatype must be one of 'stokes' or 'physical'")
+            raise NotImplementedError("datatype must be one of 'stokes' or 'physical' or 'raw'")
 
         if not name.endswith('.zarr'):
             name = name+'.zarr'
@@ -195,13 +195,15 @@ class WaveorderWriter:
         """
 
         if self.datatype is None:
-            raise AttributeError("datatype is not set.  Must be one of 'stokes' or 'physical'")
+            raise AttributeError("datatype is not set.  Must be one of 'stokes' or 'physical' or 'raw'")
         elif self.datatype == 'stokes':
             self.__builder = StokesZarr(self.__builder_name)
         elif self.datatype == 'physical':
             self.__builder = PhysicalZarr(self.__builder_name)
+        elif self.datatype == 'raw':
+            self.__builder = RawZarr(self.__builder_name)
         else:
-            raise NotImplementedError("datatype must be one of 'stokes' or 'physical'")
+            raise NotImplementedError("datatype must be one of 'stokes' or 'physical' or 'raw'")
 
         if os.path.exists(path):
             self.store = zarr.open(path)
