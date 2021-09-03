@@ -8,7 +8,7 @@ class Builder:
     """
     def __init__(self):
         self.__zarr = None
-        self.__compressor = Blosc(cname='zstd', clevel=3, shuffle=Blosc.BITSHUFFLE)
+        self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.BITSHUFFLE)
 
 
     # Initialize zero array
