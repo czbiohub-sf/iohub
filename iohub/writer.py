@@ -1,6 +1,6 @@
 import zarr
 import os
-from waveorder.io.writer_builders import PhysicalZarr, StokesZarr, RawZarr
+from waveorder.io.writer_structures import PhysicalZarr, StokesZarr, RawZarr
 
 
 class WaveorderWriter:
@@ -237,20 +237,6 @@ class WaveorderWriter:
 
         self.__builder.init_array(self.__current_zarr_group, data_shape, chunk_size, dtype, chan_names, clims, overwrite)
         self.__current_zarr_dir = self.__current_zarr_group[self.__builder.name]
-
-    def set_compressor(self, compressor):
-        """
-        Placeholder function for future user-specified compressors.
-
-        Parameters
-        ----------
-        compressor: (object) compressor to use for data saving.
-
-        Returns
-        -------
-
-        """
-        self.__builder.init_compressor(compressor)
 
     def write(self, data, t=None, c=None, z=None):
         """
