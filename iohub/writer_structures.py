@@ -1,7 +1,6 @@
 import os
 from numcodecs import Blosc
 import numpy as np
-import zarr
 
 class WriterBase:
     """
@@ -16,15 +15,18 @@ class WriterBase:
     def init_array(self, store, data_shape, chunk_size, dtype, chan_names, clims, overwrite):
         """
 
+        Initializes the zarr array under the current position subgroup.
+        array level is called 'array' in the hierarchy.
+
         Parameters
         ----------
-        store
-        data_shape
-        chunk_size
-        dtype
-        chan_names
-        clims
-        overwrite
+        store:              (ZarrStore) Opened Zarr store at the position subgroup level
+        data_shape:         (tuple)  Desired Shape of your data (T, C, Z, Y, X).  Must match data
+        chunk_size:         (tuple) Desired Chunk Size (T, C, Z, Y, X).  Chunking each image would be (1, 1, 1, Y, X)
+        dtype:              (str) Data Type, i.e. 'uint16'
+        chan_names:         (list) List of strings corresponding to your channel names.  Used for OME-zarr metadata
+        clims:              (list) list of tuples corresponding to contrast limtis for channel.  OME-Zarr metadata
+        overwrite:          (bool) Whether or not to overwrite the existing data that may be present.
 
         Returns
         -------
@@ -94,6 +96,20 @@ class WriterBase:
             raise ValueError('Did not understand data formatting')
 
     def create_channel_dict(self, chan_name, clim=None):
+        """
+        This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
+        names for display.  Defaults everything to grayscale.
+
+        Parameters
+        ----------
+        chan_name:          (str) Desired name of the channel for display
+        clim:               (tuple) contrast limits (min,max)
+
+        Returns
+        -------
+        dict_:              (dict) dictionary adherent to ome-zarr standards
+
+        """
 
         min = 0.0
         max = 65535.0
@@ -181,7 +197,7 @@ class PhysicalZarr(WriterBase):
 
     def __init__(self, name=None):
         """
-
+        Physical Zarr Writer Structure
         """
         super().__init__()
         self.__zarr = None
@@ -192,7 +208,22 @@ class PhysicalZarr(WriterBase):
             self.name = 'physical_data'
 
     def create_channel_dict(self, chan_name, clim=None):
+        """
+        This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
+        names for display.  Defaults everything to grayscale.
 
+        This overrides base class and looks for specific names of common physical_data channels.  Will use
+        common default contrast limits if channel name matches and the user doesn't specify a contrast limit
+
+        Parameters
+        ----------
+        chan_name:          (str) Desired name of the channel for display
+        clim:               (tuple) contrast limits (min,max)
+
+        Returns
+        -------
+        dict_:              (dict) dictionary adherent to ome-zarr standards
+        """
         if chan_name == 'Retardance':
             min = 0.0
             max = 1000.0
@@ -238,7 +269,7 @@ class StokesZarr(WriterBase):
 
     def __init__(self, name=None):
         """
-
+        Stokes Zarr Writer Structure
         """
         super().__init__()
         self.__zarr = None
@@ -249,6 +280,22 @@ class StokesZarr(WriterBase):
             self.name = 'stokes_data'
 
     def create_channel_dict(self, chan_name, clim=None):
+        """
+        This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
+        names for display.  Defaults everything to grayscale.
+
+        This overrides base class and looks for specific names of common physical_data channels.  Will use
+        common default contrast limits if channel name matches and the user doesn't specify a contrast limit
+
+        Parameters
+        ----------
+        chan_name:          (str) Desired name of the channel for display
+        clim:               (tuple) contrast limits (min,max)
+
+        Returns
+        -------
+        dict_:              (dict) dictionary adherent to ome-zarr standards
+        """
 
         if chan_name == 'S0':
             min = 0.0
@@ -296,7 +343,7 @@ class RawZarr(WriterBase):
 
     def __init__(self, name=None):
         """
-
+        Raw Zarr Writer Structure
         """
         super().__init__()
         self.__zarr = None
@@ -307,6 +354,22 @@ class RawZarr(WriterBase):
             self.name = 'raw_data'
 
     def create_channel_dict(self, chan_name, clim=None):
+        """
+        This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
+        names for display.  Defaults everything to grayscale.
+
+        This overrides base class and looks for specific names of common physical_data channels.  Will use
+        common default contrast limits if channel name matches and the user doesn't specify a contrast limit
+
+        Parameters
+        ----------
+        chan_name:          (str) Desired name of the channel for display
+        clim:               (tuple) contrast limits (min,max)
+
+        Returns
+        -------
+        dict_:              (dict) dictionary adherent to ome-zarr standards
+        """
 
         min = 0
         max = 65535
