@@ -22,8 +22,6 @@ class WaveorderWriter:
 
     def __init__(self,
                  save_dir: str = None,
-                 datatype: str = None,
-                 alt_name: str = None,
                  silence: bool = False):
         """
         datatype is one of "stokes" or "physical".
