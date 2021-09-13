@@ -98,8 +98,11 @@ class WaveorderWriter:
         else:
             raise FileNotFoundError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
-    def get_current_group(self):
-        return self.current_group_name
+    def get_current_pos_group(self):
+        return self.sub_writer.current_pos_group
+
+    def get_current_well_group(self):
+        return self.sub_writer.current_well_group
 
     def create_position(self, position, name=None):
         """

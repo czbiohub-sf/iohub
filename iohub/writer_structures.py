@@ -263,7 +263,7 @@ class WriterBase:
             # check to see if the position exists
             if os.path.exists(pos_path):
 
-                if not self.verbose: print(f'Opening subgroup {row_name}/{col_name}/{pos_name}')
+                if self.verbose: print(f'Opening subgroup {row_name}/{col_name}/{pos_name}')
 
                 # update trackers to note the current status of the writer
                 self.current_pos_group = self.store[row_name][col_name][pos_name]
@@ -433,7 +433,7 @@ class DefaultZarr(WriterBase):
         self.create_column(0, position)
         col_name = self.columns[position]
 
-        if not self.verbose:
+        if self.verbose:
             print(f'Creating and opening subgroup {row_name}/{col_name}/{name}')
 
         # create position subgroup
@@ -482,7 +482,7 @@ class DefaultZarr(WriterBase):
 
         """
 
-        self.well_meta['well']['images'] = [{'name': self.positions[pos]['name']}]
+        self.well_meta['well']['images'] = [{'path': self.positions[pos]['name']}]
         self.store[self.rows[0]][self.columns[pos]].attrs.put(self.well_meta)
 
 
