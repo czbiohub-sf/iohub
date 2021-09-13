@@ -25,16 +25,6 @@ class WaveorderWriter:
                  hcs_meta: dict = None,
                  verbose: bool = False):
 
-        """
-
-
-        Parameters
-        ----------
-        save_dir
-        hcs
-        hcs_meta
-        verbose
-        """
         self.verbose = verbose
         self.use_hcs = hcs
         self.hcs_meta = hcs_meta
@@ -45,6 +35,7 @@ class WaveorderWriter:
         else:
             self._check_is_dir(save_dir)
 
+        # initialize the subwriter based upon HCS or Default
         if self.use_hcs:
             if not self.hcs_meta:
                 raise ValueError('No HCS Metadata provided. If HCS format is to be used you must specify the HCS Metadata')
@@ -110,8 +101,8 @@ class WaveorderWriter:
 
         Parameters
         ----------
-        position: (int) position subfolder that will contain .zarr array
-        prefix:   (str) prefix to put before the name of position subdirectory i.e. {Prefix}_Pos_000
+        position:   (int) position subfolder that will contain .zarr array
+        name:       (str) name to replace 'Pos_N' in the folder structure
 
         Returns
         -------
@@ -125,12 +116,11 @@ class WaveorderWriter:
     def open_position(self, position):
 
         """
-        Opens existing position sub-group.  Prefix must be specified to find the subgroup correctly
+        Opens existing position sub-group.
 
         Parameters
         ----------
         position: (int) position subfolder that will contain .zarr array
-        prefix:   (str) prefix to put before the name of position subdirectory i.e. {Prefix}_Pos_000
 
         Returns
         -------
@@ -174,7 +164,6 @@ class WaveorderWriter:
 
         Parameters
         ----------
-        store:              (ZarrStore) Opened Zarr store at the position subgroup level
         data_shape:         (tuple)  Desired Shape of your data (T, C, Z, Y, X).  Must match data
         chunk_size:         (tuple) Desired Chunk Size (T, C, Z, Y, X).  Chunking each image would be (1, 1, 1, Y, X)
         dtype:              (str) Data Type, i.e. 'uint16'
