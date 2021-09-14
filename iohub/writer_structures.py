@@ -2,6 +2,7 @@ import os
 from numcodecs import Blosc
 import numpy as np
 
+
 class WriterBase:
     """
     ABC for all writer types
@@ -567,14 +568,34 @@ class HCSZarr(WriterBase):
 
         """
 
+        HCS_Defaults = {'acquisitions': [{'id': 1, 'maxmimumfieldcount': 1, 'name': 'Dataset', 'starttime': 0}],
+                        'field_count': 1,
+                        'name': os.path.basename(self.root_path).strip('.zarr'),
+                        'version': '0.1'}
+
 
         # Check to see if all of the required keys are present
         if 'plate' not in self.hcs_meta.keys():
-            raise ValueError(f'HCS metadata missing plate metadata')
+            raise KeyError(f'HCS metadata missing plate metadata')
 
-        # Check to see if all of the required keys are present
         if 'well' not in self.hcs_meta.keys():
-            raise ValueError(f'HCS metadata missing well metadata')
+            raise KeyError(f'HCS metadata missing well metadata')
+
+        plate_keys = self.hcs_meta['plate'].keys()
+        for key in plate_keys:
+            if key not in HCS_Defaults:
+                self.hcs_meta['plate'][key] = HCS_Defaults[key]
+
+        if 'rows' not in plate_keys:
+            raise KeyError('rows key is missing from plate metadata')
+
+        if 'columns' not in plate_keys:
+            raise KeyError('columns key is missing from plate metadata')
+
+        # create wells data based on rows, columns if not present
+        if 'wells' not in self.hcs_meta['plate'].keys():
+            self.hcs_meta['plate']['wells'] = [{'path': f'{row}/{col}'} for row in self.hcs_meta['plate']['rows']
+                                               for col in self.hcs_meta['plate']['columns']]
 
         # Check Plate Meta
         n_col = len(self.hcs_meta['plate']['columns'])
@@ -594,7 +615,7 @@ class HCSZarr(WriterBase):
                                         does not match row {row_name}, col {col_name}')
                 cnt += 1
 
-        # if well metadata present check to make sure it is correct
+        # check to make sure well metadata is correct
         if 'well' in self.hcs_meta.keys():
             for well in self.hcs_meta['well']:
                 if len(well['images']) > self.hcs_meta['plate']['field_count']:
