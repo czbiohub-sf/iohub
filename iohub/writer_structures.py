@@ -550,6 +550,7 @@ class HCSZarr(WriterBase):
         self.store.attrs.put({'plate': plate_meta})
 
     def _check_HCS_meta(self):
+        #TODO: fill in non-essential fields if the user doesn't provide
         """
         checks to make sure the HCS metadata is formatted properly. HCS metadata should be passed in the following
         structure:
