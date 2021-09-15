@@ -44,28 +44,57 @@ class ZarrReader(ReaderInterface):
         self.stage_positions = 0
         self.z_step_size = None
 
+        # initialize metadata
         self.mm_meta = None
         self._set_mm_meta()
 
     def _get_rows(self):
+        """
+        Function to get the rows of the zarr hierarchy from HCS metadata
+
+        Returns
+        -------
+
+        """
         rows = []
         for row in self.plate_meta['rows']:
             rows.append(row['name'])
         self.rows = rows
 
     def _get_columns(self):
+        """
+        Function to get the columns of the zarr hierarchy from HCS metadata
+
+        Returns
+        -------
+
+        """
         columns = []
         for column in self.plate_meta['columns']:
             columns.append(column['name'])
         self.columns = columns
 
     def _get_wells(self):
+        """
+        Function to get the wells (Row/Col) of the zarr hierarchy from HCS metadata
+
+        Returns
+        -------
+
+        """
         wells = []
         for well in self.plate_meta['wells']:
             wells.append(well['path'])
         self.wells = wells
 
     def _get_positions(self):
+        """
+        Gets the position names and paths from HCS metadata
+
+        Returns
+        -------
+
+        """
 
         idx = 0
         # Assumes that the positions are indexed in the order of Row-->Well-->FOV
@@ -76,6 +105,13 @@ class ZarrReader(ReaderInterface):
                 idx += 1
 
     def _set_mm_meta(self):
+        """
+        Sets the micromanager summary metadata based on MM version
+
+        Returns
+        -------
+
+        """
         self.mm_meta = self.store.attrs.get('Summary')
 
         mm_version = self.mm_meta['MicroManagerVersion']
@@ -155,17 +191,56 @@ class ZarrReader(ReaderInterface):
         return new_dict
 
     def get_image_plane_metadata(self, p, c, z):
-        # coord must be (p, t, c, z)
+        """
+        For the sake of not keeping an enormous amount of metadta, only the microscope conditions
+        for the first timepoint are kept in the zarr metadata during write.  User can only query image
+         plane metadata at p, c, z
+
+        Parameters
+        ----------
+        p:          (int) Position index
+        c:          (int) Channel index
+        z:          (int) Z-slice index
+
+        Returns
+        -------
+        (dict) Image Plane Metadata at given coordinate w/ T = 0
+
+        """
         coord_str = f'({p}, 0, {c}, {z})'
         return self.store.attrs.get('ImagePlaneMetadata').get(coord_str)
 
     def get_zarr(self, position):
+        """
+        Returns the position-level zarr group
+
+        Parameters
+        ----------
+        position:       (int) position index
+
+        Returns
+        -------
+        (ZarrGroup) Position subgroup containing the array group+data
+
+        """
         pos_info = self.position_map[position]
         well = pos_info['well']
         pos = pos_info['name']
         return self.store[well][pos]
 
     def get_array(self, position):
+        """
+        Gets the (T, C, Z, Y, X) array at given position
+
+        Parameters
+        ----------
+        position:       (int) position index
+
+        Returns
+        -------
+        (ZarrArray) Zarr array of size (T, C, Z, Y, X) at specified position
+
+        """
         pos = self.get_zarr(position)
         return pos['array']
 
