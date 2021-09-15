@@ -24,7 +24,7 @@ import logging
 ###############################################################################
 
 
-class MicromanagerReader:
+class WaveorderReader:
 
     def __init__(self,
                  src: str,
