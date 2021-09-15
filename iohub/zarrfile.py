@@ -32,19 +32,20 @@ class ZarrReader(ReaderInterface):
         self._get_wells()
         self.position_map = dict()
         self._get_positions()
-        self.mm_meta = None
-        self._set_mm_meta()
 
         # structure of zarr array
         (self.frames,
          self.channels,
          self.slices,
          self.height,
-         self.width) = self.store[self.wells[0]]['array'].shape
+         self.width) = self.store[self.position_map[0]['well']][self.position_map[0]['name']]['array'].shape
         self.positions = len(self.position_map)
         self.channel_names = []
         self.stage_positions = 0
         self.z_step_size = None
+
+        self.mm_meta = None
+        self._set_mm_meta()
 
     def _get_rows(self):
         rows = []
@@ -153,19 +154,20 @@ class ZarrReader(ReaderInterface):
 
         return new_dict
 
-    def get_image_plane_metadata(self, coord):
+    def get_image_plane_metadata(self, p, c, z):
         # coord must be (p, t, c, z)
-        coord_str = f'({coord[0]}, {coord[1]}, {coord[2]}, {coord[3]})'
+        coord_str = f'({p}, 0, {c}, {z})'
         return self.store.attrs.get('ImagePlaneMetadata').get(coord_str)
 
-    def get_zarr(self, pt: tuple) -> zarr.array:
-        pos_info = self.position_map[pt[0]]
+    def get_zarr(self, position):
+        pos_info = self.position_map[position]
         well = pos_info['well']
-        return self.store[well]
+        pos = pos_info['name']
+        return self.store[well][pos]
 
-    def get_array(self, pt: tuple) -> np.ndarray:
-        well = self.get_zarr(pt)
-        return well['array']
+    def get_array(self, position):
+        pos = self.get_zarr(position)
+        return pos['array']
 
     def get_num_positions(self) -> int:
         return self.positions
