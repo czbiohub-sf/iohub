@@ -47,6 +47,7 @@ class ZarrReader(ReaderInterface):
         # initialize metadata
         self.mm_meta = None
         self._set_mm_meta()
+        self._generate_hcs_meta()
 
     def _get_rows(self):
         """
@@ -103,6 +104,25 @@ class ZarrReader(ReaderInterface):
                 name = pos['path']
                 self.position_map[idx] = {'name': name, 'well': well}
                 idx += 1
+
+    def _generate_hcs_meta(self):
+        """
+        Pulls the HCS metadata and organizes it into a dictionary structure
+        that can be easily read by the WaveorderWriter.
+
+        Returns
+        -------
+
+        """
+        self.hcs_meta = dict()
+        self.hcs_meta['plate'] = self.plate_meta
+
+        well_metas = []
+        for well in self.wells:
+            meta = self.store[well].attrs.get('well')
+            well_metas.append(meta)
+
+        self.hcs_meta['well'] = well_metas
 
     def _set_mm_meta(self):
         """
