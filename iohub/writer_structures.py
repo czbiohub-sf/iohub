@@ -358,8 +358,6 @@ class WriterBase:
         pass
 
 
-#TODO: Figure out why this isn't producing the same error as the generated dataset
-#todo: save position map in metadata for later parsing??
 class DefaultZarr(WriterBase):
     """
     This writer is based off creating a default HCS hierarchy for non-hcs datasets.
@@ -502,9 +500,6 @@ class HCSZarr(WriterBase):
         super().__init__(store, root_path)
         self.hcs_meta = hcs_meta
 
-        # check to make sure HCS metadata can be parsed / isn't missing critical info
-        self._check_HCS_meta()
-
     def init_hierarchy(self):
         """
         Creates the entire Row/Col/Pos hierarchy structure based upon the accepted
@@ -514,6 +509,9 @@ class HCSZarr(WriterBase):
         -------
 
         """
+
+        # check to make sure HCS metadata can be parsed / isn't missing critical info
+        self._check_HCS_meta()
 
         plate_meta = self.hcs_meta['plate']
         row_count = 0
@@ -551,7 +549,6 @@ class HCSZarr(WriterBase):
         self.store.attrs.put({'plate': plate_meta})
 
     def _check_HCS_meta(self):
-        #TODO: fill in non-essential fields if the user doesn't provide
         """
         checks to make sure the HCS metadata is formatted properly. HCS metadata should be passed in the following
         structure:
@@ -583,7 +580,7 @@ class HCSZarr(WriterBase):
 
         plate_keys = self.hcs_meta['plate'].keys()
         for key in plate_keys:
-            if key not in HCS_Defaults:
+            if key in HCS_Defaults and key not in plate_keys:
                 self.hcs_meta['plate'][key] = HCS_Defaults[key]
 
         if 'rows' not in plate_keys:

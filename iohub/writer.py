@@ -89,47 +89,6 @@ class WaveorderWriter:
         else:
             raise FileNotFoundError(f'No store found at {path}, check spelling or create new store with create_zarr')
 
-    def get_current_pos_group(self):
-        return self.sub_writer.current_pos_group
-
-    def get_current_well_group(self):
-        return self.sub_writer.current_well_group
-
-    def create_position(self, position, name=None):
-        """
-        append file paths for zarr store
-
-        Parameters
-        ----------
-        position:   (int) position subfolder that will contain .zarr array
-        name:       (str) name to replace 'Pos_N' in the folder structure
-
-        Returns
-        -------
-
-        """
-
-        pos_name = name if name else f'Pos_{position:03d}'
-        self.sub_writer.create_position(position, pos_name)
-
-
-    def open_position(self, position):
-
-        """
-        Opens existing position sub-group.
-
-        Parameters
-        ----------
-        position: (int) position subfolder that will contain .zarr array
-
-        Returns
-        -------
-
-        """
-
-        self.sub_writer.open_position(position)
-
-
     def create_zarr_root(self, name):
         """
         Method for creating the root zarr store.
@@ -156,14 +115,15 @@ class WaveorderWriter:
         self.sub_writer.set_root(self.__root_store_path)
         self.sub_writer.init_hierarchy()
 
-    def init_array(self, data_shape, chunk_size, dtype, chan_names, clims, overwrite=False):
+    def init_array(self, position, data_shape, chunk_size, dtype, chan_names, clims, position_name=None, overwrite=False):
         """
 
-        Initializes the zarr array under the current position subgroup.
-        array level is called 'array' in the hierarchy.
+        Creates a subgroup structure based on position index.  Then initializes the zarr array under the
+        current position subgroup.  Array level is called 'array' in the hierarchy.
 
         Parameters
         ----------
+        position:           (int) Position index upon which to initialize array
         data_shape:         (tuple)  Desired Shape of your data (T, C, Z, Y, X).  Must match data
         chunk_size:         (tuple) Desired Chunk Size (T, C, Z, Y, X).  Chunking each image would be (1, 1, 1, Y, X)
         dtype:              (str) Data Type, i.e. 'uint16'
@@ -176,27 +136,33 @@ class WaveorderWriter:
 
         """
 
+        pos_name = position_name if position_name else f'Pos_{position:03d}'
+
         # Make sure data matches OME zarr structure
         if len(data_shape) != 5:
             raise ValueError('Data shape must be (T, C, Z, Y, X)')
 
+        self.sub_writer.create_position(position, pos_name)
         self.sub_writer.init_array(data_shape, chunk_size, dtype, chan_names, clims, overwrite)
 
-
-    def write(self, data, t=None, c=None, z=None):
+    def write(self, data, p, t=None, c=None, z=None):
         """
         Wrapper that calls the builder's write function.
         Will write to existing array of zeros and place
         data over the specified indicies.
+
         Parameters
         ----------
         data:   (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
+        p:      (int), Position index in which to write the data into
         t:      (list or value), index or index range of the time dimension
         c:      (list or value), index or index range of the channel dimension
         z:      (list or value), index or index range of the Z-slice dimension
         Returns
         -------
         """
+        self.sub_writer.open_position(p)
+
         if t is None:
             t = [0,data.shape[0]]
 
