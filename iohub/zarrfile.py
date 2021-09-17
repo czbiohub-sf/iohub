@@ -5,15 +5,13 @@ from copy import copy
 from waveorder.io.reader_interface import ReaderInterface
 
 
-"""
-This reader is written to load data that has been directly streamed from micro-manager
-    to a zarr array.  The array dims order is based on the micro-manager order
-    
-by default supports READ ONLY MODE
-"""
-
 
 class ZarrReader(ReaderInterface):
+
+    """
+    Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
+    Also collects the HCS metadata so it can be later copied.
+    """
 
     def __init__(self,
                  zarrfile: str):
