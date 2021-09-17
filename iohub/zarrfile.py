@@ -20,7 +20,7 @@ class ZarrReader(ReaderInterface):
 
         # zarr files (.zarr) are directories
         if not os.path.isdir(zarrfile):
-            raise ValueError("file is not a .zarr file")
+            raise ValueError("file does not exist")
         if not '.zarr' in zarrfile:
             raise ValueError("file is not a .zarr file")
 
