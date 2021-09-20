@@ -5,8 +5,10 @@ from tifffile import TiffFile
 from copy import copy
 import logging
 
+from waveorder.io.reader_interface import ReaderInterface
 
-class MicromanagerOmeTiffReader:
+
+class MicromanagerOmeTiffReader(ReaderInterface):
 
     def __init__(self,
                  folder: str,

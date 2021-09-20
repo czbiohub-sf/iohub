@@ -315,3 +315,46 @@ def setup_mm1422_singlepage_tiffs():
         shutil.rmtree(temp_folder)
     except OSError as e:
         print(f"Error while deleting temp folder: {e.strerror}")
+
+@pytest.fixture(scope="session")
+def setup_mm2gamma_zarr():
+    temp_folder = os.getcwd() + '/pytest_temp'
+    temp_2gamma = os.path.join(temp_folder, 'mm2gamma')
+    if not os.path.isdir(temp_folder):
+        os.mkdir(temp_folder)
+        print("\nsetting up temp folder")
+
+    # shared gdrive
+    # 'https://drive.google.com/file/d/1ORg45aCfkiHGBVtTtgAJIk4DjIv8GNt6/view?usp=sharing'
+
+    # DO NOT ADJUST THIS VALUE
+    mm2gamma_zarr = '1ORg45aCfkiHGBVtTtgAJIk4DjIv8GNt6'
+
+    # download files to temp folder
+    output = temp_2gamma + "/2021_06_11_recOrder_pytest_20x_04NA_zarr.zip"
+    gdd.download_file_from_google_drive(file_id=mm2gamma_zarr,
+                                        dest_path=output,
+                                        unzip=True,
+                                        showsize=True,
+                                        overwrite=True)
+
+    print(os.listdir(temp_2gamma))
+
+    src = os.path.join(temp_2gamma, '2021_06_11_recOrder_pytest_20x_04NA_zarr')
+    zp = os.path.join(src, '2T_3P_81Z_231Y_498X_Kazansky.zarr')
+
+    # return path to unzipped folder containing test images as well as specific folder paths
+    yield zp
+
+    # breakdown files
+    try:
+        # remove zip file
+        os.remove(output)
+
+        # remove unzipped folder
+        shutil.rmtree(src)
+
+        # remove temp folder
+        shutil.rmtree(temp_folder)
+    except OSError as e:
+        print(f"Error while deleting temp folder: {e.strerror}")
