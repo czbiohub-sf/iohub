@@ -9,6 +9,9 @@ class ReaderInterface:
     def get_array(self, position: int) -> np.ndarray:
         pass
 
+    def get_image(self, p, t, c, z):
+        pass
+
     def get_num_positions(self) -> int:
         pass
 

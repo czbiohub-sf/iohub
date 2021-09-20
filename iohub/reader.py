@@ -87,6 +87,9 @@ class WaveorderReader:
         """
         return self.reader.get_array(position)
 
+    def get_image(self, p, t, c, z):
+        return self.reader.get_image(p, t, c, z)
+
     def get_num_positions(self):
         """
         get total number of scenes referenced in ome-tiff metadata
