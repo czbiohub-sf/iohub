@@ -274,12 +274,12 @@ class MicromanagerOmeTiffReader(ReaderInterface):
             if position != tup[0]:
                 continue
             else:
-                if tup[1] > t:
-                    t = tup[1]
-                if tup[2] > c:
-                    c = tup[2]
-                if tup[3] > z:
-                    z = tup[3]
+                if tup[1]+1 > t:
+                    t = tup[1]+1
+                if tup[2]+1 > c:
+                    c = tup[2]+1
+                if tup[3]+1 > z:
+                    z = tup[3]+1
 
         return t, c, z
 
