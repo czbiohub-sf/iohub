@@ -90,17 +90,17 @@ class MicromanagerOmeTiffReader(ReaderInterface):
                 self.coord_map[tuple(coord)] = (file, page, offset)
 
                 # update dimensions
-                if coord[0] > self.positions:
-                    self.positions = coord[0]
+                if coord[0]+1 > self.positions:
+                    self.positions = coord[0]+1
 
-                if coord[1] > self.frames:
-                    self.frames = coord[1]
+                if coord[1]+1 > self.frames:
+                    self.frames = coord[1]+1
 
-                if coord[2] > self.channels:
-                    self.channels = coord[2]
+                if coord[2]+1 > self.channels:
+                    self.channels = coord[2]+1
 
-                if coord[3] > self.slices:
-                    self.slices = coord[2]
+                if coord[3]+1 > self.slices:
+                    self.slices = coord[2]+1
 
 
     def _get_byte_offset(self, tiff_file, page):
