@@ -13,7 +13,7 @@ from waveorder.io.reader_interface import ReaderInterface
 
 class MicromanagerOmeTiffReader(ReaderInterface):
 
-    def __init__(self, folder: str):
+    def __init__(self, folder: str, extract_data: bool = False):
         """
 
         Parameters
@@ -24,10 +24,8 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         """
 
         # Add Initial Checks
-        if len(glob.glob(os.path.join(input, '*.ome.tif'))) == 0:
+        if len(glob.glob(os.path.join(folder, '*.ome.tif'))) == 0:
             raise ValueError('Specific input contains no ome.tif files, please specify a valid input directory')
-
-        self.log = logging.getLogger(__name__)
 
         # ignore tiffile warnings
         with warnings.catch_warnings():
@@ -45,12 +43,14 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         self.t_dim = None
         self.c_dim = None
         self.z_dim = None
+        self.position_arrays = dict()
         self.positions = 0
         self.frames = 0
         self.channels = 0
         self.slices = 0
         self.height = 0
         self.width = 0
+        self._set_dtype()
         # print(f'Found Dataset {self.save_name} w/ dimensions (P, T, C, Z, Y, X): {self.dim}')
 
         self.mm_meta = None
@@ -62,6 +62,10 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         self._set_mm_meta()
         self._gather_index_maps()
+
+        if extract_data:
+            for i in range(self.positions):
+                self._create_position_array(i)
 
     def _gather_index_maps(self):
         """
@@ -78,12 +82,26 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
             for page in range(len(meta['Channel'])):
                 coord = [0, 0, 0, 0]
-                coord[self.p_dim] = meta['Position'][page]
-                coord[self.t_dim] = meta['Frame'][page]
-                coord[self.c_dim] = meta['Channel'][page]
-                coord[self.z_dim] = meta['Slice'][page]
+                coord[0] = meta['Position'][page]
+                coord[1] = meta['Frame'][page]
+                coord[2] = meta['Channel'][page]
+                coord[3] = meta['Slice'][page]
                 offset = self._get_byte_offset(tf, page)
                 self.coord_map[tuple(coord)] = (file, page, offset)
+
+                # update dimensions
+                if coord[0] > self.positions:
+                    self.positions = coord[0]
+
+                if coord[1] > self.frames:
+                    self.frames = coord[1]
+
+                if coord[2] > self.channels:
+                    self.channels = coord[2]
+
+                if coord[3] > self.slices:
+                    self.slices = coord[2]
+
 
     def _get_byte_offset(self, tiff_file, page):
         """
@@ -114,7 +132,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         -------
 
         """
-        with TiffFile(self.master_ome_tiff) as tif:
+        with TiffFile(self.files[0]) as tif:
             self.mm_meta = tif.micromanager_metadata
 
             mm_version = self.mm_meta['Summary']['MicroManagerVersion']
@@ -158,121 +176,6 @@ class MicromanagerOmeTiffReader(ReaderInterface):
             self.t_dim = self.dim_order.index('time')
             self.c_dim = self.dim_order.index('channel')
             self.z_dim = self.dim_order.index('z')
-
-            #todo: get rid of?
-            self._check_missing_dims()
-
-    def _check_missing_dims(self):
-        """
-        establishes which dimensions are not present in the data
-
-        Returns
-        -------
-
-        """
-
-        missing_coords = []
-        if self.frames == 1:
-            missing_coords.append('T')
-        if self.slices == 1:
-            missing_coords.append('Z')
-        if self.channels == 1:
-            missing_coords.append('C')
-        if bool(missing_coords) is True:
-            self._missing_dims = set(missing_coords)
-
-    def _reshape_zarr(self, zar):
-        """
-        reshape zarr arrays to match (T, C, Z, Y, X)
-        if zarr array is lower dimensional, reshape to match the target
-        if zarr array is purely 2 or 3 dimensional, no need to reshape
-
-        Parameters
-        ----------
-        zar:        (zarr.array)
-
-        Returns
-        -------
-        zar:        (zarr.array)
-
-        """
-
-        if self._missing_dims is None:
-            target = np.array(zar).reshape((self.frames, self.channels, self.slices, self.height, self.width))
-            return zarr.array(target, chunks=(1, 1, 1, self.height, self.width))
-
-        elif {'T'} == self._missing_dims:
-            target = np.array(zar).reshape((self.channels, self.slices, self.height, self.width))
-            return zarr.array(target, chunks=(1, 1, self.height, self.width))
-
-        # at least one channel is always present
-        # elif {'C'} == self._missing_dims:
-        #     target = np.array(zar).reshape((self.frames, self.slices, self.height, self.width))
-
-        elif {'Z'} == self._missing_dims:
-            target = np.array(zar).reshape((self.frames, self.channels, self.height, self.width))
-            return zarr.array(target, chunks=(1, 1, self.height, self.width))
-
-        else:
-            return zar
-
-    def _expand_zarr(self, zar):
-        """
-        takes a zarr array and, if necessary, expands it to include missing dimensions
-        returns zarr array of dims (T, C, Z, Y, X)
-
-        Parameters
-        ----------
-        zar:        (zarr.array)
-
-        Returns
-        -------
-        target:     (zarr.array)
-        """
-
-        # major assumption -- that supplied zar is always shaped as (T, C, Z, Y, X)
-        if self._missing_dims is None:
-            return zar
-
-        elif {'T'} == self._missing_dims:
-            target = zarr.empty(shape=(1, self.channels, self.slices, self.height, self.width),
-                                chunks=(1, 1, 1, self.height, self.width))
-            target[0, :, :, :, :] = zar
-
-        elif {'C'} == self._missing_dims:
-            target = zarr.empty(shape=(self.frames, 1, self.slices, self.height, self.width),
-                                chunks=(1, 1, 1, self.height, self.width))
-            target[:, 0, :, :, :] = zar
-
-        elif {'Z'} == self._missing_dims:
-            target = zarr.empty(shape=(self.frames, self.channels, 1, self.height, self.width),
-                                chunks=(1, 1, 1, self.height, self.width))
-            target[:, :, 0, :, :] = zar
-
-        elif {'T', 'C'} == self._missing_dims:
-            target = zarr.empty(shape=(1, 1, self.slices, self.height, self.width),
-                                chunks=(1, 1, 1, self.height, self.width))
-            target[0, 0, :, :, :] = zar
-
-        elif {'T', 'Z'} == self._missing_dims:
-            target = zarr.empty(shape=(1, self.channels, 1, self.height, self.width),
-                                chunks=(1, 1, 1, self.height, self.width))
-            target[0, :, 0, :, :] = zar
-
-        elif {'C', 'Z'} == self._missing_dims:
-            target = zarr.empty(shape=(self.frames, 1, 1, self.height, self.width),
-                                chunks=(1, 1, 1, self.height, self.width))
-            target[:, 0, 0, :, :] = zar
-
-        elif {'T', 'C', 'Z'} == self._missing_dims:
-            target = zarr.empty(shape=(1, 1, 1, self.height, self.width),
-                                chunks=(1, 1, 1, self.height, self.width))
-            target[0, 0, 0, :, :] = zar
-
-        else:
-            raise ValueError("missing dims not properly identified")
-
-        return target
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
@@ -325,33 +228,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         return new_dict
 
-    def _set_dims_ome_meta(self, tps):
-        """
-        read ome metadata from tiffpageseries and set class dims
-
-        Parameters
-        ----------
-        tps: (TiffPageSeries): generated from tifffile.TiffFile.series
-
-        Returns
-        -------
-
-        """
-        shp = tps.shape
-        # get_axes() returns strings like 'TCYX'
-        for idx, dim in enumerate(tps.get_axes()):
-            if 'T' in dim:
-                self.frames = shp[idx]
-            if 'C' in dim:
-                self.channels = shp[idx]
-            if 'Z' in dim:
-                self.slices = shp[idx]
-            if 'Y' in dim:
-                self.height = shp[idx]
-            if 'X' in dim:
-                self.width = shp[idx]
-
-    def _create_stores(self, master_ome):
+    def _create_position_array(self, pos):
         """
         extract all series from ome-tiff and place into dict of (pos: zarr)
 
@@ -364,72 +241,54 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         """
 
-        self.log.info(f"extracting data from {master_ome}")
-        with TiffFile(master_ome) as tif:
-            for idx, tiffpageseries in enumerate(tif.series):
-                self._set_dims_ome_meta(tiffpageseries)
-                z = zarr.open(tiffpageseries.aszarr(), mode='r')
-                z = self._reshape_zarr(z)
-                z = self._expand_zarr(z)
-                self.positions[idx] = z
+        timepoints, channels, slices = self._get_dimensions(pos)
+        self.position_arrays[pos] = zarr.empty(shape=(timepoints, channels, slices, self.height, self.width),
+                                               chunks=(1, 1, 1, self.height, self.width),
+                                               dtype=self.dtype)
 
-    def _get_master_ome_tiff(self, folder_):
+        for t in range(timepoints):
+            for c in range(channels):
+                for z in range(slices):
+                    self.position_arrays[pos][t, c, z, :, :] = self._get_image(pos, t, c, z)
+
+    def _set_dtype(self):
         """
-        given either a single ome.tiff or a folder of ome.tiffs
-            load the omexml metadata for a single file and
-            search for the element attribute corresponding to the master file
-
-        Parameters
-        ----------
-        folder_:        (str) full path to folder containing images
+        gets the datatype from any image plane metadata
 
         Returns
         -------
-        path:           (str) full path to master-ome tiff
+
         """
 
-        from xml.etree import ElementTree as etree  # delayed import
+        tf = tiff.TiffFile(self.files[0])
 
-        ome_master = None
+        self.dtype = tf.pages[0].dtype
 
-        if os.path.isdir(folder_):
-            dirname = folder_
-            file = [f for f in os.listdir(folder_) if ".ome.tif" in f][0]
-        elif os.path.isfile(folder_) and folder_.endswith('.ome.tif'):
-            dirname = os.path.dirname(folder_)
-            file = folder_
-        else:
-            raise ValueError("supplied path contains no ome.tif or is itself not an ome.tif")
+    def _get_dimensions(self, position):
 
-        self.log.info(f"checking {file} for ome-master records")
+        t = 0
+        c = 0
+        z = 0
 
-        with TiffFile(os.path.join(dirname, file)) as tiff:
-            omexml = tiff.pages[0].description
-            # get omexml root from first page
-            try:
-                root = etree.fromstring(omexml)
-            except etree.ParseError as exc:
-                try:
-                    omexml = omexml.decode(errors='ignore').encode()
-                    root = etree.fromstring(omexml)
-                except Exception as ex:
-                    self.log.error(f"Exception while parsing root from omexml: {ex}")
+        for tup in self.coord_map.keys():
+            if position != tup[0]:
+                continue
+            else:
+                if tup[1] > t:
+                    t = tup[1]
+                if tup[2] > c:
+                    c = tup[2]
+                if tup[3] > z:
+                    z = tup[3]
 
-            # search all elements for tags that identify ome-master tiff
-            for element in root:
-                # MetadataFile attribute identifies master-ome from a BinaryOnly non-master file
-                if element.tag.endswith('BinaryOnly'):
-                    self.log.warning(f'OME series: BinaryOnly: not an ome-tiff master file')
-                    ome_master = element.attrib['MetadataFile']
-                    return os.path.join(dirname, ome_master)
-                # Name attribute identifies master-ome from a master-ome file.
-                elif element.tag.endswith("Image"):
-                    self.log.warning(f'OME series: Master-ome found')
-                    ome_master = element.attrib['Name'] + ".ome.tif"
-                    return os.path.join(dirname, ome_master)
+        return t, c, z
 
-            if not ome_master:
-                raise AttributeError("no ome-master file found")
+    def _get_image(self, p, t, c, z):
+
+        coord_key = (p, t, c, z)
+        coord = self.coord_map[coord_key] # (file, page, offset)
+
+        return np.memmap(coord[0], dtype=self.dtype, mode='r', offset=coord[2], shape=(self.height, self.width))
 
     def get_zarr(self, position):
         """
@@ -444,9 +303,9 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         position:       (zarr.array)
 
         """
-        if not self.positions:
-            self._create_stores(self.master_ome_tiff)
-        return self.positions[position]
+        if position not in self.position_arrays.keys():
+            self._create_position_array(position)
+        return self.position_arrays[position]
 
     def get_array(self, position):
         """
@@ -462,9 +321,10 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         """
 
-        if not self.positions:
-            self._create_stores(self.master_ome_tiff)
-        return np.array(self.positions[position])
+        if position not in self.position_arrays.keys():
+            self._create_position_array(position)
+
+        return np.array(self.position_arrays[position])
 
     def get_num_positions(self):
         """
@@ -475,10 +335,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         number of positions     (int)
 
         """
-        if self.positions:
-            return len(self.positions)
-        else:
-            self.log.error("ome-tiff scenes not read.")
+        return self.positions
 
     @property
     def shape(self):
