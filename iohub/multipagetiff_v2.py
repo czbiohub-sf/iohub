@@ -4,7 +4,6 @@ import zarr
 from tifffile import TiffFile
 import tifffile as tiff
 from copy import copy
-import logging
 import glob
 import warnings
 
@@ -15,7 +14,6 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
     def __init__(self, folder: str, extract_data: bool = False):
         """
-
         Parameters
         ----------
         folder:         (str) folder or file containing all ome-tiff files
@@ -27,10 +25,11 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         if len(glob.glob(os.path.join(folder, '*.ome.tif'))) == 0:
             raise ValueError('Specific input contains no ome.tif files, please specify a valid input directory')
 
-        # ignore tiffile warnings
+        # ignore tiffile warnings, doesn't work
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', tiff)
 
+        # Grab all image files
         self.data_directory = folder
         self.files = glob.glob(os.path.join(self.data_directory, '*.ome.tif'))
 
@@ -38,11 +37,6 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         self.coords = None
         self.coord_map = dict()
         self.pos_names = []
-        self.dim_order = None
-        self.p_dim = None
-        self.t_dim = None
-        self.c_dim = None
-        self.z_dim = None
         self.position_arrays = dict()
         self.positions = 0
         self.frames = 0
@@ -51,18 +45,20 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         self.height = 0
         self.width = 0
         self._set_dtype()
-        # print(f'Found Dataset {self.save_name} w/ dimensions (P, T, C, Z, Y, X): {self.dim}')
 
+        # Initialize MM attributes
         self.mm_meta = None
         self.stage_positions = 0
         self.z_step_size = None
         self.channel_names = []
 
-        self._missing_dims = None
-
+        # Read MM data
         self._set_mm_meta()
+
+        # Gather index map of file, page, byte offset
         self._gather_index_maps()
 
+        # if extract data, create all of the virtual zarr stores up front
         if extract_data:
             for i in range(self.positions):
                 self._create_position_array(i)
@@ -76,6 +72,10 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         """
 
+        positions = 0
+        frames = 0
+        channels = 0
+        slices = 0
         for file in self.files:
             tf = TiffFile(file)
             meta = tf.micromanager_metadata['IndexMap']
@@ -89,19 +89,24 @@ class MicromanagerOmeTiffReader(ReaderInterface):
                 offset = self._get_byte_offset(tf, page)
                 self.coord_map[tuple(coord)] = (file, page, offset)
 
-                # update dimensions
-                if coord[0]+1 > self.positions:
-                    self.positions = coord[0]+1
+                # update dimensions as we go along, helps with incomplete datasets
+                if coord[0]+1 > positions:
+                    positions = coord[0]+1
 
-                if coord[1]+1 > self.frames:
-                    self.frames = coord[1]+1
+                if coord[1]+1 > frames:
+                    frames = coord[1]+1
 
-                if coord[2]+1 > self.channels:
-                    self.channels = coord[2]+1
+                if coord[2]+1 > channels:
+                    channels = coord[2]+1
 
-                if coord[3]+1 > self.slices:
-                    self.slices = coord[2]+1
+                if coord[3]+1 > slices:
+                    slices = coord[3]+1
 
+        # update dimensions to the largest dimensions present in the saved data
+        self.positions = positions
+        self.frames = frames
+        self.channels = channels
+        self.slices = slices
 
     def _get_byte_offset(self, tiff_file, page):
         """
@@ -169,14 +174,6 @@ class MicromanagerOmeTiffReader(ReaderInterface):
             self.slices = self.mm_meta['Summary']['Slices']
             self.channels = self.mm_meta['Summary']['Channels']
 
-            # Reverse the dimension order and gather dimension indices
-            self.dim_order = self.mm_meta['Summary']['AxisOrder']
-            self.dim_order.reverse()
-            self.p_dim = self.dim_order.index('position')
-            self.t_dim = self.dim_order.index('time')
-            self.c_dim = self.dim_order.index('channel')
-            self.z_dim = self.dim_order.index('z')
-
     def _simplify_stage_position(self, stage_pos: dict):
         """
         flattens the nested dictionary structure of stage_pos and removes superfluous keys
@@ -230,22 +227,24 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
     def _create_position_array(self, pos):
         """
-        extract all series from ome-tiff and place into dict of (pos: zarr)
+        maps all of the tiff data into a virtual zarr store in memory for a given position
 
         Parameters
         ----------
-        master_ome:     (str): full path to master OME-tiff
+        pos:            (int) index of the position to create array under
 
         Returns
         -------
 
         """
 
+        # intialize virtual zarr store and save it under positions
         timepoints, channels, slices = self._get_dimensions(pos)
         self.position_arrays[pos] = zarr.empty(shape=(timepoints, channels, slices, self.height, self.width),
                                                chunks=(1, 1, 1, self.height, self.width),
                                                dtype=self.dtype)
-
+        # add all the images with this specific dimension.  Will be blank images if dataset
+        # is incomplete
         for t in range(timepoints):
             for c in range(channels):
                 for z in range(slices):
@@ -265,11 +264,23 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         self.dtype = tf.pages[0].dtype
 
     def _get_dimensions(self, position):
+        """
+        Gets the max dimensions from the current position in case of incomplete datasets
+
+        Parameters
+        ----------
+        position:       (int) Position index to grab dimensions from
+
+        Returns
+        -------
+
+        """
 
         t = 0
         c = 0
         z = 0
 
+        # dimension size = index + 1
         for tup in self.coord_map.keys():
             if position != tup[0]:
                 continue
@@ -284,6 +295,21 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         return t, c, z
 
     def _get_image(self, p, t, c, z):
+        """
+        get the image at a specific coordinate through memory mapping
+
+        Parameters
+        ----------
+        p:              (int) position index
+        t:              (int) time index
+        c:              (int) channel index
+        z:              (int) slice/z index
+
+        Returns
+        -------
+        image:          (np-array) numpy array of shape (Y, X) at given coordinate
+
+        """
 
         coord_key = (p, t, c, z)
         coord = self.coord_map[coord_key] # (file, page, offset)
@@ -321,6 +347,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         """
 
+        # if position hasn't been initialized in memory, do that.
         if position not in self.position_arrays.keys():
             self._create_position_array(position)
 
