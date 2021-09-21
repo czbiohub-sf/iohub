@@ -30,7 +30,7 @@ class WriterBase:
         self.verbose = verbose
 
     # Initialize zero array
-    def init_array(self, data_shape, chunk_size, dtype, chan_names, clims, overwrite):
+    def init_array(self, data_shape, chunk_size, dtype, chan_names, clims, overwrite=False):
         """
 
         Initializes the zarr array under the current position subgroup.
@@ -309,7 +309,7 @@ class WriterBase:
     def get_zarr(self):
         return self.current_pos_group
 
-    def set_channel_attributes(self, chan_names, clims):
+    def set_channel_attributes(self, chan_names, clims=None):
         """
         A method for creating ome-zarr metadata dictionary.
         Channel names are defined by the user, everything else
@@ -333,7 +333,7 @@ class WriterBase:
                             'version': '0.1'}]
         dict_list = []
 
-        if len(chan_names) < len(clims):
+        if clims and len(chan_names) < len(clims):
             raise ValueError('Contrast Limits specified exceed the number of channels given')
 
         for i in range(len(chan_names)):

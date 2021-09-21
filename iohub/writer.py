@@ -115,7 +115,8 @@ class WaveorderWriter:
         self.sub_writer.set_root(self.__root_store_path)
         self.sub_writer.init_hierarchy()
 
-    def init_array(self, position, data_shape, chunk_size, dtype, chan_names, clims, position_name=None, overwrite=False):
+    def init_array(self, position, data_shape, chunk_size, chan_names, dtype='float32',
+                   clims=None, position_name=None, overwrite=False):
         """
 
         Creates a subgroup structure based on position index.  Then initializes the zarr array under the
