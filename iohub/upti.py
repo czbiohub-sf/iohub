@@ -21,7 +21,7 @@ class UPTIReader(ReaderInterface):
 
         self.data_folder = folder
         self.files = glob.glob(os.path.join(folder, '*.tif'))
-        info_img = tiff.imread(self.files[0]).dtype
+        info_img = tiff.imread(self.files[0])
         self.dtype = info_img.dtype
         (self.height, self.width) = info_img.shape
         self.positions = 1
@@ -51,25 +51,27 @@ class UPTIReader(ReaderInterface):
             z = int(re.search('z_\d\d\d', file).group(0).strip('z_'))
             state_idx = 0
 
-            if pattern_idx > self.patterns:
-                self.patterns = pattern_idx
+            if pattern_idx + 1 > self.patterns:
+                self.patterns = pattern_idx + 1
 
-            if z > self.slices:
-                self.slices = z
+            if z + 1 > self.slices:
+                self.slices = z + 1
 
             if states:
                 state = re.search('State_\d\d\d', file).group(0)
                 state_idx = int(state.strip('State_'))
 
                 if f'{pattern}_{state}' not in self.channel_names:
-                    self.channel_names.append(pattern)
+                    self.channel_names.append(f'{pattern}_{state}')
             else:
                 if pattern not in self.channel_names:
                     self.channel_names.append(pattern)
 
             self.file_map[(pattern_idx, state_idx, z)] = file
 
-            self.channel_names.sort(key=lambda x: re.sub('State_\d\d\d', '', x)) # sorts pattern first
+            # sorts list by pattern 0 --> state_0, state_1, state_2, state_3
+            self.channel_names.sort(key=lambda x: re.sub('pattern_\d\d\d', '', x))
+            self.channel_names.sort(key=lambda x: re.sub('State_\d\d\d', '', x))
 
     def _create_position_array(self, pos):
         """
