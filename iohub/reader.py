@@ -1,9 +1,9 @@
 
 from waveorder.io.singlepagetiff import MicromanagerSequenceReader
 from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
+from waveorder.io.upti import UPTIReader
 from waveorder.io.zarrfile import ZarrReader
 import logging
-
 
 # replicate from aicsimageio logging mechanism
 ###############################################################################
@@ -56,6 +56,8 @@ class WaveorderReader:
             self.reader = MicromanagerSequenceReader(src, extract_data)
         elif data_type == 'zarr':
             self.reader = ZarrReader(src)
+        elif data_type == 'upti':
+            self.reader = UPTIReader(src, extract_data)
         else:
             raise NotImplementedError(f"reader of type {data_type} is not implemented")
 
