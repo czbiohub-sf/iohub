@@ -20,7 +20,6 @@ def test_constructor_mm2gamma(setup_mm2gamma_ome_tiffs):
     assert(mmr.frames is not 0)
     assert(mmr.slices is not 0)
     assert(mmr.channels is not 0)
-    assert(mmr.master_ome_tiff is not None)
 
 
 def test_output_dims_mm2gamma(setup_mm2gamma_ome_tiffs):
