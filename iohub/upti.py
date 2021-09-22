@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import re
-from copy import copy
+import zarr
 import tifffile as tiff
 import glob
 from waveorder.io.reader_interface import ReaderInterface
@@ -10,8 +10,7 @@ from waveorder.io.reader_interface import ReaderInterface
 class UPTIReader(ReaderInterface):
 
     """
-    Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
-    Also collects the HCS metadata so it can be later copied.
+    Reader for UPTI raw data.  Accepts both new live UPTI and older UPTI format.
     """
 
     def __init__(self, folder: str, extract_data: bool = False):
@@ -33,17 +32,14 @@ class UPTIReader(ReaderInterface):
         self.channel_names = []
         self._map_files()
         self.channels = len(self.channel_names)
-
-        # structure of zarr array
-        self.stage_positions = 1
         self.z_step_size = None
-        self.position_map = ()
 
         # initialize metadata
         self.mm_meta = None
+        self.position_arrays = dict()
         if extract_data:
-            self._create
-
+            for i in range(self.positions):
+                self._create_position_array(i)
 
     def _map_files(self):
         self.file_map = dict()
@@ -75,42 +71,84 @@ class UPTIReader(ReaderInterface):
 
             self.channel_names.sort(key=lambda x: re.sub('State_\d\d\d', '', x)) # sorts pattern first
 
-    def get_zarr(self, position=0):
+    def _create_position_array(self, pos):
         """
-        Returns the position-level zarr group
+        maps all of the tiff data into a virtual zarr store in memory for a given position
 
         Parameters
         ----------
-        position:       (int) position index
+        pos:            (int) index of the position to create array under
 
         Returns
         -------
-        (ZarrGroup) Position subgroup containing the array group+data
+
+        """
+
+        self.position_arrays[pos] = zarr.empty(shape=(self.frames, self.channels, self.slices, self.height, self.width),
+                                               chunks=(1, 1, 1, self.height, self.width),
+                                               dtype=self.dtype)
+        # add all the images with this specific dimension.  Will be blank images if dataset
+        # is incomplete
+        for t in range(self.frames):
+            for c in range(self.channels):
+                for z in range(self.slices):
+                    self.position_arrays[pos][t, c, z] = self._get_image(c, z)
+
+
+    def _get_image(self, c, z):
+
+        chan_name = self.channel_names[c]
+        pattern = int(re.search('pattern_\d\d\d', chan_name).group(0).strip('pattern_'))
+        state = re.search('State_\d\d\d', chan_name)
+        state_idx = 0 if not state else int(state.group(0).strip('State_'))
+
+        fn = self.file_map[(pattern, state_idx, z)]
+        img = zarr.open(tiff.imread(fn, aszarr=True), 'r')
+
+        return img
+
+    def get_zarr(self, position=0):
+        """
+        return a zarr array for a given position
+
+        Parameters
+        ----------
+        position:       (int) position (aka ome-tiff scene)
+
+        Returns
+        -------
+        position:       (zarr.array)
 
         """
         if position > self.positions - 1:
             raise ValueError('Entered position is greater than the number of positions in the data')
 
-        pos_info = self.position_map[position]
-        well = pos_info['well']
-        pos = pos_info['name']
-        return self.store[well][pos]
+        if position not in self.position_arrays.keys():
+            self._create_position_array(position)
+        return self.position_arrays[position]
 
-    def get_array(self, position):
+    def get_array(self, position=0):
         """
-        Gets the (T, C, Z, Y, X) array at given position
+        return a numpy array for a given position
 
         Parameters
         ----------
-        position:       (int) position index
+        position:   (int) position (aka ome-tiff scene)
 
         Returns
         -------
-        (ZarrArray) Zarr array of size (T, C, Z, Y, X) at specified position
+        position:   (np.ndarray)
 
         """
-        pos = self.get_zarr(position)
-        return pos['array']
+
+        if position > self.positions - 1:
+            raise ValueError('Entered position is greater than the number of positions in the data')
+
+        # if position hasn't been initialized in memory, do that.
+        if position not in self.position_arrays.keys():
+            self._create_position_array(position)
+
+        return np.array(self.position_arrays[position])
 
     def get_num_positions(self) -> int:
         return self.positions
