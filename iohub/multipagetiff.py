@@ -78,6 +78,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         for file in self.files:
             tf = TiffFile(file)
             meta = tf.micromanager_metadata['IndexMap']
+            offsets = list(meta['Offset'])
 
             for page in range(len(meta['Channel'])):
                 coord = [0, 0, 0, 0]
@@ -85,7 +86,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
                 coord[1] = meta['Frame'][page]
                 coord[2] = meta['Channel'][page]
                 coord[3] = meta['Slice'][page]
-                offset = self._get_byte_offset(tf, page)
+                offset = self._get_byte_offset(offsets, page)
                 self.coord_map[tuple(coord)] = (file, page, offset)
 
                 # update dimensions as we go along, helps with incomplete datasets
@@ -107,7 +108,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         self.channels = channels
         self.slices = slices
 
-    def _get_byte_offset(self, tiff_file, page):
+    def _get_byte_offset(self, offsets, page):
         """
         Gets the byte offset from the tiff tag metadata
 
@@ -122,11 +123,13 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         """
 
-        for tag in tiff_file.pages[page].tags.values():
-            if 'StripOffset' in tag.name:
-                return tag.value[0]
-            else:
-                continue
+        if page == 0:
+            array_offset = offsets[page] + 210
+        else:
+            array_offset = offsets[page] + 162
+
+        return array_offset
+
 
     def _set_mm_meta(self):
         """
