@@ -1,6 +1,6 @@
 
 from waveorder.io.singlepagetiff import MicromanagerSequenceReader
-from waveorder.io.multipagetiff_v2 import MicromanagerOmeTiffReader
+from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
 from waveorder.io.zarrfile import ZarrReader
 import logging
 

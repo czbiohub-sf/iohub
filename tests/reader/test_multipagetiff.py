@@ -1,6 +1,6 @@
 import zarr
 import numpy as np
-from waveorder.io.multipagetiff_v2 import MicromanagerOmeTiffReader
+from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
 
 
 def test_constructor_mm2gamma(setup_mm2gamma_ome_tiffs):
