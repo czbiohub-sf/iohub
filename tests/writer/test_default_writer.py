@@ -102,8 +102,8 @@ def test_init_array(setup_folder):
     clims = [(-0.5, 0.5), (0, 25), (0, 10000)]
     dtype = 'uint16'
 
-    writer.init_array(0, data_shape, chunk_size, dtype, chan_names, clims, position_name=None, overwrite=False)
-    writer.init_array(1, data_shape, chunk_size, dtype, chan_names, clims, position_name='Test', overwrite=False)
+    writer.init_array(0, data_shape, chunk_size, chan_names, dtype, clims, position_name=None, overwrite=False)
+    writer.init_array(1, data_shape, chunk_size, chan_names, dtype, clims, position_name='Test', overwrite=False)
 
     assert(isinstance(writer.sub_writer.store['Row_0']['Col_0']['Pos_000'], zarr.Group))
     meta_folder = writer.store['Row_0']['Col_0']['Pos_000']
@@ -174,7 +174,7 @@ def test_write(setup_folder):
     clims = [(-0.5, 0.5), (0, 25), (0, 10000)]
     dtype = 'uint16'
 
-    writer.init_array(0, data_shape, chunk_size, dtype, chan_names, clims, position_name=None, overwrite=True)
+    writer.init_array(0, data_shape, chunk_size, chan_names, dtype, clims, position_name=None, overwrite=True)
 
     # Write single index for each channel
     writer.write(data[0, 0, 0], p=0, t=0, c=0, z=0)
