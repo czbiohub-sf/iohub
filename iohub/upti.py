@@ -15,10 +15,11 @@ class UPTIReader(ReaderInterface):
 
     def __init__(self, folder: str, extract_data: bool = False):
 
-        # zarr files (.zarr) are directories
+        # check if folder exists
         if not os.path.isdir(folder):
             raise ValueError("folder does not exist")
 
+        # Initializate data parameters
         self.data_folder = folder
         self.files = glob.glob(os.path.join(folder, '*.tif'))
         info_img = tiff.imread(self.files[0])
@@ -30,6 +31,8 @@ class UPTIReader(ReaderInterface):
         self.states = 0
         self.slices = 0
         self.channel_names = []
+
+        # map files and update data parameters
         self._map_files()
         self.channels = len(self.channel_names)
         self.z_step_size = None
@@ -37,11 +40,21 @@ class UPTIReader(ReaderInterface):
         # initialize metadata
         self.mm_meta = None
         self.position_arrays = dict()
+
         if extract_data:
             for i in range(self.positions):
                 self._create_position_array(i)
 
     def _map_files(self):
+        """
+        Creates a map of (pattern, state, slice) coordinate with corresponding file.
+        Uses regex parsing and assumes a consistent file naming structure.
+
+        Returns
+        -------
+
+        """
+
         self.file_map = dict()
 
         states = True if 'State' in self.files[0] else False
@@ -96,8 +109,20 @@ class UPTIReader(ReaderInterface):
                 for z in range(self.slices):
                     self.position_arrays[pos][t, c, z] = self._get_image(c, z)
 
-
     def _get_image(self, c, z):
+        """
+        Gets image at specific channel, z coordinate.  Makes sure that the channel index
+        specified corresponds to the channel_name index.
+
+        Parameters
+        ----------
+        c:              (int) channel index.  Maps to channel_name index
+        z:              (int) z/slice index.
+
+        Returns
+        -------
+        img             (nd-array) numpy array of dimensions (Y, X)
+        """
 
         chan_name = self.channel_names[c]
         pattern = int(re.search('pattern_\d\d\d', chan_name).group(0).strip('pattern_'))
@@ -109,13 +134,13 @@ class UPTIReader(ReaderInterface):
 
         return img
 
-    def get_zarr(self, position=0):
+    def get_zarr(self, position):
         """
-        return a zarr array for a given position
+        return a zarr array for a given position.  Allows for only one position
 
         Parameters
         ----------
-        position:       (int) position (aka ome-tiff scene)
+        position:       (int) position
 
         Returns
         -------
@@ -129,13 +154,13 @@ class UPTIReader(ReaderInterface):
             self._create_position_array(position)
         return self.position_arrays[position]
 
-    def get_array(self, position=0):
+    def get_array(self, position):
         """
-        return a numpy array for a given position
+        return a numpy array for a given position.  Allows for only one position
 
         Parameters
         ----------
-        position:   (int) position (aka ome-tiff scene)
+        position:   (int) position
 
         Returns
         -------
