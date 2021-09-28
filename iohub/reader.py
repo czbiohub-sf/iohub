@@ -23,7 +23,7 @@ import logging
 
 ###############################################################################
 
-
+#todo: add dim_order to all reader objects
 class WaveorderReader:
 
     def __init__(self,
