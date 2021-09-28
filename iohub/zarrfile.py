@@ -44,7 +44,10 @@ class ZarrReader(ReaderInterface):
 
         # initialize metadata
         self.mm_meta = None
-        self._set_mm_meta()
+        try:
+            self._set_mm_meta()
+        except:
+            self.mm_meta = None
         self._generate_hcs_meta()
 
     def _get_rows(self):
