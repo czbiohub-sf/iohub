@@ -44,8 +44,13 @@ class ZarrReader(ReaderInterface):
 
         # initialize metadata
         self.mm_meta = None
-        self._set_mm_meta()
+        if self.store.attrs.get('Summary'):
+            self._set_mm_meta()
         self._generate_hcs_meta()
+
+        # get channel names from omero metadata if no MM meta present
+        if len(self.channel_names) == 0:
+            self._get_channel_names()
 
     def _get_rows(self):
         """
@@ -141,9 +146,9 @@ class ZarrReader(ReaderInterface):
                     pos = self._simplify_stage_position_beta(self.mm_meta['StagePositions'][p])
                     self.stage_positions.append(pos)
 
-        elif mm_version == '1.4.22':
-            for ch in self.mm_meta['ChNames']:
-                self.channel_names.append(ch)
+        # elif mm_version == '1.4.22':
+        #     for ch in self.mm_meta['ChNames']:
+        #         self.channel_names.append(ch)
         else:
             if self.mm_meta['Positions'] > 1:
                 self.stage_positions = []
@@ -152,10 +157,20 @@ class ZarrReader(ReaderInterface):
                     pos = self._simplify_stage_position(self.mm_meta['StagePositions'][p])
                     self.stage_positions.append(pos)
 
-            for ch in self.mm_meta['ChNames']:
-                self.channel_names.append(ch)
+            # for ch in self.mm_meta['ChNames']:
+            #     self.channel_names.append(ch)
 
         self.z_step_size = self.mm_meta['z-step_um']
+
+    def _get_channel_names(self):
+
+        well = self.hcs_meta['plate']['wells'][0]['path']
+        pos = self.hcs_meta['well'][0]['images'][0]['path']
+
+        omero_meta = self.store[well][pos].attrs.asdict()['omero']
+
+        for chan in omero_meta['channels']:
+            self.channel_names.append(chan['label'])
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
@@ -244,7 +259,7 @@ class ZarrReader(ReaderInterface):
         pos_info = self.position_map[position]
         well = pos_info['well']
         pos = pos_info['name']
-        return self.store[well][pos]
+        return self.store[well][pos]['array']
 
     def get_array(self, position):
         """
@@ -260,7 +275,7 @@ class ZarrReader(ReaderInterface):
 
         """
         pos = self.get_zarr(position)
-        return pos['array']
+        return pos[:]
 
     def get_num_positions(self) -> int:
         return self.positions
