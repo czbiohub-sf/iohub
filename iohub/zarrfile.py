@@ -245,7 +245,7 @@ class ZarrReader(ReaderInterface):
 
     def get_zarr(self, position):
         """
-        Returns the position-level zarr group
+        Returns the position-level zarr group array (not in memory)
 
         Parameters
         ----------
@@ -253,7 +253,7 @@ class ZarrReader(ReaderInterface):
 
         Returns
         -------
-        (ZarrGroup) Position subgroup containing the array group+data
+        (ZarrArray) Zarr array containing the (T, C, Z, Y, X) array at given position
 
         """
         pos_info = self.position_map[position]
@@ -271,7 +271,7 @@ class ZarrReader(ReaderInterface):
 
         Returns
         -------
-        (ZarrArray) Zarr array of size (T, C, Z, Y, X) at specified position
+        (nd-Array) numpy array of size (T, C, Z, Y, X) at specified position
 
         """
         pos = self.get_zarr(position)
