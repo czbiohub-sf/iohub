@@ -46,7 +46,7 @@ class ZarrReader(ReaderInterface):
         self.mm_meta = None
         try:
             self._set_mm_meta()
-        except:
+        except TypeError as err:
             self.mm_meta = None
         self._generate_hcs_meta()
 
