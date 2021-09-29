@@ -1,6 +1,7 @@
 import pytest
 from waveorder.io.zarrfile import ZarrReader
 import zarr
+import numpy as np
 
 def test_constructor_mm2gamma(setup_mm2gamma_zarr):
     """
@@ -55,7 +56,7 @@ def test_get_zarr_mm2gamma(setup_mm2gamma_zarr):
 
     for i in range(mmr.get_num_positions()):
         z = mmr.get_zarr(i)
-        assert(isinstance(z, zarr.Group))
+        assert(isinstance(z, zarr.core.Array))
 
 def test_get_array_mm2gamma(setup_mm2gamma_zarr):
 
@@ -65,7 +66,7 @@ def test_get_array_mm2gamma(setup_mm2gamma_zarr):
     for i in range(mmr.get_num_positions()):
         z = mmr.get_array(i)
         assert(z.shape == mmr.shape)
-        assert(isinstance(z, zarr.core.Array))
+        assert(isinstance(z, np.ndarray))
 
 def test_get_num_positions_mm2gamma(setup_mm2gamma_zarr):
 
