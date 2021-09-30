@@ -44,8 +44,12 @@ class ZarrReader(ReaderInterface):
 
         # initialize metadata
         self.mm_meta = None
-        if self.store.attrs.get('Summary'):
+        
+        try:
             self._set_mm_meta()
+        except TypeError as err:
+            self.mm_meta = None
+
         self._generate_hcs_meta()
 
         # get channel names from omero metadata if no MM meta present
