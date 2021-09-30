@@ -58,18 +58,23 @@ class UPTIReader(ReaderInterface):
         self.file_map = dict()
 
         states = True if 'State' in self.files[0] else False
+
+        # Loop through the files and use regex to grab patterns and states,
+        # **hardcoded file name structure**
         for file in self.files:
             pattern = re.search('pattern_\d\d\d', file).group(0)
             pattern_idx = int(pattern.strip('pattern_'))
             z = int(re.search('z_\d\d\d', file).group(0).strip('z_'))
             state_idx = 0
 
+            # update dimensionality as we read the file names
             if pattern_idx + 1 > self.patterns:
                 self.patterns = pattern_idx + 1
 
             if z + 1 > self.slices:
                 self.slices = z + 1
 
+            # if live upti, grab the states, otherwise just use patterns
             if states:
                 state = re.search('State_\d\d\d', file).group(0)
                 state_idx = int(state.strip('State_'))
