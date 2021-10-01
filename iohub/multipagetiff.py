@@ -250,7 +250,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         for t in range(timepoints):
             for c in range(channels):
                 for z in range(slices):
-                    self.position_arrays[pos][t, c, z, :, :] = self._get_image(pos, t, c, z)
+                    self.position_arrays[pos][t, c, z, :, :] = self.get_image(pos, t, c, z)
 
     def _set_dtype(self):
         """
@@ -296,7 +296,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
 
         return t, c, z
 
-    def _get_image(self, p, t, c, z):
+    def get_image(self, p, t, c, z):
         """
         get the image at a specific coordinate through memory mapping
 
