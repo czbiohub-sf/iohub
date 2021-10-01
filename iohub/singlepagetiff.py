@@ -210,7 +210,7 @@ class MicromanagerSequenceReader(ReaderInterface):
 
         coord_filename_map = {}
         for idx, metadata in enumerate(metadatas):
-            with open(metadata, 'r+') as m:
+            with open(metadata, 'r') as m:
                 j = json.load(m)
                 coord_filename_map.update(self._extract_coord_to_filename(j, folder, positions[idx]))
         self.num_positions = len(positions)
