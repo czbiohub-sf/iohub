@@ -5,7 +5,6 @@ from copy import copy
 from waveorder.io.reader_interface import ReaderInterface
 
 
-
 class ZarrReader(ReaderInterface):
 
     """
