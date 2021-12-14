@@ -247,10 +247,9 @@ class MicromanagerOmeTiffReader(ReaderInterface):
                                                dtype=self.dtype)
         # add all the images with this specific dimension.  Will be blank images if dataset
         # is incomplete
-        for t in range(timepoints):
-            for c in range(channels):
-                for z in range(slices):
-                    self.position_arrays[pos][t, c, z, :, :] = self.get_image(pos, t, c, z)
+        for p, t, c, z in self.coord_map.keys():
+            if p == pos:
+                self.position_arrays[pos][t, c, z, :, :] = self.get_image(pos, t, c, z)
 
     def _set_dtype(self):
         """
