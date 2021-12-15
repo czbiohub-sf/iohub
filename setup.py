@@ -18,11 +18,11 @@ setup(  name             = 'waveorder',
                 'scipy>=1.3.0',
                 'pywavelets>=1.1.1',
                 'ipywidgets>=7.5.1',
-                'opencv-python>=3.4.1',
                 'tifffile>=2020.11.26',
                 'zarr>=2.6.1',
                 'natsort>=7.1.1'
         ],
+        extras_requires = {'full': ['opencv-python>=3.4.1']},
         classifiers = [
                 'Development Status :: 4 - Beta',
                 'Intended Audience :: Science/Research',
