@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 import platform
 
-
+packages = [package for package in find_packages()]
 
 if platform.machine() == 'ppc64le':
         requirements = []
@@ -23,7 +23,7 @@ with open(os.path.join(dir_, 'README.md')) as file:
         long_description = file.read()
 
 setup(  name             = 'waveordertest',
-        version          = '1.0.2-beta',
+        version          = '1.0.4-beta',
         description      = 'wave optical simulations and deconvolution of optical properties',
         author           = 'Li-Hao Yeh',
         author_email     = 'lihao.yeh@czbiohub.org',
@@ -32,26 +32,11 @@ setup(  name             = 'waveordertest',
         license_file     = 'LICENSE.txt',
         long_description = long_description,
         long_description_content_type = 'text/markdown',
-        packages         = find_packages(),
+        packages         = packages,
+        include_package_data = True,
         python_requies   = '==3.7',
         install_requires = requirements,
-        # extras_require = {
-        #         '': ['numpy>=1.17.4',
-        #                 'pywavelets>=1.1.1',
-        #                 'ipywidgets>=7.5.1',
-        #                 'tifffile>=2020.11.26',
-        #                 'zarr>=2.6.1',
-        #                 'natsort>=7.1.1',
-        #                 'opencv-python>=3.4.1',
-        #                 'scipy>=1.3.0',
-        #                 'matplotlib>=3.1.1'],
-        #
-        #         'ibm': ['numpy>=1.17.4',
-        #                 'pywavelets>=1.1.1',
-        #                 'ipywidgets>=7.5.1',
-        #                 'tifffile>=2020.11.26',
-        #                 'zarr>=2.6.1',
-        #                 'natsort>=7.1.1']},
+        # setup_requires = requirements,
         classifiers = [
                 'Development Status :: 4 - Beta',
                 'Intended Audience :: Science/Research',
