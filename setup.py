@@ -22,8 +22,8 @@ dir_ = Path(__file__).parent
 with open(os.path.join(dir_, 'README.md')) as file:
         long_description = file.read()
 
-setup(  name             = 'waveordertest',
-        version          = '1.0.4-beta',
+setup(  name             = 'waveorder',
+        version          = '1.0.0-beta',
         description      = 'wave optical simulations and deconvolution of optical properties',
         author           = 'Li-Hao Yeh',
         author_email     = 'lihao.yeh@czbiohub.org',
@@ -36,7 +36,6 @@ setup(  name             = 'waveordertest',
         include_package_data = True,
         python_requies   = '==3.7',
         install_requires = requirements,
-        # setup_requires = requirements,
         classifiers = [
                 'Development Status :: 4 - Beta',
                 'Intended Audience :: Science/Research',
