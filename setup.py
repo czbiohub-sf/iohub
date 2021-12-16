@@ -1,6 +1,25 @@
 from setuptools import setup, find_packages
 from pathlib import Path
 import os
+import platform
+
+
+
+if platform.machine() == 'ppc64le':
+        requirements = ['numpy>=1.17.4',
+                'ipywidgets>=7.5.1',
+                'zarr>=2.6.1',
+                'natsort>=7.1.1']
+else:
+        requirements = ['numpy>=1.17.4',
+                'pywavelets>=1.1.1',
+                'ipywidgets>=7.5.1',
+                'tifffile>=2020.11.26',
+                'zarr>=2.6.1',
+                'natsort>=7.1.1',
+                'opencv-python>=3.4.1',
+                'scipy>=1.3.0',
+                'matplotlib>=3.1.1']
 
 dir_ = Path(__file__).parent
 with open(os.path.join(dir_, 'README.md')) as file:
@@ -18,24 +37,24 @@ setup(  name             = 'waveordertest',
         long_description_content_type = 'text/markdown',
         packages         = find_packages(),
         python_requies   = '==3.7',
-        install_requires = [],
-        extras_require = {
-                '': ['numpy>=1.17.4',
-                        'pywavelets>=1.1.1',
-                        'ipywidgets>=7.5.1',
-                        'tifffile>=2020.11.26',
-                        'zarr>=2.6.1',
-                        'natsort>=7.1.1',
-                        'opencv-python>=3.4.1',
-                        'scipy>=1.3.0',
-                        'matplotlib>=3.1.1'],
-
-                'ibm': ['numpy>=1.17.4',
-                        'pywavelets>=1.1.1',
-                        'ipywidgets>=7.5.1',
-                        'tifffile>=2020.11.26',
-                        'zarr>=2.6.1',
-                        'natsort>=7.1.1']},
+        install_requires = requirements,
+        # extras_require = {
+        #         '': ['numpy>=1.17.4',
+        #                 'pywavelets>=1.1.1',
+        #                 'ipywidgets>=7.5.1',
+        #                 'tifffile>=2020.11.26',
+        #                 'zarr>=2.6.1',
+        #                 'natsort>=7.1.1',
+        #                 'opencv-python>=3.4.1',
+        #                 'scipy>=1.3.0',
+        #                 'matplotlib>=3.1.1'],
+        #
+        #         'ibm': ['numpy>=1.17.4',
+        #                 'pywavelets>=1.1.1',
+        #                 'ipywidgets>=7.5.1',
+        #                 'tifffile>=2020.11.26',
+        #                 'zarr>=2.6.1',
+        #                 'natsort>=7.1.1']},
         classifiers = [
                 'Development Status :: 4 - Beta',
                 'Intended Audience :: Science/Research',
