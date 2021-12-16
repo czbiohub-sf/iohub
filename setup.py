@@ -1,14 +1,20 @@
 from setuptools import setup, find_packages
+from pathlib import Path
+import os
 
-setup(  name             = 'waveorder',
-        version          = '1.0.0-beta',
+dir_ = Path(__file__).parent
+with open(os.path.join(dir_, 'README.md')) as file:
+        long_description = file.read()
+
+setup(  name             = 'waveordertest',
+        version          = '1.0.2-beta',
         description      = 'wave optical simulations and deconvolution of optical properties',
         author           = 'Li-Hao Yeh',
         author_email     = 'lihao.yeh@czbiohub.org',
         url              = 'https://github.com/mehta-lab/waveorder/',
         license          = 'BSD License (Chan Zuckerberg Biohub Software License)',
         license_file     = 'LICENSE.txt',
-        long_description = 'file: README.md',
+        long_description = long_description,
         long_description_content_type = 'text/markdown',
         packages         = find_packages(),
         python_requies   = '==3.7',
@@ -22,7 +28,7 @@ setup(  name             = 'waveorder',
                 'zarr>=2.6.1',
                 'natsort>=7.1.1'
         ],
-        extras_requires = {'full': ['opencv-python>=3.4.1']},
+        extras_require = {'full': ['opencv-python>=3.4.1']},
         classifiers = [
                 'Development Status :: 4 - Beta',
                 'Intended Audience :: Science/Research',
