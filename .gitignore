@@ -1,4 +1,5 @@
 waveorder.egg-info/
+waveordertest.egg-info/
 .ipynb_checkpoints/
 .idea/
 waveorder/__pycache__/
