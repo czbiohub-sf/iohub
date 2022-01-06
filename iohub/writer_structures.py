@@ -34,7 +34,7 @@ class WriterBase:
         """
 
         Initializes the zarr array under the current position subgroup.
-        array level is called 'array' in the hierarchy.  Sets omero/multiscales metadata based upon
+        array level is called 'arr_0' in the hierarchy.  Sets omero/multiscales metadata based upon
         chan_names and clims
 
         Parameters
@@ -52,7 +52,7 @@ class WriterBase:
         """
 
         self.set_channel_attributes(chan_names, clims)
-        self.current_pos_group.zeros('array', shape=data_shape, chunks=chunk_size, dtype=dtype,
+        self.current_pos_group.zeros('arr_0', shape=data_shape, chunks=chunk_size, dtype=dtype,
                            compressor=self.__compressor, overwrite=overwrite)
 
     def write(self, data, t, c, z):
@@ -76,33 +76,33 @@ class WriterBase:
             if len(shape) > 2:
                 raise ValueError('Index dimensions do not match data dimensions')
             else:
-                self.current_pos_group['array'][t[0], c[0], z[0]] = data
+                self.current_pos_group['arr_0'][t[0], c[0], z[0]] = data
 
         elif len(c) == 1 and len(t) == 2 and len(z) == 1:
-            self.current_pos_group['array'][t[0]:t[1], c[0], z[0]] = data
+            self.current_pos_group['arr_0'][t[0]:t[1], c[0], z[0]] = data
 
         elif len(c) == 1 and len(t) == 1 and len(z) == 2:
-            self.current_pos_group['array'][t[0], c[0], z[0]:z[1]] = data
+            self.current_pos_group['arr_0'][t[0], c[0], z[0]:z[1]] = data
 
         elif len(c) == 1 and len(t) == 2 and len(z) == 2:
-            self.current_pos_group['array'][t[0]:t[1], c[0], z[0]:z[1]] = data
+            self.current_pos_group['arr_0'][t[0]:t[1], c[0], z[0]:z[1]] = data
 
         elif len(c) == 2 and len(t) == 2 and len(z) == 2:
-            self.current_pos_group['array'][t[0]:t[1], c[0]:c[1], z[0]:z[1]] = data
+            self.current_pos_group['arr_0'][t[0]:t[1], c[0]:c[1], z[0]:z[1]] = data
 
         elif len(c) == 2 and len(t) == 1 and len(z) == 2:
-            self.current_pos_group['array'][t[0], c[0]:c[1], z[0]:z[1]] = data
+            self.current_pos_group['arr_0'][t[0], c[0]:c[1], z[0]:z[1]] = data
 
         elif len(c) == 2 and len(t) == 2 and len(z) == 1:
-            self.current_pos_group['array'][t[0]:t[1], c[0]:c[1], z[0]] = data
+            self.current_pos_group['arr_0'][t[0]:t[1], c[0]:c[1], z[0]] = data
 
         elif len(c) == 2 and len(t) == 1 and len(z) == 1:
-            self.current_pos_group['array'][t[0], c[0]:c[1], z[0]] = data
+            self.current_pos_group['arr_0'][t[0], c[0]:c[1], z[0]] = data
 
         else:
             raise ValueError('Did not understand data formatting')
 
-    def create_channel_dict(self, chan_name, clim=None):
+    def create_channel_dict(self, chan_name, clim=None, first_chan=False):
         """
         This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
         names for display.  Defaults everything to grayscale.
@@ -110,7 +110,8 @@ class WriterBase:
         Parameters
         ----------
         chan_name:          (str) Desired name of the channel for display
-        clim:               (tuple) contrast limits (min,max)
+        clim:               (tuple) contrast limits (start, end)
+        first_chan:         (bool) whether or not this is the first channel of the dataset (display will be set to active)
 
         Returns
         -------
@@ -171,9 +172,9 @@ class WriterBase:
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 65535.0
 
-        dict_ = {'active': True,
+        dict_ = {'active': first_chan,
                  'coefficient': 1.0,
-                 'color': '808080',
+                 'color': 'FFFFFF',
                  'family': 'linear',
                  'inverted': False,
                  'label': chan_name,
@@ -329,7 +330,7 @@ class WriterBase:
                  'projection': 'normal',
                  'defaultZ': 0}
 
-        multiscale_dict = [{'datasets': [{'path': "array"}],
+        multiscale_dict = [{'datasets': [{'path': "arr_0"}],
                             'version': '0.1'}]
         dict_list = []
 
@@ -337,10 +338,12 @@ class WriterBase:
             raise ValueError('Contrast Limits specified exceed the number of channels given')
 
         for i in range(len(chan_names)):
+
+            first_chan = True if i == 0 else False
             if not clims or i >= len(clims):
-                dict_list.append(self.create_channel_dict(chan_names[i]))
+                dict_list.append(self.create_channel_dict(chan_names[i], first_chan=first_chan))
             else:
-                dict_list.append(self.create_channel_dict(chan_names[i], clims[i]))
+                dict_list.append(self.create_channel_dict(chan_names[i], clims[i], first_chan=first_chan))
 
         full_dict = {'multiscales': multiscale_dict,
                      'omero': {
