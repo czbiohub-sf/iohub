@@ -156,30 +156,21 @@ class WaveorderWriter:
         ----------
         data:   (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
         p:      (int), Position index in which to write the data into
-        t:      (list or value), index or index range of the time dimension
-        c:      (list or value), index or index range of the channel dimension
-        z:      (list or value), index or index range of the Z-slice dimension
+        t:      (slice or int), index or index range of the time dimension
+        c:      (slice or int), index or index range of the channel dimension
+        z:      (slice or int), index or index range of the Z-slice dimension
         Returns
         -------
         """
         self.sub_writer.open_position(p)
 
         if t is None:
-            t = [0,data.shape[0]]
+            t = slice(0, data.shape[0])
 
         if c is None:
-            c = [0,data.shape[1]]
+            c = slice(0, data.shape[1])
 
         if z is None:
-            z = [0,data.shape[2]]
-
-        if isinstance(t, int):
-            t = [t]
-
-        if isinstance(c, int):
-            c = [c]
-
-        if isinstance(z, int):
-            z = [z]
+            z = slice(0, data.shape[2])
 
         self.sub_writer.write(data, t, c, z)

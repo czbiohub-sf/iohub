@@ -60,9 +60,9 @@ class WriterBase:
         Write data to specified index of initialized zarr array
 
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
-        :param t: (list), index or index range of the time dimension
-        :param c: (list), index or index range of the channel dimension
-        :param z: (list), index or index range of the z dimension
+        :param t: (list), index or index slice of the time dimension
+        :param c: (list), index or index slice of the channel dimension
+        :param z: (list), index or index slice of the z dimension
 
         """
 
@@ -71,36 +71,31 @@ class WriterBase:
         if self.current_pos_group.__len__() == 0:
             raise ValueError('Array not initialized')
 
-        if len(c) == 1 and len(t) == 1 and len(z) == 1:
+        if not isinstance(t, int) or not isinstance(t, slice):
+            raise TypeError('t specification must be either int or slice')
+
+        if not isinstance(c, int) or not isinstance(c, slice):
+            raise TypeError('c specification must be either int or slice')
+
+        if not isinstance(z, int) or not isinstance(z, slice):
+            raise TypeError('z specification must be either int or slice')
+
+        if isinstance(t, int) and isinstance(c, int) and isinstance(z, int):
 
             if len(shape) > 2:
-                raise ValueError('Index dimensions do not match data dimensions')
+                raise ValueError('Index dimensions exceed data dimensions')
             else:
-                self.current_pos_group['arr_0'][t[0], c[0], z[0]] = data
+                self.current_pos_group['arr_0'][t, c, z] = data
 
-        elif len(c) == 1 and len(t) == 2 and len(z) == 1:
-            self.current_pos_group['arr_0'][t[0]:t[1], c[0], z[0]] = data
+        elif isinstance(t, slice) and isinstance(c, slice) and isinstance(z, slice):
 
-        elif len(c) == 1 and len(t) == 1 and len(z) == 2:
-            self.current_pos_group['arr_0'][t[0], c[0], z[0]:z[1]] = data
-
-        elif len(c) == 1 and len(t) == 2 and len(z) == 2:
-            self.current_pos_group['arr_0'][t[0]:t[1], c[0], z[0]:z[1]] = data
-
-        elif len(c) == 2 and len(t) == 2 and len(z) == 2:
-            self.current_pos_group['arr_0'][t[0]:t[1], c[0]:c[1], z[0]:z[1]] = data
-
-        elif len(c) == 2 and len(t) == 1 and len(z) == 2:
-            self.current_pos_group['arr_0'][t[0], c[0]:c[1], z[0]:z[1]] = data
-
-        elif len(c) == 2 and len(t) == 2 and len(z) == 1:
-            self.current_pos_group['arr_0'][t[0]:t[1], c[0]:c[1], z[0]] = data
-
-        elif len(c) == 2 and len(t) == 1 and len(z) == 1:
-            self.current_pos_group['arr_0'][t[0], c[0]:c[1], z[0]] = data
+            if len(shape) > 2:
+                raise ValueError('Index dimensions exceed data dimensions')
+            else:
+                self.current_pos_group['arr_0'][t, c, z] = data
 
         else:
-            raise ValueError('Did not understand data formatting')
+            self.current_pos_group['arr_0'][t, c, z] = data
 
     def create_channel_dict(self, chan_name, clim=None, first_chan=False):
         """
