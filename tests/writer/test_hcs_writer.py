@@ -132,7 +132,7 @@ def test_init_array(setup_folder):
     assert(isinstance(writer.sub_writer.store['A']['1']['FOV1'], zarr.Group))
     meta_folder = writer.store['A']['1']['FOV1']
     meta = meta_folder.attrs.asdict()
-    array = meta_folder['array']
+    array = meta_folder['arr_0']
 
     assert(meta_folder is not None)
     assert(array is not None)
@@ -154,7 +154,7 @@ def test_init_array(setup_folder):
     assert(isinstance(writer.sub_writer.store['B']['2']['FOV2'], zarr.Group))
     meta_folder = writer.store['B']['2']['FOV2']
     meta = meta_folder.attrs.asdict()
-    array = meta_folder['array']
+    array = meta_folder['arr_0']
 
     assert(meta_folder is not None)
     assert(array is not None)
@@ -202,10 +202,12 @@ def test_write(setup_folder):
 
     # Write single index for each channel
     writer.write(data[0, 0, 0], p=0, t=0, c=0, z=0)
-    assert(np.array_equal(writer.sub_writer.store['A']['1']['FOV1']['array'][0, 0, 0], data[0, 0, 0]))
+    assert(np.array_equal(writer.sub_writer.store['A']['1']['FOV1']['arr_0'][0, 0, 0], data[0, 0, 0]))
 
     # Write full data
     writer.write(data, p=0)
-    assert(np.array_equal(writer.sub_writer.store['A']['1']['FOV1']['array'][:, :, :, :, :], data))
+    assert(np.array_equal(writer.sub_writer.store['A']['1']['FOV1']['arr_0'][:, :, :, :, :], data))
 
-
+    # Write full data with alt method
+    writer.write(data, p=0, t=slice(0, 3), c=slice(0, 3), z=slice(0, 11))
+    assert(np.array_equal(writer.sub_writer.store['A']['1']['FOV1']['arr_0'][:, :, :, :, :], data))

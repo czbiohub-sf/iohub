@@ -136,16 +136,3 @@ def test_get_num_positions_mm1422(setup_mm1422_singlepage_tiffs):
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=True)
     assert(mmr.get_num_positions() >= 1)
-
-
-# uncertain whether the bottom tests are useful
-# def test_read_tiff_series_mm2gamma(setup_mm2gamma_singlepage_tiffs):
-#     pass
-#
-#
-# def test_extract_coord_mm2gamma(setup_mm2gamma_singlepage_tiffs):
-#     pass
-#
-#
-# def test_shape_mm2gamma(setup_mm2gamma_singlepage_tiffs):
-#     pass

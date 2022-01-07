@@ -80,23 +80,16 @@ class WriterBase:
         if self.current_pos_group.__len__() == 0:
             raise ValueError('Array not initialized')
 
-        if not isinstance(t, int) or not isinstance(t, slice):
+        if not isinstance(t, int) and not isinstance(t, slice):
             raise TypeError('t specification must be either int or slice')
 
-        if not isinstance(c, int) or not isinstance(c, slice):
+        if not isinstance(c, int) and not isinstance(c, slice):
             raise TypeError('c specification must be either int or slice')
 
-        if not isinstance(z, int) or not isinstance(z, slice):
+        if not isinstance(z, int) and not isinstance(z, slice):
             raise TypeError('z specification must be either int or slice')
 
         if isinstance(t, int) and isinstance(c, int) and isinstance(z, int):
-
-            if len(shape) > 2:
-                raise ValueError('Index dimensions exceed data dimensions')
-            else:
-                self.current_pos_group['arr_0'][t, c, z] = data
-
-        elif isinstance(t, slice) and isinstance(c, slice) and isinstance(z, slice):
 
             if len(shape) > 2:
                 raise ValueError('Index dimensions exceed data dimensions')
@@ -114,7 +107,7 @@ class WriterBase:
         Parameters
         ----------
         chan_name:          (str) Desired name of the channel for display
-        clim:               (tuple) contrast limits (start, end)
+        clim:               (tuple) contrast limits (start, end, min, max)
         first_chan:         (bool) whether or not this is the first channel of the dataset (display will be set to active)
 
         Returns
@@ -124,55 +117,55 @@ class WriterBase:
         """
 
         if chan_name == 'Retardance':
-            min = 0.0
-            max = 1000.0
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 1000.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 100.0
         elif chan_name == 'Orientation':
-            min = 0.0
-            max = np.pi
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else np.pi
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else np.pi
 
         elif chan_name == 'Phase3D':
-            min = -10.0
-            max = 10.0
+            min = clim[2] if clim else -10.0
+            max = clim[3] if clim else 10.0
             start = clim[0] if clim else -0.2
             end = clim[1] if clim else 0.2
 
         elif chan_name == 'BF':
-            min = 0.0
-            max = 65535.0
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 5.0
 
         elif chan_name == 'S0':
-            min = 0.0
-            max = 65535
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 1.0
 
         elif chan_name == 'S1':
-            min = 10.0
-            max = -10.0
+            min = clim[2] if clim else 10.0
+            max = clim[3] if clim else -10.0
             start = clim[0] if clim else -0.5
             end = clim[1] if clim else 0.5
 
         elif chan_name == 'S2':
-            min = -10.0
-            max = 10.0
+            min = clim[2] if clim else -10.0
+            max = clim[3] if clim else 10.0
             start = clim[0] if clim else -0.5
             end = clim[1] if clim else 0.5
 
         elif chan_name == 'S3':
-            min = -10
-            max = 10
+            min = clim[2] if clim else -10
+            max = clim[3] if clim else 10
             start = clim[0] if clim else -1.0
             end = clim[1] if clim else 1.0
 
         else:
-            min = 0.0
-            max = 65535.0
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 65535.0
 
@@ -343,14 +336,16 @@ class WriterBase:
 
         for i in range(len(chan_names)):
 
-            if len(clims[i]) not in (2, 4):
-                raise ValueError('clim specification must a tuple of length 2 or 4')
             if len(clims[i]) == 2:
                 if 'float' in self.dtype.name:
-                    clim = (clims[0], clims[1], -1000, 1000)
+                    clim = (clims[i][0], clims[i][1], -1000, 1000)
                 else:
                     info = np.iinfo(self.dtype)
-                    clim = (clims[0], clims[1], info.min, info.max)
+                    clim = (clims[i][0], clims[i][1], info.min, info.max)
+            elif len(clims[i]) == 4:
+                clim = clims[i]
+            else:
+                raise ValueError('clim specification must a tuple of length 2 or 4')
 
             first_chan = True if i == 0 else False
             if not clims or i >= len(clims):
