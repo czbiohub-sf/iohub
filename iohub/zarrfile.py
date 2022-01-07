@@ -2,18 +2,17 @@ import numpy as np
 import os
 import zarr
 from copy import copy
-from waveorder.io.reader_interface import ReaderInterface
+from waveorder.io.reader_base import ReaderBase
 
 
-class ZarrReader(ReaderInterface):
+class ZarrReader(ReaderBase):
 
     """
     Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
     Also collects the HCS metadata so it can be later copied.
     """
 
-    def __init__(self,
-                 zarrfile: str):
+    def __init__(self, zarrfile: str):
 
         # zarr files (.zarr) are directories
         if not os.path.isdir(zarrfile):
@@ -279,6 +278,26 @@ class ZarrReader(ReaderInterface):
         """
         pos = self.get_zarr(position)
         return pos[:]
+
+    def get_image(self, p, t, c, z):
+        """
+        Returns the image at dimension P, T, C, Z
+
+        Parameters
+        ----------
+        p:          (int) index of the position dimension
+        t:          (int) index of the time dimension
+        c:          (int) index of the channel dimension
+        z:          (int) index of the z dimension
+
+        Returns
+        -------
+        image:      (nd-array) image at the given dimension of shape (Y, X)
+        """
+
+        pos = self.get_zarr(p)
+
+        return pos[t, c, z]
 
     def get_num_positions(self) -> int:
         return self.positions

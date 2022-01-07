@@ -6,10 +6,10 @@ import tifffile as tiff
 from copy import copy
 import glob
 import warnings
-from waveorder.io.reader_interface import ReaderInterface
+from waveorder.io.reader_base import ReaderBase
 
 
-class MicromanagerOmeTiffReader(ReaderInterface):
+class MicromanagerOmeTiffReader(ReaderBase):
 
     def __init__(self, folder: str, extract_data: bool = False):
         """
