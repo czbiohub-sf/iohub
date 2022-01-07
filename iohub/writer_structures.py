@@ -16,6 +16,7 @@ class WriterBase:
         self.current_position = None
         self.current_well_group = None
         self.verbose = False
+        self.dtype = None
 
         # set hardcoded compressor
         self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.BITSHUFFLE)
@@ -41,15 +42,23 @@ class WriterBase:
         ----------
         data_shape:         (tuple)  Desired Shape of your data (T, C, Z, Y, X).  Must match data
         chunk_size:         (tuple) Desired Chunk Size (T, C, Z, Y, X).  Chunking each image would be (1, 1, 1, Y, X)
-        dtype:              (str) Data Type, i.e. 'uint16'
+        dtype:              (str or np.dtype) Data Type, i.e. 'uint16'
         chan_names:         (list) List of strings corresponding to your channel names.  Used for OME-zarr metadata
         clims:              (list) list of tuples corresponding to contrast limtis for channel.  OME-Zarr metadata
+                                    tuple can be of (start, end, min, max) or (start, end)
         overwrite:          (bool) Whether or not to overwrite the existing data that may be present.
 
         Returns
         -------
 
         """
+
+        if isinstance(dtype, str):
+            self.dtype = np.dtype(dtype)
+        elif isinstance(dtype, np.dtype):
+            self.dtype = dtype
+        else:
+            raise TypeError('dtype must be instance of either np.dtype or str')
 
         self.set_channel_attributes(chan_names, clims)
         self.current_pos_group.zeros('arr_0', shape=data_shape, chunks=chunk_size, dtype=dtype,
@@ -334,11 +343,20 @@ class WriterBase:
 
         for i in range(len(chan_names)):
 
+            if len(clims[i]) not in (2, 4):
+                raise ValueError('clim specification must a tuple of length 2 or 4')
+            if len(clims[i]) == 2:
+                if 'float' in self.dtype.name:
+                    clim = (clims[0], clims[1], -1000, 1000)
+                else:
+                    info = np.iinfo(self.dtype)
+                    clim = (clims[0], clims[1], info.min, info.max)
+
             first_chan = True if i == 0 else False
             if not clims or i >= len(clims):
                 dict_list.append(self.create_channel_dict(chan_names[i], first_chan=first_chan))
             else:
-                dict_list.append(self.create_channel_dict(chan_names[i], clims[i], first_chan=first_chan))
+                dict_list.append(self.create_channel_dict(chan_names[i], clim, first_chan=first_chan))
 
         full_dict = {'multiscales': multiscale_dict,
                      'omero': {

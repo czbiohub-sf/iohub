@@ -78,6 +78,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         for file in self.files:
             tf = TiffFile(file)
             meta = tf.micromanager_metadata['IndexMap']
+            tf.close()
             offsets = list(meta['Offset'])
 
             for page in range(len(meta['Channel'])):
@@ -263,6 +264,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         tf = tiff.TiffFile(self.files[0])
 
         self.dtype = tf.pages[0].dtype
+        tf.close()
 
     def _get_dimensions(self, position):
         """
