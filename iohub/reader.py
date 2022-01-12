@@ -118,7 +118,7 @@ class WaveorderReader:
         #    assert subDirName, 'No sub directories found'
         return natsort.natsorted(sub_dir_name)
 
-    def get_zarr(self, position):
+    def get_zarr(self, position=0):
         """
         return a zarr array for a given position
 
@@ -132,7 +132,7 @@ class WaveorderReader:
         """
         return self.reader.get_zarr(position)
 
-    def get_array(self, position):
+    def get_array(self, position=0):
         """
         return a numpy array for a given position
 
