@@ -21,7 +21,10 @@ class UPTIReader(ReaderInterface):
 
         # Initializate data parameters
         self.data_folder = folder
-        self.files = glob.glob(os.path.join(folder, '*.tif'))
+        if glob.glob(os.path.join(folder, '*.tif')) == []:
+            self.files = glob.glob(os.path.join(folder, '*.tiff'))
+        else:
+            self.files = glob.glob(os.path.join(folder, '*.tif'))
         info_img = tiff.imread(self.files[0])
         self.dtype = info_img.dtype
         (self.height, self.width) = info_img.shape
@@ -64,7 +67,10 @@ class UPTIReader(ReaderInterface):
         for file in self.files:
             pattern = re.search('pattern_\d\d\d', file).group(0)
             pattern_idx = int(pattern.strip('pattern_'))
-            z = int(re.search('z_\d\d\d', file).group(0).strip('z_'))
+            if re.search('z_\d\d\d', file) == None:
+                z = 0
+            else:
+                z = int(re.search('z_\d\d\d', file).group(0).strip('z_'))
             state_idx = 0
 
             # update dimensionality as we read the file names
