@@ -53,6 +53,14 @@ class WaveorderReader:
         )
         self.log = logging.getLogger(__name__)
 
+        # catch if the user accidentally specifies one of the tiff files and not the parent folder
+        if data_type == 'ometiff':
+            if src.endswith('.tif'):
+                src = os.path.dirname(src)
+
+            if len(glob.glob(os.path.join(src, '*.tif'))) == 0:
+                raise FileNotFoundError('Specified folder does not contain any ome.tif files')
+
         # Try to infer datatype
         if not data_type:
             try:
@@ -60,8 +68,12 @@ class WaveorderReader:
                 data_type = 'zarr'
             except:
                 if os.path.exists(src):
+                    if src.endswith('.tif'):
+                        src = os.path.dirname(src)
+
                     files = glob.glob(os.path.join(src, '*.tif'))
                     if len(files) == 0:
+
                         sub_dirs = self._get_sub_dirs(src)
                         if sub_dirs:
                             path = os.path.join(src, sub_dirs[0])
@@ -74,7 +86,8 @@ class WaveorderReader:
                                         data_type = 'singlepagetiff'
 
                         else:
-                            raise FileNotFoundError(f'No compatible data found under {src}')
+                            raise FileNotFoundError(f'No compatible data found under {src}, please specify the top '
+                                                    'level micromanager directory')
                     else:
                         with tiff.TiffFile(files[0]) as tf:
                             if len(tf.pages) > 1:
