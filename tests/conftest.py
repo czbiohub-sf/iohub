@@ -2,7 +2,7 @@ import pytest
 import shutil
 import os
 import random
-import gdown
+# import gdown
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
 MM2GAMMA_OMETIFF_SUBFOLDERS = \
