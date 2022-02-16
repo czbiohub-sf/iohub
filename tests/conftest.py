@@ -2,7 +2,7 @@ import pytest
 import shutil
 import os
 import random
-
+import zipfile
 from google_drive_downloader import GoogleDriveDownloader as gdd
 
 MM2GAMMA_OMETIFF_SUBFOLDERS = \
@@ -334,9 +334,12 @@ def setup_mm2gamma_zarr():
     output = temp_2gamma + "/2021_06_11_recOrder_pytest_20x_04NA_zarr.zip"
     gdd.download_file_from_google_drive(file_id=mm2gamma_zarr,
                                         dest_path=output,
-                                        unzip=True,
+                                        unzip=False,
                                         showsize=True,
                                         overwrite=True)
+
+    with zipfile.ZipFile(output, 'r') as zip_ref:
+        zip_ref.extractall(temp_2gamma)
 
     print(os.listdir(temp_2gamma))
 
