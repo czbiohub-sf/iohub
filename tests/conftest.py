@@ -338,8 +338,7 @@ def setup_mm2gamma_zarr():
                                         showsize=True,
                                         overwrite=True)
 
-    with zipfile.ZipFile(output, 'r') as zip_ref:
-        zip_ref.extractall(temp_2gamma)
+    shutil.unpack_archive(output, temp_2gamma)
 
     print(os.listdir(temp_2gamma))
 
