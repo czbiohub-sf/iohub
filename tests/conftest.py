@@ -325,10 +325,10 @@ def setup_mm2gamma_zarr():
         print("\nsetting up temp folder")
 
     # shared gdrive
-    # 'https://drive.google.com/file/d/1sdFkruz1AQgQ7frz5_Wa5JCWqoeIC6bT/view?usp=sharing'
+    # https://drive.google.com/file/d/1mCMjKxoQ3D09j0xBJFP0Rg_p2TBY6pAq/view?usp=sharing
 
     # DO NOT ADJUST THIS VALUE
-    mm2gamma_zarr = '1sdFkruz1AQgQ7frz5_Wa5JCWqoeIC6bT'
+    mm2gamma_zarr = '1mCMjKxoQ3D09j0xBJFP0Rg_p2TBY6pAq'
 
     # download files to temp folder
     output = temp_2gamma + "/2021_06_11_recOrder_pytest_20x_04NA_zarr.zip"
