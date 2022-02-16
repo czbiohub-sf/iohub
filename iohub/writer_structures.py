@@ -338,12 +338,12 @@ class WriterBase:
             if clims:
                 if len(clims[i]) == 2:
                     if 'float' in self.dtype.name:
-                        clim = (clims[i][0], clims[i][1], -1000, 1000)
+                        clim = (float(clims[i][0]), float(clims[i][1]), -1000, 1000)
                     else:
                         info = np.iinfo(self.dtype)
-                        clim = (clims[i][0], clims[i][1], info.min, info.max)
+                        clim = (float(clims[i][0]), float(clims[i][1]), info.min, info.max)
                 elif len(clims[i]) == 4:
-                    clim = clims[i]
+                    clim = (float(clims[i][0]), float(clims[i][1]), float(clims[i][2]), float(clims[i][3]))
                 else:
                     raise ValueError('clim specification must a tuple of length 2 or 4')
 
