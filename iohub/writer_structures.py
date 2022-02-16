@@ -335,17 +335,17 @@ class WriterBase:
             raise ValueError('Contrast Limits specified exceed the number of channels given')
 
         for i in range(len(chan_names)):
-
-            if len(clims[i]) == 2:
-                if 'float' in self.dtype.name:
-                    clim = (clims[i][0], clims[i][1], -1000, 1000)
+            if clims:
+                if len(clims[i]) == 2:
+                    if 'float' in self.dtype.name:
+                        clim = (clims[i][0], clims[i][1], -1000, 1000)
+                    else:
+                        info = np.iinfo(self.dtype)
+                        clim = (clims[i][0], clims[i][1], info.min, info.max)
+                elif len(clims[i]) == 4:
+                    clim = clims[i]
                 else:
-                    info = np.iinfo(self.dtype)
-                    clim = (clims[i][0], clims[i][1], info.min, info.max)
-            elif len(clims[i]) == 4:
-                clim = clims[i]
-            else:
-                raise ValueError('clim specification must a tuple of length 2 or 4')
+                    raise ValueError('clim specification must a tuple of length 2 or 4')
 
             first_chan = True if i == 0 else False
             if not clims or i >= len(clims):
