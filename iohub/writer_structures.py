@@ -16,6 +16,7 @@ class WriterBase:
         self.current_position = None
         self.current_well_group = None
         self.verbose = False
+        self.dtype = None
 
         # set hardcoded compressor
         self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.BITSHUFFLE)
@@ -34,16 +35,17 @@ class WriterBase:
         """
 
         Initializes the zarr array under the current position subgroup.
-        array level is called 'array' in the hierarchy.  Sets omero/multiscales metadata based upon
+        array level is called 'arr_0' in the hierarchy.  Sets omero/multiscales metadata based upon
         chan_names and clims
 
         Parameters
         ----------
         data_shape:         (tuple)  Desired Shape of your data (T, C, Z, Y, X).  Must match data
         chunk_size:         (tuple) Desired Chunk Size (T, C, Z, Y, X).  Chunking each image would be (1, 1, 1, Y, X)
-        dtype:              (str) Data Type, i.e. 'uint16'
+        dtype:              (str or np.dtype) Data Type, i.e. 'uint16'
         chan_names:         (list) List of strings corresponding to your channel names.  Used for OME-zarr metadata
         clims:              (list) list of tuples corresponding to contrast limtis for channel.  OME-Zarr metadata
+                                    tuple can be of (start, end, min, max) or (start, end)
         overwrite:          (bool) Whether or not to overwrite the existing data that may be present.
 
         Returns
@@ -51,8 +53,15 @@ class WriterBase:
 
         """
 
+        if isinstance(dtype, str):
+            self.dtype = np.dtype(dtype)
+        elif isinstance(dtype, np.dtype):
+            self.dtype = dtype
+        else:
+            raise TypeError('dtype must be instance of either np.dtype or str')
+
         self.set_channel_attributes(chan_names, clims)
-        self.current_pos_group.zeros('array', shape=data_shape, chunks=chunk_size, dtype=dtype,
+        self.current_pos_group.zeros('arr_0', shape=data_shape, chunks=chunk_size, dtype=dtype,
                            compressor=self.__compressor, overwrite=overwrite)
 
     def write(self, data, t, c, z):
@@ -60,9 +69,9 @@ class WriterBase:
         Write data to specified index of initialized zarr array
 
         :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
-        :param t: (list), index or index range of the time dimension
-        :param c: (list), index or index range of the channel dimension
-        :param z: (list), index or index range of the z dimension
+        :param t: (list), index or index slice of the time dimension
+        :param c: (list), index or index slice of the channel dimension
+        :param z: (list), index or index slice of the z dimension
 
         """
 
@@ -71,38 +80,26 @@ class WriterBase:
         if self.current_pos_group.__len__() == 0:
             raise ValueError('Array not initialized')
 
-        if len(c) == 1 and len(t) == 1 and len(z) == 1:
+        if not isinstance(t, int) and not isinstance(t, slice):
+            raise TypeError('t specification must be either int or slice')
+
+        if not isinstance(c, int) and not isinstance(c, slice):
+            raise TypeError('c specification must be either int or slice')
+
+        if not isinstance(z, int) and not isinstance(z, slice):
+            raise TypeError('z specification must be either int or slice')
+
+        if isinstance(t, int) and isinstance(c, int) and isinstance(z, int):
 
             if len(shape) > 2:
-                raise ValueError('Index dimensions do not match data dimensions')
+                raise ValueError('Index dimensions exceed data dimensions')
             else:
-                self.current_pos_group['array'][t[0], c[0], z[0]] = data
-
-        elif len(c) == 1 and len(t) == 2 and len(z) == 1:
-            self.current_pos_group['array'][t[0]:t[1], c[0], z[0]] = data
-
-        elif len(c) == 1 and len(t) == 1 and len(z) == 2:
-            self.current_pos_group['array'][t[0], c[0], z[0]:z[1]] = data
-
-        elif len(c) == 1 and len(t) == 2 and len(z) == 2:
-            self.current_pos_group['array'][t[0]:t[1], c[0], z[0]:z[1]] = data
-
-        elif len(c) == 2 and len(t) == 2 and len(z) == 2:
-            self.current_pos_group['array'][t[0]:t[1], c[0]:c[1], z[0]:z[1]] = data
-
-        elif len(c) == 2 and len(t) == 1 and len(z) == 2:
-            self.current_pos_group['array'][t[0], c[0]:c[1], z[0]:z[1]] = data
-
-        elif len(c) == 2 and len(t) == 2 and len(z) == 1:
-            self.current_pos_group['array'][t[0]:t[1], c[0]:c[1], z[0]] = data
-
-        elif len(c) == 2 and len(t) == 1 and len(z) == 1:
-            self.current_pos_group['array'][t[0], c[0]:c[1], z[0]] = data
+                self.current_pos_group['arr_0'][t, c, z] = data
 
         else:
-            raise ValueError('Did not understand data formatting')
+            self.current_pos_group['arr_0'][t, c, z] = data
 
-    def create_channel_dict(self, chan_name, clim=None):
+    def create_channel_dict(self, chan_name, clim=None, first_chan=False):
         """
         This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
         names for display.  Defaults everything to grayscale.
@@ -110,7 +107,8 @@ class WriterBase:
         Parameters
         ----------
         chan_name:          (str) Desired name of the channel for display
-        clim:               (tuple) contrast limits (min,max)
+        clim:               (tuple) contrast limits (start, end, min, max)
+        first_chan:         (bool) whether or not this is the first channel of the dataset (display will be set to active)
 
         Returns
         -------
@@ -119,61 +117,61 @@ class WriterBase:
         """
 
         if chan_name == 'Retardance':
-            min = 0.0
-            max = 1000.0
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 1000.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 100.0
         elif chan_name == 'Orientation':
-            min = 0.0
-            max = np.pi
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else np.pi
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else np.pi
 
         elif chan_name == 'Phase3D':
-            min = -10.0
-            max = 10.0
+            min = clim[2] if clim else -10.0
+            max = clim[3] if clim else 10.0
             start = clim[0] if clim else -0.2
             end = clim[1] if clim else 0.2
 
         elif chan_name == 'BF':
-            min = 0.0
-            max = 65535.0
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 5.0
 
         elif chan_name == 'S0':
-            min = 0.0
-            max = 65535
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 1.0
 
         elif chan_name == 'S1':
-            min = 10.0
-            max = -10.0
+            min = clim[2] if clim else 10.0
+            max = clim[3] if clim else -10.0
             start = clim[0] if clim else -0.5
             end = clim[1] if clim else 0.5
 
         elif chan_name == 'S2':
-            min = -10.0
-            max = 10.0
+            min = clim[2] if clim else -10.0
+            max = clim[3] if clim else 10.0
             start = clim[0] if clim else -0.5
             end = clim[1] if clim else 0.5
 
         elif chan_name == 'S3':
-            min = -10
-            max = 10
+            min = clim[2] if clim else -10
+            max = clim[3] if clim else 10
             start = clim[0] if clim else -1.0
             end = clim[1] if clim else 1.0
 
         else:
-            min = 0.0
-            max = 65535.0
+            min = clim[2] if clim else 0.0
+            max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 65535.0
 
-        dict_ = {'active': True,
+        dict_ = {'active': first_chan,
                  'coefficient': 1.0,
-                 'color': '808080',
+                 'color': 'FFFFFF',
                  'family': 'linear',
                  'inverted': False,
                  'label': chan_name,
@@ -329,7 +327,7 @@ class WriterBase:
                  'projection': 'normal',
                  'defaultZ': 0}
 
-        multiscale_dict = [{'datasets': [{'path': "array"}],
+        multiscale_dict = [{'datasets': [{'path': "arr_0"}],
                             'version': '0.1'}]
         dict_list = []
 
@@ -337,10 +335,23 @@ class WriterBase:
             raise ValueError('Contrast Limits specified exceed the number of channels given')
 
         for i in range(len(chan_names)):
+            if clims:
+                if len(clims[i]) == 2:
+                    if 'float' in self.dtype.name:
+                        clim = (float(clims[i][0]), float(clims[i][1]), -1000, 1000)
+                    else:
+                        info = np.iinfo(self.dtype)
+                        clim = (float(clims[i][0]), float(clims[i][1]), info.min, info.max)
+                elif len(clims[i]) == 4:
+                    clim = (float(clims[i][0]), float(clims[i][1]), float(clims[i][2]), float(clims[i][3]))
+                else:
+                    raise ValueError('clim specification must a tuple of length 2 or 4')
+
+            first_chan = True if i == 0 else False
             if not clims or i >= len(clims):
-                dict_list.append(self.create_channel_dict(chan_names[i]))
+                dict_list.append(self.create_channel_dict(chan_names[i], first_chan=first_chan))
             else:
-                dict_list.append(self.create_channel_dict(chan_names[i], clims[i]))
+                dict_list.append(self.create_channel_dict(chan_names[i], clim, first_chan=first_chan))
 
         full_dict = {'multiscales': multiscale_dict,
                      'omero': {

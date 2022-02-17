@@ -6,10 +6,10 @@ import tifffile as tiff
 from copy import copy
 import glob
 import warnings
-from waveorder.io.reader_interface import ReaderInterface
+from waveorder.io.reader_base import ReaderBase
 
 
-class MicromanagerOmeTiffReader(ReaderInterface):
+class MicromanagerOmeTiffReader(ReaderBase):
 
     def __init__(self, folder: str, extract_data: bool = False):
         """
@@ -78,6 +78,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         for file in self.files:
             tf = TiffFile(file)
             meta = tf.micromanager_metadata['IndexMap']
+            tf.close()
             offsets = list(meta['Offset'])
 
             for page in range(len(meta['Channel'])):
@@ -263,6 +264,7 @@ class MicromanagerOmeTiffReader(ReaderInterface):
         tf = tiff.TiffFile(self.files[0])
 
         self.dtype = tf.pages[0].dtype
+        tf.close()
 
     def _get_dimensions(self, position):
         """

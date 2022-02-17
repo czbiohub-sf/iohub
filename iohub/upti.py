@@ -4,10 +4,10 @@ import re
 import zarr
 import tifffile as tiff
 import glob
-from waveorder.io.reader_interface import ReaderInterface
+from waveorder.io.reader_base import ReaderBase
 
 
-class UPTIReader(ReaderInterface):
+class UPTIReader(ReaderBase):
 
     """
     Reader for UPTI raw data.  Accepts both new live UPTI and older UPTI format.

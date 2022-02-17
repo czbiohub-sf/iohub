@@ -1,28 +1,37 @@
-import numpy as np
 import os
 import zarr
 from copy import copy
-from waveorder.io.reader_interface import ReaderInterface
+from waveorder.io.reader_base import ReaderBase
 
 
-class ZarrReader(ReaderInterface):
+class ZarrReader(ReaderBase):
 
     """
     Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
     Also collects the HCS metadata so it can be later copied.
     """
 
-    def __init__(self,
-                 zarrfile: str):
+    def __init__(self, zarrfile: str):
 
         # zarr files (.zarr) are directories
         if not os.path.isdir(zarrfile):
             raise ValueError("file does not exist")
-        if not '.zarr' in zarrfile:
-            raise ValueError("file is not a .zarr file")
 
         self.zf = zarrfile
-        self.store = zarr.open(self.zf, 'r')
+
+        try:
+            self.store = zarr.open(self.zf, 'r')
+        except:
+            raise FileNotFoundError('Supplies path is not a valid zarr store')
+
+        try:
+            row = self.store[list(self.store.group_keys())[0]]
+            col = row[list(row.group_keys())[0]]
+            pos = col[list(col.group_keys())[0]]
+            self.arr_name = list(pos.array_keys())[0]
+        except IndexError:
+            raise IndexError('Incompatible zarr format')
+
         self.plate_meta = self.store.attrs.get('plate')
         self._get_rows()
         self._get_columns()
@@ -35,7 +44,7 @@ class ZarrReader(ReaderInterface):
          self.channels,
          self.slices,
          self.height,
-         self.width) = self.store[self.position_map[0]['well']][self.position_map[0]['name']]['array'].shape
+         self.width) = self.store[self.position_map[0]['well']][self.position_map[0]['name']][self.arr_name].shape
         self.positions = len(self.position_map)
         self.channel_names = []
         self.stage_positions = 0
@@ -46,7 +55,7 @@ class ZarrReader(ReaderInterface):
         
         try:
             self._set_mm_meta()
-        except TypeError as err:
+        except TypeError:
             self.mm_meta = None
 
         self._generate_hcs_meta()
@@ -262,7 +271,7 @@ class ZarrReader(ReaderInterface):
         pos_info = self.position_map[position]
         well = pos_info['well']
         pos = pos_info['name']
-        return self.store[well][pos]['array']
+        return self.store[well][pos][self.arr_name]
 
     def get_array(self, position):
         """
@@ -279,6 +288,26 @@ class ZarrReader(ReaderInterface):
         """
         pos = self.get_zarr(position)
         return pos[:]
+
+    def get_image(self, p, t, c, z):
+        """
+        Returns the image at dimension P, T, C, Z
+
+        Parameters
+        ----------
+        p:          (int) index of the position dimension
+        t:          (int) index of the time dimension
+        c:          (int) index of the channel dimension
+        z:          (int) index of the z dimension
+
+        Returns
+        -------
+        image:      (nd-array) image at the given dimension of shape (Y, X)
+        """
+
+        pos = self.get_zarr(p)
+
+        return pos[t, c, z]
 
     def get_num_positions(self) -> int:
         return self.positions

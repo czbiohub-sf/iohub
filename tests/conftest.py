@@ -338,10 +338,10 @@ def setup_mm2gamma_zarr():
                                         showsize=True,
                                         overwrite=True)
 
+
     shutil.unpack_archive(output, temp_2gamma)
-
     print(os.listdir(temp_2gamma))
-
+    
     src = os.path.join(temp_2gamma, '2021_06_11_recOrder_pytest_20x_04NA_zarr')
     zp = os.path.join(src, '2T_3P_3Z_128Y_128X_Kazansky.zarr')
 
