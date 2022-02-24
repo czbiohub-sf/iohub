@@ -4,12 +4,13 @@ from waveorder.io.reader import WaveorderReader
 import zarr
 import numpy as np
 
-def test_constructor_mm2gamma(setup_mm2gamma_zarr):
+def test_constructor_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
     """
     test that constructor parses metadata properly
         no data extraction in this test
     """
 
+    fold = setup_test_data
     src = setup_mm2gamma_zarr
 
     reader = WaveorderReader(src)
@@ -40,11 +41,12 @@ def test_constructor_mm2gamma(setup_mm2gamma_zarr):
     assert(meta['well'][0]['images'][0]['path'] == 'Pos_000')
 
 
-def test_output_dims_mm2gamma(setup_mm2gamma_zarr):
+def test_output_dims_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
     """
     test that output dimensions are always (t, c, z, y, x)
     """
 
+    fold = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -54,8 +56,9 @@ def test_output_dims_mm2gamma(setup_mm2gamma_zarr):
     assert(mmr.get_array(0).shape[3] == mmr.height)
     assert(mmr.get_array(0).shape[4] == mmr.width)
 
-def test_get_zarr_mm2gamma(setup_mm2gamma_zarr):
+def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
+    fold = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -63,8 +66,9 @@ def test_get_zarr_mm2gamma(setup_mm2gamma_zarr):
         z = mmr.get_zarr(i)
         assert(isinstance(z, zarr.core.Array))
 
-def test_get_array_mm2gamma(setup_mm2gamma_zarr):
+def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
+    fold = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -73,8 +77,9 @@ def test_get_array_mm2gamma(setup_mm2gamma_zarr):
         assert(z.shape == mmr.shape)
         assert(isinstance(z, np.ndarray))
 
-def test_get_image_mm2gamma(setup_mm2gamma_zarr):
+def test_get_image_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
+    fold = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -83,9 +88,10 @@ def test_get_image_mm2gamma(setup_mm2gamma_zarr):
         assert(z.shape == (mmr.shape[-2], mmr.shape[-1]))
         assert(isinstance(z, np.ndarray))
 
-def test_get_num_positions_mm2gamma(setup_mm2gamma_zarr):
+def test_get_num_positions_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
+    fold = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
-    assert(mmr.get_num_positions() == 3)
+    assert(mmr.get_num_positions() == 4)
