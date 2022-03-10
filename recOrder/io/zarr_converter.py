@@ -19,7 +19,7 @@ class ZarrConverter:
     for tiled acquisitions)
     """
 
-    def __init__(self, input, output, data_type, replace_position_names=False, format_hcs=False):
+    def __init__(self, input, output, data_type=None, replace_position_names=False, format_hcs=False):
 
         # Add Initial Checks
         if len(glob.glob(os.path.join(input, '*.tif'))) == 0:
@@ -39,7 +39,7 @@ class ZarrConverter:
         self.meta_file = None
 
         print('Initializing Data...')
-        self.reader = WaveorderReader(self.data_directory, self.data_type, extract_data=False)
+        self.reader = WaveorderReader(self.data_directory, data_type, extract_data=False)
         print('Finished initializing data')
 
         self.summary_metadata = self.reader.mm_meta['Summary'] if self.reader.mm_meta else None
@@ -79,34 +79,11 @@ class ZarrConverter:
         self.metadata = dict()
         self.metadata['recOrder_Converter_Version'] = self.version
         self.metadata['Summary'] = self.summary_metadata
-        self.metadata['ImagePlaneMetadata'] = dict()
 
         # initialize metadata if HCS desired, init writer
         self.hcs_meta = self._generate_hcs_metadata() if self.format_hcs else None
         self.writer = WaveorderWriter(self.save_directory, hcs=self.format_hcs, hcs_meta=self.hcs_meta, verbose=False)
         self.writer.create_zarr_root(self.save_name)
-
-    # def _gather_index_maps(self):
-    #     """
-    #     Will return a dictionary of {coord: (filepath, page)} of length(N_Images) to later query
-    #     Returns
-    #     -------
-    #     """
-    #     if self.data_type == 'ometiff':
-    #         for file in self.files:
-    #             tf = tiff.TiffFile(file)
-    #             meta = tf.micromanager_metadata['IndexMap']
-    #
-    #             for page in range(len(meta['Channel'])):
-    #                 coord = [0, 0, 0, 0]
-    #                 coord[self.p_dim] = meta['Position'][page]
-    #                 coord[self.t_dim] = meta['Frame'][page]
-    #                 coord[self.c_dim] = meta['Channel'][page]
-    #                 coord[self.z_dim] = meta['Slice'][page]
-    #
-    #                 self.coord_map[tuple(coord)] = (file, page)
-    #     else:
-    #         pass
 
     def _gen_coordset(self):
         """
@@ -242,7 +219,7 @@ class ZarrConverter:
 
         """
 
-        zarr_array = self.writer.sub_writer.current_pos_group['array']
+        zarr_array = self.writer.sub_writer.current_pos_group['arr_0']
         zarr_img = zarr_array[coord[self.dim_order.index('time')],
                               coord[self.dim_order.index('channel')],
                               coord[self.dim_order.index('z')]]
@@ -341,7 +318,7 @@ class ZarrConverter:
     def init_zarr_structure(self):
         """
         Initiates the zarr store.  Will create a zarr store with user-specified name or original name of data
-        if not provided.  Store will contain a group called 'array' with contains an array of original
+        if not provided.  Store will contain a group called 'arr_0' with contains an array of original
         data dtype of dimensions (T, C, Z, Y, X).  Appends OME-zarr metadata with clims,chan_names
 
         Current compressor is Blosc zstd w/ bitshuffle (~1.5x compression, faster compared to best 1.6x compressor)
@@ -418,13 +395,7 @@ class ZarrConverter:
                 plane_meta = self._generate_plane_metadata(tf, page)
                 meta[f'{coord_reorder}'] = plane_meta
 
-                # only write the plane metadata for the first time-point to avoid huge i/o overhead
-                # rest will be placed in json file with the zarr store
-                if coord[self.t_dim] == 0:
-                    self.metadata['ImagePlaneMetadata'][f'{coord_reorder}'] = plane_meta
-                    json.dump(meta, self.meta_file, indent=1)
-                else:
-                    json.dump(meta, self.meta_file, indent=1)
+                json.dump(meta, self.meta_file, indent=1)
             # get the memory mapped image
             img_raw = self.get_image_array(coord[self.p_dim], coord[self.t_dim], coord[self.c_dim], coord[self.z_dim])
 

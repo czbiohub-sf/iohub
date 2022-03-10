@@ -2,6 +2,54 @@ import glob
 import os
 import tifffile as tiff
 import numpy as np
+from waveorder.waveorder_reconstructor import fluorescence_microscopy, waveorder_microscopy
+
+
+def extract_reconstruction_parameters(reconstructor, magnification=None):
+    """
+    Function that extracts the reconstruction parameters from a waveorder reconstructor.  Works
+    for both fluorescence_microscopy class and waveorder_microscopy class.
+
+    Parameters
+    ----------
+    reconstructor:      (waveorder reconstructor object) initalized reconstructor
+    magnification:      (float or None) magnification of the microscope setup (value not saved in reconstructor)
+
+    Returns
+    -------
+    attr_dict           (dict) dictionary of reconstruction parameters in their native units
+
+    """
+
+    ps = reconstructor.ps
+    if ps:
+        ps = ps * magnification if magnification else ps
+
+    if isinstance(reconstructor, waveorder_microscopy):
+        attr_dict = {'phase_dimension': reconstructor.phase_deconv,
+                     'wavelength (nm)': np.round(reconstructor.lambda_illu * 1000 * reconstructor.n_media,1),
+                     'pad_z': reconstructor.pad_z,
+                     'n_objective_media': reconstructor.n_media,
+                     'bg_correction_option': reconstructor.bg_option,
+                     'objective_NA': reconstructor.NA_obj * reconstructor.n_media,
+                     'condenser_NA': reconstructor.NA_illu * reconstructor.n_media,
+                     'magnification': magnification,
+                     'swing': reconstructor.chi if reconstructor.N_channel == 4 else reconstructor.chi / 2 / np.pi,
+                     'pixel_size': ps}
+
+    elif isinstance(reconstructor, fluorescence_microscopy):
+        attr_dict = {'fluor_wavelength (nm)': list(reconstructor.lambda_emiss * reconstructor.n_media * 1000),
+                     'pad_z': reconstructor.pad_z,
+                     'n_objective_media': reconstructor.n_media,
+                     'objective_NA': reconstructor.NA_obj * reconstructor.n_media,
+                     'magnification': magnification,
+                     'pixel_size': ps}
+
+    else:
+        attr_dict = dict()
+
+    return attr_dict
+
 
 def load_bg(bg_path, height, width, ROI=None):
     """
@@ -17,7 +65,7 @@ def load_bg(bg_path, height, width, ROI=None):
     bg_data   : (ndarray) Array of background data w/ dimensions (N_channel, Y, X)
     """
 
-    bg_paths = glob.glob(os.path.join(bg_path,'*.tif'))
+    bg_paths = glob.glob(os.path.join(bg_path, '*.tif'))
     bg_paths.sort()
     bg_data = np.zeros([len(bg_paths), height, width])
 
@@ -32,7 +80,22 @@ def load_bg(bg_path, height, width, ROI=None):
 
     return bg_data
 
+
 def create_grid_from_coordinates(xy_coords, rows, columns):
+    """
+    Function to create a grid from XY-position coordinates.  Useful for generating HCS Zarr metadata.
+
+    Parameters
+    ----------
+    xy_coords:          (list) XY Stage position list in the order in which it was acquired: (X, Y) tuple.
+    rows:               (int) number of rows in the grid-like acquisition
+    columns:            (int) number of columns in the grid-like acquisition
+
+    Returns
+    -------
+    pos_index_grid      (array) A grid-like array mimicking the shape of the acquisition where the value in the array
+                                corresponds to the position index at that location.
+    """
 
     coords = dict()
     coords_list = []
@@ -57,6 +120,10 @@ def create_grid_from_coordinates(xy_coords, rows, columns):
             pos_index_grid[row, col] = keys[vals.index(list(grid[row, col]))]
 
     return pos_index_grid
+
+class MockEmitter:
+    def emit(self, value):
+        pass
 
 def get_unimodal_threshold(input_image):
     """Determines optimal unimodal threshold
