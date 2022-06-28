@@ -151,7 +151,14 @@ class MicromanagerOmeTiffReader(ReaderBase):
                     for p in range(len(self.mm_meta['Summary']['StagePositions'])):
                         pos = self._simplify_stage_position_beta(self.mm_meta['Summary']['StagePositions'][p])
                         self.stage_positions.append(pos)
-                # self.channel_names = 'Not Listed'
+
+                # MM beta versions sometimes don't have 'ChNames', so I'm wrapping in a try-except and setting the
+                # channel names to empty strings if it fails.
+                try:
+                    for ch in self.mm_meta['Summary']['ChNames']:
+                        self.channel_names.append(ch)
+                except:
+                    self.channel_names = self.mm_meta['Summary']['Channels']*[''] # empty strings
 
             elif mm_version == '1.4.22':
                 for ch in self.mm_meta['Summary']['ChNames']:
