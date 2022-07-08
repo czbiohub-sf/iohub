@@ -250,7 +250,10 @@ class ZarrConverter:
 
         for p in range(self.p):
             if self.p > 1:
-                name = self.summary_metadata['StagePositions'][p]['Label']
+                try:
+                    name = self.summary_metadata['StagePositions'][p]['Label']
+                except KeyError:
+                    name = ''
             else:
                 name = ''
             self.pos_names.append(name)
@@ -331,7 +334,6 @@ class ZarrConverter:
 
         chan_names = self._get_channel_names()
         self._get_position_names()
-
         for pos in range(self.p):
 
             clims = self.get_channel_clims(pos)
