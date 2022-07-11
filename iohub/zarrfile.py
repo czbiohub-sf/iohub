@@ -12,6 +12,7 @@ class ZarrReader(ReaderBase):
     """
 
     def __init__(self, zarrfile: str):
+        super().__init__()
 
         # zarr files (.zarr) are directories
         if not os.path.isdir(zarrfile):
@@ -311,8 +312,3 @@ class ZarrReader(ReaderBase):
 
     def get_num_positions(self) -> int:
         return self.positions
-
-    @property
-    def shape(self):
-        return self.frames, self.channels, self.slices, self.height, self.width
-

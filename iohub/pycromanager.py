@@ -10,6 +10,8 @@ class PycromanagerReader(ReaderBase):
     z_step_size = None
 
     def __init__(self, data_path: str):
+        super().__init__()
+
         """
 
         """

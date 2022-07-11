@@ -7,6 +7,7 @@ from waveorder.io.singlepagetiff import MicromanagerSequenceReader
 from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
 from waveorder.io.upti import UPTIReader
 from waveorder.io.zarrfile import ZarrReader
+from waveorder.io.pycromanager import PycromanagerReader
 import logging
 
 # replicate from aicsimageio logging mechanism
@@ -171,6 +172,18 @@ class WaveorderReader:
         int of number of positions
         """
         return self.reader.get_num_positions()
+
+    @property
+    def shape(self):
+        """
+        return the underlying data shape as a tuple
+
+        Returns
+        -------
+        tuple of (frames, slices, channels, height, width)
+
+        """
+        return self.frames, self.channels, self.slices, self.height, self.width
 
     @property
     def mm_meta(self):

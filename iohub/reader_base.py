@@ -4,15 +4,16 @@ import numpy as np
 
 class ReaderBase:
 
-    frames = None
-    channels = None
-    slices = None
-    height = None
-    width = None
-    mm_meta = None
-    stage_positions = None
-    z_step_size = None
-    channel_names = None
+    def __init__(self):
+        self.frames = None
+        self.channels = None
+        self.slices = None
+        self.height = None
+        self.width = None
+        self.mm_meta = None
+        self.stage_positions = None
+        self.z_step_size = None
+        self.channel_names = None
 
     @property
     def shape(self):

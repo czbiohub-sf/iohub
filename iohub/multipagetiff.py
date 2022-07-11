@@ -12,6 +12,8 @@ from waveorder.io.reader_base import ReaderBase
 class MicromanagerOmeTiffReader(ReaderBase):
 
     def __init__(self, folder: str, extract_data: bool = False):
+        super().__init__()
+
         """
         Parameters
         ----------
@@ -373,15 +375,3 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         """
         return self.positions
-
-    @property
-    def shape(self):
-        """
-        return the underlying data shape as a tuple
-
-        Returns
-        -------
-        (tuple) five elements of (frames, slices, channels, height, width)
-
-        """
-        return self.frames, self.channels, self.slices, self.height, self.width
