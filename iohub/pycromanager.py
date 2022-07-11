@@ -6,6 +6,9 @@ from pycromanager import Dataset
 
 class PycromanagerReader(ReaderBase):
 
+    stage_positions = None
+    z_step_size = None
+
     def __init__(self, data_path: str):
         """
 
@@ -24,7 +27,7 @@ class PycromanagerReader(ReaderBase):
         self.channel_names = list(self.dataset.get_channel_names())
 
     def get_num_positions(self) -> int:
-        return self.len(self._axes['position']) if 'position' in self._axes.keys() else 1
+        return len(self._axes['position']) if 'position' in self._axes.keys() else 1
 
     def get_image(self, p, t, c, z) -> np.ndarray:
         image = None
@@ -38,7 +41,15 @@ class PycromanagerReader(ReaderBase):
         # data is a Dask array
         data = self.dataset.as_array(axes=['position', 'time', 'channel', 'z'], position=position)
 
-        return data.to_zarr()
+        return data
 
     def get_array(self, position: int) -> np.ndarray:
         return np.asarray(self.get_zarr(position))
+
+    def get_image_metadata(self, p, t, c, z) -> dict:
+        metadata = None
+
+        if self.dataset.has_image(position=p, time=t, channel=c, z=z):
+            metadata = self.dataset.read_metadata(position=p, time=t, channel=c, z=z)
+
+        return metadata
