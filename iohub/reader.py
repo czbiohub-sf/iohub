@@ -54,52 +54,17 @@ class WaveorderReader:
         )
         self.log = logging.getLogger(__name__)
 
-        # catch if the user accidentally specifies one of the tiff files and not the parent folder
-        if data_type == 'ometiff':
-            if src.endswith('.tif'):
-                src = os.path.dirname(src)
-
-            if len(glob.glob(os.path.join(src, '*.tif'))) == 0:
-                raise FileNotFoundError('Specified folder does not contain any ome.tif files')
-
-        # Try to infer datatype
-        if not data_type:
-            try:
-                zarr.open(src, 'r')
+        # try to guess data type
+        if data_type is None:
+            if WaveorderReader._check_zarr_data_type(src):
                 data_type = 'zarr'
-            except:
-                if os.path.exists(src):
-                    if src.endswith('.tif'):
-                        src = os.path.dirname(src)
-
-                    files = glob.glob(os.path.join(src, '*.tif'))
-                    if len(files) == 0:
-
-                        sub_dirs = self._get_sub_dirs(src)
-                        if sub_dirs:
-                            path = os.path.join(src, sub_dirs[0])
-                            files = glob.glob(os.path.join(path, '*.tif'))
-                            if len(files) == 0:
-                                raise FileNotFoundError(f'No compatible data found under {src}')
-                            else:
-                                with tiff.TiffFile(os.path.join(path, files[0])) as tf:
-                                    if len(tf.pages) == 1 and tf.pages[0].is_multipage.name == 'UNDEFINED':
-                                        data_type = 'singlepagetiff'
-
-                        else:
-                            raise FileNotFoundError(f'No compatible data found under {src}, please specify the top '
-                                                    'level micromanager directory')
-                    else:
-                        with tiff.TiffFile(files[0]) as tf:
-                            if len(tf.pages) > 1:
-                                data_type = 'ometiff'
-                            else:
-                                if tf.pages[0].is_multipage == 0 and tf.is_ome == True:
-                                    data_type = 'ometiff'
-                                else:
-                                    raise FileNotFoundError(f'No compatible data found under {src}')
-                else:
-                    raise FileExistsError(f'{src} does not exist')
+            elif WaveorderReader._check_multipage_tiff(src):
+                data_type = 'ometiff'
+            elif WaveorderReader._check_single_page_tiff(src):
+                data_type = 'singlepagetiff'
+            else:
+                raise FileNotFoundError(f'No compatible data found under {src}, please specify the top '
+                                        'level micromanager directory.')
 
         # identify data structure type
         if data_type == 'ometiff':
@@ -111,9 +76,51 @@ class WaveorderReader:
         elif data_type == 'upti':
             self.reader = UPTIReader(src, extract_data)
         else:
-            raise NotImplementedError(f"reader of type {data_type} is not implemented")
+            raise NotImplementedError(f"Reader of type {data_type} is not implemented")
 
-    def _get_sub_dirs(self, f):
+    @staticmethod
+    def _check_zarr_data_type(src):
+        try:
+            zarr.open(src, 'r')
+        except:
+            return False
+        return True
+
+    @staticmethod
+    def _check_single_page_tiff(src):
+        # pick parent directory in case a .tif file is selected
+        if src.endswith('.tif'):
+            src = os.path.dirname(src)
+
+        files = glob.glob(os.path.join(src, '*.tif'))
+        if len(files) == 0:
+            sub_dirs = WaveorderReader._get_sub_dirs(src)
+            if sub_dirs:
+                path = os.path.join(src, sub_dirs[0])
+                files = glob.glob(os.path.join(path, '*.tif'))
+                if len(files) > 0:
+                    with tiff.TiffFile(os.path.join(path, files[0])) as tf:
+                        if len(tf.pages) == 1 and tf.pages[0].is_multipage.name == 'UNDEFINED':
+                            return True
+        return False
+
+    @staticmethod
+    def _check_multipage_tiff(src):
+        # pick parent directory in case a .tif file is selected
+        if src.endswith('.tif'):
+            src = os.path.dirname(src)
+
+        files = glob.glob(os.path.join(src, '*.tif'))
+        if len(files) > 0:
+            with tiff.TiffFile(files[0]) as tf:
+                if len(tf.pages) > 1:
+                    return True
+                elif tf.pages[0].is_multipage == 0 and tf.is_ome == True:
+                    return True
+        return False
+
+    @staticmethod
+    def _get_sub_dirs(f):
         """
         subdir walk
         from https://github.com/mehta-lab/reconstruct-order
