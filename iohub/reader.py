@@ -62,6 +62,8 @@ class WaveorderReader:
                 data_type = 'ometiff'
             elif WaveorderReader._check_single_page_tiff(src):
                 data_type = 'singlepagetiff'
+            elif WaveorderReader._check_pycromanager(src):
+                data_type = 'pycromanager'
             else:
                 raise FileNotFoundError(f'No compatible data found under {src}, please specify the top '
                                         'level micromanager directory.')
@@ -73,6 +75,8 @@ class WaveorderReader:
             self.reader = MicromanagerSequenceReader(src, extract_data)
         elif data_type == 'zarr':
             self.reader = ZarrReader(src)
+        elif data_type == 'pycromanager':
+            self.reader = PycromanagerReader(src)
         elif data_type == 'upti':
             self.reader = UPTIReader(src, extract_data)
         else:
@@ -117,6 +121,17 @@ class WaveorderReader:
                     return True
                 elif tf.pages[0].is_multipage == 0 and tf.is_ome == True:
                     return True
+        return False
+
+    @staticmethod
+    def _check_pycromanager(src):
+        # go two levels up in case a .tif file is selected
+        if src.endswith('.tif'):
+            src = os.path.abspath(os.path.join(src, '../..'))
+
+        # shortcut, may not be foolproof
+        if os.path.exists(os.path.join(src, 'Full resolution/NDTiff.index')):
+            return True
         return False
 
     @staticmethod
