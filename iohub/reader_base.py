@@ -1,7 +1,17 @@
 import zarr
 import numpy as np
 
+
 class ReaderBase:
+
+    frames = None
+    channels = None
+    slices = None
+    height = None
+    width = None
+    mm_meta = None
+    stage_positions = None
+    z_step_size = None
 
     def get_zarr(self, position: int) -> zarr.array:
         pass
