@@ -12,6 +12,11 @@ class ReaderBase:
     mm_meta = None
     stage_positions = None
     z_step_size = None
+    channel_names = None
+
+    @property
+    def shape(self):
+        return self.frames, self.channels, self.slices, self.height, self.width
 
     def get_zarr(self, position: int) -> zarr.array:
         pass
