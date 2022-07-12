@@ -25,6 +25,7 @@ class PycromanagerReader(ReaderBase):
         self.slices = len(self._axes['z']) if 'z' in self._axes.keys() else 1
         self.height = self.dataset.image_height
         self.width = self.dataset.image_width
+        self.dtype = self.dataset.dtype
         self.mm_meta = {'Summary': self.dataset.summary_metadata}
 
         self.channel_names = list(self.dataset.get_channel_names())

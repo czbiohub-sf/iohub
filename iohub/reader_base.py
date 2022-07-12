@@ -10,6 +10,7 @@ class ReaderBase:
         self.slices = None
         self.height = None
         self.width = None
+        self.dtype = None
         self.mm_meta = None
         self.stage_positions = None
         self.z_step_size = None

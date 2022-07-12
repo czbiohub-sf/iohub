@@ -208,6 +208,10 @@ class WaveorderReader:
         return self.frames, self.channels, self.slices, self.height, self.width
 
     @property
+    def dtype(self):
+        return self.reader.dtype
+
+    @property
     def mm_meta(self):
         return self.reader.mm_meta
 
