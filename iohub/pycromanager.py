@@ -13,6 +13,7 @@ class PycromanagerReader(ReaderBase):
         super().__init__()
 
         """
+        Reader for data acquired with pycromanager, effectively a wrapper of the pycromanager.Dataset class
 
         """
 
@@ -24,7 +25,7 @@ class PycromanagerReader(ReaderBase):
         self.slices = len(self._axes['z']) if 'z' in self._axes.keys() else 1
         self.height = self.dataset.image_height
         self.width = self.dataset.image_width
-        self.mm_meta = self.dataset.summary_metadata
+        self.mm_meta = {'Summary': self.dataset.summary_metadata}
 
         self.channel_names = list(self.dataset.get_channel_names())
 
