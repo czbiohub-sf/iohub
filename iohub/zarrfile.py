@@ -149,31 +149,32 @@ class ZarrReader(ReaderBase):
 
         """
         self.mm_meta = self.store.attrs.get('Summary')
-
         mm_version = self.mm_meta['MicroManagerVersion']
-        if 'beta' in mm_version:
-            if self.mm_meta['Positions'] > 1:
-                self.stage_positions = []
 
-                for p in range(len(self.mm_meta['StagePositions'])):
-                    pos = self._simplify_stage_position_beta(self.mm_meta['StagePositions'][p])
-                    self.stage_positions.append(pos)
+        if mm_version != 'pycromanager':
+            if 'beta' in mm_version:
+                if self.mm_meta['Positions'] > 1:
+                    self.stage_positions = []
 
-        # elif mm_version == '1.4.22':
-        #     for ch in self.mm_meta['ChNames']:
-        #         self.channel_names.append(ch)
-        else:
-            if self.mm_meta['Positions'] > 1:
-                self.stage_positions = []
+                    for p in range(len(self.mm_meta['StagePositions'])):
+                        pos = self._simplify_stage_position_beta(self.mm_meta['StagePositions'][p])
+                        self.stage_positions.append(pos)
 
-                for p in range(self.mm_meta['Positions']):
-                    pos = self._simplify_stage_position(self.mm_meta['StagePositions'][p])
-                    self.stage_positions.append(pos)
+            # elif mm_version == '1.4.22':
+            #     for ch in self.mm_meta['ChNames']:
+            #         self.channel_names.append(ch)
+            else:
+                if self.mm_meta['Positions'] > 1:
+                    self.stage_positions = []
 
-            # for ch in self.mm_meta['ChNames']:
-            #     self.channel_names.append(ch)
+                    for p in range(self.mm_meta['Positions']):
+                        pos = self._simplify_stage_position(self.mm_meta['StagePositions'][p])
+                        self.stage_positions.append(pos)
 
-        self.z_step_size = self.mm_meta['z-step_um']
+                # for ch in self.mm_meta['ChNames']:
+                #     self.channel_names.append(ch)
+
+            self.z_step_size = self.mm_meta['z-step_um']
 
     def _get_channel_names(self):
 

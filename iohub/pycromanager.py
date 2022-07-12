@@ -26,9 +26,18 @@ class PycromanagerReader(ReaderBase):
         self.height = self.dataset.image_height
         self.width = self.dataset.image_width
         self.dtype = self.dataset.dtype
-        self.mm_meta = {'Summary': self.dataset.summary_metadata}
 
+        self.mm_meta = self._set_summary_metadata()
         self.channel_names = list(self.dataset.get_channel_names())
+
+    def _set_summary_metadata(self):
+        pm_metadata = self.dataset.summary_metadata
+        pm_metadata['MicroManagerVersion'] = 'pycromanager'
+        pm_metadata['Positions'] = None
+        pm_metadata['StagePositions'] = None
+        pm_metadata['z-step_um'] = None
+
+        self.mm_meta = {'Summary': pm_metadata}
 
     def get_num_positions(self) -> int:
         return len(self._axes['position']) if 'position' in self._axes.keys() else 1
