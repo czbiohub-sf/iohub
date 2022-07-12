@@ -58,12 +58,12 @@ class WaveorderReader:
         if data_type is None:
             if WaveorderReader._check_zarr_data_type(src):
                 data_type = 'zarr'
+            elif WaveorderReader._check_pycromanager(src):
+                data_type = 'pycromanager'
             elif WaveorderReader._check_multipage_tiff(src):
                 data_type = 'ometiff'
             elif WaveorderReader._check_single_page_tiff(src):
                 data_type = 'singlepagetiff'
-            elif WaveorderReader._check_pycromanager(src):
-                data_type = 'pycromanager'
             else:
                 raise FileNotFoundError(f'No compatible data found under {src}, please specify the top '
                                         'level micromanager directory.')
