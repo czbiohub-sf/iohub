@@ -174,7 +174,7 @@ class ZarrReader(ReaderBase):
                 # for ch in self.mm_meta['ChNames']:
                 #     self.channel_names.append(ch)
 
-            self.z_step_size = self.mm_meta['z-step_um']
+        self.z_step_size = self.mm_meta['z-step_um']
 
     def _get_channel_names(self):
 
