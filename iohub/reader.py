@@ -105,7 +105,7 @@ class WaveorderReader:
                 files = glob.glob(os.path.join(path, '*.tif'))
                 if len(files) > 0:
                     with tiff.TiffFile(os.path.join(path, files[0])) as tf:
-                        if len(tf.pages) == 1 and tf.pages[0].is_multipage is False:
+                        if len(tf.pages) == 1:  # and tf.pages[0].is_multipage is False:
                             return True
         return False
 
@@ -120,7 +120,7 @@ class WaveorderReader:
             with tiff.TiffFile(files[0]) as tf:
                 if len(tf.pages) > 1:
                     return True
-                elif tf.pages[0].is_multipage is False and tf.is_ome is True:
+                elif tf.is_multipage is False and tf.is_ome is True:
                     return True
         return False
 
