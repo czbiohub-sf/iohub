@@ -67,6 +67,7 @@ class WaveorderReader:
             else:
                 raise FileNotFoundError(f'No compatible data found under {src}, please specify the top '
                                         'level micromanager directory.')
+        self.data_type = data_type
 
         # identify data structure type
         if data_type == 'ometiff':
