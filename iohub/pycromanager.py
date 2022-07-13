@@ -29,10 +29,10 @@ class PycromanagerReader(ReaderBase):
         self.width = self.dataset.image_width
         self.dtype = self.dataset.dtype
 
-        self.mm_meta = self._set_summary_metadata()
+        self.mm_meta = self._get_summary_metadata()
         self.channel_names = list(self.dataset.get_channel_names())
 
-    def _set_summary_metadata(self):
+    def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
         pm_metadata['MicroManagerVersion'] = 'pycromanager'
         pm_metadata['Positions'] = self.get_num_positions()
@@ -42,16 +42,17 @@ class PycromanagerReader(ReaderBase):
         pm_metadata['StagePositions'] = []
 
         if 'ZPosition_um_Intended' in img_metadata.keys():
-            pm_metadata['z-step_um'] = abs(self.get_image_metadata(0, 0, 0, 1)['ZPosition_um_Intended'] -
-                                           self.get_image_metadata(0, 0, 0, 0)['ZPosition_um_Intended'])
+            pm_metadata['z-step_um'] = np.around(abs(self.get_image_metadata(0, 0, 0, 1)['ZPosition_um_Intended'] -
+                                                     self.get_image_metadata(0, 0, 0, 0)['ZPosition_um_Intended']),
+                                                 decimals=3)
 
         if 'XPosition_um_Intended' in img_metadata.keys():
             for p in range(self.get_num_positions()):
                 img_metadata = self.get_image_metadata(p, 0, 0, 0)
-                pm_metadata['StagePositions'].append([img_metadata['XPosition_um_Intended'],
-                                                      img_metadata['YPosition_um_Intended']])
+                pm_metadata['StagePositions'].append({img_metadata['Core-XYStage']: (img_metadata['XPosition_um_Intended'],
+                                                                                     img_metadata['YPosition_um_Intended'])})
 
-        self.mm_meta = {'Summary': pm_metadata}
+        return {'Summary': pm_metadata}
 
     def get_num_positions(self) -> int:
         return len(self._axes['position']) if 'position' in self._axes.keys() else 1
