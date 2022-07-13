@@ -1,4 +1,5 @@
 import pytest
+import os
 import zarr
 import numpy as np
 from waveorder.io.writer import WaveorderWriter
@@ -13,7 +14,7 @@ def test_constructor(setup_folder):
 
     """
     folder = setup_folder
-    writer_def = WaveorderWriter(folder+'/Test', hcs=False, hcs_meta=None, verbose=False)
+    writer_def = WaveorderWriter(os.path.join(folder, 'Test'), hcs=False, hcs_meta=None, verbose=False)
 
     assert(isinstance(writer_def.sub_writer, DefaultZarr))
     assert(isinstance(writer_def.sub_writer, WriterBase))
@@ -34,12 +35,12 @@ def test_constructor_existing(setup_folder):
 
     folder = setup_folder
 
-    writer = WaveorderWriter(folder + '/Test')
+    writer = WaveorderWriter(os.path.join(folder, 'Test'))
     writer.create_zarr_root('existing.zarr')
 
-    writer_existing = WaveorderWriter(folder+'/Test/existing.zarr')
+    writer_existing = WaveorderWriter(os.path.join(folder, 'Test/existing.zarr'))
 
-    assert(writer_existing.sub_writer.root_path == folder+'/Test/existing.zarr')
+    assert(writer_existing.sub_writer.root_path == os.path.join(folder, 'Test/existing.zarr'))
     assert(writer_existing.sub_writer.store is not None)
 
 def test_create_functions(setup_folder):
@@ -57,11 +58,11 @@ def test_create_functions(setup_folder):
     """
 
     folder = setup_folder
-    writer = WaveorderWriter(folder+'/Test', hcs=False, hcs_meta=None, verbose=False)
+    writer = WaveorderWriter(os.path.join(folder, 'Test'), hcs=False, hcs_meta=None, verbose=False)
 
     writer.create_zarr_root('test_zarr_root')
 
-    assert(writer.sub_writer.root_path == folder+'/Test/test_zarr_root.zarr')
+    assert(writer.sub_writer.root_path == os.path.join(folder, 'Test', 'test_zarr_root.zarr'))
     assert(writer.sub_writer.store is not None)
     assert(isinstance(writer.sub_writer.store['Row_0'], zarr.Group))
 
@@ -93,7 +94,7 @@ def test_init_array(setup_folder):
     """
 
     folder = setup_folder
-    writer = WaveorderWriter(folder+'/Test', hcs=False, hcs_meta=None, verbose=False)
+    writer = WaveorderWriter(os.path.join(folder, 'Test'), hcs=False, hcs_meta=None, verbose=False)
     writer.create_zarr_root('test_zarr_root')
 
     data_shape = (3, 3, 21, 128, 128) # T, C, Z, Y, X
@@ -165,7 +166,7 @@ def test_write(setup_folder):
     """
 
     folder = setup_folder
-    writer = WaveorderWriter(folder+'/Test', hcs=False, hcs_meta=None, verbose=False)
+    writer = WaveorderWriter(os.path.join(folder, 'Test'), hcs=False, hcs_meta=None, verbose=False)
     writer.create_zarr_root('test_zarr_root')
 
     data = np.random.randint(1, 60000, size=(3, 3, 11, 128, 128), dtype='uint16')
