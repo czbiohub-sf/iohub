@@ -38,9 +38,9 @@ def test_constructor_existing(setup_folder):
     writer = WaveorderWriter(os.path.join(folder, 'Test'))
     writer.create_zarr_root('existing.zarr')
 
-    writer_existing = WaveorderWriter(os.path.join(folder, 'Test/existing.zarr'))
+    writer_existing = WaveorderWriter(os.path.join(folder, 'Test', 'existing.zarr'))
 
-    assert(writer_existing.sub_writer.root_path == os.path.join(folder, 'Test/existing.zarr'))
+    assert(writer_existing.sub_writer.root_path == os.path.join(folder, 'Test', 'existing.zarr'))
     assert(writer_existing.sub_writer.store is not None)
 
 def test_create_functions(setup_folder):
