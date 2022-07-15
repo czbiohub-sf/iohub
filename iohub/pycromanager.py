@@ -1,5 +1,4 @@
 import warnings
-
 import numpy as np
 import zarr
 from waveorder.io.reader_base import ReaderBase
@@ -7,9 +6,6 @@ from pycromanager import Dataset
 
 
 class PycromanagerReader(ReaderBase):
-
-    stage_positions = None
-    z_step_size = None
 
     def __init__(self, data_path: str):
         super().__init__()
@@ -31,6 +27,8 @@ class PycromanagerReader(ReaderBase):
 
         self.mm_meta = self._get_summary_metadata()
         self.channel_names = list(self.dataset.get_channel_names())
+        self.stage_positions = self.mm_meta['Summary']['StagePositions']
+        self.z_step_size = self.mm_meta['Summary']['z-step_um']
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
@@ -49,18 +47,46 @@ class PycromanagerReader(ReaderBase):
         if 'XPosition_um_Intended' in img_metadata.keys():
             for p in range(self.get_num_positions()):
                 img_metadata = self.get_image_metadata(p, 0, 0, 0)
-                pm_metadata['StagePositions'].append({img_metadata['Core-XYStage']: (img_metadata['XPosition_um_Intended'],
-                                                                                     img_metadata['YPosition_um_Intended'])})
+                pm_metadata['StagePositions'].append(
+                    {img_metadata['Core-XYStage']: (img_metadata['XPosition_um_Intended'],
+                                                    img_metadata['YPosition_um_Intended'])})
 
         return {'Summary': pm_metadata}
+
+    def _check_coordinates(self, p, t, c, z):
+        if p == 0 and 'position' not in self._axes.keys():
+            p = None
+        if t == 0 and 'time' not in self._axes.keys():
+            t = None
+        if c == 0 and 'channel' not in self._axes.keys():
+            c = None
+        if z == 0 and 'z' not in self._axes.keys():
+            z = None
+
+        return p, t, c, z
 
     def get_num_positions(self) -> int:
         return len(self._axes['position']) if 'position' in self._axes.keys() else 1
 
     def get_image(self, p, t, c, z) -> np.ndarray:
+        """
+        return the image at the provided PTCZ coordinates
+
+        Parameters
+        ----------
+        p:              (int) position index
+        t:              (int) time index
+        c:              (int) channel index
+        z:              (int) slice/z index
+
+        Returns
+        -------
+        image:          (np-array) numpy array of shape (Y, X) at given coordinate
+
+        """
+
         image = None
-        if 'position' not in self._axes.keys():
-            p = None
+        p, t, c, z = self._check_coordinates(p, t, c, z)
 
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
             image = self.dataset.read_image(position=p, time=t, channel=c, z=z)
@@ -68,23 +94,75 @@ class PycromanagerReader(ReaderBase):
         return image
 
     def get_zarr(self, position: int) -> zarr.array:
+        """
+        return a lazy-loaded dask array with shape TCZYX at the given position.
+        Data is not loaded into memory.
+
+        Note: The behavior of this function is different from other WaveorderReaders
+         as it return a Dask array rather than a zarr array.
+
+        # TODO: try casting the dask array into a zarr array using dask.array.to_zarr().
+        # Currently this call brings the data into memory
+
+        Parameters
+        ----------
+        position:       (int) position index
+
+        Returns
+        -------
+        position:       (zarr.array)
+
+        """
+
+        ax = [ax_ for ax_ in ['position', 'time', 'channel', 'z'] if ax_ in self._axes]
+
         if 'position' in self._axes.keys():
-            data = self.dataset.as_array(axes=['position', 'time', 'channel', 'z'], position=position)
+            # da is Dask array
+            da = self.dataset.as_array(axes=ax, position=position)
         else:
             if position not in (0, None):
-                warnings.warn('Position index is not part of this dataset. Returning data at default position.')
-            data = self.dataset.as_array(axes=['time', 'channel', 'z'])
+                warnings.warn(f'Position index {position} is not part of this dataset.'
+                              f' Returning data at default position.')
+            da = self.dataset.as_array(axes=ax)
 
-        # data is a Dask array
-        return data
+        shape = (self.frames, self.channels, self.slices, self.height, self.width)
+
+        return da.reshape(shape)
 
     def get_array(self, position: int) -> np.ndarray:
+        """
+        return a numpy array with shape TCZYX at the given position
+
+        Parameters
+        ----------
+        position:       (int) position index
+
+        Returns
+        -------
+        position:       (np.ndarray)
+
+        """
+
         return np.asarray(self.get_zarr(position))
 
     def get_image_metadata(self, p, t, c, z) -> dict:
+        """
+        return image plane metadata at the requested PTCZ coordinates
+
+        Parameters
+        ----------
+        p:              (int) position index
+        t:              (int) time index
+        c:              (int) channel index
+        z:              (int) slice/z index
+
+        Returns
+        -------
+        metadata:       (dict) image plane metadata dictionary
+
+        """
         metadata = None
-        if 'position' not in self._axes.keys():
-            p = None
+        p, t, c, z = self._check_coordinates(p, t, c, z)
 
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
             metadata = self.dataset.read_metadata(position=p, time=t, channel=c, z=z)

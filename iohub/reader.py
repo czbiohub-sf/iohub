@@ -131,7 +131,7 @@ class WaveorderReader:
             src = os.path.abspath(os.path.join(src, '../..'))
 
         # shortcut, may not be foolproof
-        if os.path.exists(os.path.join(src, 'Full resolution/NDTiff.index')):
+        if os.path.exists(os.path.join(src, 'Full resolution', 'NDTiff.index')):
             return True
         return False
 
