@@ -42,7 +42,7 @@ class PycromanagerReader(ReaderBase):
         if 'ZPosition_um_Intended' in img_metadata.keys():
             pm_metadata['z-step_um'] = np.around(abs(self.get_image_metadata(0, 0, 0, 1)['ZPosition_um_Intended'] -
                                                      self.get_image_metadata(0, 0, 0, 0)['ZPosition_um_Intended']),
-                                                 decimals=3)
+                                                 decimals=3).astype(float)
 
         if 'XPosition_um_Intended' in img_metadata.keys():
             for p in range(self.get_num_positions()):
