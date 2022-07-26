@@ -1,9 +1,11 @@
 import pytest
+import dask.array
 import zarr
 import numpy as np
 from waveorder.io.reader import WaveorderReader
 from waveorder.io.singlepagetiff import MicromanagerSequenceReader
 from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
+from waveorder.io.pycromanager import PycromanagerReader
 
 # todo: consider tests for handling ometiff when singlepagetifff is specified (or vice versa)
 # todo: consider tests for handling of positions when extract_data is True and False.
@@ -22,6 +24,8 @@ def test_datatype(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 # ===== test mm2gamma =========== #
+
+# test ometiff reader
 def test_ometiff_constructor_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
 
     fold = setup_test_data
@@ -34,13 +38,15 @@ def test_ometiff_constructor_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs)
 
     assert(mmr.mm_meta is not None)
     assert(mmr.stage_positions is not None)
-    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
     assert(mmr.slices is not 0)
     assert(mmr.channels is not 0)
-    assert(mmr.channel_names is not None)
+    if mmr.channels > 1:
+        assert(mmr.channel_names is not None)
+    if mmr.slices > 1:
+        assert(mmr.z_step_size is not None)
 
 
 def test_ometiff_zarr_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
@@ -72,7 +78,7 @@ def test_ometiff_array_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
         assert(isinstance(z, np.ndarray))
 
 
-# test sequence constructor
+# test sequence reader
 def test_sequence_constructor_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):
 
     fold = setup_test_data
@@ -83,12 +89,15 @@ def test_sequence_constructor_mm2gamma(setup_test_data, setup_mm2gamma_singlepag
     assert(isinstance(mmr.reader, MicromanagerSequenceReader))
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
     assert(mmr.slices is not 0)
     assert(mmr.channels is not 0)
+    if mmr.channels > 1:
+        assert(mmr.channel_names is not None)
+    if mmr.slices > 1:
+        assert(mmr.z_step_size is not None)
 
 
 def test_sequence_zarr_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):
@@ -118,6 +127,55 @@ def test_sequence_array_zarr_mm2gamma(setup_test_data, setup_mm2gamma_singlepage
         assert(z.shape == mmr.shape)
         assert(isinstance(z, np.ndarray))
 
+# test pycromanager reader
+def test_pycromanager_constructor(setup_test_data, setup_pycromanager_test_data):
+
+    fold = setup_test_data
+    # choose a specific folder
+    first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
+    mmr = WaveorderReader(rand_dir,
+                          extract_data=False)
+
+    assert (isinstance(mmr.reader, PycromanagerReader))
+
+    assert(mmr.mm_meta is not None)
+    assert(mmr.width is not 0)
+    assert(mmr.height is not 0)
+    assert(mmr.frames is not 0)
+    assert(mmr.slices is not 0)
+    assert(mmr.channels is not 0)
+    assert(mmr.stage_positions is not None)
+    if mmr.channels > 1:
+        assert(mmr.channel_names is not None)
+    if mmr.slices > 1:
+        assert(mmr.z_step_size is not None)
+
+
+def test_pycromanager_get_zarr(setup_test_data, setup_pycromanager_test_data):
+
+    fold = setup_test_data
+    first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
+    mmr = WaveorderReader(rand_dir)
+    assert (isinstance(mmr.reader, PycromanagerReader))
+
+    for i in range(mmr.get_num_positions()):
+        z = mmr.get_zarr(i)
+        assert (z.shape == mmr.shape)
+        assert(isinstance(z, dask.array.Array))
+
+
+def test_pycromanager_get_array(setup_test_data, setup_pycromanager_test_data):
+
+    fold = setup_test_data
+    first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
+    mmr = WaveorderReader(rand_dir)
+    assert (isinstance(mmr.reader, PycromanagerReader))
+
+    for i in range(mmr.get_num_positions()):
+        z = mmr.get_array(i)
+        assert (z.shape == mmr.shape)
+        assert(isinstance(z, np.ndarray))
+
 
 # ===== test mm1.4.22  =========== #
 def test_ometiff_constructor_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
@@ -132,13 +190,16 @@ def test_ometiff_constructor_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 
     assert(mmr.mm_meta is not None)
     assert(mmr.stage_positions is not None)
-    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
     assert(mmr.slices is not 0)
     assert(mmr.channels is not 0)
-    assert(mmr.channel_names is not None)
+    if mmr.channels > 1:
+        assert(mmr.channel_names is not None)
+    if mmr.slices > 1:
+        assert(mmr.z_step_size is not None)
+
 
 
 def test_ometiff_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
@@ -182,12 +243,16 @@ def test_sequence_constructor_mm1422(setup_test_data, setup_mm1422_singlepage_ti
     assert (isinstance(mmr.reader, MicromanagerSequenceReader))
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.z_step_size is not None)
     assert(mmr.width is not 0)
     assert(mmr.height is not 0)
     assert(mmr.frames is not 0)
     assert(mmr.slices is not 0)
     assert(mmr.channels is not 0)
+    if mmr.channels > 1:
+        assert(mmr.channel_names is not None)
+    if mmr.slices > 1:
+        assert(mmr.z_step_size is not None)
+
 
 
 def test_sequence_zarr_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
