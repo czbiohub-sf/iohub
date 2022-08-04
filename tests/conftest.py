@@ -28,22 +28,6 @@ MM2GAMMA_OMETIFF_SUBFOLDERS = \
 join = os.path.join
 
 
-@pytest.fixture(scope='function')
-def setup_folder():
-    temp_folder = join(os.getcwd(), 'pytest_temp')
-    if not os.path.isdir(temp_folder):
-        os.mkdir(temp_folder)
-        print("\nsetting up temp folder")
-
-    yield temp_folder
-
-    try:
-        # remove temp folder
-        shutil.rmtree(temp_folder)
-    except OSError as e:
-        print(f"Error while deleting temp folder: {e.strerror}")
-
-
 @pytest.fixture(scope="session")
 def setup_test_data():
 
@@ -56,25 +40,38 @@ def setup_test_data():
         os.mkdir(test_data)
 
     # Zenodo URL
-    url = 'https://zenodo.org/record/6249285/files/waveOrder_testData.zip?download=1'
+    url = 'https://zenodo.org/record/6941042/files/waveOrder_test_data.zip?download=1'
 
     # download files to temp folder
-    # output = join(test_data, "waveOrder_testData.zip")
-    # download(url, out=output)
     output = join(test_data, "waveOrder_test_data.zip")
-    shutil.unpack_archive(r'C:\Users\labelfree\Documents\waveOrder_test_data.zip', extract_dir=test_data)
+    download(url, out=output)
+    shutil.unpack_archive(output, extract_dir=test_data)
 
     yield test_data
 
     # breakdown files
     try:
         # remove zip file
-        # TODO: Uncomment when finished
-        # os.remove(output)
+        os.remove(output)
 
         # remove unzipped folder
         shutil.rmtree(test_data)
 
+        # remove temp folder
+        shutil.rmtree(temp_folder)
+    except OSError as e:
+        print(f"Error while deleting temp folder: {e.strerror}")
+
+@pytest.fixture(scope='function')
+def setup_writer_folder():
+    temp_folder = join(os.getcwd(), 'pytest_temp', 'writer_temp')
+    if not os.path.isdir(temp_folder):
+        os.mkdir(temp_folder)
+        print("\nsetting up temp folder")
+
+    yield temp_folder
+
+    try:
         # remove temp folder
         shutil.rmtree(temp_folder)
     except OSError as e:

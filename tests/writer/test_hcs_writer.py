@@ -55,7 +55,7 @@ hcs_meta = {'plate': {
              {'images': [{'path': 'FOV1'}, {'path': 'FOV2'}]}]
 }
 
-def test_constructor(setup_folder):
+def test_constructor(setup_writer_folder):
     """
     Test that constructor finds correct save directory
 
@@ -63,13 +63,13 @@ def test_constructor(setup_folder):
     -------
 
     """
-    folder = setup_folder
+    folder = setup_writer_folder
     writer_def = WaveorderWriter(os.path.join(folder, 'Test'), hcs=True, hcs_meta=hcs_meta, verbose=False)
 
     assert(isinstance(writer_def.sub_writer, HCSZarr))
     assert(isinstance(writer_def.sub_writer, WriterBase))
 
-def test_create_functions(setup_folder):
+def test_create_functions(setup_writer_folder):
     """
     Test create root zarr, create position subfolders, and switching between
     position substores
@@ -83,7 +83,7 @@ def test_create_functions(setup_folder):
 
     """
 
-    folder = setup_folder
+    folder = setup_writer_folder
     writer = WaveorderWriter(os.path.join(folder, 'Test'), hcs=True, hcs_meta=hcs_meta, verbose=False)
 
     writer.create_zarr_root('test_zarr_root')
@@ -103,7 +103,7 @@ def test_create_functions(setup_folder):
                                                             'col': col["name"]})
                 cnt += 1
 
-def test_init_array(setup_folder):
+def test_init_array(setup_writer_folder):
     """
     Test the correct initialization of desired array and the associated
     metadata
@@ -117,7 +117,7 @@ def test_init_array(setup_folder):
 
     """
 
-    folder = setup_folder
+    folder = setup_writer_folder
     writer = WaveorderWriter(os.path.join(folder, 'Test'), hcs=True, hcs_meta=hcs_meta, verbose=False)
     writer.create_zarr_root('test_zarr_root')
 
@@ -174,7 +174,7 @@ def test_init_array(setup_folder):
         assert(meta['omero']['channels'][i]['window']['start'] == clims[i][0])
         assert(meta['omero']['channels'][i]['window']['end'] == clims[i][1])
 
-def test_write(setup_folder):
+def test_write(setup_writer_folder):
     """
     Test the write function of the writer
 
@@ -187,7 +187,7 @@ def test_write(setup_folder):
 
     """
 
-    folder = setup_folder
+    folder = setup_writer_folder
     writer = WaveorderWriter(os.path.join(folder, 'Test'), hcs=True, hcs_meta=hcs_meta, verbose=False)
     writer.create_zarr_root('test_zarr_root')
 
