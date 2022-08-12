@@ -34,7 +34,7 @@ setup(  name             = 'waveorder',
         long_description_content_type = 'text/markdown',
         packages         = packages,
         include_package_data = True,
-        python_requies   = '==3.7',
+        python_requires   = '>= 3.7',
         install_requires = requirements,
         classifiers = [
                 'Development Status :: 4 - Beta',
