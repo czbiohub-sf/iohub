@@ -40,23 +40,19 @@ def setup_test_data():
         os.mkdir(test_data)
 
     # Zenodo URL
-    url = 'https://zenodo.org/record/6941042/files/waveOrder_test_data.zip?download=1'
+    url = 'https://zenodo.org/record/6983916/files/waveOrder_test_data.zip?download=1'
 
     # download files to temp folder
     output = join(test_data, "waveOrder_test_data.zip")
-    download(url, out=output)
-    shutil.unpack_archive(output, extract_dir=test_data)
+    if not os.listdir(test_data):
+        print("Downloading test files...")
+        download(url, out=output)
+        shutil.unpack_archive(output, extract_dir=test_data)
 
     yield test_data
 
-    # breakdown files
+    # TODO: single page tiff don't clean up properly
     try:
-        # remove zip file
-        os.remove(output)
-
-        # remove unzipped folder
-        shutil.rmtree(test_data)
-
         # remove temp folder
         shutil.rmtree(temp_folder)
     except OSError as e:

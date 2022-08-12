@@ -177,7 +177,8 @@ class MicromanagerSequenceReader(ReaderBase):
         for c, fn in self.coord_to_filename.items():
             if c[0] == p:
                 self.log.info(f"reading coord = {c} from filename = {fn}")
-                z[c[1], c[2], c[3]] = zarr.open(tiff.imread(fn, aszarr=True))
+                with tiff.imread(fn, aszarr=True) as store:
+                    z[c[1], c[2], c[3]] = zarr.open(store)
 
         # check that the array was assigned
         if z == zarr.zeros(shape=(self.frames, self.channels, self.slices, self.height, self.width),
