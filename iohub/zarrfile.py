@@ -12,6 +12,7 @@ class ZarrReader(ReaderBase):
     """
 
     def __init__(self, zarrfile: str):
+        super().__init__()
 
         # zarr files (.zarr) are directories
         if not os.path.isdir(zarrfile):
@@ -148,29 +149,30 @@ class ZarrReader(ReaderBase):
 
         """
         self.mm_meta = self.store.attrs.get('Summary')
-
         mm_version = self.mm_meta['MicroManagerVersion']
-        if 'beta' in mm_version:
-            if self.mm_meta['Positions'] > 1:
-                self.stage_positions = []
 
-                for p in range(len(self.mm_meta['StagePositions'])):
-                    pos = self._simplify_stage_position_beta(self.mm_meta['StagePositions'][p])
-                    self.stage_positions.append(pos)
+        if mm_version != 'pycromanager':
+            if 'beta' in mm_version:
+                if self.mm_meta['Positions'] > 1:
+                    self.stage_positions = []
 
-        # elif mm_version == '1.4.22':
-        #     for ch in self.mm_meta['ChNames']:
-        #         self.channel_names.append(ch)
-        else:
-            if self.mm_meta['Positions'] > 1:
-                self.stage_positions = []
+                    for p in range(len(self.mm_meta['StagePositions'])):
+                        pos = self._simplify_stage_position_beta(self.mm_meta['StagePositions'][p])
+                        self.stage_positions.append(pos)
 
-                for p in range(self.mm_meta['Positions']):
-                    pos = self._simplify_stage_position(self.mm_meta['StagePositions'][p])
-                    self.stage_positions.append(pos)
+            # elif mm_version == '1.4.22':
+            #     for ch in self.mm_meta['ChNames']:
+            #         self.channel_names.append(ch)
+            else:
+                if self.mm_meta['Positions'] > 1:
+                    self.stage_positions = []
 
-            # for ch in self.mm_meta['ChNames']:
-            #     self.channel_names.append(ch)
+                    for p in range(self.mm_meta['Positions']):
+                        pos = self._simplify_stage_position(self.mm_meta['StagePositions'][p])
+                        self.stage_positions.append(pos)
+
+                # for ch in self.mm_meta['ChNames']:
+                #     self.channel_names.append(ch)
 
         self.z_step_size = self.mm_meta['z-step_um']
 
@@ -311,8 +313,3 @@ class ZarrReader(ReaderBase):
 
     def get_num_positions(self) -> int:
         return self.positions
-
-    @property
-    def shape(self):
-        return self.frames, self.channels, self.slices, self.height, self.width
-

@@ -42,7 +42,7 @@ class WriterBase:
         ----------
         data_shape:         (tuple)  Desired Shape of your data (T, C, Z, Y, X).  Must match data
         chunk_size:         (tuple) Desired Chunk Size (T, C, Z, Y, X).  Chunking each image would be (1, 1, 1, Y, X)
-        dtype:              (str or np.dtype) Data Type, i.e. 'uint16'
+        dtype:              (str or np.dtype) Data Type, i.e. 'uint16' or np.uint16
         chan_names:         (list) List of strings corresponding to your channel names.  Used for OME-zarr metadata
         clims:              (list) list of tuples corresponding to contrast limtis for channel.  OME-Zarr metadata
                                     tuple can be of (start, end, min, max) or (start, end)
@@ -53,12 +53,7 @@ class WriterBase:
 
         """
 
-        if isinstance(dtype, str):
-            self.dtype = np.dtype(dtype)
-        elif isinstance(dtype, np.dtype):
-            self.dtype = dtype
-        else:
-            raise TypeError('dtype must be instance of either np.dtype or str')
+        self.dtype = np.dtype(dtype)
 
         self.set_channel_attributes(chan_names, clims)
         self.current_pos_group.zeros('arr_0', shape=data_shape, chunks=chunk_size, dtype=dtype,

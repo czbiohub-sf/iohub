@@ -16,7 +16,8 @@ else:
                         'natsort>=7.1.1',
                         'opencv-python>=3.4.1',
                         'scipy>=1.3.0',
-                        'matplotlib>=3.1.1']
+                        'matplotlib>=3.1.1',
+                        'pycromanager>=0.13.2']
 
 dir_ = Path(__file__).parent
 with open(os.path.join(dir_, 'README.md')) as file:
