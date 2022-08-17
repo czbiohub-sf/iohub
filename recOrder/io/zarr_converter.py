@@ -6,9 +6,8 @@ from waveorder.io.writer import WaveorderWriter
 from waveorder.io.reader import WaveorderReader
 from recOrder.preproc.pre_processing import get_autocontrast_limits
 from recOrder.io.utils import create_grid_from_coordinates
-import glob
+import copy
 import json
-import warnings
 
 
 class ZarrConverter:
@@ -19,31 +18,41 @@ class ZarrConverter:
     for tiled acquisitions)
     """
 
-    def __init__(self, input, output, data_type=None, replace_position_names=False, format_hcs=False):
+    def __init__(self, input_dir, output_dir, data_type=None, replace_position_names=False, format_hcs=False):
+        """
+
+        Parameters
+        ----------
+        input_dir: str
+            Input directory
+        output_dir: str
+            Output directory
+        data_type: str
+            input data type, optional
+        replace_position_names: bool
+        format_hcs: bool
+        """
 
         # Add Initial Checks
-        if len(glob.glob(os.path.join(input, '*.tif'))) == 0:
-            raise ValueError('Specific input contains no .tif files, please specify a valid input directory')
-        if not output.endswith('.zarr'):
+        # if len(glob.glob(os.path.join(input, '*.tif'))) == 0:
+        #     raise ValueError('Specific input contains no .tif files, please specify a valid input directory')
+        if not output_dir.endswith('.zarr'):
             raise ValueError('Please specify .zarr at the end of your output')
-
-        # ignore tiffile warnings
-        # warnings.filterwarnings('ignore')
 
         # Init File IO Properties
         self.version = 'recOrder Converter version=0.4'
-        self.data_directory = input
-        self.save_directory = os.path.dirname(output)
-        self.files = glob.glob(os.path.join(self.data_directory, '*.tif'))
-        self.data_type = data_type
+        self.data_directory = input_dir
+        self.save_directory = os.path.dirname(output_dir)
+        # self.files = glob.glob(os.path.join(self.data_directory, '*.tif'))
         self.meta_file = None
 
         print('Initializing Data...')
         self.reader = WaveorderReader(self.data_directory, data_type, extract_data=False)
+        self.data_type = data_type  #Note: may be None, replace with self.reader.data_type after waveorder update
         print('Finished initializing data')
 
         self.summary_metadata = self.reader.mm_meta['Summary'] if self.reader.mm_meta else None
-        self.save_name = os.path.basename(output)
+        self.save_name = os.path.basename(output_dir)
         if self.data_type != 'upti':
             self.mfile_name = os.path.join(self.save_directory, f'{self.save_name.strip(".zarr")}_ImagePlaneMetadata.txt')
             self.meta_file = open(self.mfile_name, 'a')
@@ -63,7 +72,7 @@ class ZarrConverter:
         self.t_dim = None
         self.c_dim = None
         self.z_dim = None
-        self.dtype = self.reader.reader.dtype
+        self.dtype = self.reader.reader.dtype  #Note: replace with self.reader.dtype after waveorder update
         self.p = self.reader.get_num_positions()
         self.t = self.reader.frames
         self.c = self.reader.channels
@@ -74,6 +83,9 @@ class ZarrConverter:
         self.focus_z = self.z // 2
         self.prefix_list = []
         print(f'Found Dataset {self.save_name} w/ dimensions (P, T, C, Z, Y, X): {self.dim}')
+
+        # Generate coordinate set
+        self._gen_coordset()
 
         # Initialize Metadata Dictionary
         self.metadata = dict()
@@ -118,7 +130,7 @@ class ZarrConverter:
                        'channel': self.c,
                        'z': self.z}
 
-            self.dim_order = self.summary_metadata['AxisOrder']
+            self.dim_order = copy.copy(self.summary_metadata['AxisOrder'])
 
             dims = []
             for i in range(n_dim):
@@ -363,7 +375,6 @@ class ZarrConverter:
         # Run setup
         print('Running Conversion...')
         print('Setting up zarr')
-        self._gen_coordset()
         # self._gather_index_maps()
         self.init_zarr_structure()
         last_file = None
@@ -375,8 +386,6 @@ class ZarrConverter:
         # loop is done in order in which the images were acquired
         print('Converting Images...')
         for coord in tqdm(self.coords, bar_format=bar_format):
-
-
             if self.data_type == 'ometiff':
                 # re-order coordinates into zarr format
                 coord_reorder = (coord[self.p_dim],
@@ -408,7 +417,7 @@ class ZarrConverter:
             if not self._perform_image_check(img_raw, coord):
                 raise ValueError('Converted zarr image does not match the raw data. Conversion Failed')
 
-        # Put metadata into zarr store and cleanup
+        # Put summary metadata into zarr store and cleanup
         self.writer.store.attrs.update(self.metadata)
         if self.meta_file:
             self.meta_file.close()
