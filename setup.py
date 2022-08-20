@@ -24,7 +24,7 @@ with open(os.path.join(dir_, 'README.md')) as file:
         long_description = file.read()
 
 setup(  name             = 'waveorder',
-        version          = '1.0.0-beta',
+        version          = '1.1.0',
         description      = 'wave optical simulations and deconvolution of optical properties',
         author           = 'Computational Microscopy Platform, CZ Biohub',
         author_email     = 'shalin.mehta@czbiohub.org',
