@@ -67,12 +67,58 @@ def test_ometiff_converter_run(setup_data_save_folder, get_ometiff_data_dir):
                     cnt += 1
             tf.close()
 
-# def test_converter_upti():
-#
-#     input = '/Users/cameron.foltz/Desktop/Test_Data/upti/CM_FOV1/data'
-#     output = '/Users/cameron.foltz/Desktop/Test_Data/converter_test/CM_FOV1_upti.zarr'
-#     if os.path.exists(output):
-#         shutil.rmtree(output)
-#     data_type = 'upti'
-#     converter = ZarrConverter(input, output, data_type)
-#     converter.run_conversion()
+def test_pycromanager_converter_initialize(setup_data_save_folder, get_pycromanager_data_dir):
+
+    folder, pm_data = get_pycromanager_data_dir
+    save_folder = setup_data_save_folder
+
+    input = pm_data
+    output = os.path.join(save_folder, 'mm2.0-20210713_pm0.13.2_2p_3t_2c_7z_1.zarr')
+
+    if os.path.exists(output):
+        shutil.rmtree(output)
+
+    converter = ZarrConverter(input, output)
+
+    assert(isinstance(converter.reader, WaveorderReader))
+    assert(isinstance(converter.writer, WaveorderWriter))
+    assert converter.summary_metadata is not None
+
+    assert(converter.dim_order == ['position', 'time', 'channel', 'z'])
+    assert(converter.p_dim == 0)
+    assert(converter.t_dim == 1)
+    assert(converter.c_dim == 2)
+    assert(converter.z_dim == 3)
+    assert(converter.p == 2)
+    assert(converter.t == 3)
+    assert(converter.c == 2)
+    assert(converter.z == 7)
+
+def test_pycromanager_converter_run(setup_data_save_folder, get_pycromanager_data_dir):
+
+    folder, pm_data = get_pycromanager_data_dir
+    save_folder = setup_data_save_folder
+
+    input = pm_data
+    output = os.path.join(save_folder, 'mm2.0-20210713_pm0.13.2_2p_3t_2c_7z_1.zarr')
+
+    if os.path.exists(output):
+        shutil.rmtree(output)
+
+    converter = ZarrConverter(input, output)
+    wo_dataset = WaveorderReader(input)
+
+    converter.run_conversion()
+    zs = zarr.open(output, 'r')
+
+    assert(os.path.exists(os.path.join(save_folder, 'mm2.0-20210713_pm0.13.2_2p_3t_2c_7z_1_ImagePlaneMetadata.txt')))
+
+    cnt = 0
+    for t in range(3):
+        for p in range(2):
+            for c in range(2):
+                for z in range(7):
+                    image = zs['Row_0'][f'Col_{p}'][f'Pos_00{p}']['arr_0'][t, c, z]
+                    wo_image = wo_dataset.get_image(p, t, c, z)
+                    assert(np.array_equal(image, wo_image))
+                    cnt += 1

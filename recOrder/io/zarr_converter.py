@@ -33,14 +33,11 @@ class ZarrConverter:
         format_hcs: bool
         """
 
-        # Add Initial Checks
-        # if len(glob.glob(os.path.join(input, '*.tif'))) == 0:
-        #     raise ValueError('Specific input contains no .tif files, please specify a valid input directory')
         if not output_dir.endswith('.zarr'):
             raise ValueError('Please specify .zarr at the end of your output')
 
         # Init File IO Properties
-        self.version = 'recOrder Converter version=0.4'
+        self.version = 'recOrder converter version=0.5'
         self.data_directory = input_dir
         self.save_directory = os.path.dirname(output_dir)
         # self.files = glob.glob(os.path.join(self.data_directory, '*.tif'))
@@ -48,7 +45,7 @@ class ZarrConverter:
 
         print('Initializing Data...')
         self.reader = WaveorderReader(self.data_directory, data_type, extract_data=False)
-        self.data_type = data_type  #Note: may be None, replace with self.reader.data_type after waveorder update
+        self.data_type = self.reader.data_type
         print('Finished initializing data')
 
         self.summary_metadata = self.reader.mm_meta['Summary'] if self.reader.mm_meta else None
@@ -72,7 +69,7 @@ class ZarrConverter:
         self.t_dim = None
         self.c_dim = None
         self.z_dim = None
-        self.dtype = self.reader.reader.dtype  #Note: replace with self.reader.dtype after waveorder update
+        self.dtype = self.reader.dtype
         self.p = self.reader.get_num_positions()
         self.t = self.reader.frames
         self.c = self.reader.channels
@@ -407,6 +404,17 @@ class ZarrConverter:
                 meta[f'{coord_reorder}'] = plane_meta
 
                 json.dump(meta, self.meta_file, indent=1)
+            elif self.data_type == 'pycromanager':
+                # write page metadata
+                plane_metadata = self.reader.reader.get_image_metadata(coord[self.p_dim],
+                                                                       coord[self.t_dim],
+                                                                       coord[self.c_dim],
+                                                                       coord[self.z_dim])
+
+                json.dump({f'FrameKey-{coord[self.p_dim]}-{coord[self.t_dim]}-'
+                           f'{coord[self.c_dim]}-{coord[self.z_dim]}': plane_metadata},
+                          self.meta_file, indent=1)
+
             # get the memory mapped image
             img_raw = self.get_image_array(coord[self.p_dim], coord[self.t_dim], coord[self.c_dim], coord[self.z_dim])
 
