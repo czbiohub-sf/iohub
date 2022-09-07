@@ -51,13 +51,6 @@ def setup_test_data():
 
     yield test_data
 
-    # TODO: single page tiff don't clean up properly
-    try:
-        # remove temp folder
-        shutil.rmtree(temp_folder)
-    except OSError as e:
-        print(f"Error while deleting temp folder: {e.strerror}")
-
 @pytest.fixture(scope='function')
 def setup_writer_folder():
     temp_folder = join(os.getcwd(), 'pytest_temp', 'writer_temp')
