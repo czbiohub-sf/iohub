@@ -72,7 +72,7 @@ def load_bg(bg_path, height, width, ROI=None):
     for i in range(len(bg_paths)):
         img = tiff.imread(bg_paths[i])
 
-        if ROI is not None and ROI != (0, 0, height, width):
+        if ROI is not None and ROI != (0, 0, width, height):
             bg_data[i, :, :] = np.mean(img[ROI[1]:ROI[1] + ROI[3], ROI[0]:ROI[0] + ROI[2]])
 
         else:
@@ -165,3 +165,21 @@ def get_unimodal_threshold(input_image):
             max_dist = per_dist
     assert best_threshold > -np.inf, 'Error in unimodal thresholding'
     return best_threshold
+def rec_bkg_to_wo_bkg(recorder_option) -> str:
+    """
+    Converts recOrder's background options to waveorder's background options.
+
+    Parameters
+    ----------
+    recorder_option
+
+    Returns
+    -------
+    waveorder_option
+
+    """
+    if recorder_option == 'local_fit+':
+        return 'local_fit'
+    else:
+        return recorder_option
+
