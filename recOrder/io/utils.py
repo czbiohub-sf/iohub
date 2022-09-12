@@ -1,4 +1,5 @@
 import glob
+import logging
 import os
 import psutil
 import textwrap
@@ -74,9 +75,12 @@ def load_bg(bg_path, height, width, ROI=None):
     for i in range(len(bg_paths)):
         img = tiff.imread(bg_paths[i])
 
-        if ROI is not None and ROI != (0, 0, width, height):
-            bg_data[i, :, :] = np.mean(img[ROI[1]:ROI[1] + ROI[3], ROI[0]:ROI[0] + ROI[2]])
-
+        if ROI is not None and ROI != (0, 0, width, height): # TODO: Remove for 1.0.0
+            warning_msg = """
+            Warning: earlier versions of recOrder would have averaged over the background ROI. This behavior is 
+            now considered a bug, and future versions of recOrder will not average over the background. 
+            """
+            logging.warning(warning_msg)
         else:
             bg_data[i, :, :] = img
 
