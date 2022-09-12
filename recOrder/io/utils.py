@@ -1,5 +1,7 @@
 import glob
 import os
+import psutil
+import textwrap
 import tifffile as tiff
 import numpy as np
 from waveorder.waveorder_reconstructor import fluorescence_microscopy, waveorder_microscopy
@@ -165,6 +167,20 @@ def get_unimodal_threshold(input_image):
             max_dist = per_dist
     assert best_threshold > -np.inf, 'Error in unimodal thresholding'
     return best_threshold
+
+def ram_message():
+    BYTES_PER_GB = 2**30
+    gb_available = psutil.virtual_memory().total / BYTES_PER_GB
+    if gb_available < 32:
+        return ' \n'.join(textwrap.wrap(
+               f'\033[91mWARNING:\033[0m recOrder reconstructions often require more than the {gb_available:.1f} ' \
+               f'GB of RAM that this computer is equipped with. We recommend starting with reconstructions of small ' \
+               f'volumes ~1000 x 1000 x 10 and working up to larger volumes while monitoring your RAM usage with '
+               f'Task Manager or htop.',
+        ))
+    else:
+        return f'{gb_available:.1f} GB of RAM is available.'
+
 def rec_bkg_to_wo_bkg(recorder_option) -> str:
     """
     Converts recOrder's background options to waveorder's background options.
@@ -182,4 +198,3 @@ def rec_bkg_to_wo_bkg(recorder_option) -> str:
         return 'local_fit'
     else:
         return recorder_option
-
