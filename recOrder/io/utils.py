@@ -172,18 +172,33 @@ def get_unimodal_threshold(input_image):
     assert best_threshold > -np.inf, 'Error in unimodal thresholding'
     return best_threshold
 
+
 def ram_message():
+    """
+    Determine if the system's RAM capacity is sufficient for running reconstruction. 
+    The message should be treated as a warning if the RAM detected is less than 32 GB.
+
+    Returns
+    -------
+    ram_report    (is_warning, message)
+    """
     BYTES_PER_GB = 2**30
     gb_available = psutil.virtual_memory().total / BYTES_PER_GB
-    if gb_available < 32:
-        return ' \n'.join(textwrap.wrap(
-               f'\033[91mWARNING:\033[0m recOrder reconstructions often require more than the {gb_available:.1f} ' \
+    is_warning = gb_available < 32
+
+    if is_warning:
+        message = ' \n'.join(textwrap.wrap(
+               f'recOrder reconstructions often require more than the {gb_available:.1f} ' \
                f'GB of RAM that this computer is equipped with. We recommend starting with reconstructions of small ' \
                f'volumes ~1000 x 1000 x 10 and working up to larger volumes while monitoring your RAM usage with '
                f'Task Manager or htop.',
         ))
     else:
-        return f'{gb_available:.1f} GB of RAM is available.'
+        message = f'{gb_available:.1f} GB of RAM is available.'
+    
+    return (is_warning, message)
+
+
 
 def rec_bkg_to_wo_bkg(recorder_option) -> str:
     """
