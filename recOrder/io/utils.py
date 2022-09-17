@@ -59,9 +59,9 @@ def load_bg(bg_path, height, width, ROI=None):
     Parameters
     ----------
     bg_path         : (str) path to the folder containing background images
-    height          : (int) height of image in pixels
-    width           : (int) width of image in pixels
-    ROI             : (tuple)  ROI of the background images to use, if None, full FOV will be used
+    height          : (int) height of image in pixels # Remove for 1.0.0
+    width           : (int) width of image in pixels # Remove for 1.0.0
+    ROI             : (tuple)  ROI of the background images to use, if None, full FOV will be used # Remove for 1.0.0
 
     Returns
     -------
@@ -70,8 +70,8 @@ def load_bg(bg_path, height, width, ROI=None):
 
     bg_paths = glob.glob(os.path.join(bg_path, '*.tif'))
     bg_paths.sort()
-    bg_data = np.zeros([len(bg_paths), height, width])
-
+    
+    # Backwards compatibility warning
     if ROI is not None and ROI != (0, 0, width, height): # TODO: Remove for 1.0.0
         warning_msg = """
         Earlier versions of recOrder (0.1.2 and earlier) would have averaged over the background ROI. 
@@ -80,11 +80,22 @@ def load_bg(bg_path, height, width, ROI=None):
         """
         logging.warning(warning_msg)
 
-    for i in range(len(bg_paths)):
-        img = tiff.imread(bg_paths[i])
-        bg_data[i, :, :] = img
+    # Load background images 
+    bg_img_list = []
+    for bg_path in bg_paths:
+        bg_img_list.append(tiff.imread(bg_path))
+    bg_img_arr = np.array(bg_img_list) # CYX
 
-    return bg_data
+    # Warn if shapes do not match
+    # TODO: 1.0.0 move these validation check to waveorder's Polscope_bg_correction
+    if bg_img_arr.shape[1:] != (height, width):
+        warning_msg = """
+        The background image has a different X/Y size than the acquired image. 
+        You can expect a downstream error or an incorrect background correction.  
+        """
+        logging.warning(warning_msg)
+
+    return bg_img_arr # CYX
 
 
 def create_grid_from_coordinates(xy_coords, rows, columns):
