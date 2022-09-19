@@ -86,15 +86,12 @@ def load_bg(bg_path, height, width, ROI=None):
         bg_img_list.append(tiff.imread(bg_path))
     bg_img_arr = np.array(bg_img_list) # CYX
 
-    # Warn if shapes do not match
+    # Error if shapes do not match
     # TODO: 1.0.0 move these validation check to waveorder's Polscope_bg_correction
     if bg_img_arr.shape[1:] != (height, width):
-        warning_msg = """
-        The background image has a different X/Y size than the acquired image. 
-        You can expect a downstream error or an incorrect background correction.  
-        """
-        logging.warning(warning_msg)
-
+        error_msg = "The background image has a different X/Y size than the acquired image."
+        raise ValueError(error_msg)
+        
     return bg_img_arr # CYX
 
 
