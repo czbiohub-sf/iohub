@@ -4,7 +4,6 @@ import numpy as np
 import tifffile as tiff
 from waveorder.io.writer import WaveorderWriter
 from waveorder.io.reader import WaveorderReader
-from recOrder.preproc.pre_processing import get_autocontrast_limits
 from recOrder.io.utils import create_grid_from_coordinates
 import copy
 import json
@@ -323,7 +322,10 @@ class ZarrConverter:
 
         for chan in range(self.c):
             img = self.get_image_array(pos, t=0, c=chan, z=self.focus_z)
-            clims.append(get_autocontrast_limits(img))
+            clip = 0.01
+            low = np.percentile(img, clip*100)
+            high = np.percentile(img, (1-clip)*100)
+            clims.append((low, high))
 
         return clims
 
