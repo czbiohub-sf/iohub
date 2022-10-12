@@ -17,7 +17,14 @@ class ZarrConverter:
     for tiled acquisitions)
     """
 
-    def __init__(self, input_dir, output_dir, data_type=None, replace_position_names=False, format_hcs=False):
+    def __init__(
+        self,
+        input_dir,
+        output_dir,
+        data_type=None,
+        replace_position_names=False,
+        format_hcs=False,
+    ):
         """
 
         Parameters
@@ -32,26 +39,33 @@ class ZarrConverter:
         format_hcs: bool
         """
 
-        if not output_dir.endswith('.zarr'):
-            raise ValueError('Please specify .zarr at the end of your output')
+        if not output_dir.endswith(".zarr"):
+            raise ValueError("Please specify .zarr at the end of your output")
 
         # Init File IO Properties
-        self.version = 'recOrder converter version=0.5'
+        self.version = "recOrder converter version=0.5"
         self.data_directory = input_dir
         self.save_directory = os.path.dirname(output_dir)
         # self.files = glob.glob(os.path.join(self.data_directory, '*.tif'))
         self.meta_file = None
 
-        print('Initializing Data...')
-        self.reader = WaveorderReader(self.data_directory, data_type, extract_data=False)
+        print("Initializing Data...")
+        self.reader = WaveorderReader(
+            self.data_directory, data_type, extract_data=False
+        )
         self.data_type = self.reader.data_type
-        print('Finished initializing data')
+        print("Finished initializing data")
 
-        self.summary_metadata = self.reader.mm_meta['Summary'] if self.reader.mm_meta else None
+        self.summary_metadata = (
+            self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
+        )
         self.save_name = os.path.basename(output_dir)
-        if self.data_type != 'upti':
-            self.mfile_name = os.path.join(self.save_directory, f'{self.save_name.strip(".zarr")}_ImagePlaneMetadata.txt')
-            self.meta_file = open(self.mfile_name, 'a')
+        if self.data_type != "upti":
+            self.mfile_name = os.path.join(
+                self.save_directory,
+                f'{self.save_name.strip(".zarr")}_ImagePlaneMetadata.txt',
+            )
+            self.meta_file = open(self.mfile_name, "a")
 
         self.replace_position_names = replace_position_names
         self.format_hcs = format_hcs
@@ -78,19 +92,28 @@ class ZarrConverter:
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.focus_z = self.z // 2
         self.prefix_list = []
-        print(f'Found Dataset {self.save_name} w/ dimensions (P, T, C, Z, Y, X): {self.dim}')
+        print(
+            f"Found Dataset {self.save_name} w/ dimensions (P, T, C, Z, Y, X): {self.dim}"
+        )
 
         # Generate coordinate set
         self._gen_coordset()
 
         # Initialize Metadata Dictionary
         self.metadata = dict()
-        self.metadata['recOrder_Converter_Version'] = self.version
-        self.metadata['Summary'] = self.summary_metadata
+        self.metadata["recOrder_Converter_Version"] = self.version
+        self.metadata["Summary"] = self.summary_metadata
 
         # initialize metadata if HCS desired, init writer
-        self.hcs_meta = self._generate_hcs_metadata() if self.format_hcs else None
-        self.writer = WaveorderWriter(self.save_directory, hcs=self.format_hcs, hcs_meta=self.hcs_meta, verbose=False)
+        self.hcs_meta = (
+            self._generate_hcs_metadata() if self.format_hcs else None
+        )
+        self.writer = WaveorderWriter(
+            self.save_directory,
+            hcs=self.format_hcs,
+            hcs_meta=self.hcs_meta,
+            verbose=False,
+        )
         self.writer.create_zarr_root(self.save_name)
 
     def _gen_coordset(self):
@@ -105,28 +128,38 @@ class ZarrConverter:
         """
 
         # if acquisition information is not present, make an arbitrary dimension order
-        if not self.summary_metadata or 'AxisOrder' not in self.summary_metadata.keys():
+        if (
+            not self.summary_metadata
+            or "AxisOrder" not in self.summary_metadata.keys()
+        ):
 
             self.p_dim = 0
             self.t_dim = 1
             self.c_dim = 2
             self.z_dim = 3
 
-            self.dim_order = ['position', 'time', 'channel', 'z']
+            self.dim_order = ["position", "time", "channel", "z"]
 
             # Assume data was collected slice first
-            dims = [self.reader.slices, self.reader.channels, self.reader.frames, self.reader.get_num_positions()]
+            dims = [
+                self.reader.slices,
+                self.reader.channels,
+                self.reader.frames,
+                self.reader.get_num_positions(),
+            ]
 
         # get the order in which the data was collected to minimize i/o calls
         else:
             # 4 possible dimensions: p, c, t, z
             n_dim = 4
-            hashmap = {'position': self.p,
-                       'time': self.t,
-                       'channel': self.c,
-                       'z': self.z}
+            hashmap = {
+                "position": self.p,
+                "time": self.t,
+                "channel": self.c,
+                "z": self.z,
+            }
 
-            self.dim_order = copy.copy(self.summary_metadata['AxisOrder'])
+            self.dim_order = copy.copy(self.summary_metadata["AxisOrder"])
 
             dims = []
             for i in range(n_dim):
@@ -137,14 +170,19 @@ class ZarrConverter:
 
             # Reverse the dimension order and gather dimension indices
             self.dim_order.reverse()
-            self.p_dim = self.dim_order.index('position')
-            self.t_dim = self.dim_order.index('time')
-            self.c_dim = self.dim_order.index('channel')
-            self.z_dim = self.dim_order.index('z')
+            self.p_dim = self.dim_order.index("position")
+            self.t_dim = self.dim_order.index("time")
+            self.c_dim = self.dim_order.index("channel")
+            self.z_dim = self.dim_order.index("z")
 
         # create array of coordinate tuples with innermost dimension being the first dim acquired
-        self.coords = [(dim3, dim2, dim1, dim0) for dim3 in range(dims[3]) for dim2 in range(dims[2])
-                       for dim1 in range(dims[1]) for dim0 in range(dims[0])]
+        self.coords = [
+            (dim3, dim2, dim1, dim0)
+            for dim3 in range(dims[3])
+            for dim2 in range(dims[2])
+            for dim1 in range(dims[1])
+            for dim0 in range(dims[0])
+        ]
 
     def _get_position_coords(self):
 
@@ -152,16 +190,16 @@ class ZarrConverter:
         col_max = 0
         coords_list = []
 
-        #TODO: read rows, cols directly from XY corods
-        #TODO: account for non MM2gamma meta?
+        # TODO: read rows, cols directly from XY corods
+        # TODO: account for non MM2gamma meta?
         for idx, pos in enumerate(self.reader.stage_positions):
-            coords_list.append(pos['XYStage'])
-            row = pos['GridRow']
-            col = pos['GridCol']
+            coords_list.append(pos["XYStage"])
+            row = pos["GridRow"]
+            col = pos["GridCol"]
             row_max = row if row > row_max else row_max
             col_max = col if col > col_max else col_max
 
-        return coords_list, row_max+1, col_max+1
+        return coords_list, row_max + 1, col_max + 1
 
     def _generate_hcs_metadata(self):
 
@@ -170,20 +208,31 @@ class ZarrConverter:
         position_grid = create_grid_from_coordinates(position_list, rows, cols)
 
         # Build metadata based off of position grid
-        hcs_meta = {'plate': {
-            'acquisitions': [{'id': 1,
-                              'maximumfieldcount': 1,
-                              'name': 'Dataset',
-                              'starttime': 0}],
-            'columns': [{'name': f'Col_{i}'} for i in range(cols)],
-
-            'field_count': 1,
-            'name': 'name',
-            'rows': [{'name': f'Row_{i}'} for i in range(rows)],
-            'version': '0.1',
-            'wells': [{'path': f'Row_{i}/Col_{j}'} for i in range(rows) for j in range(cols)]},
-
-            'well': [{'images': [{'path': f'Pos_{pos:03d}'}]} for pos in position_grid.flatten()]
+        hcs_meta = {
+            "plate": {
+                "acquisitions": [
+                    {
+                        "id": 1,
+                        "maximumfieldcount": 1,
+                        "name": "Dataset",
+                        "starttime": 0,
+                    }
+                ],
+                "columns": [{"name": f"Col_{i}"} for i in range(cols)],
+                "field_count": 1,
+                "name": "name",
+                "rows": [{"name": f"Row_{i}"} for i in range(rows)],
+                "version": "0.1",
+                "wells": [
+                    {"path": f"Row_{i}/Col_{j}"}
+                    for i in range(rows)
+                    for j in range(cols)
+                ],
+            },
+            "well": [
+                {"images": [{"path": f"Pos_{pos:03d}"}]}
+                for pos in position_grid.flatten()
+            ],
         }
 
         return hcs_meta
@@ -206,7 +255,7 @@ class ZarrConverter:
         """
 
         for tag in tiff_file.pages[page].tags.values():
-            if tag.name == 'MicroManagerMetadata':
+            if tag.name == "MicroManagerMetadata":
                 return tag.value
             else:
                 continue
@@ -227,10 +276,12 @@ class ZarrConverter:
 
         """
 
-        zarr_array = self.writer.sub_writer.current_pos_group['arr_0']
-        zarr_img = zarr_array[coord[self.dim_order.index('time')],
-                              coord[self.dim_order.index('channel')],
-                              coord[self.dim_order.index('z')]]
+        zarr_array = self.writer.sub_writer.current_pos_group["arr_0"]
+        zarr_img = zarr_array[
+            coord[self.dim_order.index("time")],
+            coord[self.dim_order.index("channel")],
+            coord[self.dim_order.index("z")],
+        ]
 
         return np.array_equal(zarr_img, tiff_image)
 
@@ -259,11 +310,11 @@ class ZarrConverter:
         for p in range(self.p):
             if self.p > 1:
                 try:
-                    name = self.summary_metadata['StagePositions'][p]['Label']
+                    name = self.summary_metadata["StagePositions"][p]["Label"]
                 except KeyError:
-                    name = ''
+                    name = ""
             else:
-                name = ''
+                name = ""
             self.pos_names.append(name)
 
     def check_file_changed(self, last_file, current_file):
@@ -323,8 +374,8 @@ class ZarrConverter:
         for chan in range(self.c):
             img = self.get_image_array(pos, t=0, c=chan, z=self.focus_z)
             clip = 0.01
-            low = np.percentile(img, clip*100)
-            high = np.percentile(img, (1-clip)*100)
+            low = np.percentile(img, clip * 100)
+            high = np.percentile(img, (1 - clip) * 100)
             clims.append((low, high))
 
         return clims
@@ -342,24 +393,27 @@ class ZarrConverter:
 
         """
 
-
         chan_names = self._get_channel_names()
         self._get_position_names()
         for pos in range(self.p):
 
             clims = self.get_channel_clims(pos)
             name = self.pos_names[pos] if self.replace_position_names else None
-            self.writer.init_array(pos,
-                                   data_shape=(self.t if self.t != 0 else 1,
-                                               self.c if self.c != 0 else 1,
-                                               self.z if self.z != 0 else 1,
-                                               self.y,
-                                               self.x),
-                                   chunk_size=(1, 1, 1, self.y, self.x),
-                                   chan_names=chan_names,
-                                   clims=clims,
-                                   dtype=self.dtype,
-                                   position_name=name)
+            self.writer.init_array(
+                pos,
+                data_shape=(
+                    self.t if self.t != 0 else 1,
+                    self.c if self.c != 0 else 1,
+                    self.z if self.z != 0 else 1,
+                    self.y,
+                    self.x,
+                ),
+                chunk_size=(1, 1, 1, self.y, self.x),
+                chan_names=chan_names,
+                clims=clims,
+                dtype=self.dtype,
+                position_name=name,
+            )
 
     def run_conversion(self):
         """
@@ -372,25 +426,27 @@ class ZarrConverter:
         """
 
         # Run setup
-        print('Running Conversion...')
-        print('Setting up zarr')
+        print("Running Conversion...")
+        print("Setting up zarr")
         # self._gather_index_maps()
         self.init_zarr_structure()
         last_file = None
 
-        #Format bar for CLI display
-        bar_format = 'Status: |{bar}|{n_fmt}/{total_fmt} (Time Remaining: {remaining}), {rate_fmt}{postfix}]'
+        # Format bar for CLI display
+        bar_format = "Status: |{bar}|{n_fmt}/{total_fmt} (Time Remaining: {remaining}), {rate_fmt}{postfix}]"
 
         # Run through every coordinate and convert image + grab image metadata, statistics
         # loop is done in order in which the images were acquired
-        print('Converting Images...')
+        print("Converting Images...")
         for coord in tqdm(self.coords, bar_format=bar_format):
-            if self.data_type == 'ometiff':
+            if self.data_type == "ometiff":
                 # re-order coordinates into zarr format
-                coord_reorder = (coord[self.p_dim],
-                                 coord[self.t_dim],
-                                 coord[self.c_dim],
-                                 coord[self.z_dim])
+                coord_reorder = (
+                    coord[self.p_dim],
+                    coord[self.t_dim],
+                    coord[self.c_dim],
+                    coord[self.z_dim],
+                )
 
                 # Only load tiff file if it has changed from previous run
                 current_file = self.reader.reader.coord_map[coord_reorder][0]
@@ -403,29 +459,49 @@ class ZarrConverter:
 
                 meta = dict()
                 plane_meta = self._generate_plane_metadata(tf, page)
-                meta[f'{coord_reorder}'] = plane_meta
+                meta[f"{coord_reorder}"] = plane_meta
 
                 json.dump(meta, self.meta_file, indent=1)
-            elif self.data_type == 'pycromanager':
+            elif self.data_type == "pycromanager":
                 # write page metadata
-                plane_metadata = self.reader.reader.get_image_metadata(coord[self.p_dim],
-                                                                       coord[self.t_dim],
-                                                                       coord[self.c_dim],
-                                                                       coord[self.z_dim])
+                plane_metadata = self.reader.reader.get_image_metadata(
+                    coord[self.p_dim],
+                    coord[self.t_dim],
+                    coord[self.c_dim],
+                    coord[self.z_dim],
+                )
 
-                json.dump({f'FrameKey-{coord[self.p_dim]}-{coord[self.t_dim]}-'
-                           f'{coord[self.c_dim]}-{coord[self.z_dim]}': plane_metadata},
-                          self.meta_file, indent=1)
+                json.dump(
+                    {
+                        f"FrameKey-{coord[self.p_dim]}-{coord[self.t_dim]}-"
+                        f"{coord[self.c_dim]}-{coord[self.z_dim]}": plane_metadata
+                    },
+                    self.meta_file,
+                    indent=1,
+                )
 
             # get the memory mapped image
-            img_raw = self.get_image_array(coord[self.p_dim], coord[self.t_dim], coord[self.c_dim], coord[self.z_dim])
+            img_raw = self.get_image_array(
+                coord[self.p_dim],
+                coord[self.t_dim],
+                coord[self.c_dim],
+                coord[self.z_dim],
+            )
 
             # Write the data
-            self.writer.write(img_raw, coord[self.p_dim], coord[self.t_dim], coord[self.c_dim], coord[self.z_dim])
+            self.writer.write(
+                img_raw,
+                coord[self.p_dim],
+                coord[self.t_dim],
+                coord[self.c_dim],
+                coord[self.z_dim],
+            )
 
             # Perform image check
             if not self._perform_image_check(img_raw, coord):
-                raise ValueError('Converted zarr image does not match the raw data. Conversion Failed')
+                raise ValueError(
+                    "Converted zarr image does not match the raw data. Conversion Failed"
+                )
 
         # Put summary metadata into zarr store and cleanup
         self.writer.store.attrs.update(self.metadata)

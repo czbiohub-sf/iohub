@@ -282,7 +282,9 @@ def generic_hsv_overlay(
     return overlay_final[0] if mode == "2D" else overlay_final
 
 
-def ret_ori_overlay(retardance, orientation, ret_max = 10, mode="2D", cmap="JCh"):
+def ret_ori_overlay(
+    retardance, orientation, ret_max=10, mode="2D", cmap="JCh"
+):
     """
     This function will create an overlay of retardance and orientation with two different colormap options.
     HSV is the standard Hue, Saturation, Value colormap while JCh is a similar colormap but is perceptually uniform.
