@@ -1,3 +1,13 @@
+# Binary image files.
+*.tif[f]
+*.jp[e]g
+*.zar[r]
+*.json
+
+# pycharm IDE
+.idea
+.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -50,6 +60,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
+pytest_temp/
 
 # Translations
 *.mo
@@ -127,3 +138,15 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+.DS_Store
+
+# written by setuptools_scm
+*/_version.py
+recOrder/_version.py
+*.autosave
+
+# images
+*.npz
+*.png
+*.tif[f]
