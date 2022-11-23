@@ -16,5 +16,5 @@ Write:
 
 Data access API (under discussion):
 - to visualize data in above formats using napari and Fiji.
-- to ship data to deconvolution and DL pipelines.
+- enable efficient, paraellel, and lazy loading of data in deconvolution and DL pipelines via iohub.reader module.
  
