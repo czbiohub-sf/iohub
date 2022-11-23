@@ -3,6 +3,7 @@
 This library provides io utilites for ND image data. 
 
 Supported formats: 
+
 Read: 
 - single-page TIFF, OME-TIFF, NDTiff written by micro-manager, 
 - custom data formats used by Biohub microscopes (e.g., PTI, DaXi).
