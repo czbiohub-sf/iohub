@@ -14,11 +14,11 @@ def test_constructor(setup_test_data, setup_pycromanager_test_data):
     mmr = PycromanagerReader(rand_dir)
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
 
 
 def test_output_dims(setup_test_data, setup_pycromanager_test_data):
