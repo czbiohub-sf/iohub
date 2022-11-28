@@ -1,6 +1,6 @@
 import pytest
-from waveorder.io.zarrfile import ZarrReader
-from waveorder.io.reader import WaveorderReader
+from iohub.zarrfile import ZarrReader
+from iohub.reader import WaveorderReader
 import zarr
 import numpy as np
 

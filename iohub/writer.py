@@ -1,6 +1,6 @@
 import zarr
 import os
-from waveorder.io.writer_structures import HCSZarr, DefaultZarr
+from iohub.writer_structures import HCSZarr, DefaultZarr
 
 
 class WaveorderWriter:

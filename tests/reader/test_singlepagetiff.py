@@ -1,6 +1,6 @@
 import zarr
 import numpy as np
-from waveorder.io.singlepagetiff import MicromanagerSequenceReader
+from iohub.singlepagetiff import MicromanagerSequenceReader
 
 
 def test_constructor_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):

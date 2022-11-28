@@ -9,7 +9,7 @@ import glob
 import json
 import natsort
 
-from waveorder.io.reader_base import ReaderBase
+from iohub.reader_base import ReaderBase
 
 
 class MicromanagerSequenceReader(ReaderBase):

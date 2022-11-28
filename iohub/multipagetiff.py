@@ -6,7 +6,7 @@ import tifffile as tiff
 from copy import copy
 import glob
 import warnings
-from waveorder.io.reader_base import ReaderBase
+from iohub.reader_base import ReaderBase
 
 
 class MicromanagerOmeTiffReader(ReaderBase):
