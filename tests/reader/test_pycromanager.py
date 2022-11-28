@@ -1,6 +1,6 @@
 import numpy as np
 import dask.array
-from waveorder.io.pycromanager import PycromanagerReader
+from iohub.pycromanager import PycromanagerReader
 
 
 def test_constructor(setup_test_data, setup_pycromanager_test_data):

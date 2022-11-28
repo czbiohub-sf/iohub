@@ -1,7 +1,7 @@
 import os
 import zarr
 from copy import copy
-from waveorder.io.reader_base import ReaderBase
+from iohub.reader_base import ReaderBase
 
 
 class ZarrReader(ReaderBase):

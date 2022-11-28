@@ -2,10 +2,10 @@ import pytest
 import dask.array
 import zarr
 import numpy as np
-from waveorder.io.reader import WaveorderReader
-from waveorder.io.singlepagetiff import MicromanagerSequenceReader
-from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
-from waveorder.io.pycromanager import PycromanagerReader
+from iohub.reader import WaveorderReader
+from iohub.singlepagetiff import MicromanagerSequenceReader
+from iohub.multipagetiff import MicromanagerOmeTiffReader
+from iohub.pycromanager import PycromanagerReader
 
 # todo: consider tests for handling ometiff when singlepagetifff is specified (or vice versa)
 # todo: consider tests for handling of positions when extract_data is True and False.

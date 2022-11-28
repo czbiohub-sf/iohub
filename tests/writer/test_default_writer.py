@@ -2,8 +2,8 @@ import pytest
 import os
 import zarr
 import numpy as np
-from waveorder.io.writer import WaveorderWriter
-from waveorder.io.writer_structures import DefaultZarr, HCSZarr, WriterBase
+from iohub.writer import WaveorderWriter
+from iohub.writer_structures import DefaultZarr, HCSZarr, WriterBase
 
 def test_constructor(setup_writer_folder):
     """

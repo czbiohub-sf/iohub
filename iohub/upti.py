@@ -4,7 +4,7 @@ import re
 import zarr
 import tifffile as tiff
 import glob
-from waveorder.io.reader_base import ReaderBase
+from iohub.reader_base import ReaderBase
 
 
 class UPTIReader(ReaderBase):

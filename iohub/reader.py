@@ -3,11 +3,11 @@ import os
 import glob
 import natsort
 import tifffile as tiff
-from waveorder.io.singlepagetiff import MicromanagerSequenceReader
-from waveorder.io.multipagetiff import MicromanagerOmeTiffReader
-from waveorder.io.upti import UPTIReader
-from waveorder.io.zarrfile import ZarrReader
-from waveorder.io.pycromanager import PycromanagerReader
+from iohub.singlepagetiff import MicromanagerSequenceReader
+from iohub.multipagetiff import MicromanagerOmeTiffReader
+from iohub.upti import UPTIReader
+from iohub.zarrfile import ZarrReader
+from iohub.pycromanager import PycromanagerReader
 import logging
 
 # replicate from aicsimageio logging mechanism
