@@ -38,11 +38,11 @@ def test_ometiff_constructor_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs)
 
     assert(mmr.mm_meta is not None)
     assert(mmr.stage_positions is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
     if mmr.channels > 1:
         assert(mmr.channel_names is not None)
     if mmr.slices > 1:
@@ -89,11 +89,11 @@ def test_sequence_constructor_mm2gamma(setup_test_data, setup_mm2gamma_singlepag
     assert(isinstance(mmr.reader, MicromanagerSequenceReader))
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
     if mmr.channels > 1:
         assert(mmr.channel_names is not None)
     if mmr.slices > 1:
@@ -139,11 +139,11 @@ def test_pycromanager_constructor(setup_test_data, setup_pycromanager_test_data)
     assert (isinstance(mmr.reader, PycromanagerReader))
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
     assert(mmr.stage_positions is not None)
     if mmr.channels > 1:
         assert(mmr.channel_names is not None)
@@ -190,11 +190,11 @@ def test_ometiff_constructor_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 
     assert(mmr.mm_meta is not None)
     assert(mmr.stage_positions is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
     if mmr.channels > 1:
         assert(mmr.channel_names is not None)
     if mmr.slices > 1:
@@ -243,11 +243,11 @@ def test_sequence_constructor_mm1422(setup_test_data, setup_mm1422_singlepage_ti
     assert (isinstance(mmr.reader, MicromanagerSequenceReader))
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
     if mmr.channels > 1:
         assert(mmr.channel_names is not None)
     if mmr.slices > 1:

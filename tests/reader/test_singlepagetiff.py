@@ -15,11 +15,11 @@ def test_constructor_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):
     mmr = MicromanagerSequenceReader(one_folder, extract_data=False)
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
 
 
 def test_output_dims_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):
@@ -101,11 +101,11 @@ def test_constructor_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
     mmr = MicromanagerSequenceReader(one_folder, extract_data=False)
 
     assert(mmr.mm_meta is not None)
-    assert(mmr.width is not 0)
-    assert(mmr.height is not 0)
-    assert(mmr.frames is not 0)
-    assert(mmr.slices is not 0)
-    assert(mmr.channels is not 0)
+    assert(mmr.width > 0)
+    assert(mmr.height > 0)
+    assert(mmr.frames > 0)
+    assert(mmr.slices > 0)
+    assert(mmr.channels > 0)
 
 
 def test_output_dims_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):

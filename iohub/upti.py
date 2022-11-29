@@ -65,12 +65,12 @@ class UPTIReader(ReaderBase):
         # Loop through the files and use regex to grab patterns and states,
         # **hardcoded file name structure**
         for file in self.files:
-            pattern = re.search('pattern_\d\d\d', file).group(0)
+            pattern = re.search(r'pattern_\d\d\d', file).group(0)
             pattern_idx = int(pattern.strip('pattern_'))
-            if re.search('z_\d\d\d', file) == None:
+            if re.search(r'z_\d\d\d', file) == None:
                 z = 0
             else:
-                z = int(re.search('z_\d\d\d', file).group(0).strip('z_'))
+                z = int(re.search(r'z_\d\d\d', file).group(0).strip('z_'))
             state_idx = 0
 
             # update dimensionality as we read the file names
@@ -82,7 +82,7 @@ class UPTIReader(ReaderBase):
 
             # if live upti, grab the states, otherwise just use patterns
             if states:
-                state = re.search('State_\d\d\d', file).group(0)
+                state = re.search(r'State_\d\d\d', file).group(0)
                 state_idx = int(state.strip('State_'))
 
                 if f'{pattern}_{state}' not in self.channel_names:
@@ -94,8 +94,8 @@ class UPTIReader(ReaderBase):
             self.file_map[(pattern_idx, state_idx, z)] = file
 
             # sorts list by pattern 0 --> state_0, state_1, state_2, state_3
-            self.channel_names.sort(key=lambda x: re.sub('pattern_\d\d\d', '', x))
-            self.channel_names.sort(key=lambda x: re.sub('State_\d\d\d', '', x))
+            self.channel_names.sort(key=lambda x: re.sub(r'pattern_\d\d\d', '', x))
+            self.channel_names.sort(key=lambda x: re.sub(r'State_\d\d\d', '', x))
 
     def _create_position_array(self, pos):
         """
@@ -136,8 +136,8 @@ class UPTIReader(ReaderBase):
         """
 
         chan_name = self.channel_names[c]
-        pattern = int(re.search('pattern_\d\d\d', chan_name).group(0).strip('pattern_'))
-        state = re.search('State_\d\d\d', chan_name)
+        pattern = int(re.search(r'pattern_\d\d\d', chan_name).group(0).strip('pattern_'))
+        state = re.search(r'State_\d\d\d', chan_name)
         state_idx = 0 if not state else int(state.group(0).strip('State_'))
 
         fn = self.file_map[(pattern, state_idx, z)]
