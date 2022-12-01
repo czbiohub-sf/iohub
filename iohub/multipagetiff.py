@@ -32,7 +32,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         # Grab all image files
         self.data_directory = folder
-        self.files = glob.glob(os.path.join(self.data_directory, '*.ome.tif'))
+        self._files = glob.glob(os.path.join(self.data_directory, '*.ome.tif'))
 
         # Generate Data Specific Properties
         self.coords = None
@@ -77,7 +77,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
         frames = 0
         channels = 0
         slices = 0
-        for file in self.files:
+        for file in self._files:
             tf = TiffFile(file)
             meta = tf.micromanager_metadata['IndexMap']
             tf.close()
@@ -142,7 +142,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
         -------
 
         """
-        with TiffFile(self.files[0]) as tif:
+        with TiffFile(self._files[0]) as tif:
             self.mm_meta = tif.micromanager_metadata
 
             mm_version = self.mm_meta['Summary']['MicroManagerVersion']
@@ -270,7 +270,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         """
 
-        tf = tiff.TiffFile(self.files[0])
+        tf = tiff.TiffFile(self._files[0])
 
         self.dtype = tf.pages[0].dtype
         tf.close()
