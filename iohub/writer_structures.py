@@ -7,6 +7,7 @@ class WriterBase:
     """
     ABC for all writer types
     """
+
     def __init__(self, store, root_path):
 
         # init common attributes
@@ -19,7 +20,9 @@ class WriterBase:
         self.dtype = None
 
         # set hardcoded compressor
-        self.__compressor = Blosc(cname='zstd', clevel=1, shuffle=Blosc.BITSHUFFLE)
+        self.__compressor = Blosc(
+            cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+        )
 
         # maps to keep track of hierarchies
         self.rows = dict()
@@ -31,7 +34,9 @@ class WriterBase:
         self.verbose = verbose
 
     # Initialize zero array
-    def init_array(self, data_shape, chunk_size, dtype, chan_names, clims, overwrite=False):
+    def init_array(
+        self, data_shape, chunk_size, dtype, chan_names, clims, overwrite=False
+    ):
         """
 
         Initializes the zarr array under the current position subgroup.
@@ -56,8 +61,14 @@ class WriterBase:
         self.dtype = np.dtype(dtype)
 
         self.set_channel_attributes(chan_names, clims)
-        self.current_pos_group.zeros('arr_0', shape=data_shape, chunks=chunk_size, dtype=dtype,
-                           compressor=self.__compressor, overwrite=overwrite)
+        self.current_pos_group.zeros(
+            "arr_0",
+            shape=data_shape,
+            chunks=chunk_size,
+            dtype=dtype,
+            compressor=self.__compressor,
+            overwrite=overwrite,
+        )
 
     def write(self, data, t, c, z):
         """
@@ -73,26 +84,26 @@ class WriterBase:
         shape = np.shape(data)
 
         if self.current_pos_group.__len__() == 0:
-            raise ValueError('Array not initialized')
+            raise ValueError("Array not initialized")
 
         if not isinstance(t, int) and not isinstance(t, slice):
-            raise TypeError('t specification must be either int or slice')
+            raise TypeError("t specification must be either int or slice")
 
         if not isinstance(c, int) and not isinstance(c, slice):
-            raise TypeError('c specification must be either int or slice')
+            raise TypeError("c specification must be either int or slice")
 
         if not isinstance(z, int) and not isinstance(z, slice):
-            raise TypeError('z specification must be either int or slice')
+            raise TypeError("z specification must be either int or slice")
 
         if isinstance(t, int) and isinstance(c, int) and isinstance(z, int):
 
             if len(shape) > 2:
-                raise ValueError('Index dimensions exceed data dimensions')
+                raise ValueError("Index dimensions exceed data dimensions")
             else:
-                self.current_pos_group['arr_0'][t, c, z] = data
+                self.current_pos_group["arr_0"][t, c, z] = data
 
         else:
-            self.current_pos_group['arr_0'][t, c, z] = data
+            self.current_pos_group["arr_0"][t, c, z] = data
 
     def create_channel_dict(self, chan_name, clim=None, first_chan=False):
         """
@@ -111,48 +122,48 @@ class WriterBase:
 
         """
 
-        if chan_name == 'Retardance':
+        if chan_name == "Retardance":
             min = clim[2] if clim else 0.0
             max = clim[3] if clim else 1000.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 100.0
-        elif chan_name == 'Orientation':
+        elif chan_name == "Orientation":
             min = clim[2] if clim else 0.0
             max = clim[3] if clim else np.pi
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else np.pi
 
-        elif chan_name == 'Phase3D':
+        elif chan_name == "Phase3D":
             min = clim[2] if clim else -10.0
             max = clim[3] if clim else 10.0
             start = clim[0] if clim else -0.2
             end = clim[1] if clim else 0.2
 
-        elif chan_name == 'BF':
+        elif chan_name == "BF":
             min = clim[2] if clim else 0.0
             max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 5.0
 
-        elif chan_name == 'S0':
+        elif chan_name == "S0":
             min = clim[2] if clim else 0.0
             max = clim[3] if clim else 65535.0
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 1.0
 
-        elif chan_name == 'S1':
+        elif chan_name == "S1":
             min = clim[2] if clim else 10.0
             max = clim[3] if clim else -10.0
             start = clim[0] if clim else -0.5
             end = clim[1] if clim else 0.5
 
-        elif chan_name == 'S2':
+        elif chan_name == "S2":
             min = clim[2] if clim else -10.0
             max = clim[3] if clim else 10.0
             start = clim[0] if clim else -0.5
             end = clim[1] if clim else 0.5
 
-        elif chan_name == 'S3':
+        elif chan_name == "S3":
             min = clim[2] if clim else -10
             max = clim[3] if clim else 10
             start = clim[0] if clim else -1.0
@@ -164,14 +175,15 @@ class WriterBase:
             start = clim[0] if clim else 0.0
             end = clim[1] if clim else 65535.0
 
-        dict_ = {'active': first_chan,
-                 'coefficient': 1.0,
-                 'color': 'FFFFFF',
-                 'family': 'linear',
-                 'inverted': False,
-                 'label': chan_name,
-                 'window': {'end': end, 'max': max, 'min': min, 'start': start}
-                 }
+        dict_ = {
+            "active": first_chan,
+            "coefficient": 1.0,
+            "color": "FFFFFF",
+            "family": "linear",
+            "inverted": False,
+            "label": chan_name,
+            "window": {"end": end, "max": max, "min": min, "start": start},
+        }
 
         return dict_
 
@@ -191,12 +203,14 @@ class WriterBase:
 
         """
 
-        row_name = f'Row_{idx}' if not name else name
+        row_name = f"Row_{idx}" if not name else name
         row_path = os.path.join(self.root_path, row_name)
 
         # check if the user is trying to create a row that already exsits
         if os.path.exists(row_path):
-            raise FileExistsError(f'A row subgroup with the name {row_name} already exists')
+            raise FileExistsError(
+                f"A row subgroup with the name {row_name} already exists"
+            )
         else:
             self.store.create_group(row_name)
             self.rows[idx] = row_name
@@ -218,13 +232,17 @@ class WriterBase:
 
         """
 
-        col_name = f'Col_{idx}' if not name else name
+        col_name = f"Col_{idx}" if not name else name
         row_name = self.rows[row_idx]
-        col_path = os.path.join(os.path.join(self.root_path, row_name), col_name)
+        col_path = os.path.join(
+            os.path.join(self.root_path, row_name), col_name
+        )
 
         # check to see if the user is trying to create a row that already exists
         if os.path.exists(col_path):
-            raise FileExistsError(f'A column subgroup with the name {col_name} already exists')
+            raise FileExistsError(
+                f"A column subgroup with the name {col_name} already exists"
+            )
         else:
             self.store[self.rows[row_idx]].create_group(col_name)
             self.columns[idx] = col_name
@@ -245,31 +263,40 @@ class WriterBase:
         """
 
         # get row, column, and path to the well
-        row_name = self.positions[position]['row']
-        col_name = self.positions[position]['col']
-        well_path = os.path.join(os.path.join(self.root_path, row_name), col_name)
+        row_name = self.positions[position]["row"]
+        col_name = self.positions[position]["col"]
+        well_path = os.path.join(
+            os.path.join(self.root_path, row_name), col_name
+        )
 
         # check to see if this well exists (row/column)
         if os.path.exists(well_path):
-            pos_name = self.positions[position]['name']
+            pos_name = self.positions[position]["name"]
             pos_path = os.path.join(well_path, pos_name)
 
             # check to see if the position exists
             if os.path.exists(pos_path):
 
-                if self.verbose: print(f'Opening subgroup {row_name}/{col_name}/{pos_name}')
+                if self.verbose:
+                    print(f"Opening subgroup {row_name}/{col_name}/{pos_name}")
 
                 # update trackers to note the current status of the writer
-                self.current_pos_group = self.store[row_name][col_name][pos_name]
+                self.current_pos_group = self.store[row_name][col_name][
+                    pos_name
+                ]
                 self.current_well_group = self.store[row_name][col_name]
                 self.current_position = position
 
             else:
-                raise FileNotFoundError(f'Could not find zarr position subgroup at {row_name}/{col_name}/{pos_name}\
-                                                    Check spelling or create position subgroup with create_position')
+                raise FileNotFoundError(
+                    f"Could not find zarr position subgroup at {row_name}/{col_name}/{pos_name}\
+                                                    Check spelling or create position subgroup with create_position"
+                )
         else:
-            raise FileNotFoundError(f'Could not find zarr position subgroup at {row_name}/{col_name}/\
-                                                Check spelling or create column/position subgroup with create_position')
+            raise FileNotFoundError(
+                f"Could not find zarr position subgroup at {row_name}/{col_name}/\
+                                                Check spelling or create column/position subgroup with create_position"
+            )
 
     def set_root(self, root):
         """
@@ -317,43 +344,69 @@ class WriterBase:
 
         """
 
-        rdefs = {'defaultT': 0,
-                 'model': 'color',
-                 'projection': 'normal',
-                 'defaultZ': 0}
+        rdefs = {
+            "defaultT": 0,
+            "model": "color",
+            "projection": "normal",
+            "defaultZ": 0,
+        }
 
-        multiscale_dict = [{'datasets': [{'path': "arr_0"}],
-                            'version': '0.1'}]
+        multiscale_dict = [{"datasets": [{"path": "arr_0"}], "version": "0.1"}]
         dict_list = []
 
         if clims and len(chan_names) < len(clims):
-            raise ValueError('Contrast Limits specified exceed the number of channels given')
+            raise ValueError(
+                "Contrast Limits specified exceed the number of channels given"
+            )
 
         for i in range(len(chan_names)):
             if clims:
                 if len(clims[i]) == 2:
-                    if 'float' in self.dtype.name:
-                        clim = (float(clims[i][0]), float(clims[i][1]), -1000, 1000)
+                    if "float" in self.dtype.name:
+                        clim = (
+                            float(clims[i][0]),
+                            float(clims[i][1]),
+                            -1000,
+                            1000,
+                        )
                     else:
                         info = np.iinfo(self.dtype)
-                        clim = (float(clims[i][0]), float(clims[i][1]), info.min, info.max)
+                        clim = (
+                            float(clims[i][0]),
+                            float(clims[i][1]),
+                            info.min,
+                            info.max,
+                        )
                 elif len(clims[i]) == 4:
-                    clim = (float(clims[i][0]), float(clims[i][1]), float(clims[i][2]), float(clims[i][3]))
+                    clim = (
+                        float(clims[i][0]),
+                        float(clims[i][1]),
+                        float(clims[i][2]),
+                        float(clims[i][3]),
+                    )
                 else:
-                    raise ValueError('clim specification must a tuple of length 2 or 4')
+                    raise ValueError(
+                        "clim specification must a tuple of length 2 or 4"
+                    )
 
             first_chan = True if i == 0 else False
             if not clims or i >= len(clims):
-                dict_list.append(self.create_channel_dict(chan_names[i], first_chan=first_chan))
+                dict_list.append(
+                    self.create_channel_dict(
+                        chan_names[i], first_chan=first_chan
+                    )
+                )
             else:
-                dict_list.append(self.create_channel_dict(chan_names[i], clim, first_chan=first_chan))
+                dict_list.append(
+                    self.create_channel_dict(
+                        chan_names[i], clim, first_chan=first_chan
+                    )
+                )
 
-        full_dict = {'multiscales': multiscale_dict,
-                     'omero': {
-                         'channels': dict_list,
-                         'rdefs': rdefs,
-                         'version': 0.1}
-                     }
+        full_dict = {
+            "multiscales": multiscale_dict,
+            "omero": {"channels": dict_list, "rdefs": rdefs, "version": 0.1},
+        }
 
         self.current_pos_group.attrs.put(full_dict)
 
@@ -400,22 +453,28 @@ class DefaultZarr(WriterBase):
 
         """
         self.create_row(0)
-        self.dataset_name = os.path.basename(self.root_path).strip('.zarr')
+        self.dataset_name = os.path.basename(self.root_path).strip(".zarr")
 
-        self.plate_meta['plate'] = {'acquisitions': [{'id': 1,
-                                                      'maximumfieldcount': 1,
-                                                      'name': 'Dataset',
-                                                      'starttime': 0}],
-                                    'columns': [],
-                                    'field_count': 1,
-                                    'name': self.dataset_name,
-                                    'rows': [],
-                                    'version': '0.1',
-                                    'wells': []}
+        self.plate_meta["plate"] = {
+            "acquisitions": [
+                {
+                    "id": 1,
+                    "maximumfieldcount": 1,
+                    "name": "Dataset",
+                    "starttime": 0,
+                }
+            ],
+            "columns": [],
+            "field_count": 1,
+            "name": self.dataset_name,
+            "rows": [],
+            "version": "0.1",
+            "wells": [],
+        }
 
-        self.plate_meta['plate']['rows'].append({'name': self.rows[0]})
+        self.plate_meta["plate"]["rows"].append({"name": self.rows[0]})
 
-        self.well_meta['well'] = {'images': [], 'version': '0.1'}
+        self.well_meta["well"] = {"images": [], "version": "0.1"}
         self.well_meta = dict(self.well_meta)
 
     def create_position(self, position, name):
@@ -439,7 +498,9 @@ class DefaultZarr(WriterBase):
         col_name = self.columns[position]
 
         if self.verbose:
-            print(f'Creating and opening subgroup {row_name}/{col_name}/{name}')
+            print(
+                f"Creating and opening subgroup {row_name}/{col_name}/{name}"
+            )
 
         # create position subgroup
         self.store[row_name][col_name].create_group(name)
@@ -450,7 +511,11 @@ class DefaultZarr(WriterBase):
         self.current_position = position
 
         # update ome-metadata
-        self.positions[position] = {'name': name, 'row': row_name, 'col': col_name}
+        self.positions[position] = {
+            "name": name,
+            "row": row_name,
+            "col": col_name,
+        }
         self._update_plate_meta(position)
         self._update_well_meta(position)
 
@@ -468,8 +533,10 @@ class DefaultZarr(WriterBase):
 
         """
 
-        self.plate_meta['plate']['columns'].append({'name': self.columns[pos]})
-        self.plate_meta['plate']['wells'].append({'path': f'{self.rows[0]}/{self.columns[pos]}'})
+        self.plate_meta["plate"]["columns"].append({"name": self.columns[pos]})
+        self.plate_meta["plate"]["wells"].append(
+            {"path": f"{self.rows[0]}/{self.columns[pos]}"}
+        )
         self.store.attrs.put(self.plate_meta)
 
     def _update_well_meta(self, pos):
@@ -487,7 +554,9 @@ class DefaultZarr(WriterBase):
 
         """
 
-        self.well_meta['well']['images'] = [{'path': self.positions[pos]['name']}]
+        self.well_meta["well"]["images"] = [
+            {"path": self.positions[pos]["name"]}
+        ]
         self.store[self.rows[0]][self.columns[pos]].attrs.put(self.well_meta)
 
 
@@ -519,32 +588,40 @@ class HCSZarr(WriterBase):
         # check to make sure HCS metadata can be parsed / isn't missing critical info
         self._check_HCS_meta()
 
-        plate_meta = self.hcs_meta['plate']
+        plate_meta = self.hcs_meta["plate"]
         row_count = 0
         col_count = 0
         well_count = 0
         pos_count = 0
 
         # go through rows
-        for row in plate_meta['rows']:
+        for row in plate_meta["rows"]:
 
-            self.create_row(row_count, row['name'])
+            self.create_row(row_count, row["name"])
 
             # go through columns under this row
-            for col in plate_meta['columns']:
+            for col in plate_meta["columns"]:
 
-                self.create_column(row_count, col_count, col['name'])
+                self.create_column(row_count, col_count, col["name"])
 
-                well_meta = self.hcs_meta['well'][well_count]
+                well_meta = self.hcs_meta["well"][well_count]
 
                 # go through positions under this column
-                for image in well_meta['images']:
-                    self.positions[pos_count] = {'name': image['path'], 'row': row['name'], 'col': col['name']}
-                    self.store[row['name']][col['name']].create_group(image['path'])
+                for image in well_meta["images"]:
+                    self.positions[pos_count] = {
+                        "name": image["path"],
+                        "row": row["name"],
+                        "col": col["name"],
+                    }
+                    self.store[row["name"]][col["name"]].create_group(
+                        image["path"]
+                    )
                     pos_count += 1
 
                 # place well_metadata provided from user
-                self.store[row['name']][col['name']].attrs.put({'well': well_meta})
+                self.store[row["name"]][col["name"]].attrs.put(
+                    {"well": well_meta}
+                )
 
                 col_count += 1
                 well_count += 1
@@ -552,7 +629,7 @@ class HCSZarr(WriterBase):
             col_count = 0
 
         # place plate metadata as provided by the user
-        self.store.attrs.put({'plate': plate_meta})
+        self.store.attrs.put({"plate": plate_meta})
 
     def _check_HCS_meta(self):
         """
@@ -571,58 +648,75 @@ class HCSZarr(WriterBase):
 
         """
 
-        HCS_Defaults = {'acquisitions': [{'id': 1, 'maxmimumfieldcount': 1, 'name': 'Dataset', 'starttime': 0}],
-                        'field_count': 1,
-                        'name': os.path.basename(self.root_path).strip('.zarr'),
-                        'version': '0.1'}
-
+        HCS_Defaults = {
+            "acquisitions": [
+                {
+                    "id": 1,
+                    "maxmimumfieldcount": 1,
+                    "name": "Dataset",
+                    "starttime": 0,
+                }
+            ],
+            "field_count": 1,
+            "name": os.path.basename(self.root_path).strip(".zarr"),
+            "version": "0.1",
+        }
 
         # Check to see if all of the required keys are present
-        if 'plate' not in self.hcs_meta.keys():
-            raise KeyError(f'HCS metadata missing plate metadata')
+        if "plate" not in self.hcs_meta.keys():
+            raise KeyError(f"HCS metadata missing plate metadata")
 
-        if 'well' not in self.hcs_meta.keys():
-            raise KeyError(f'HCS metadata missing well metadata')
+        if "well" not in self.hcs_meta.keys():
+            raise KeyError(f"HCS metadata missing well metadata")
 
-        plate_keys = self.hcs_meta['plate'].keys()
+        plate_keys = self.hcs_meta["plate"].keys()
         for key in plate_keys:
             if key in HCS_Defaults and key not in plate_keys:
-                self.hcs_meta['plate'][key] = HCS_Defaults[key]
+                self.hcs_meta["plate"][key] = HCS_Defaults[key]
 
-        if 'rows' not in plate_keys:
-            raise KeyError('rows key is missing from plate metadata')
+        if "rows" not in plate_keys:
+            raise KeyError("rows key is missing from plate metadata")
 
-        if 'columns' not in plate_keys:
-            raise KeyError('columns key is missing from plate metadata')
+        if "columns" not in plate_keys:
+            raise KeyError("columns key is missing from plate metadata")
 
         # create wells data based on rows, columns if not present
-        if 'wells' not in self.hcs_meta['plate'].keys():
-            self.hcs_meta['plate']['wells'] = [{'path': f'{row}/{col}'} for row in self.hcs_meta['plate']['rows']
-                                               for col in self.hcs_meta['plate']['columns']]
+        if "wells" not in self.hcs_meta["plate"].keys():
+            self.hcs_meta["plate"]["wells"] = [
+                {"path": f"{row}/{col}"}
+                for row in self.hcs_meta["plate"]["rows"]
+                for col in self.hcs_meta["plate"]["columns"]
+            ]
 
         # Check Plate Meta
-        n_col = len(self.hcs_meta['plate']['columns'])
-        n_row = len(self.hcs_meta['plate']['rows'])
-        n_well = len(self.hcs_meta['plate']['wells'])
+        n_col = len(self.hcs_meta["plate"]["columns"])
+        n_row = len(self.hcs_meta["plate"]["rows"])
+        n_well = len(self.hcs_meta["plate"]["wells"])
         if n_col * n_row != n_well:
-            raise ValueError('Plate metadata error: Numbers of rows/columns does not match number of wells')
+            raise ValueError(
+                "Plate metadata error: Numbers of rows/columns does not match number of wells"
+            )
 
         cnt = 0
-        for row in self.hcs_meta['plate']['rows']:
-            for col in self.hcs_meta['plate']['columns']:
-                row_name = row['name']
-                col_name = col['name']
-                well_path = self.hcs_meta['plate']['wells'][cnt]['path']
-                if well_path != f'{row_name}/{col_name}':
-                    raise ValueError(f'Plate metadata error: well path {well_path} \
-                                        does not match row {row_name}, col {col_name}')
+        for row in self.hcs_meta["plate"]["rows"]:
+            for col in self.hcs_meta["plate"]["columns"]:
+                row_name = row["name"]
+                col_name = col["name"]
+                well_path = self.hcs_meta["plate"]["wells"][cnt]["path"]
+                if well_path != f"{row_name}/{col_name}":
+                    raise ValueError(
+                        f"Plate metadata error: well path {well_path} \
+                                        does not match row {row_name}, col {col_name}"
+                    )
                 cnt += 1
 
         # check to make sure well metadata is correct
-        if 'well' in self.hcs_meta.keys():
-            for well in self.hcs_meta['well']:
-                if len(well['images']) > self.hcs_meta['plate']['field_count']:
-                    raise ValueError('Well metadata error: number of FOV exceeds maximum field count in plate metadata')
+        if "well" in self.hcs_meta.keys():
+            for well in self.hcs_meta["well"]:
+                if len(well["images"]) > self.hcs_meta["plate"]["field_count"]:
+                    raise ValueError(
+                        "Well metadata error: number of FOV exceeds maximum field count in plate metadata"
+                    )
 
     def create_position(self, position, name=None):
         """
@@ -641,4 +735,6 @@ class HCSZarr(WriterBase):
         try:
             self.open_position(position)
         except:
-            raise ValueError('HCS Writer already initialized positions. Cannot create a position that already exists')
+            raise ValueError(
+                "HCS Writer already initialized positions. Cannot create a position that already exists"
+            )

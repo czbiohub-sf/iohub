@@ -6,7 +6,6 @@ from pycromanager import Dataset
 
 
 class PycromanagerReader(ReaderBase):
-
     def __init__(self, data_path: str):
         super().__init__()
 
@@ -18,55 +17,76 @@ class PycromanagerReader(ReaderBase):
         self.dataset = Dataset(data_path)
         self._axes = self.dataset.axes
 
-        self.frames = len(self._axes['time']) if 'time' in self._axes.keys() else 1
-        self.channels = len(self._axes['channel']) if 'channel' in self._axes.keys() else 1
-        self.slices = len(self._axes['z']) if 'z' in self._axes.keys() else 1
+        self.frames = (
+            len(self._axes["time"]) if "time" in self._axes.keys() else 1
+        )
+        self.channels = (
+            len(self._axes["channel"]) if "channel" in self._axes.keys() else 1
+        )
+        self.slices = len(self._axes["z"]) if "z" in self._axes.keys() else 1
         self.height = self.dataset.image_height
         self.width = self.dataset.image_width
         self.dtype = self.dataset.dtype
 
         self.mm_meta = self._get_summary_metadata()
         self.channel_names = list(self.dataset.get_channel_names())
-        self.stage_positions = self.mm_meta['Summary']['StagePositions']
-        self.z_step_size = self.mm_meta['Summary']['z-step_um']
+        self.stage_positions = self.mm_meta["Summary"]["StagePositions"]
+        self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
-        pm_metadata['MicroManagerVersion'] = 'pycromanager'
-        pm_metadata['Positions'] = self.get_num_positions()
+        pm_metadata["MicroManagerVersion"] = "pycromanager"
+        pm_metadata["Positions"] = self.get_num_positions()
 
         img_metadata = self.get_image_metadata(0, 0, 0, 0)
-        pm_metadata['z-step_um'] = None
-        pm_metadata['StagePositions'] = []
+        pm_metadata["z-step_um"] = None
+        pm_metadata["StagePositions"] = []
 
-        if 'ZPosition_um_Intended' in img_metadata.keys():
-            pm_metadata['z-step_um'] = np.around(abs(self.get_image_metadata(0, 0, 0, 1)['ZPosition_um_Intended'] -
-                                                     self.get_image_metadata(0, 0, 0, 0)['ZPosition_um_Intended']),
-                                                 decimals=3).astype(float)
+        if "ZPosition_um_Intended" in img_metadata.keys():
+            pm_metadata["z-step_um"] = np.around(
+                abs(
+                    self.get_image_metadata(0, 0, 0, 1)[
+                        "ZPosition_um_Intended"
+                    ]
+                    - self.get_image_metadata(0, 0, 0, 0)[
+                        "ZPosition_um_Intended"
+                    ]
+                ),
+                decimals=3,
+            ).astype(float)
 
-        if 'XPosition_um_Intended' in img_metadata.keys():
+        if "XPosition_um_Intended" in img_metadata.keys():
             for p in range(self.get_num_positions()):
                 img_metadata = self.get_image_metadata(p, 0, 0, 0)
-                pm_metadata['StagePositions'].append(
-                    {img_metadata['Core-XYStage']: (img_metadata['XPosition_um_Intended'],
-                                                    img_metadata['YPosition_um_Intended'])})
+                pm_metadata["StagePositions"].append(
+                    {
+                        img_metadata["Core-XYStage"]: (
+                            img_metadata["XPosition_um_Intended"],
+                            img_metadata["YPosition_um_Intended"],
+                        )
+                    }
+                )
 
-        return {'Summary': pm_metadata}
+        return {"Summary": pm_metadata}
 
     def _check_coordinates(self, p, t, c, z):
-        if p == 0 and 'position' not in self._axes.keys():
+        if p == 0 and "position" not in self._axes.keys():
             p = None
-        if t == 0 and 'time' not in self._axes.keys():
+        if t == 0 and "time" not in self._axes.keys():
             t = None
-        if c == 0 and 'channel' not in self._axes.keys():
+        if c == 0 and "channel" not in self._axes.keys():
             c = None
-        if z == 0 and 'z' not in self._axes.keys():
+        if z == 0 and "z" not in self._axes.keys():
             z = None
 
         return p, t, c, z
 
     def get_num_positions(self) -> int:
-        return len(self._axes['position']) if 'position' in self._axes.keys() else 1
+        return (
+            len(self._axes["position"])
+            if "position" in self._axes.keys()
+            else 1
+        )
 
     def get_image(self, p, t, c, z) -> np.ndarray:
         """
@@ -114,18 +134,30 @@ class PycromanagerReader(ReaderBase):
 
         """
 
-        ax = [ax_ for ax_ in ['position', 'time', 'channel', 'z'] if ax_ in self._axes]
+        ax = [
+            ax_
+            for ax_ in ["position", "time", "channel", "z"]
+            if ax_ in self._axes
+        ]
 
-        if 'position' in self._axes.keys():
+        if "position" in self._axes.keys():
             # da is Dask array
             da = self.dataset.as_array(axes=ax, position=position)
         else:
             if position not in (0, None):
-                warnings.warn(f'Position index {position} is not part of this dataset.'
-                              f' Returning data at default position.')
+                warnings.warn(
+                    f"Position index {position} is not part of this dataset."
+                    f" Returning data at default position."
+                )
             da = self.dataset.as_array(axes=ax)
 
-        shape = (self.frames, self.channels, self.slices, self.height, self.width)
+        shape = (
+            self.frames,
+            self.channels,
+            self.slices,
+            self.height,
+            self.width,
+        )
 
         return da.reshape(shape)
 
@@ -165,6 +197,8 @@ class PycromanagerReader(ReaderBase):
         p, t, c, z = self._check_coordinates(p, t, c, z)
 
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
-            metadata = self.dataset.read_metadata(position=p, time=t, channel=c, z=z)
+            metadata = self.dataset.read_metadata(
+                position=p, time=t, channel=c, z=z
+            )
 
         return metadata

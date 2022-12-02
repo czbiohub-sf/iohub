@@ -21,10 +21,10 @@ class UPTIReader(ReaderBase):
 
         # Initializate data parameters
         self.data_folder = folder
-        if glob.glob(os.path.join(folder, '*.tif')) == []:
-            self.files = glob.glob(os.path.join(folder, '*.tiff'))
+        if glob.glob(os.path.join(folder, "*.tif")) == []:
+            self.files = glob.glob(os.path.join(folder, "*.tiff"))
         else:
-            self.files = glob.glob(os.path.join(folder, '*.tif'))
+            self.files = glob.glob(os.path.join(folder, "*.tif"))
         info_img = tiff.imread(self.files[0])
         self.dtype = info_img.dtype
         (self.height, self.width) = info_img.shape
@@ -60,17 +60,17 @@ class UPTIReader(ReaderBase):
 
         self.file_map = dict()
 
-        states = True if 'State' in self.files[0] else False
+        states = True if "State" in self.files[0] else False
 
         # Loop through the files and use regex to grab patterns and states,
         # **hardcoded file name structure**
         for file in self.files:
-            pattern = re.search(r'pattern_\d\d\d', file).group(0)
-            pattern_idx = int(pattern.strip('pattern_'))
-            if re.search(r'z_\d\d\d', file) == None:
+            pattern = re.search(r"pattern_\d\d\d", file).group(0)
+            pattern_idx = int(pattern.strip("pattern_"))
+            if re.search(r"z_\d\d\d", file) == None:
                 z = 0
             else:
-                z = int(re.search(r'z_\d\d\d', file).group(0).strip('z_'))
+                z = int(re.search(r"z_\d\d\d", file).group(0).strip("z_"))
             state_idx = 0
 
             # update dimensionality as we read the file names
@@ -82,11 +82,11 @@ class UPTIReader(ReaderBase):
 
             # if live upti, grab the states, otherwise just use patterns
             if states:
-                state = re.search(r'State_\d\d\d', file).group(0)
-                state_idx = int(state.strip('State_'))
+                state = re.search(r"State_\d\d\d", file).group(0)
+                state_idx = int(state.strip("State_"))
 
-                if f'{pattern}_{state}' not in self.channel_names:
-                    self.channel_names.append(f'{pattern}_{state}')
+                if f"{pattern}_{state}" not in self.channel_names:
+                    self.channel_names.append(f"{pattern}_{state}")
             else:
                 if pattern not in self.channel_names:
                     self.channel_names.append(pattern)
@@ -94,8 +94,12 @@ class UPTIReader(ReaderBase):
             self.file_map[(pattern_idx, state_idx, z)] = file
 
             # sorts list by pattern 0 --> state_0, state_1, state_2, state_3
-            self.channel_names.sort(key=lambda x: re.sub(r'pattern_\d\d\d', '', x))
-            self.channel_names.sort(key=lambda x: re.sub(r'State_\d\d\d', '', x))
+            self.channel_names.sort(
+                key=lambda x: re.sub(r"pattern_\d\d\d", "", x)
+            )
+            self.channel_names.sort(
+                key=lambda x: re.sub(r"State_\d\d\d", "", x)
+            )
 
     def _create_position_array(self, pos):
         """
@@ -110,9 +114,17 @@ class UPTIReader(ReaderBase):
 
         """
 
-        self.position_arrays[pos] = zarr.empty(shape=(self.frames, self.channels, self.slices, self.height, self.width),
-                                               chunks=(1, 1, 1, self.height, self.width),
-                                               dtype=self.dtype)
+        self.position_arrays[pos] = zarr.empty(
+            shape=(
+                self.frames,
+                self.channels,
+                self.slices,
+                self.height,
+                self.width,
+            ),
+            chunks=(1, 1, 1, self.height, self.width),
+            dtype=self.dtype,
+        )
         # add all the images with this specific dimension.  Will be blank images if dataset
         # is incomplete
         for t in range(self.frames):
@@ -136,12 +148,14 @@ class UPTIReader(ReaderBase):
         """
 
         chan_name = self.channel_names[c]
-        pattern = int(re.search(r'pattern_\d\d\d', chan_name).group(0).strip('pattern_'))
-        state = re.search(r'State_\d\d\d', chan_name)
-        state_idx = 0 if not state else int(state.group(0).strip('State_'))
+        pattern = int(
+            re.search(r"pattern_\d\d\d", chan_name).group(0).strip("pattern_")
+        )
+        state = re.search(r"State_\d\d\d", chan_name)
+        state_idx = 0 if not state else int(state.group(0).strip("State_"))
 
         fn = self.file_map[(pattern, state_idx, z)]
-        img = zarr.open(tiff.imread(fn, aszarr=True), 'r')
+        img = zarr.open(tiff.imread(fn, aszarr=True), "r")
 
         return img
 
@@ -159,7 +173,9 @@ class UPTIReader(ReaderBase):
 
         """
         if position > self.positions - 1:
-            raise ValueError('Entered position is greater than the number of positions in the data')
+            raise ValueError(
+                "Entered position is greater than the number of positions in the data"
+            )
 
         if position not in self.position_arrays.keys():
             self._create_position_array(position)
@@ -180,7 +196,9 @@ class UPTIReader(ReaderBase):
         """
 
         if position > self.positions - 1:
-            raise ValueError('Entered position is greater than the number of positions in the data')
+            raise ValueError(
+                "Entered position is greater than the number of positions in the data"
+            )
 
         # if position hasn't been initialized in memory, do that.
         if position not in self.position_arrays.keys():
@@ -194,4 +212,3 @@ class UPTIReader(ReaderBase):
     @property
     def shape(self):
         return self.frames, self.channels, self.slices, self.height, self.width
-

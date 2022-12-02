@@ -28,14 +28,15 @@ import logging
 
 ###############################################################################
 
-#todo: add dim_order to all reader objects
+# todo: add dim_order to all reader objects
 class WaveorderReader:
-
-    def __init__(self,
-                 src: str,
-                 data_type: str = None,
-                 extract_data: bool = False,
-                 log_level: int = logging.ERROR):
+    def __init__(
+        self,
+        src: str,
+        data_type: str = None,
+        extract_data: bool = False,
+        log_level: int = logging.ERROR,
+    ):
         """
         reads data output from micro-manager and returns a zarr array or numpy array
         supports singlepage tiff sequences or ome-tiffs
@@ -57,36 +58,40 @@ class WaveorderReader:
         # try to guess data type
         if data_type is None:
             if WaveorderReader._check_zarr_data_type(src):
-                data_type = 'zarr'
+                data_type = "zarr"
             elif WaveorderReader._check_pycromanager(src):
-                data_type = 'pycromanager'
+                data_type = "pycromanager"
             elif WaveorderReader._check_multipage_tiff(src):
-                data_type = 'ometiff'
+                data_type = "ometiff"
             elif WaveorderReader._check_single_page_tiff(src):
-                data_type = 'singlepagetiff'
+                data_type = "singlepagetiff"
             else:
-                raise FileNotFoundError(f'No compatible data found under {src}, please specify the top '
-                                        'level micromanager directory.')
+                raise FileNotFoundError(
+                    f"No compatible data found under {src}, please specify the top "
+                    "level micromanager directory."
+                )
         self.data_type = data_type
 
         # identify data structure type
-        if data_type == 'ometiff':
+        if data_type == "ometiff":
             self.reader = MicromanagerOmeTiffReader(src, extract_data)
-        elif data_type == 'singlepagetiff':
+        elif data_type == "singlepagetiff":
             self.reader = MicromanagerSequenceReader(src, extract_data)
-        elif data_type == 'zarr':
+        elif data_type == "zarr":
             self.reader = ZarrReader(src)
-        elif data_type == 'pycromanager':
+        elif data_type == "pycromanager":
             self.reader = PycromanagerReader(src)
-        elif data_type == 'upti':
+        elif data_type == "upti":
             self.reader = UPTIReader(src, extract_data)
         else:
-            raise NotImplementedError(f"Reader of type {data_type} is not implemented")
+            raise NotImplementedError(
+                f"Reader of type {data_type} is not implemented"
+            )
 
     @staticmethod
     def _check_zarr_data_type(src):
         try:
-            zarr.open(src, 'r')
+            zarr.open(src, "r")
         except:
             return False
         return True
@@ -94,28 +99,30 @@ class WaveorderReader:
     @staticmethod
     def _check_single_page_tiff(src):
         # pick parent directory in case a .tif file is selected
-        if src.endswith('.tif'):
+        if src.endswith(".tif"):
             src = os.path.dirname(src)
 
-        files = glob.glob(os.path.join(src, '*.tif'))
+        files = glob.glob(os.path.join(src, "*.tif"))
         if len(files) == 0:
             sub_dirs = WaveorderReader._get_sub_dirs(src)
             if sub_dirs:
                 path = os.path.join(src, sub_dirs[0])
-                files = glob.glob(os.path.join(path, '*.tif'))
+                files = glob.glob(os.path.join(path, "*.tif"))
                 if len(files) > 0:
                     with tiff.TiffFile(os.path.join(path, files[0])) as tf:
-                        if len(tf.pages) == 1:  # and tf.pages[0].is_multipage is False:
+                        if (
+                            len(tf.pages) == 1
+                        ):  # and tf.pages[0].is_multipage is False:
                             return True
         return False
 
     @staticmethod
     def _check_multipage_tiff(src):
         # pick parent directory in case a .tif file is selected
-        if src.endswith('.tif'):
+        if src.endswith(".tif"):
             src = os.path.dirname(src)
 
-        files = glob.glob(os.path.join(src, '*.tif'))
+        files = glob.glob(os.path.join(src, "*.tif"))
         if len(files) > 0:
             with tiff.TiffFile(files[0]) as tf:
                 if len(tf.pages) > 1:
@@ -127,11 +134,13 @@ class WaveorderReader:
     @staticmethod
     def _check_pycromanager(src):
         # go two levels up in case a .tif file is selected
-        if src.endswith('.tif'):
-            src = os.path.abspath(os.path.join(src, '../..'))
+        if src.endswith(".tif"):
+            src = os.path.abspath(os.path.join(src, "../.."))
 
         # shortcut, may not be foolproof
-        if os.path.exists(os.path.join(src, 'Full resolution', 'NDTiff.index')):
+        if os.path.exists(
+            os.path.join(src, "Full resolution", "NDTiff.index")
+        ):
             return True
         return False
 
@@ -150,8 +159,10 @@ class WaveorderReader:
         sub_dir_name    (list) natsorted list of subdirectories
         """
 
-        sub_dir_path = glob.glob(os.path.join(f, '*/'))
-        sub_dir_name = [os.path.split(subdir[:-1])[1] for subdir in sub_dir_path]
+        sub_dir_path = glob.glob(os.path.join(f, "*/"))
+        sub_dir_name = [
+            os.path.split(subdir[:-1])[1] for subdir in sub_dir_path
+        ]
         #    assert subDirName, 'No sub directories found'
         return natsort.natsorted(sub_dir_name)
 
@@ -218,7 +229,7 @@ class WaveorderReader:
 
     @mm_meta.setter
     def mm_meta(self, value):
-        assert(type(value) is dict)
+        assert type(value) is dict
         self.reader.mm_meta = value
 
     @property
@@ -227,7 +238,7 @@ class WaveorderReader:
 
     @stage_positions.setter
     def stage_positions(self, value):
-        assert(type(value) is list)
+        assert type(value) is list
         self.reader.stage_positions = value
 
     @property

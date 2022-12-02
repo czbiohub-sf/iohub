@@ -3,7 +3,6 @@ import numpy as np
 
 
 class ReaderBase:
-
     def __init__(self):
         self.frames = None
         self.channels = None

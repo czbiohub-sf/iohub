@@ -9,6 +9,7 @@ class WaveorderWriter:
         should conform to the ome-zarr standard as much as possible
 
     """
+
     __builder = None
     __save_dir = None
     __root_store_path = None
@@ -19,18 +20,20 @@ class WaveorderWriter:
     current_group_name = None
     current_position = None
 
-    def __init__(self,
-                 save_dir: str = None,
-                 hcs: bool = False,
-                 hcs_meta: dict = None,
-                 verbose: bool = False):
+    def __init__(
+        self,
+        save_dir: str = None,
+        hcs: bool = False,
+        hcs_meta: dict = None,
+        verbose: bool = False,
+    ):
 
         self.verbose = verbose
         self.use_hcs = hcs
         self.hcs_meta = hcs_meta
 
-        if os.path.exists(save_dir) and save_dir.endswith('.zarr'):
-            print(f'Opening existing store at {save_dir}')
+        if os.path.exists(save_dir) and save_dir.endswith(".zarr"):
+            print(f"Opening existing store at {save_dir}")
             self._open_zarr_root(save_dir)
         else:
             self._check_is_dir(save_dir)
@@ -38,9 +41,13 @@ class WaveorderWriter:
         # initialize the subwriter based upon HCS or Default
         if self.use_hcs:
             if not self.hcs_meta:
-                raise ValueError('No HCS Metadata provided. If HCS format is to be used you must specify the HCS Metadata')
+                raise ValueError(
+                    "No HCS Metadata provided. If HCS format is to be used you must specify the HCS Metadata"
+                )
 
-            self.sub_writer = HCSZarr(self.store, self.__root_store_path, self.hcs_meta)
+            self.sub_writer = HCSZarr(
+                self.store, self.__root_store_path, self.hcs_meta
+            )
         else:
             self.sub_writer = DefaultZarr(self.store, self.__root_store_path)
 
@@ -63,13 +70,15 @@ class WaveorderWriter:
         if os.path.isdir(path) and os.path.exists(path):
             self.__save_dir = path
         else:
-            print(f'No existing directory found. Creating new directory at {path}')
+            print(
+                f"No existing directory found. Creating new directory at {path}"
+            )
             os.mkdir(path)
             self.__save_dir = path
 
     def _open_zarr_root(self, path):
 
-        #TODO: Use case where user opens an already HCS-store?
+        # TODO: Use case where user opens an already HCS-store?
         """
         Change current zarr to an existing store
         if zarr doesn't exist, raise error
@@ -87,7 +96,9 @@ class WaveorderWriter:
             self.store = zarr.open(path)
             self.__root_store_path = path
         else:
-            raise FileNotFoundError(f'No store found at {path}, check spelling or create new store with create_zarr')
+            raise FileNotFoundError(
+                f"No store found at {path}, check spelling or create new store with create_zarr"
+            )
 
     def create_zarr_root(self, name):
         """
@@ -101,22 +112,31 @@ class WaveorderWriter:
 
         """
 
-        if not name.endswith('.zarr'):
-            name = name+'.zarr'
+        if not name.endswith(".zarr"):
+            name = name + ".zarr"
 
         zarr_path = os.path.join(self.__save_dir, name)
         if os.path.exists(zarr_path):
-            raise FileExistsError('A zarr store with this name already exists')
+            raise FileExistsError("A zarr store with this name already exists")
 
-        print(f'Creating new zarr store at {zarr_path}')
+        print(f"Creating new zarr store at {zarr_path}")
         self.store = zarr.open(zarr_path)
         self.__root_store_path = zarr_path
         self.sub_writer.set_store(self.store)
         self.sub_writer.set_root(self.__root_store_path)
         self.sub_writer.init_hierarchy()
 
-    def init_array(self, position, data_shape, chunk_size, chan_names, dtype='float32',
-                   clims=None, position_name=None, overwrite=False):
+    def init_array(
+        self,
+        position,
+        data_shape,
+        chunk_size,
+        chan_names,
+        dtype="float32",
+        clims=None,
+        position_name=None,
+        overwrite=False,
+    ):
         """
 
         Creates a subgroup structure based on position index.  Then initializes the zarr array under the
@@ -137,14 +157,16 @@ class WaveorderWriter:
 
         """
 
-        pos_name = position_name if position_name else f'Pos_{position:03d}'
+        pos_name = position_name if position_name else f"Pos_{position:03d}"
 
         # Make sure data matches OME zarr structure
         if len(data_shape) != 5:
-            raise ValueError('Data shape must be (T, C, Z, Y, X)')
+            raise ValueError("Data shape must be (T, C, Z, Y, X)")
 
         self.sub_writer.create_position(position, pos_name)
-        self.sub_writer.init_array(data_shape, chunk_size, dtype, chan_names, clims, overwrite)
+        self.sub_writer.init_array(
+            data_shape, chunk_size, dtype, chan_names, clims, overwrite
+        )
 
     def write(self, data, p, t=None, c=None, z=None):
         """
