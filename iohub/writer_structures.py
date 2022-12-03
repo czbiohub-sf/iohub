@@ -1,336 +1,214 @@
-import os
+import os, logging
 from numcodecs import Blosc
 import numpy as np
+import zarr
+from ome_zarr.writer import write_image
+from ome_zarr.format import format_from_version, Format, FormatV04, FormatV01
+
+from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
+from numpy.typing import ArrayLike
+
+if TYPE_CHECKING:
+    from _typeshed import StrOrBytesPath
 
 
-class WriterBase:
+def _channel_display_settings(
+    chan_name: str,
+    clim: Tuple[float, float, float, float] = None,
+    first_chan: bool = False,
+):
+    """This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
+    names for display. Defaults everything to grayscale.
+
+    Parameters
+    ----------
+    chan_name : str
+        Desired name of the channel for display
+    clim : Tuple[float, float, float, float], optional
+        Contrast limits (start, end, min, max)
+    first_chan : bool, optional
+        Whether or not this is the first channel of the dataset (display will be set to active), by default False
+
+    Returns
+    -------
+    dict
+        Display settings adherent to ome-zarr standards
     """
-    ABC for all writer types
+    U16_FMAX = float(2**16 - 1)
+    channel_settings = {
+        "Retardance": (0.0, 100.0, 0.0, 1000.0),
+        "Orientation": (0.0, np.pi, 0.0, np.pi),
+        "Phase3D": (-0.2, 0.2, -10, 10),
+        "BF": (0.0, 5.0, 0.0, U16_FMAX),
+        "S0": (0.0, 1.0, 0.0, U16_FMAX),
+        "S1": (-0.5, 0.5, -10.0, 10.0),
+        "S2": (-0.5, 0.5, -10.0, 10.0),
+        "S3": (-1.0, 1.0, -10.0, -10.0),
+        "Other": (0, U16_FMAX, 0.0, U16_FMAX),
+    }
+    if not clim:
+        if chan_name in channel_settings.keys():
+            clim = channel_settings[chan_name]
+        else:
+            clim = channel_settings["Other"]
+    start, end, min, max = clim
+    return {
+        "active": first_chan,
+        "coefficient": 1.0,
+        "color": "FFFFFF",
+        "family": "linear",
+        "inverted": False,
+        "label": chan_name,
+        "window": {"end": end, "max": max, "min": min, "start": start},
+    }
+
+
+def _ome_axes(
+    name: str,
+    type: Literal["space", "time", "channel"] = None,
+    unit: str = None,
+):
+    """Generate OME-NGFF axes metadata
+
+    Parameters
+    ----------
+    name : str
+        Name
+    type : Literal["space", "time", "channel"], optional
+        Fype, by default None
+    unit : str, optional
+        _description_, by default None
+    """
+    axes = {"name": name}
+    if type:
+        axes["type"] = type
+        if unit:
+            axes["unit"] = unit
+    return axes
+
+
+class OMEZarrWriter:
+    """Generic OME-Zarr writer instance for an existing Zarr store.
+
+    Parameters
+    ----------
+    root : zarr.Group
+        The root group of the Zarr store
+    format : str, optional
+        OME-NGFF version, by default FormatV04
+    axes : Union[str, List[str], Dict[str, str]], optional
+        OME axes metadata, by default:
+        `
+        [{'name': 'T', 'type': 'time', 'unit': 'second'},
+        {'name': 'C', 'type': 'channel'},
+        {'name': 'Z', 'type': 'space', 'unit': 'micrometer'},
+        {'name': 'Y', 'type': 'space', 'unit': 'micrometer'},
+        {'name': 'X', 'type': 'space', 'unit': 'micrometer'}]
+        `
     """
 
-    def __init__(self, store, root_path):
+    _DEFAULT_AXES = [
+        _ome_axes("T", "time", "second"),
+        _ome_axes("C", "channel"),
+        *[_ome_axes(i, "space", "micrometer") for i in ("Z", "Y", "X")],
+    ]
 
-        # init common attributes
-        self.store = store
-        self.root_path = root_path
-        self.current_pos_group = None
-        self.current_position = None
-        self.current_well_group = None
-        self.verbose = False
-        self.dtype = None
+    def __init__(
+        self,
+        root: zarr.Group,
+        version: Literal["0.1", "0.4"],
+        axes: Union[str, List[str], List[Dict[str, str]]] = None,
+    ):
+        self.root = root
+        self.fmt = format_from_version(str(version))
+        self.positions: Dict[int, str] = {}
+        self.axes = axes if axes else self._DEFAULT_AXES
 
-        # set hardcoded compressor
-        self.__compressor = Blosc(
-            cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+    @property
+    def next_position_index(self):
+        """The next auto-generated position index (current max index + 1)"""
+        return sorted(self.positions.keys())[-1] + 1
+
+    def require_position(self, name: str, index: int = None):
+        """Creates a new position group if it does not exist.
+
+        Parameters
+        ----------
+        name : str
+            Name (absolute path under the store root) of position group
+        index : int, optional
+            Index of the position if a new one is created, by default incremented by 1
+
+        Returns
+        -------
+        Group
+            Zarr group for the required position
+        """
+        if index not in self.positions.keys():
+            self.positions[index] = name
+        elif self.positions[index] != name:
+            raise ValueError(
+                f"The specified index {index} does not match an existing name {name}."
+            )
+        position = self.root.require_group(name)
+        return position
+
+    def write_position(
+        self,
+        data: ArrayLike,
+        channel_names: List[str],
+        pos: int,
+        chunks: Tuple[int] = None,
+        overwrite: bool = False,
+    ):
+        """Write 5-D data to a position group.
+
+        Parameters
+        ----------
+        data : ArrayLike
+            Data array
+        channel_names: List[str]
+            Channel names to write to metadata
+        pos : int
+            path name of the position group to write into
+        chunks : Tuple[int], optional
+            Chunk size, by default None
+        overwrite : bool, optional
+            Overwrite if the position exists, by default False
+        """
+        group = self.require_position(self.positions[pos])
+        storage_options = {
+            "chunks": chunks,
+            "compressor": Blosc(
+                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+            ),
+            "overwrite": overwrite,
+        }
+        if self.fmt == FormatV01:
+            self._old_channel_attributes(channel_names, group)
+            metadata = None
+        elif self.fmt == FormatV04:
+            metadata = self._position_metadata(group)
+        write_image(
+            data,
+            group=group,
+            axes=self.axes,
+            scaler=None,
+            fmt=self.version,
+            storage_options=storage_options,
+            metadata=metadata,
         )
 
-        # maps to keep track of hierarchies
-        self.rows = dict()
-        self.columns = dict()
-        self.positions = dict()
+    def _position_metadata(self, position):
+        pass
 
-    # Silence print statements
-    def set_verbosity(self, verbose: bool):
-        self.verbose = verbose
-
-    # Initialize zero array
-    def init_array(
-        self, data_shape, chunk_size, dtype, chan_names, clims, overwrite=False
+    def _old_channel_attributes(
+        self, chan_names, position: zarr.Group, clims=None
     ):
         """
+        .. deprecated:: 0.0.1
+          `_old_channel_attributes` is implemented for OME-NGFF v0.1
 
-        Initializes the zarr array under the current position subgroup.
-        array level is called 'arr_0' in the hierarchy.  Sets omero/multiscales metadata based upon
-        chan_names and clims
-
-        Parameters
-        ----------
-        data_shape:         (tuple)  Desired Shape of your data (T, C, Z, Y, X).  Must match data
-        chunk_size:         (tuple) Desired Chunk Size (T, C, Z, Y, X).  Chunking each image would be (1, 1, 1, Y, X)
-        dtype:              (str or np.dtype) Data Type, i.e. 'uint16' or np.uint16
-        chan_names:         (list) List of strings corresponding to your channel names.  Used for OME-zarr metadata
-        clims:              (list) list of tuples corresponding to contrast limtis for channel.  OME-Zarr metadata
-                                    tuple can be of (start, end, min, max) or (start, end)
-        overwrite:          (bool) Whether or not to overwrite the existing data that may be present.
-
-        Returns
-        -------
-
-        """
-
-        self.dtype = np.dtype(dtype)
-
-        self.set_channel_attributes(chan_names, clims)
-        self.current_pos_group.zeros(
-            "arr_0",
-            shape=data_shape,
-            chunks=chunk_size,
-            dtype=dtype,
-            compressor=self.__compressor,
-            overwrite=overwrite,
-        )
-
-    def write(self, data, t, c, z):
-        """
-        Write data to specified index of initialized zarr array
-
-        :param data: (nd-array), data to be saved. Must be the shape that matches indices (T, C, Z, Y, X)
-        :param t: (list), index or index slice of the time dimension
-        :param c: (list), index or index slice of the channel dimension
-        :param z: (list), index or index slice of the z dimension
-
-        """
-
-        shape = np.shape(data)
-
-        if self.current_pos_group.__len__() == 0:
-            raise ValueError("Array not initialized")
-
-        if not isinstance(t, int) and not isinstance(t, slice):
-            raise TypeError("t specification must be either int or slice")
-
-        if not isinstance(c, int) and not isinstance(c, slice):
-            raise TypeError("c specification must be either int or slice")
-
-        if not isinstance(z, int) and not isinstance(z, slice):
-            raise TypeError("z specification must be either int or slice")
-
-        if isinstance(t, int) and isinstance(c, int) and isinstance(z, int):
-
-            if len(shape) > 2:
-                raise ValueError("Index dimensions exceed data dimensions")
-            else:
-                self.current_pos_group["arr_0"][t, c, z] = data
-
-        else:
-            self.current_pos_group["arr_0"][t, c, z] = data
-
-    def create_channel_dict(self, chan_name, clim=None, first_chan=False):
-        """
-        This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
-        names for display.  Defaults everything to grayscale.
-
-        Parameters
-        ----------
-        chan_name:          (str) Desired name of the channel for display
-        clim:               (tuple) contrast limits (start, end, min, max)
-        first_chan:         (bool) whether or not this is the first channel of the dataset (display will be set to active)
-
-        Returns
-        -------
-        dict_:              (dict) dictionary adherent to ome-zarr standards
-
-        """
-
-        if chan_name == "Retardance":
-            min = clim[2] if clim else 0.0
-            max = clim[3] if clim else 1000.0
-            start = clim[0] if clim else 0.0
-            end = clim[1] if clim else 100.0
-        elif chan_name == "Orientation":
-            min = clim[2] if clim else 0.0
-            max = clim[3] if clim else np.pi
-            start = clim[0] if clim else 0.0
-            end = clim[1] if clim else np.pi
-
-        elif chan_name == "Phase3D":
-            min = clim[2] if clim else -10.0
-            max = clim[3] if clim else 10.0
-            start = clim[0] if clim else -0.2
-            end = clim[1] if clim else 0.2
-
-        elif chan_name == "BF":
-            min = clim[2] if clim else 0.0
-            max = clim[3] if clim else 65535.0
-            start = clim[0] if clim else 0.0
-            end = clim[1] if clim else 5.0
-
-        elif chan_name == "S0":
-            min = clim[2] if clim else 0.0
-            max = clim[3] if clim else 65535.0
-            start = clim[0] if clim else 0.0
-            end = clim[1] if clim else 1.0
-
-        elif chan_name == "S1":
-            min = clim[2] if clim else 10.0
-            max = clim[3] if clim else -10.0
-            start = clim[0] if clim else -0.5
-            end = clim[1] if clim else 0.5
-
-        elif chan_name == "S2":
-            min = clim[2] if clim else -10.0
-            max = clim[3] if clim else 10.0
-            start = clim[0] if clim else -0.5
-            end = clim[1] if clim else 0.5
-
-        elif chan_name == "S3":
-            min = clim[2] if clim else -10
-            max = clim[3] if clim else 10
-            start = clim[0] if clim else -1.0
-            end = clim[1] if clim else 1.0
-
-        else:
-            min = clim[2] if clim else 0.0
-            max = clim[3] if clim else 65535.0
-            start = clim[0] if clim else 0.0
-            end = clim[1] if clim else 65535.0
-
-        dict_ = {
-            "active": first_chan,
-            "coefficient": 1.0,
-            "color": "FFFFFF",
-            "family": "linear",
-            "inverted": False,
-            "label": chan_name,
-            "window": {"end": end, "max": max, "min": min, "start": start},
-        }
-
-        return dict_
-
-    def create_row(self, idx, name=None):
-        """
-        Creates a row in the hierarchy (first level below zarr store). Option to name
-        this row.  Default is Row_{idx}.  Keeps track of the row name + row index for later
-        metadata creation
-
-        Parameters
-        ----------
-        idx:            (int) Index of the row (order in which it is placed)
-        name:           (str) Optional name to replace default row name
-
-        Returns
-        -------
-
-        """
-
-        row_name = f"Row_{idx}" if not name else name
-        row_path = os.path.join(self.root_path, row_name)
-
-        # check if the user is trying to create a row that already exsits
-        if os.path.exists(row_path):
-            raise FileExistsError(
-                f"A row subgroup with the name {row_name} already exists"
-            )
-        else:
-            self.store.create_group(row_name)
-            self.rows[idx] = row_name
-
-    def create_column(self, row_idx, idx, name=None):
-        """
-        Creates a column in the hierarchy (second level below zarr store, one below row). Option to name
-        this column.  Default is Col_{idx}.  Keeps track of the column name + column index for later
-        metadata creation
-
-        Parameters
-        ----------
-        row_idx:        (int) Index of the row to place the column underneath
-        idx:            (int) Index of the column (order in which it is placed)
-        name:           (str) Optional name to replace default column name
-
-        Returns
-        -------
-
-        """
-
-        col_name = f"Col_{idx}" if not name else name
-        row_name = self.rows[row_idx]
-        col_path = os.path.join(
-            os.path.join(self.root_path, row_name), col_name
-        )
-
-        # check to see if the user is trying to create a row that already exists
-        if os.path.exists(col_path):
-            raise FileExistsError(
-                f"A column subgroup with the name {col_name} already exists"
-            )
-        else:
-            self.store[self.rows[row_idx]].create_group(col_name)
-            self.columns[idx] = col_name
-
-    def open_position(self, position: int):
-        """
-        Opens a position based upon the position index.  It will navigate the rows/column to
-        find where this position is based off of the generation position map which keeps track
-        of this information.  It will set current_pos_group to this position for writing the data
-
-        Parameters
-        ----------
-        position:           (int) Index of the position you wish to open
-
-        Returns
-        -------
-
-        """
-
-        # get row, column, and path to the well
-        row_name = self.positions[position]["row"]
-        col_name = self.positions[position]["col"]
-        well_path = os.path.join(
-            os.path.join(self.root_path, row_name), col_name
-        )
-
-        # check to see if this well exists (row/column)
-        if os.path.exists(well_path):
-            pos_name = self.positions[position]["name"]
-            pos_path = os.path.join(well_path, pos_name)
-
-            # check to see if the position exists
-            if os.path.exists(pos_path):
-
-                if self.verbose:
-                    print(f"Opening subgroup {row_name}/{col_name}/{pos_name}")
-
-                # update trackers to note the current status of the writer
-                self.current_pos_group = self.store[row_name][col_name][
-                    pos_name
-                ]
-                self.current_well_group = self.store[row_name][col_name]
-                self.current_position = position
-
-            else:
-                raise FileNotFoundError(
-                    f"Could not find zarr position subgroup at {row_name}/{col_name}/{pos_name}\
-                                                    Check spelling or create position subgroup with create_position"
-                )
-        else:
-            raise FileNotFoundError(
-                f"Could not find zarr position subgroup at {row_name}/{col_name}/\
-                                                Check spelling or create column/position subgroup with create_position"
-            )
-
-    def set_root(self, root):
-        """
-        set the root path of the zarr store.  Used in the main writer class.
-
-        Parameters
-        ----------
-        root:               (str) path to the zarr store (folder ending in .zarr)
-
-        Returns
-        -------
-
-        """
-        self.root_path = root
-
-    def set_store(self, store):
-        """
-        Sets the zarr store.  Used in the main writer class
-
-        Parameters
-        ----------
-        store:              (Zarr StoreObject) Opened zarr store at the highest level
-
-        Returns
-        -------
-
-        """
-        self.store = store
-
-    def get_zarr(self):
-        return self.current_pos_group
-
-    def set_channel_attributes(self, chan_names, clims=None):
-        """
         A method for creating ome-zarr metadata dictionary.
         Channel names are defined by the user, everything else
         is pre-defined.
@@ -339,6 +217,9 @@ class WriterBase:
         ----------
         chan_names:     (list) List of channel names in the order of the channel dimensions
                                 i.e. if 3D Phase is C = 0, list '3DPhase' first.
+
+        position: Group
+            Position group to write metadata
 
         clims:          (list of tuples) contrast limits to display for every channel
 
@@ -392,13 +273,13 @@ class WriterBase:
             first_chan = True if i == 0 else False
             if not clims or i >= len(clims):
                 dict_list.append(
-                    self.create_channel_dict(
+                    _channel_display_settings(
                         chan_names[i], first_chan=first_chan
                     )
                 )
             else:
                 dict_list.append(
-                    self.create_channel_dict(
+                    _channel_display_settings(
                         chan_names[i], clim, first_chan=first_chan
                     )
                 )
@@ -408,16 +289,84 @@ class WriterBase:
             "omero": {"channels": dict_list, "rdefs": rdefs, "version": 0.1},
         }
 
-        self.current_pos_group.attrs.put(full_dict)
+        position.attrs.put(full_dict)
 
-    def init_hierarchy(self):
+
+class HCSWriter(OMEZarrWriter):
+    def __init__(self, root: zarr.Group, version: Format = FormatV04):
+        super().__init__(root, version)
+
+    @property
+    def row_names(self) -> List[str]:
+        return [name for name in self.root.group_keys()]
+
+    def get_cols_in_row(self, row_name: str) -> List[str]:
+        """Get column names in a row (wells).
+
+        Parameters
+        ----------
+        row_name : str
+            Name of the parent row
+
+        Returns
+        -------
+        List[str]
+            list of names of columns
+        """
+        return [well_name for well_name in self.root[row_name].group_keys()]
+
+    def get_pos_in_well(self, row_name: str, col_name: str):
         pass
 
-    def create_position(self, position: int, name: str):
-        pass
+    @property
+    def plate_layout(self) -> Dict[str, List[str]]:
+        """Names of rows and columns of non-empty wells.
+
+        Returns
+        -------
+        Dict[str, List[str]]
+            {"A": ["1", ...],...}
+        """
+        return {
+            row_name: self.get_cols_in_row() for row_name in self.row_names
+        }
+
+    def require_row(self, name: str):
+        """Creates a row in the hierarchy (first level below zarr root) if it does not exist.
+
+        Parameters
+        ----------
+        name : str
+            Name of the row
+
+        Returns
+        -------
+        Group
+            Zarr group for the required row
+        """
+        return self.root.require_group(name)
+
+    def require_column(self, row_name: str, col_name: str):
+        """Creates a column in the hierarchy (second level below zarr root, one below rows) if it does not exist.
+        Will also create the parent row if it does not exist
+
+        Parameters
+        ----------
+        row_name : str
+            Name of the parent row
+        col_name : str
+            Name of the column
+
+        Returns
+        -------
+        Group
+            Zarr group for the required column
+        """
+        row = self.root.require_group(row_name)
+        return row.require_group(col_name)
 
 
-class DefaultZarr(WriterBase):
+class DefaultZarr(HCSWriter):
     """
     This writer is based off creating a default HCS hierarchy for non-hcs datasets.
     Currently, we decide that all positions will live under individual columns under
@@ -560,7 +509,7 @@ class DefaultZarr(WriterBase):
         self.store[self.rows[0]][self.columns[pos]].attrs.put(self.well_meta)
 
 
-class HCSZarr(WriterBase):
+class HCSZarr(HCSWriter):
     """
     This writer version will write new data based upon provided HCS metadata.
     Useful for when we are reconstructing data that already has a specific HCS heirarchy.
