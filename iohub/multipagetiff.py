@@ -10,7 +10,6 @@ from iohub.reader_base import ReaderBase
 
 
 class MicromanagerOmeTiffReader(ReaderBase):
-
     def __init__(self, folder: str, extract_data: bool = False):
         super().__init__()
 
@@ -23,16 +22,18 @@ class MicromanagerOmeTiffReader(ReaderBase):
         """
 
         # Add Initial Checks
-        if len(glob.glob(os.path.join(folder, '*.ome.tif'))) == 0:
-            raise ValueError('Specific input contains no ome.tif files, please specify a valid input directory')
+        if len(glob.glob(os.path.join(folder, "*.ome.tif"))) == 0:
+            raise ValueError(
+                "Specific input contains no ome.tif files, please specify a valid input directory"
+            )
 
         # ignore tiffile warnings, doesn't work
         with warnings.catch_warnings():
-            warnings.simplefilter('ignore', tiff)
+            warnings.simplefilter("ignore", tiff)
 
         # Grab all image files
         self.data_directory = folder
-        self._files = glob.glob(os.path.join(self.data_directory, '*.ome.tif'))
+        self._files = glob.glob(os.path.join(self.data_directory, "*.ome.tif"))
 
         # Generate Data Specific Properties
         self.coords = None
@@ -79,31 +80,31 @@ class MicromanagerOmeTiffReader(ReaderBase):
         slices = 0
         for file in self._files:
             tf = TiffFile(file)
-            meta = tf.micromanager_metadata['IndexMap']
+            meta = tf.micromanager_metadata["IndexMap"]
             tf.close()
-            offsets = list(meta['Offset'])
+            offsets = list(meta["Offset"])
 
-            for page in range(len(meta['Channel'])):
+            for page in range(len(meta["Channel"])):
                 coord = [0, 0, 0, 0]
-                coord[0] = meta['Position'][page]
-                coord[1] = meta['Frame'][page]
-                coord[2] = meta['Channel'][page]
-                coord[3] = meta['Slice'][page]
+                coord[0] = meta["Position"][page]
+                coord[1] = meta["Frame"][page]
+                coord[2] = meta["Channel"][page]
+                coord[3] = meta["Slice"][page]
                 offset = self._get_byte_offset(offsets, page)
                 self.coord_map[tuple(coord)] = (file, page, offset)
 
                 # update dimensions as we go along, helps with incomplete datasets
-                if coord[0]+1 > positions:
-                    positions = coord[0]+1
+                if coord[0] + 1 > positions:
+                    positions = coord[0] + 1
 
-                if coord[1]+1 > frames:
-                    frames = coord[1]+1
+                if coord[1] + 1 > frames:
+                    frames = coord[1] + 1
 
-                if coord[2]+1 > channels:
-                    channels = coord[2]+1
+                if coord[2] + 1 > channels:
+                    channels = coord[2] + 1
 
-                if coord[3]+1 > slices:
-                    slices = coord[3]+1
+                if coord[3] + 1 > slices:
+                    slices = coord[3] + 1
 
         # update dimensions to the largest dimensions present in the saved data
         self.positions = positions
@@ -133,7 +134,6 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         return array_offset
 
-
     def _set_mm_meta(self):
         """
         assign image metadata from summary metadata
@@ -145,46 +145,56 @@ class MicromanagerOmeTiffReader(ReaderBase):
         with TiffFile(self._files[0]) as tif:
             self.mm_meta = tif.micromanager_metadata
 
-            mm_version = self.mm_meta['Summary']['MicroManagerVersion']
-            if 'beta' in mm_version:
-                if self.mm_meta['Summary']['Positions'] > 1:
+            mm_version = self.mm_meta["Summary"]["MicroManagerVersion"]
+            if "beta" in mm_version:
+                if self.mm_meta["Summary"]["Positions"] > 1:
                     self.stage_positions = []
 
-                    for p in range(len(self.mm_meta['Summary']['StagePositions'])):
-                        pos = self._simplify_stage_position_beta(self.mm_meta['Summary']['StagePositions'][p])
+                    for p in range(
+                        len(self.mm_meta["Summary"]["StagePositions"])
+                    ):
+                        pos = self._simplify_stage_position_beta(
+                            self.mm_meta["Summary"]["StagePositions"][p]
+                        )
                         self.stage_positions.append(pos)
 
                 # MM beta versions sometimes don't have 'ChNames', so I'm wrapping in a try-except and setting the
                 # channel names to empty strings if it fails.
                 try:
-                    for ch in self.mm_meta['Summary']['ChNames']:
+                    for ch in self.mm_meta["Summary"]["ChNames"]:
                         self.channel_names.append(ch)
                 except:
-                    self.channel_names = self.mm_meta['Summary']['Channels']*[''] # empty strings
+                    self.channel_names = self.mm_meta["Summary"][
+                        "Channels"
+                    ] * [
+                        ""
+                    ]  # empty strings
 
-            elif mm_version == '1.4.22':
-                for ch in self.mm_meta['Summary']['ChNames']:
+            elif mm_version == "1.4.22":
+                for ch in self.mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
 
             else:
-                if self.mm_meta['Summary']['Positions'] > 1:
+                if self.mm_meta["Summary"]["Positions"] > 1:
                     self.stage_positions = []
 
-                    for p in range(self.mm_meta['Summary']['Positions']):
-                        pos = self._simplify_stage_position(self.mm_meta['Summary']['StagePositions'][p])
+                    for p in range(self.mm_meta["Summary"]["Positions"]):
+                        pos = self._simplify_stage_position(
+                            self.mm_meta["Summary"]["StagePositions"][p]
+                        )
                         self.stage_positions.append(pos)
 
-                for ch in self.mm_meta['Summary']['ChNames']:
+                for ch in self.mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
 
             # dimensions based on mm metadata do not reflect final written dimensions
             # these will change after data is loaded
-            self.z_step_size = self.mm_meta['Summary']['z-step_um']
-            self.height = self.mm_meta['Summary']['Height']
-            self.width = self.mm_meta['Summary']['Width']
-            self.frames = self.mm_meta['Summary']['Frames']
-            self.slices = self.mm_meta['Summary']['Slices']
-            self.channels = self.mm_meta['Summary']['Channels']
+            self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
+            self.height = self.mm_meta["Summary"]["Height"]
+            self.width = self.mm_meta["Summary"]["Width"]
+            self.frames = self.mm_meta["Summary"]["Frames"]
+            self.slices = self.mm_meta["Summary"]["Slices"]
+            self.channels = self.mm_meta["Summary"]["Channels"]
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
@@ -200,9 +210,9 @@ class MicromanagerOmeTiffReader(ReaderBase):
         """
 
         out = copy(stage_pos)
-        out.pop('DevicePositions')
-        for dev_pos in stage_pos['DevicePositions']:
-            out.update({dev_pos['Device']: dev_pos['Position_um']})
+        out.pop("DevicePositions")
+        for dev_pos in stage_pos["DevicePositions"]:
+            out.update({dev_pos["Device"]: dev_pos["Position_um"]})
         return out
 
     def _simplify_stage_position_beta(self, stage_pos: dict):
@@ -221,19 +231,19 @@ class MicromanagerOmeTiffReader(ReaderBase):
         """
 
         new_dict = {}
-        new_dict['Label'] = stage_pos['label']
-        new_dict['GridRow'] = stage_pos['gridRow']
-        new_dict['GridCol'] = stage_pos['gridCol']
+        new_dict["Label"] = stage_pos["label"]
+        new_dict["GridRow"] = stage_pos["gridRow"]
+        new_dict["GridCol"] = stage_pos["gridCol"]
 
-        for sub in stage_pos['subpositions']:
+        for sub in stage_pos["subpositions"]:
             values = []
-            for field in ['x', 'y', 'z']:
+            for field in ["x", "y", "z"]:
                 if sub[field] != 0:
                     values.append(sub[field])
             if len(values) == 1:
-                new_dict[sub['stageName']] = values[0]
+                new_dict[sub["stageName"]] = values[0]
             else:
-                new_dict[sub['stageName']] = values
+                new_dict[sub["stageName"]] = values
 
         return new_dict
 
@@ -252,14 +262,18 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         # intialize virtual zarr store and save it under positions
         timepoints, channels, slices = self._get_dimensions(pos)
-        self.position_arrays[pos] = zarr.empty(shape=(timepoints, channels, slices, self.height, self.width),
-                                               chunks=(1, 1, 1, self.height, self.width),
-                                               dtype=self.dtype)
+        self.position_arrays[pos] = zarr.empty(
+            shape=(timepoints, channels, slices, self.height, self.width),
+            chunks=(1, 1, 1, self.height, self.width),
+            dtype=self.dtype,
+        )
         # add all the images with this specific dimension.  Will be blank images if dataset
         # is incomplete
         for p, t, c, z in self.coord_map.keys():
             if p == pos:
-                self.position_arrays[pos][t, c, z, :, :] = self.get_image(pos, t, c, z)
+                self.position_arrays[pos][t, c, z, :, :] = self.get_image(
+                    pos, t, c, z
+                )
 
     def _set_dtype(self):
         """
@@ -297,12 +311,12 @@ class MicromanagerOmeTiffReader(ReaderBase):
             if position != tup[0]:
                 continue
             else:
-                if tup[1]+1 > t:
-                    t = tup[1]+1
-                if tup[2]+1 > c:
-                    c = tup[2]+1
-                if tup[3]+1 > z:
-                    z = tup[3]+1
+                if tup[1] + 1 > t:
+                    t = tup[1] + 1
+                if tup[2] + 1 > c:
+                    c = tup[2] + 1
+                if tup[3] + 1 > z:
+                    z = tup[3] + 1
 
         return t, c, z
 
@@ -324,9 +338,15 @@ class MicromanagerOmeTiffReader(ReaderBase):
         """
 
         coord_key = (p, t, c, z)
-        coord = self.coord_map[coord_key] # (file, page, offset)
+        coord = self.coord_map[coord_key]  # (file, page, offset)
 
-        return np.memmap(coord[0], dtype=self.dtype, mode='r', offset=coord[2], shape=(self.height, self.width))
+        return np.memmap(
+            coord[0],
+            dtype=self.dtype,
+            mode="r",
+            offset=coord[2],
+            shape=(self.height, self.width),
+        )
 
     def get_zarr(self, position):
         """

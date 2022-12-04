@@ -1,0 +1,4 @@
+# .git-blame-ignore-revs
+# created as described in: https://docs.github.com/en/repositories/working-with-files/using-files/viewing-a-file#ignore-commits-in-the-blame-view
+# adopt black formatting
+687d50b983202a684b8d884c508e01af85233df2
