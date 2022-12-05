@@ -124,6 +124,9 @@ class OMEZarrWriter:
         self.positions: Dict[int, str] = {}
         self.axes = axes if axes else self._DEFAULT_AXES
 
+    def _rel_keys(self, rel_path: str) -> List[str]:
+        return [name for name in self.root[rel_path].group_keys()]
+
     @property
     def next_position_index(self):
         """The next auto-generated position index (current max index + 1)"""
@@ -293,30 +296,43 @@ class OMEZarrWriter:
 
 
 class HCSWriter(OMEZarrWriter):
-    def __init__(self, root: zarr.Group, version: Format = FormatV04):
+    def __init__(self, root: zarr.Group, version: Literal["0.1", "0.4"]):
         super().__init__(root, version)
 
     @property
     def row_names(self) -> List[str]:
-        return [name for name in self.root.group_keys()]
+        """Row names in the plate (sub-groups under root)"""
+        return self._rel_keys("")
 
     def get_cols_in_row(self, row_name: str) -> List[str]:
-        """Get column names in a row (wells).
+        """Get non-empty column names in a row (wells).
 
         Parameters
         ----------
         row_name : str
-            Name of the parent row
+            Name path of the parent row, e.g. `"A"`, `"H"`
 
         Returns
         -------
         List[str]
-            list of names of columns
+            list of the names of the available columns
         """
-        return [well_name for well_name in self.root[row_name].group_keys()]
+        return self._rel_keys(row_name)
 
-    def get_pos_in_well(self, row_name: str, col_name: str):
-        pass
+    def get_pos_in_well(self, well_name: str) -> List[str]:
+        """Get column names in a row (wells).
+
+        Parameters
+        ----------
+        well_name : str
+            Name path of the well relative to the root, e.g. `"A/1"`, `"H/12"`
+
+        Returns
+        -------
+        List[str]
+            list of the names of the positions
+        """
+        return self._rel_keys(well_name)
 
     @property
     def plate_layout(self) -> Dict[str, List[str]]:
