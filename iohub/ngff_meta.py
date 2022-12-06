@@ -1,20 +1,33 @@
 """
-Dataclasses for OME-NGFF metadata.
+Dataclasses with validation for OME-NGFF metadata.
 Developed against OME-NGFF v0.4 and ome-zarr v0.6
+
+Attributes are 'snake_case' with aliases to match NGFF names.
+See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase' inconsistency.
 """
 
 from abc import ABC
-from pydantic.dataclasses import dataclass
 from pydantic import validator, Field
+from pydantic.dataclasses import dataclass
+from pydantic.color import Color
 
-from typing import Optional, Literal, List, ClassVar, TYPE_CHECKING
+from typing import (
+    Optional,
+    Any,
+    Literal,
+    List,
+    Dict,
+    TypedDict,
+    ClassVar,
+    TYPE_CHECKING,
+)
 
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
 
 @dataclass
-class Axis:
+class AxisMeta:
     """https://ngff.openmicroscopy.org/0.4/index.html#axes-md"""
 
     # MUST
@@ -97,7 +110,7 @@ class Axis:
 
 
 @dataclass
-class Transformation:
+class TransformationMeta:
     """https://ngff.openmicroscopy.org/0.4/index.html#trafo-md"""
 
     # MUST
@@ -121,34 +134,137 @@ class Transformation:
 
 
 @dataclass
-class Dataset:
+class DatasetMeta:
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # MUST
     path: StrPath
     # MUST
-    coordinate_transformations: List[Transformation] = Field(
-        None, alias="coordinateTransformations"
+    coordinate_transformations: List[TransformationMeta] = Field(
+        alias="coordinateTransformations"
     )
 
 
 @dataclass
-class MultiScales:
+class VersionMeta:
+    """OME-NGFF spec version. Default is the current version (0.4)."""
+
+    version: Optional[Literal["0.1", "0.2", "0.3", "0.4"]] = "0.4"
+
+
+@dataclass
+class MultiScalesMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # SHOULD
-    version: Optional[Literal["0.1", "0.2", "0.3", "0.4"]] = "0.4"
-    # SHOULD
     name: Optional[str] = ""
     # MUST
-    axes: List[Axis]
+    axes: List[AxisMeta]
     # MUST
-    datasets: List[Dataset]
+    datasets: List[DatasetMeta]
     # MAY
-    coordinate_transformations: Optional[List[Transformation]] = Field(
-        None, alias="coordinateTransformations"
+    coordinate_transformations: Optional[List[TransformationMeta]] = Field(
+        alias="coordinateTransformations"
     )
     # SHOULD, describes the downscaling method (e.g. 'gaussian')
     type: Optional[str]
     # SHOULD, additional information about the downscaling method
     metadata: Optional[dict]
+
+
+class WindowDict(TypedDict):
+    """Dictionary of contrast limit settings"""
+
+    start: float
+    end: float
+    min: float
+    max: float
+
+
+@dataclass
+class ChannelMeta:
+    """Channel display settings without clear documentation from the NGFF spec.
+    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
+
+    active: bool = False
+    coefficient: float = 1.0
+    color: Color = Color("FFFFFF")
+    family: str = "linear"
+    inverted: bool = False
+    label: str
+    window: WindowDict
+
+    class Config:
+        json_encoders = {Color: lambda c: c.as_hex()}
+
+
+@dataclass
+class OMEROMeta(VersionMeta):
+    """https://ngff.openmicroscopy.org/0.4/index.html#omero-md"""
+
+    id: int
+    name: Optional[str]
+    channels: List[ChannelMeta]
+
+
+@dataclass
+class LabelsMeta:
+    """https://ngff.openmicroscopy.org/0.4/index.html#labels-md"""
+
+    # SHOULD? (keyword not found in spec)
+    labels: str
+    # unlisted groups MAY be labels
+
+
+@dataclass
+class LabelColorMeta:
+    """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
+
+    # MUST
+    label_value: int = Field(alias="label-value")
+    # MAY
+    rgba: Color
+
+    class Config:
+        # MUST
+        json_encoders = {Color: lambda c: c.as_rgb_tuple(alpha=True)}
+
+
+@dataclass
+class ImageLabelMeta(VersionMeta):
+    """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
+
+    # SHOULD
+    colors: List[LabelColorMeta]
+    # MAY
+    properties: List[Dict[str, Any]]
+    # MAY
+    source: Dict[str, Any]
+
+
+@dataclass
+class AcquisitionMeta:
+    """https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+
+    # MUST
+    id: int
+    # SHOULD
+    name: Optional[str]
+    # SHOULD
+    maximum_field_count: Optional[int] = Field(alias="maximumfieldcount")
+
+    @validator("id", "maximum_field_count")
+    def geq_zero(cls, v):
+        if v < 0:
+            raise ValueError(
+                "Integer identifier must be equal or greater to zero!"
+            )
+
+
+@dataclass
+class PlateMeta:
+    """https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+
+    # MAY
+    acquisitions: Optional[List[dict]]
+    #
