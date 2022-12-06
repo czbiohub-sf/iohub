@@ -9,7 +9,7 @@ See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase
 import re
 from pydantic import validator, Field
 from pydantic.dataclasses import dataclass, Dataclass
-from pydantic.color import Color, ColorTuple
+from pydantic.color import Color, ColorTuple, ColorType
 import pandas as pd
 
 from typing import (
@@ -219,14 +219,14 @@ class ChannelMeta:
 
     active: bool = False
     coefficient: float = 1.0
-    color: Color = Color("FFFFFF")
+    color: ColorType = Color("FFFFFF").as_hex()
     family: str = "linear"
     inverted: bool = False
     label: str
     window: WindowDict
 
     class Config:
-        json_encoders = {Color: lambda c: c.as_hex()}
+        json_encoders = {ColorType: lambda c: Color(c).as_hex()}
 
 
 @dataclass
@@ -270,7 +270,9 @@ class LabelColorMeta:
 
     class Config:
         # MUST
-        json_encoders = {Color: lambda c: c.as_rgb_tuple(alpha=True)}
+        json_encoders = {
+            ColorTuple: lambda c: Color(c).as_rgb_tuple(alpha=True)
+        }
 
 
 @dataclass
