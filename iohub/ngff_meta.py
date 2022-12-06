@@ -6,15 +6,17 @@ Attributes are 'snake_case' with aliases to match NGFF names.
 See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase' inconsistency.
 """
 
-from abc import ABC
+import re
 from pydantic import validator, Field
-from pydantic.dataclasses import dataclass
-from pydantic.color import Color
+from pydantic.dataclasses import dataclass, Dataclass
+from pydantic.color import Color, ColorTuple
+import pandas as pd
 
 from typing import (
     Optional,
-    Any,
+    Union,
     Literal,
+    Any,
     List,
     Dict,
     TypedDict,
@@ -24,6 +26,30 @@ from typing import (
 
 if TYPE_CHECKING:
     from _typeshed import StrPath
+
+
+def unique_validator(
+    data: List[Union[Dataclass, TypedDict]], field: Union[str, List[str]]
+):
+    """Called by validators to ensure the uniqueness of certain fields.
+
+    Parameters
+    ----------
+    data : List[Union[Dataclass, TypedDict]]
+        list of dataclass instances or typed dictionaries
+    field : Union[str, List[str]]
+        field(s) of the dataclass that must be unique
+
+    Raises
+    ------
+    ValueError
+        raised if any value is not unique
+    """
+    fields = [field] if isinstance(field, str) else field
+    df = pd.DataFrame(data)
+    for key in fields:
+        if not df[key].is_unique:
+            raise ValueError(f"'{key}' must be unique!")
 
 
 @dataclass
@@ -149,6 +175,7 @@ class DatasetMeta:
 class VersionMeta:
     """OME-NGFF spec version. Default is the current version (0.4)."""
 
+    # SHOULD
     version: Optional[Literal["0.1", "0.2", "0.3", "0.4"]] = "0.4"
 
 
@@ -170,6 +197,10 @@ class MultiScalesMeta(VersionMeta):
     type: Optional[str]
     # SHOULD, additional information about the downscaling method
     metadata: Optional[dict]
+
+    @validator("axes")
+    def unique_name(cls, v):
+        unique_validator(v, "name")
 
 
 class WindowDict(TypedDict):
@@ -199,12 +230,24 @@ class ChannelMeta:
 
 
 @dataclass
+class RDefsMeta:
+    """Rendering settings without clear documentation from the NGFF spec.
+    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
+
+    default_t: int = Field(alias="defaultT")
+    default_z: int = Field(alias="defaultZ")
+    model: str = "color"
+    projection: Optional[str] = "normal"
+
+
+@dataclass
 class OMEROMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#omero-md"""
 
     id: int
     name: Optional[str]
     channels: List[ChannelMeta]
+    rdefs: RDefsMeta
 
 
 @dataclass
@@ -223,7 +266,7 @@ class LabelColorMeta:
     # MUST
     label_value: int = Field(alias="label-value")
     # MAY
-    rgba: Color
+    rgba: ColorTuple
 
     class Config:
         # MUST
@@ -241,6 +284,11 @@ class ImageLabelMeta(VersionMeta):
     # MAY
     source: Dict[str, Any]
 
+    @validator("colors", "properties")
+    def unique_label_value(cls, v):
+        # MUST
+        unique_validator(v, "label_value")
+
 
 @dataclass
 class AcquisitionMeta:
@@ -252,19 +300,109 @@ class AcquisitionMeta:
     name: Optional[str]
     # SHOULD
     maximum_field_count: Optional[int] = Field(alias="maximumfieldcount")
+    # MAY
+    description: Optional[str]
+    # MAY
+    start_time: Optional[int] = Field(alias="starttime")
+    # MAY
+    end_time: Optional[int] = Field(alias="endtime")
 
-    @validator("id", "maximum_field_count")
+    @validator("id", "maximum_field_count", "start_time", "end_time")
     def geq_zero(cls, v):
+        # MUST
         if v < 0:
             raise ValueError(
-                "Integer identifier must be equal or greater to zero!"
+                "The integer value must be equal or greater to zero!"
+            )
+
+    @validator("end_time")
+    def end_after_start(cls, v: int, values: dict):
+        # CUSTOM
+        st = values.get("start_time")
+        if st:
+            if st > v:
+                raise ValueError(
+                    f"The start timestamp {st} should not be larger than the end timestamp {v}"
+                )
+
+
+@dataclass
+class PlateAxisMeta:
+    """OME-NGFF metadata for a row or a column on a multi-well plate.
+    https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+
+    # MUST
+    name: str
+
+    @validator("name")
+    def alpha_numeric(cls, v: str):
+        # MUST
+        if not (v.isalnum() or v.isnumeric()):
+            raise ValueError(
+                f"The column name must be alphanumerical! Got invalid value: '{v}'."
             )
 
 
 @dataclass
-class PlateMeta:
-    """https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+class WellMeta:
+    """OME-NGFF metadata for a well on a multi-well plate.
+    https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
+    path: StrPath
+    row_index: int = Field(alias="rowIndex")
+    column_index: int = Field(alias="columnIndex")
+
+    @validator("path")
+    def row_slash_column(cls, v: str):
+        # MUST
+        # regex: one line that is exactly two words separated by one forward slash
+        if len(re.findall(r"^\w\/\w$", v)) != 1:
+            raise ValueError(
+                f"The well path '{v}' is not in the form of 'row/column'!"
+            )
+
+    @validator("row_index", "column_index")
+    def geq_zero(cls, v: int):
+        # MUST
+        if v < 0:
+            raise ValueError("Well position indices must not be negative!")
+
+
+@dataclass
+class PlateMeta(VersionMeta):
+    """OME-NGFF high-content screening plate metadata.
+    https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+
+    # SHOULD
+    name: Optional[str]
     # MAY
-    acquisitions: Optional[List[dict]]
-    #
+    acquisitions: Optional[List[AcquisitionMeta]]
+    # MUST
+    rows: List[PlateAxisMeta]
+    # MUST
+    columns: List[PlateAxisMeta]
+    # MUST
+    wells: List[WellMeta]
+    # SHOULD
+    field_count: Optional[int]
+
+    @validator("acquisitions")
+    def unique_id(cls, v):
+        # MUST
+        unique_validator(v, "id")
+
+    @validator("rows", "columns")
+    def unique_name(cls, v):
+        # MUST
+        unique_validator(v, "name")
+
+    @validator("wells")
+    def unique_well(cls, v):
+        # CUSTOM
+        unique_validator(v, ["path", "row_index", "column_index"])
+
+    @validator("field_count")
+    def positive(cls, v):
+        # MUST
+        if v <= 0:
+            raise ValueError("Field count must be a positive integer!")
