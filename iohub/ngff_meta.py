@@ -52,6 +52,24 @@ def unique_validator(
             raise ValueError(f"'{key}' must be unique!")
 
 
+def alpha_numeric_validator(data: str):
+    """Called by validators to ensure that strings are alpha-numeric.
+
+    Parameters
+    ----------
+    data : str
+        string to check
+
+    Raises
+    ------
+    ValueError
+        raised if the string contains characters other than [a-zA-z0-9]
+    """
+    if not (data.isalnum() or data.isnumeric()):
+                raise ValueError(
+                    f"The column name must be alphanumerical! Got invalid value: '{data}'."
+            )
+
 @dataclass
 class AxisMeta:
     """https://ngff.openmicroscopy.org/0.4/index.html#axes-md"""
@@ -339,14 +357,11 @@ class PlateAxisMeta:
     @validator("name")
     def alpha_numeric(cls, v: str):
         # MUST
-        if not (v.isalnum() or v.isnumeric()):
-            raise ValueError(
-                f"The column name must be alphanumerical! Got invalid value: '{v}'."
-            )
+        alpha_numeric_validator(v)
 
 
 @dataclass
-class WellMeta:
+class WellIndexMeta:
     """OME-NGFF metadata for a well on a multi-well plate.
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
@@ -384,7 +399,7 @@ class PlateMeta(VersionMeta):
     # MUST
     columns: List[PlateAxisMeta]
     # MUST
-    wells: List[WellMeta]
+    wells: List[WellIndexMeta]
     # SHOULD
     field_count: Optional[int]
 
@@ -408,3 +423,28 @@ class PlateMeta(VersionMeta):
         # MUST
         if v <= 0:
             raise ValueError("Field count must be a positive integer!")
+
+
+@dataclass
+class ImageMeta:
+    """Image metadata field under an HCS well group.
+    https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
+    
+    # MUST if `PlateMeta.acquisitions` contains multiple acquisitions
+    acquisition: int
+    # MUST
+    path: StrPath
+
+    @validator("path")
+    def alpha_numeric(cls, v):
+        # MUST
+        alpha_numeric_validator(v)
+
+
+@dataclass
+class WellGroupMeta(VersionMeta):
+    """OME-NGFF high-content screening well group metadata.
+    https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
+
+    # MUST
+    images: List[ImageMeta]
