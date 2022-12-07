@@ -8,7 +8,7 @@ See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase
 
 import re
 from pydantic import validator, Field
-from pydantic.dataclasses import dataclass, Dataclass
+from pydantic.dataclasses import dataclass
 from pydantic.color import Color, ColorTuple, ColorType
 import pandas as pd
 
@@ -21,16 +21,10 @@ from typing import (
     Dict,
     TypedDict,
     ClassVar,
-    TYPE_CHECKING,
 )
 
-if TYPE_CHECKING:
-    from _typeshed import StrPath
 
-
-def unique_validator(
-    data: List[Union[Dataclass, TypedDict]], field: Union[str, List[str]]
-):
+def unique_validator(data: List[Union[dataclass, TypedDict]], field: Union[str, List[str]]):
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
@@ -66,9 +60,10 @@ def alpha_numeric_validator(data: str):
         raised if the string contains characters other than [a-zA-z0-9]
     """
     if not (data.isalnum() or data.isnumeric()):
-                raise ValueError(
-                    f"The column name must be alphanumerical! Got invalid value: '{data}'."
-            )
+        raise ValueError(
+            f"The column name must be alphanumerical! Got invalid value: '{data}'."
+        )
+
 
 @dataclass
 class AxisMeta:
@@ -160,9 +155,9 @@ class TransformationMeta:
     # MUST
     type: Literal["identity", "translation", "scale"] = "identity"
     # MUST? (keyword not found in spec for the fields below)
-    translation: Optional[List[float]]
-    scale: Optional[List[float]]
-    path: Optional[str]
+    translation: Optional[List[float]] = None
+    scale: Optional[List[float]] = None
+    path: Optional[str] = None
 
     @validator("type")
     def unique_tranformation(cls, v, values: dict):
@@ -182,7 +177,7 @@ class DatasetMeta:
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # MUST
-    path: StrPath
+    path: str
     # MUST
     coordinate_transformations: List[TransformationMeta] = Field(
         alias="coordinateTransformations"
@@ -194,7 +189,7 @@ class VersionMeta:
     """OME-NGFF spec version. Default is the current version (0.4)."""
 
     # SHOULD
-    version: Optional[Literal["0.1", "0.2", "0.3", "0.4"]] = "0.4"
+    version: Optional[Literal["0.1", "0.2", "0.3", "0.4"]]
 
 
 @dataclass
@@ -202,7 +197,7 @@ class MultiScalesMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # SHOULD
-    name: Optional[str] = ""
+    name: Optional[str]
     # MUST
     axes: List[AxisMeta]
     # MUST
@@ -212,9 +207,9 @@ class MultiScalesMeta(VersionMeta):
         alias="coordinateTransformations"
     )
     # SHOULD, describes the downscaling method (e.g. 'gaussian')
-    type: Optional[str]
+    type: Optional[str] = None
     # SHOULD, additional information about the downscaling method
-    metadata: Optional[dict]
+    metadata: Optional[dict] = None
 
     @validator("axes")
     def unique_name(cls, v):
@@ -240,8 +235,8 @@ class ChannelMeta:
     color: ColorType = Color("FFFFFF").as_hex()
     family: str = "linear"
     inverted: bool = False
-    label: str
-    window: WindowDict
+    label: str = None
+    window: WindowDict = None
 
     class Config:
         json_encoders = {ColorType: lambda c: Color(c).as_hex()}
@@ -284,7 +279,7 @@ class LabelColorMeta:
     # MUST
     label_value: int = Field(alias="label-value")
     # MAY
-    rgba: ColorTuple
+    rgba: Optional[ColorTuple] = None
 
     class Config:
         # MUST
@@ -321,7 +316,7 @@ class AcquisitionMeta:
     # SHOULD
     maximum_field_count: Optional[int] = Field(alias="maximumfieldcount")
     # MAY
-    description: Optional[str]
+    description: Optional[str] = None
     # MAY
     start_time: Optional[int] = Field(alias="starttime")
     # MAY
@@ -365,7 +360,7 @@ class WellIndexMeta:
     """OME-NGFF metadata for a well on a multi-well plate.
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
-    path: StrPath
+    path: str
     row_index: int = Field(alias="rowIndex")
     column_index: int = Field(alias="columnIndex")
 
@@ -429,11 +424,11 @@ class PlateMeta(VersionMeta):
 class ImageMeta:
     """Image metadata field under an HCS well group.
     https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
-    
+
     # MUST if `PlateMeta.acquisitions` contains multiple acquisitions
     acquisition: int
     # MUST
-    path: StrPath
+    path: str
 
     @validator("path")
     def alpha_numeric(cls, v):

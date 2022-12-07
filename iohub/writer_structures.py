@@ -3,10 +3,12 @@ from numcodecs import Blosc
 import numpy as np
 import zarr
 from ome_zarr.writer import write_image
-from ome_zarr.format import format_from_version, Format, FormatV04, FormatV01
+from ome_zarr.format import format_from_version, FormatV04, FormatV01
+
+from iohub.ngff_meta import AxisMeta, WindowDict, ChannelMeta
 
 from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
-from numpy.typing import ArrayLike
+from numpy.typing import ArrayLike, DTypeLike
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -51,40 +53,16 @@ def _channel_display_settings(
             clim = channel_settings[chan_name]
         else:
             clim = channel_settings["Other"]
-    start, end, min, max = clim
-    return {
-        "active": first_chan,
-        "coefficient": 1.0,
-        "color": "FFFFFF",
-        "family": "linear",
-        "inverted": False,
-        "label": chan_name,
-        "window": {"end": end, "max": max, "min": min, "start": start},
-    }
-
-
-def _ome_axes(
-    name: str,
-    type: Literal["space", "time", "channel"] = None,
-    unit: str = None,
-):
-    """Generate OME-NGFF axes metadata
-
-    Parameters
-    ----------
-    name : str
-        Name
-    type : Literal["space", "time", "channel"], optional
-        Fype, by default None
-    unit : str, optional
-        _description_, by default None
-    """
-    axes = {"name": name}
-    if type:
-        axes["type"] = type
-        if unit:
-            axes["unit"] = unit
-    return axes
+    window = WindowDict(clim)
+    return ChannelMeta(
+        active=first_chan,
+        coefficient=1.0,
+        color="FFFFFF",
+        family="linear",
+        inverted=False,
+        label=chan_name,
+        window=window,
+    )
 
 
 class OMEZarrWriter:
@@ -94,8 +72,10 @@ class OMEZarrWriter:
     ----------
     root : zarr.Group
         The root group of the Zarr store
-    format : str, optional
-        OME-NGFF version, by default FormatV04
+    version : Literal["0.1", "0.4"]
+        OME-NGFF version, by default 0.4
+    arr_name : str
+        Base name of the arrays
     axes : Union[str, List[str], Dict[str, str]], optional
         OME axes metadata, by default:
         `
@@ -108,21 +88,32 @@ class OMEZarrWriter:
     """
 
     _DEFAULT_AXES = [
-        _ome_axes("T", "time", "second"),
-        _ome_axes("C", "channel"),
-        *[_ome_axes(i, "space", "micrometer") for i in ("Z", "Y", "X")],
+        AxisMeta("T", "time", "second"),
+        AxisMeta("C", "channel", None),
+        *[AxisMeta(i, "space", "micrometer") for i in ("Z", "Y", "X")],
     ]
 
     def __init__(
         self,
         root: zarr.Group,
-        version: Literal["0.1", "0.4"],
+        version: Literal["0.1", "0.4"] = "0.4",
+        arr_name: str = "arr",
         axes: Union[str, List[str], List[Dict[str, str]]] = None,
     ):
         self.root = root
         self.fmt = format_from_version(str(version))
         self.positions: Dict[int, str] = {}
+        self.arr_name = arr_name
         self.axes = axes if axes else self._DEFAULT_AXES
+
+    def storage_options(self, chunks: Tuple[int], overwrite: bool = False):
+        return {
+            "chunks": chunks,
+            "compressor": Blosc(
+                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+            ),
+            "overwrite": overwrite,
+        }
 
     def _rel_keys(self, rel_path: str) -> List[str]:
         return [name for name in self.root[rel_path].group_keys()]
@@ -132,7 +123,14 @@ class OMEZarrWriter:
         """The next auto-generated position index (current max index + 1)"""
         return sorted(self.positions.keys())[-1] + 1
 
-    def require_position(self, name: str, index: int = None):
+    def init_position(
+        self, name: str, shape: Tuple, dtype: DTypeLike, index: int
+    ):
+        self.positions[index] = name
+        position = self.root.create_group(name)
+        position.zeros(name=self.arr_name, shape=shape)
+
+    def require_position(self, name: str, dtype: DTypeLike, index: int = None):
         """Creates a new position group if it does not exist.
 
         Parameters
@@ -148,13 +146,13 @@ class OMEZarrWriter:
             Zarr group for the required position
         """
         if index not in self.positions.keys():
-            self.positions[index] = name
+            index = index if index is not None else self.next_position_index
+            self.init_position(name, dtype, index)
         elif self.positions[index] != name:
             raise ValueError(
                 f"The specified index {index} does not match an existing name {name}."
             )
-        position = self.root.require_group(name)
-        return position
+        return self.root.require_group(name)
 
     def write_position(
         self,
@@ -180,13 +178,6 @@ class OMEZarrWriter:
             Overwrite if the position exists, by default False
         """
         group = self.require_position(self.positions[pos])
-        storage_options = {
-            "chunks": chunks,
-            "compressor": Blosc(
-                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-            ),
-            "overwrite": overwrite,
-        }
         if self.fmt == FormatV01:
             self._old_channel_attributes(channel_names, group)
             metadata = None
@@ -198,7 +189,7 @@ class OMEZarrWriter:
             axes=self.axes,
             scaler=None,
             fmt=self.version,
-            storage_options=storage_options,
+            storage_options=self.storage_options(chunks, overwrite),
             metadata=metadata,
         )
 
