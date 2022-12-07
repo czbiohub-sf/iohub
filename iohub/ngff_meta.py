@@ -2,7 +2,7 @@
 Dataclasses with validation for OME-NGFF metadata.
 Developed against OME-NGFF v0.4 and ome-zarr v0.6
 
-Attributes are 'snake_case' with aliases to match NGFF names.
+Attributes are 'snake_case' with aliases to match NGFF names in JSON output.
 See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase' inconsistency.
 """
 
