@@ -315,6 +315,8 @@ class OMEZarrWriter:
         clims: List[Tuple[float, float, float, float]] = None,
     ):
         id = self.positions[position.name]["id"]
+        if not clims:
+            clims = [None] * 4
         channels = []
         for i, (channel_name, clim) in enumerate(
             zip(self.channel_names, clims)
