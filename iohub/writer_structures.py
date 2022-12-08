@@ -286,7 +286,7 @@ class OMEZarrWriter:
                 id=pos_meta["id"],
                 name=position.name,
                 channels=[chm],
-                rdefs=RDefsMeta(0, 0),
+                rdefs=RDefsMeta(default_t=0, default_z=0),
             )
             images_meta = ImagesMeta(multiscales, omero)
             pos_meta["attrs"] = images_meta
