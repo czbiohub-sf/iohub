@@ -234,6 +234,7 @@ class OMEZarrWriter:
         position: zarr.Group,
         time_index: int,
         channel_index: int,
+        transform: List[TransformationMeta] = None,
         name: str = None,
         additional_meta: dict = None,
     ):
@@ -249,6 +250,8 @@ class OMEZarrWriter:
             Time index
         channel_index : int
             Channel index
+        transform: List[TransformationMeta], optional
+            Coordinate transformations for the z-stack, by default identity
         name : str, optional
             Name key of the 5D array, by default None
         additional_meta : dict, optional
@@ -272,7 +275,7 @@ class OMEZarrWriter:
         # write data
         array[time_index, channel_index] = data
         # write metadata
-        dataset_meta = self._dataset_meta(channel_index, name)
+        dataset_meta = self._dataset_meta(name, transform=transform)
         pos_meta = self.positions[position.name]
         if "attrs" not in pos_meta:
             multiscales = MultiScalesMeta(
