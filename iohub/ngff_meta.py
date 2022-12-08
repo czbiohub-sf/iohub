@@ -66,7 +66,12 @@ def alpha_numeric_validator(data: str):
         )
 
 
-class AxisMeta(BaseModel):
+class MetaBase(BaseModel):
+    class Config:
+        allow_population_by_field_name = True
+
+
+class AxisMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#axes-md"""
 
     # MUST
@@ -148,7 +153,7 @@ class AxisMeta(BaseModel):
         return v
 
 
-class TransformationMeta(BaseModel):
+class TransformationMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#trafo-md"""
 
     # MUST
@@ -172,7 +177,7 @@ class TransformationMeta(BaseModel):
         return values
 
 
-class DatasetMeta(BaseModel):
+class DatasetMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # MUST
@@ -183,7 +188,7 @@ class DatasetMeta(BaseModel):
     )
 
 
-class VersionMeta(BaseModel):
+class VersionMeta(MetaBase):
     """OME-NGFF spec version. Default is the current version (0.4)."""
 
     # SHOULD
@@ -223,7 +228,7 @@ class WindowDict(TypedDict):
     max: float
 
 
-class ChannelMeta(BaseModel):
+class ChannelMeta(MetaBase):
     """Channel display settings without clear documentation from the NGFF spec.
     https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
 
@@ -239,7 +244,7 @@ class ChannelMeta(BaseModel):
         json_encoders = {ColorType: lambda c: Color(c).as_hex()}
 
 
-class RDefsMeta(BaseModel):
+class RDefsMeta(MetaBase):
     """Rendering settings without clear documentation from the NGFF spec.
     https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
 
@@ -258,7 +263,7 @@ class OMEROMeta(VersionMeta):
     rdefs: RDefsMeta
 
 
-class ImagesMeta(BaseModel):
+class ImagesMeta(MetaBase):
     """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
     https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
 
@@ -266,7 +271,7 @@ class ImagesMeta(BaseModel):
     omero: OMEROMeta
 
 
-class LabelsMeta(BaseModel):
+class LabelsMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#labels-md"""
 
     # SHOULD? (keyword not found in spec)
@@ -274,7 +279,7 @@ class LabelsMeta(BaseModel):
     # unlisted groups MAY be labels
 
 
-class LabelColorMeta(BaseModel):
+class LabelColorMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
 
     # MUST
@@ -305,7 +310,7 @@ class ImageLabelMeta(VersionMeta):
         return v
 
 
-class AcquisitionMeta(BaseModel):
+class AcquisitionMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
     # MUST
@@ -342,7 +347,7 @@ class AcquisitionMeta(BaseModel):
         return v
 
 
-class PlateAxisMeta(BaseModel):
+class PlateAxisMeta(MetaBase):
     """OME-NGFF metadata for a row or a column on a multi-well plate.
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
@@ -356,7 +361,7 @@ class PlateAxisMeta(BaseModel):
         return v
 
 
-class WellIndexMeta(BaseModel):
+class WellIndexMeta(MetaBase):
     """OME-NGFF metadata for a well on a multi-well plate.
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
@@ -425,7 +430,7 @@ class PlateMeta(VersionMeta):
         return v
 
 
-class ImageMeta(BaseModel):
+class ImageMeta(MetaBase):
     """Image metadata field under an HCS well group.
     https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
 

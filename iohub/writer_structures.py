@@ -36,7 +36,7 @@ def _channel_display_settings(
     dict
         Display settings adherent to ome-zarr standards
     """
-    U16_FMAX = float(2**16 - 1)
+    U16_FMAX = float(np.iinfo(np.uint16).max)
     channel_settings = {
         "Retardance": (0.0, 100.0, 0.0, 1000.0),
         "Orientation": (0.0, np.pi, 0.0, np.pi),
@@ -92,7 +92,10 @@ class OMEZarrWriter:
     _DEFAULT_AXES = [
         AxisMeta(name="T", type="time", unit="second"),
         AxisMeta(name="C", type="channel"),
-        *[AxisMeta(name=i, type="space", unit="micrometer") for i in ("Z", "Y", "X")],
+        *[
+            AxisMeta(name=i, type="space", unit="micrometer")
+            for i in ("Z", "Y", "X")
+        ],
     ]
 
     @classmethod
@@ -208,12 +211,12 @@ class OMEZarrWriter:
         Group
             Zarr group for the required position
         """
+        if not pixel_x:
+            pixel_x = pixel_y
         if any([bool(s <= 0) for s in (z_step, pixel_y, pixel_x)]):
             raise ValueError(
                 f"(Z, Y, X) pixel size {(z_step, pixel_y, pixel_x)} must be positive!"
             )
-        if not pixel_x:
-            pixel_x = pixel_y
         if name not in self.positions:
             self.positions[name] = {
                 "id": len(self.positions),
@@ -289,17 +292,18 @@ class OMEZarrWriter:
             pos_meta["attrs"] = images_meta
             array.attrs.put(images_meta.json(exclude_none=True))
 
-
     def _array_meta(
         self,
         channel_index,
         name: str,
         clim: Tuple[float] = None,
-        transform: TransformationMeta = None,
+        transform: List[TransformationMeta] = None,
     ):
         if not transform:
-            transform = TransformationMeta("identity")
-        dataset_meta = DatasetMeta(name, transform)
+            transform = [TransformationMeta(type="identity")]
+        dataset_meta = DatasetMeta(
+            path=name, coordinate_transformations=transform
+        )
         channel_name = self.channel_names[channel_index]
         first_chan = True if channel_index == 0 else False
         channel_meta = _channel_display_settings(
