@@ -232,7 +232,7 @@ class OMEZarrWriter:
                 "pixel_x": pixel_y,
                 "pixel_x": pixel_y,
             }
-        return self.root.require_group(name, overwrite=True)
+        return self.root.require_group(name, overwrite=overwrite)
 
     def write_zstack(
         self,
