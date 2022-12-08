@@ -71,7 +71,7 @@ class OMEZarrWriter:
     Parameters
     ----------
     root : zarr.Group
-        The root group of the Zarr store
+        The root group of the Zarr store, dimension separator should be '/'
     channel_names: List[str]
         Names of all the channels present in data ordered according to channel indices
     version : Literal["0.1", "0.4"], optional
@@ -357,8 +357,46 @@ class OMEZarrWriter:
 
 
 class HCSWriter(OMEZarrWriter):
-    def __init__(self, root: zarr.Group, version: Literal["0.1", "0.4"]):
-        super().__init__(root, version)
+    """High-content screening OME-Zarr writer instance for an existing Zarr store.
+
+    Parameters
+    ----------
+    root : zarr.Group
+        The root group of the Zarr store, dimension separator should be '/'
+    channel_names: List[str]
+        Names of all the channels present in data ordered according to channel indices
+    version : Literal["0.1", "0.4"], optional
+        OME-NGFF version, by default 0.4
+    arr_name : str, optional
+        Base name of the arrays, by default '0'
+    axes : Union[str, List[str], Dict[str, str]], optional
+        OME axes metadata, by default:
+        `
+        [{'name': 'T', 'type': 'time', 'unit': 'second'},
+        {'name': 'C', 'type': 'channel'},
+        {'name': 'Z', 'type': 'space', 'unit': 'micrometer'},
+        {'name': 'Y', 'type': 'space', 'unit': 'micrometer'},
+        {'name': 'X', 'type': 'space', 'unit': 'micrometer'}]
+        `
+    """
+
+    def __init__(
+        self,
+        root: zarr.Group,
+        channel_names: List[str],
+        version: Literal["0.1", "0.4"] = "0.4",
+        arr_name: str = "0",
+        axes: Union[str, List[str], List[Dict[str, str]]] = None,
+        acquisitions: List[AcquisitionMeta] = None,
+    ):
+        super().__init__(root, channel_names, version, arr_name, axes)
+        self.plate_meta: PlateMeta = None
+        self.acquisitions = (
+            [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
+        )
+        self.rows: Dict[str, Union[PlateAxisMeta, int, float]] = {}
+        self.columns: Dict[str, Union[PlateAxisMeta, int, float]] = {}
+        self.wells: Dict[str, Union[WellIndexMeta, int, float]] = {}
 
     @property
     def row_names(self) -> List[str]:
@@ -366,7 +404,7 @@ class HCSWriter(OMEZarrWriter):
         return self._rel_keys("")
 
     def get_cols_in_row(self, row_name: str) -> List[str]:
-        """Get non-empty column names in a row (wells).
+        """Get column names in a row (wells).
 
         Parameters
         ----------
@@ -376,7 +414,7 @@ class HCSWriter(OMEZarrWriter):
         Returns
         -------
         List[str]
-            list of the names of the available columns
+            list of the names of the columns
         """
         return self._rel_keys(row_name)
 
@@ -408,23 +446,48 @@ class HCSWriter(OMEZarrWriter):
             row_name: self.get_cols_in_row() for row_name in self.row_names
         }
 
-    def require_row(self, name: str):
+    def require_row(
+        self, name: str, index: int = None, overwrite: bool = False
+    ):
         """Creates a row in the hierarchy (first level below zarr root) if it does not exist.
 
         Parameters
         ----------
         name : str
             Name of the row
+        index : int, optional
+            Unique index of the new row, by default incremented by 1
+        overwrite : bool, optional
+            Delete all existing data in the row group, by default false
 
         Returns
         -------
         Group
             Zarr group for the required row
         """
-        return self.root.require_group(name)
+        if not index:
+            index = max(row["id"] for row in self.rows) + 1
+        if name in self.rows:
+            _id = self.rows[name]["id"]
+            if _id != index:
+                raise ValueError(
+                    f"Requested index {index} conflicts with existing row {name} index {_id}."
+                )
+        else:
+            self.rows[name] = {
+                "id": index,
+                "meta": PlateAxisMeta(name=name),
+            }
+        return self.root.require_group(name, overwrite=overwrite)
 
-    def require_column(self, row_name: str, col_name: str):
-        """Creates a column in the hierarchy (second level below zarr root, one below rows) if it does not exist.
+    def require_well(
+        self,
+        row_name: str,
+        col_name: str,
+        col_index: int = None,
+        overwrite: bool = False,
+    ):
+        """Creates a well ('row_name/col_name') in the hierarchy if it does not exist.
         Will also create the parent row if it does not exist
 
         Parameters
@@ -433,14 +496,103 @@ class HCSWriter(OMEZarrWriter):
             Name of the parent row
         col_name : str
             Name of the column
+        col_index: int, optional
+            Unique index of the new column, by default incremented by 1
+        overwrite : bool, optional
+            Delete all existing data in the row group, by default false
 
         Returns
         -------
         Group
-            Zarr group for the required column
+            Zarr group for the required well
         """
+        well_name = os.path.join(row_name, col_name)
         row = self.root.require_group(row_name)
-        return row.require_group(col_name)
+        if not col_index:
+            col_index = max(col["id"] for col in self.columns) + 1
+        if col_name in self.columns:
+            _id = self.columns[col_name]["id"]
+            if _id != col_index:
+                raise ValueError(
+                    f"Requested index {col_index} conflicts with existing column {col_name} index {_id}."
+                )
+        else:
+            self.columns[col_name] = {
+                "id": col_index,
+                "meta": PlateAxisMeta(name=col_name),
+            }
+        if well_name not in self.wells:
+            self.wells[well_name] = {
+                "meta": WellIndexMeta(
+                    path=well_name,
+                    rowIndex=self.rows[row_name]["id"],
+                    columnIndex=self.columns[col_name]["id"],
+                ),
+                "positions": [],
+            }
+        return row.require_group(col_name, overwrite=overwrite)
+
+    def rquire_position(
+        self, row: str, column: str, fov: str, px_size: Tuple[float], **kwargs
+    ):
+        """Create a row, a column, and a FOV/position if they do not exist.
+        Row/column indices are defaults (see `require_row()` and `require_column()`).
+
+        Parameters
+        ----------
+        row : str
+            Name key of the row, e.g. 'A'
+        column : str
+            Name key of the column, e.g. '12'
+        fov : str
+            Name key of the FOV/position, e.g. '0'
+        px_size : Tuple[float]
+            Pixel sizes in micrometers (Z, Y, (X))
+        **kwargs:
+            Keyword arguments for `OMEZarrWriter.require_position()`
+        """
+        well = self.require_well(row, column, **kwargs)
+        position_name = os.path.join(well.name, fov)
+        self.wells[well.name]["positions"].append(position_name)
+        return super().require_position(
+            position_name, *px_size, **kwargs
+        )
+
+    def write_zstack(
+        self,
+        data: NDArray,
+        position: zarr.Group,
+        time_index: int,
+        channel_index: int,
+        transform: List[TransformationMeta] = None,
+        name: str = None,
+        auto_meta=True,
+        additional_meta: dict = None,
+    ):
+        if not name:
+            name = self.arr_name
+        self.require_well()
+        super().write_zstack(
+            data,
+            position,
+            time_index,
+            channel_index,
+            name=name,
+            auto_meta=False,
+        )
+        if auto_meta:
+            self._write_zstack_meta(position, name, transform, additional_meta)
+
+    def _write_zstack_meta(
+        self,
+        position: zarr.Group,
+        name: str,
+        transform: List[TransformationMeta],
+        additional_meta: dict,
+    ):
+        return super()._write_zstack_meta(
+            position, name, transform, additional_meta
+        )
 
 
 class DefaultZarr(HCSWriter):
