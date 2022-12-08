@@ -68,6 +68,9 @@ def alpha_numeric_validator(data: str):
         )
 
 
+TO_DICT_SETTINGS = dict(exclude_none=True, by_alias=True)
+
+
 class MetaBase(BaseModel):
     class Config:
         allow_population_by_field_name = True

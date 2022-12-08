@@ -264,9 +264,9 @@ class OMEZarrWriter:
         # write data
         array[time_index, channel_index] = data
         if auto_meta:
-            self._write_zstack_meta(position, name, transform, additional_meta)
+            self._dump_zstack_meta(position, name, transform, additional_meta)
 
-    def _write_zstack_meta(
+    def _dump_zstack_meta(
         self,
         position: zarr.Group,
         name: str,
@@ -291,9 +291,7 @@ class OMEZarrWriter:
                 not in pos_meta["attrs"].multiscales.get_dataset_paths()
             ):
                 pos_meta["attrs"].multiscales.datasets.append(dataset_meta)
-        position.attrs.put(
-            pos_meta["attrs"].dict(exclude_none=True, by_alias=True)
-        )
+        position.attrs.put(pos_meta["attrs"].dict(**TO_DICT_SETTINGS))
 
     def _dataset_meta(
         self,
@@ -512,10 +510,13 @@ class HCSWriter(OMEZarrWriter):
                     columnIndex=self.columns[col_name]["id"],
                 ),
                 "positions": [],
+                "image_meta_list": [],
             }
         return row.require_group(col_name, overwrite=overwrite)
 
-    def rquire_position(self, row: str, column: str, fov: str, **kwargs):
+    def rquire_position(
+        self, row: str, column: str, fov: str, acq_id: int = 0, **kwargs
+    ):
         """Create a row, a column, and a FOV/position if they do not exist.
 
         Parameters
@@ -526,13 +527,21 @@ class HCSWriter(OMEZarrWriter):
             Name key of the column, e.g. '12'
         fov : str
             Name key of the FOV/position, e.g. '0'
+        acq_id : str, optional
+            Acquisition ID, by default 0
         **kwargs :
-            Keyword arguments for `require_well()`
+            Keyword arguments for `require_well()` and `require_position`
         """
         well = self.require_well(row, column, **kwargs)
-        position_name = os.path.join(well.name, fov)
-        self.wells[well.name]["positions"].append(position_name)
-        return super().require_position(position_name)
+        position = super().require_position(
+            os.path.join(well.name, fov),
+            overwrite=bool(kwargs.get("overwrite")),
+        )
+        if position.name not in self.wells[well.name]["positions"]:
+            image_meta = ImageMeta(acquisition=acq_id, path=position.name)
+            self.wells[well.name]["image_meta_list"].append(image_meta)
+            self.wells[well.name]["positions"].append(position.name)
+        return position
 
     def write_zstack(
         self,
@@ -547,7 +556,6 @@ class HCSWriter(OMEZarrWriter):
     ):
         if not name:
             name = self.arr_name
-        self.require_well()
         super().write_zstack(
             data,
             position,
@@ -557,18 +565,34 @@ class HCSWriter(OMEZarrWriter):
             auto_meta=False,
         )
         if auto_meta:
-            self._write_zstack_meta(position, name, transform, additional_meta)
+            self._dump_zstack_meta(position, name, transform, additional_meta)
+        well = self.root.get(self.positions[position.name]["well"])
 
-    def _write_zstack_meta(
+        self._dump_well_meta(well)
+        self._dump_plate_meta()
+
+    def _dump_zstack_meta(
         self,
         position: zarr.Group,
         name: str,
         transform: List[TransformationMeta],
         additional_meta: dict,
     ):
-        return super()._write_zstack_meta(
-            position, name, transform, additional_meta
+        super()._dump_zstack_meta(position, name, transform, additional_meta)
+
+    def _dump_plate_meta(self):
+        
+        self.root.attrs["plate"] = self.plate_meta.dict(**TO_DICT_SETTINGS)
+
+    def _dump_well_meta(
+        self,
+        well: zarr.Group,
+    ):
+        well_group_meta = WellGroupMeta(
+            version=self.version,
+            images=self.wells[well.name]["image_meta_list"],
         )
+        well.attrs["wells"] = well_group_meta.dict(**TO_DICT_SETTINGS)
 
 
 class DefaultZarr(HCSWriter):
