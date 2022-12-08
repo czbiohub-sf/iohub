@@ -281,22 +281,15 @@ class OMEZarrWriter:
                 datasets=[dsm],
                 metadata=additional_meta,
             )
-            omero = OMEROMeta(
-                version=self.version,
-                id=pos_meta["id"],
-                name=position.name,
-                channels=[chm],
-                rdefs=RDefsMeta(default_t=0, default_z=0),
-            )
+            omero = self._omero_meta(position)
             images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
             pos_meta["attrs"] = images_meta
         else:
-            images_meta: ImagesMeta = pos_meta["attrs"]
-            images_meta.multiscales.datasets.append(dsm)
-            images_meta.omero.channels.append(chm)
-        position.attrs.put(images_meta.json(exclude_none=True))
+            if dsm.path not in pos_meta["attrs"].multiscales.get_dataset_paths():
+                pos_meta["attrs"].multiscales.datasets.append(dsm)
+        position.attrs.put(pos_meta["attrs"].json(exclude_none=True))
 
-    def _array_meta(
+    def _dataset_meta(
         self,
         channel_index,
         name: str,
@@ -308,12 +301,26 @@ class OMEZarrWriter:
         dataset_meta = DatasetMeta(
             path=name, coordinate_transformations=transform
         )
-        channel_name = self.channel_names[channel_index]
-        first_chan = True if channel_index == 0 else False
-        channel_meta = _channel_display_settings(
-            channel_name, clim=clim, first_chan=first_chan
-        )
-        return dataset_meta, channel_meta
+        return dataset_meta
+
+    def _omero_meta(self, position: zarr.Group, clims: List[Tuple[float, float, float, float]] = None):
+        id = self.positions[position.name]["id"]
+        channels = []
+        for i, (channel_name, clim) in enumerate(zip(self.channel_names, clims)):
+            if i ==0:
+                first_chan = True
+            channels.append(_channel_display_settings(
+                channel_name, clim=clim, first_chan=first_chan
+            ))
+        omero_meta = OMEROMeta(
+                version=self.version,
+                id=id,
+                name=position.name,
+                channels=channels,
+                rdefs=RDefsMeta(default_t=0, default_z=0),
+            )
+        return omero_meta
+
 
 
 class HCSWriter(OMEZarrWriter):

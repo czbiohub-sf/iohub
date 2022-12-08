@@ -220,6 +220,9 @@ class MultiScalesMeta(VersionMeta):
         unique_validator(v, "name")
         return v
 
+    def get_dataset_paths(self):
+        return [dataset.path for dataset in self.datasets]
+
 
 class WindowDict(TypedDict):
     """Dictionary of contrast limit settings"""
