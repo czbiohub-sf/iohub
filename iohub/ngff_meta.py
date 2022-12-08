@@ -6,9 +6,8 @@ Attributes are 'snake_case' with aliases to match NGFF names in JSON output.
 See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase' inconsistency.
 """
 
-import re
-from pydantic import validator, Field
-from pydantic.dataclasses import dataclass
+import re, json
+from pydantic import BaseModel, validator, root_validator, Field
 from pydantic.color import Color, ColorTuple, ColorType
 import pandas as pd
 
@@ -25,14 +24,14 @@ from typing import (
 
 
 def unique_validator(
-    data: List[Union[dataclass, TypedDict]], field: Union[str, List[str]]
+    data: List[Union[BaseModel, TypedDict]], field: Union[str, List[str]]
 ):
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
     ----------
-    data : List[Union[Dataclass, TypedDict]]
-        list of dataclass instances or typed dictionaries
+    data : List[Union[BaseModel, TypedDict]]
+        list of pydantic models or typed dictionaries
     field : Union[str, List[str]]
         field(s) of the dataclass that must be unique
 
@@ -67,8 +66,7 @@ def alpha_numeric_validator(data: str):
         )
 
 
-@dataclass
-class AxisMeta:
+class AxisMeta(BaseModel):
     """https://ngff.openmicroscopy.org/0.4/index.html#axes-md"""
 
     # MUST
@@ -150,32 +148,31 @@ class AxisMeta:
         return v
 
 
-@dataclass
-class TransformationMeta:
+class TransformationMeta(BaseModel):
     """https://ngff.openmicroscopy.org/0.4/index.html#trafo-md"""
 
     # MUST
-    type: Literal["identity", "translation", "scale"] = "identity"
+    type: Literal["identity", "translation", "scale"]
     # MUST? (keyword not found in spec for the fields below)
     translation: Optional[List[float]] = None
     scale: Optional[List[float]] = None
     path: Optional[str] = None
 
-    @validator("type")
-    def unique_tranformation(cls, v, values: dict):
-        count = bool(values.get(v)) + bool(values.get("path"))
-        if v == "identity" and count != 0:
+    @root_validator
+    def no_extra_method(cls, values: dict):
+        count = sum([bool(v) for _, v in values.items()])
+        if values["type"] == "identity" and count > 1:
             raise ValueError(
-                "The identity transformation should not be specified!"
+                f"Method should not be specified for identity transformation!"
             )
-        elif count != 1:
+        elif count > 2:
             raise ValueError(
-                f"Only one of the {v} list and the path should be specified!"
+                "Only one type of transformation method is allowed."
             )
+        return values
 
 
-@dataclass
-class DatasetMeta:
+class DatasetMeta(BaseModel):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # MUST
@@ -186,15 +183,13 @@ class DatasetMeta:
     )
 
 
-@dataclass
-class VersionMeta:
+class VersionMeta(BaseModel):
     """OME-NGFF spec version. Default is the current version (0.4)."""
 
     # SHOULD
     version: Optional[Literal["0.1", "0.2", "0.3", "0.4"]]
 
 
-@dataclass
 class MultiScalesMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
@@ -216,6 +211,7 @@ class MultiScalesMeta(VersionMeta):
     @validator("axes")
     def unique_name(cls, v):
         unique_validator(v, "name")
+        return v
 
 
 class WindowDict(TypedDict):
@@ -227,8 +223,7 @@ class WindowDict(TypedDict):
     max: float
 
 
-@dataclass
-class ChannelMeta:
+class ChannelMeta(BaseModel):
     """Channel display settings without clear documentation from the NGFF spec.
     https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
 
@@ -244,8 +239,7 @@ class ChannelMeta:
         json_encoders = {ColorType: lambda c: Color(c).as_hex()}
 
 
-@dataclass
-class RDefsMeta:
+class RDefsMeta(BaseModel):
     """Rendering settings without clear documentation from the NGFF spec.
     https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
 
@@ -255,7 +249,6 @@ class RDefsMeta:
     projection: Optional[str] = "normal"
 
 
-@dataclass
 class OMEROMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#omero-md"""
 
@@ -265,8 +258,7 @@ class OMEROMeta(VersionMeta):
     rdefs: RDefsMeta
 
 
-@dataclass
-class ImagesMeta:
+class ImagesMeta(BaseModel):
     """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
     https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
 
@@ -274,8 +266,7 @@ class ImagesMeta:
     omero: OMEROMeta
 
 
-@dataclass
-class LabelsMeta:
+class LabelsMeta(BaseModel):
     """https://ngff.openmicroscopy.org/0.4/index.html#labels-md"""
 
     # SHOULD? (keyword not found in spec)
@@ -283,8 +274,7 @@ class LabelsMeta:
     # unlisted groups MAY be labels
 
 
-@dataclass
-class LabelColorMeta:
+class LabelColorMeta(BaseModel):
     """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
 
     # MUST
@@ -293,13 +283,11 @@ class LabelColorMeta:
     rgba: Optional[ColorTuple] = None
 
     class Config:
-        # MUST
         json_encoders = {
             ColorTuple: lambda c: Color(c).as_rgb_tuple(alpha=True)
         }
 
 
-@dataclass
 class ImageLabelMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
 
@@ -314,10 +302,10 @@ class ImageLabelMeta(VersionMeta):
     def unique_label_value(cls, v):
         # MUST
         unique_validator(v, "label_value")
+        return v
 
 
-@dataclass
-class AcquisitionMeta:
+class AcquisitionMeta(BaseModel):
     """https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
     # MUST
@@ -340,6 +328,7 @@ class AcquisitionMeta:
             raise ValueError(
                 "The integer value must be equal or greater to zero!"
             )
+        return v
 
     @validator("end_time")
     def end_after_start(cls, v: int, values: dict):
@@ -350,10 +339,10 @@ class AcquisitionMeta:
                 raise ValueError(
                     f"The start timestamp {st} should not be larger than the end timestamp {v}"
                 )
+        return v
 
 
-@dataclass
-class PlateAxisMeta:
+class PlateAxisMeta(BaseModel):
     """OME-NGFF metadata for a row or a column on a multi-well plate.
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
@@ -364,10 +353,10 @@ class PlateAxisMeta:
     def alpha_numeric(cls, v: str):
         # MUST
         alpha_numeric_validator(v)
+        return v
 
 
-@dataclass
-class WellIndexMeta:
+class WellIndexMeta(BaseModel):
     """OME-NGFF metadata for a well on a multi-well plate.
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
@@ -383,15 +372,16 @@ class WellIndexMeta:
             raise ValueError(
                 f"The well path '{v}' is not in the form of 'row/column'!"
             )
+        return v
 
     @validator("row_index", "column_index")
     def geq_zero(cls, v: int):
         # MUST
         if v < 0:
             raise ValueError("Well position indices must not be negative!")
+        return v
 
 
-@dataclass
 class PlateMeta(VersionMeta):
     """OME-NGFF high-content screening plate metadata.
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
@@ -413,26 +403,29 @@ class PlateMeta(VersionMeta):
     def unique_id(cls, v):
         # MUST
         unique_validator(v, "id")
+        return v
 
     @validator("rows", "columns")
     def unique_name(cls, v):
         # MUST
         unique_validator(v, "name")
+        return v
 
     @validator("wells")
     def unique_well(cls, v):
         # CUSTOM
         unique_validator(v, ["path", "row_index", "column_index"])
+        return v
 
     @validator("field_count")
     def positive(cls, v):
         # MUST
         if v <= 0:
             raise ValueError("Field count must be a positive integer!")
+        return v
 
 
-@dataclass
-class ImageMeta:
+class ImageMeta(BaseModel):
     """Image metadata field under an HCS well group.
     https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
 
@@ -445,9 +438,9 @@ class ImageMeta:
     def alpha_numeric(cls, v):
         # MUST
         alpha_numeric_validator(v)
+        return v
 
 
-@dataclass
 class WellGroupMeta(VersionMeta):
     """OME-NGFF high-content screening well group metadata.
     https://ngff.openmicroscopy.org/0.4/index.html#well-md"""

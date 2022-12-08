@@ -3,10 +3,9 @@ from numcodecs import Blosc
 import numpy as np
 import zarr
 from ome_zarr.reader import Reader
-from ome_zarr.writer import write_image
-from ome_zarr.format import format_from_version, FormatV04, FormatV01
+from ome_zarr.format import format_from_version
 
-from iohub.ngff_meta import AxisMeta, WindowDict, ChannelMeta
+from iohub.ngff_meta import *
 
 from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
 from numpy.typing import NDArray, DTypeLike
@@ -54,7 +53,7 @@ def _channel_display_settings(
             clim = channel_settings[chan_name]
         else:
             clim = channel_settings["Other"]
-    window = WindowDict(clim)
+    window = WindowDict(start=clim[0], end=clim[1], min=clim[2], max=clim[3])
     return ChannelMeta(
         active=first_chan,
         coefficient=1.0,
@@ -73,9 +72,11 @@ class OMEZarrWriter:
     ----------
     root : zarr.Group
         The root group of the Zarr store
-    version : Literal["0.1", "0.4"]
+    channel_names: List[str]
+        Names of all the channels present in data ordered according to channel indices
+    version : Literal["0.1", "0.4"], optional
         OME-NGFF version, by default 0.4
-    arr_name : str
+    arr_name : str, optional
         Base name of the arrays, by default '0'
     axes : Union[str, List[str], Dict[str, str]], optional
         OME axes metadata, by default:
@@ -89,9 +90,9 @@ class OMEZarrWriter:
     """
 
     _DEFAULT_AXES = [
-        AxisMeta("T", "time", "second"),
-        AxisMeta("C", "channel", None),
-        *[AxisMeta(i, "space", "micrometer") for i in ("Z", "Y", "X")],
+        AxisMeta(name="T", type="time", unit="second"),
+        AxisMeta(name="C", type="channel"),
+        *[AxisMeta(name=i, type="space", unit="micrometer") for i in ("Z", "Y", "X")],
     ]
 
     @classmethod
@@ -103,13 +104,16 @@ class OMEZarrWriter:
     def __init__(
         self,
         root: zarr.Group,
+        channel_names: List[str],
         version: Literal["0.1", "0.4"] = "0.4",
         arr_name: str = "0",
         axes: Union[str, List[str], List[Dict[str, str]]] = None,
     ):
         self.root = root
+        self.channel_names = channel_names
+        self.version = version
         self.fmt = format_from_version(str(version))
-        self.positions: Dict[int, Tuple[str, ]] = {}
+        self.positions: Dict[str, Dict[str, Any]] = {}
         self.arr_name = arr_name
         self.axes = axes if axes else self._DEFAULT_AXES
         self._overwrite = False
@@ -125,11 +129,6 @@ class OMEZarrWriter:
 
     def _rel_keys(self, rel_path: str) -> List[str]:
         return [name for name in self.root[rel_path].group_keys()]
-
-    @property
-    def next_position_index(self):
-        """The next auto-generated position index (current max index + 1)"""
-        return sorted(self.positions.keys())[-1] + 1
 
     def require_array(
         self,
@@ -189,9 +188,7 @@ class OMEZarrWriter:
             )
 
     def require_position(
-        self,
-        name: str,
-        index: int = None,
+        self, name: str, z_step: float, pixel_y: float, pixel_x: float = None
     ):
         """Creates a new position group if it does not exist.
 
@@ -199,27 +196,32 @@ class OMEZarrWriter:
         ----------
         name : str
             Name (absolute path under the store root) of position group
-        zyx_shape : Tuple[int]
-            Shape of the Z-stack (Z, Y, X)
-        dtype: DTypeLike, optional
-            Data type, by default np.uint16
-        index : int, optional
-            Index of the position if a new one is created, by default incremented by 1
+        z_step : float
+            Z step size in micrometers
+        pixel_y : float
+            Pixel size (Y) in micrometers
+        pixel_x : float, optional
+            Pixel size (X) in micrometers, by default equal to `pixel_y`
 
         Returns
         -------
         Group
             Zarr group for the required position
         """
-        if index not in self.positions.keys():
-            if not index:
-                index = self.next_position_index
-            self.positions[index] = name
-            return self.root.create_group(name)
-        elif self.positions[index] != name:
-            raise KeyError(
-                f"The specified index {index} does not match an existing name '{name}'."
+        if any([bool(s <= 0) for s in (z_step, pixel_y, pixel_x)]):
+            raise ValueError(
+                f"(Z, Y, X) pixel size {(z_step, pixel_y, pixel_x)} must be positive!"
             )
+        if not pixel_x:
+            pixel_x = pixel_y
+        if name not in self.positions:
+            self.positions[name] = {
+                "id": len(self.positions),
+                "z_step": z_step,
+                "pixel_x": pixel_y,
+                "pixel_x": pixel_y,
+            }
+            return self.root.create_group(name)
         else:
             return self.root.require_group(name)
 
@@ -230,7 +232,25 @@ class OMEZarrWriter:
         time_index: int,
         channel_index: int,
         name: str = None,
+        additional_meta: dict = None,
     ):
+        """Write a z-stack with OME-NGFF metadata.
+
+        Parameters
+        ----------
+        data : NDArray
+            Image data with shape (Z, Y, X)
+        position : zarr.Group
+            Parent position group
+        time_index : int
+            Time index
+        channel_index : int
+            Channel index
+        name : str, optional
+            Name key of the 5D array, by default None
+        additional_meta : dict, optional
+            Additional metadata, by default None
+        """
         if len(data.shape) < 3:
             raise ValueError("Data has less than 3 dimensions.")
         if time_index < 0 or channel_index < 0:
@@ -248,95 +268,44 @@ class OMEZarrWriter:
             array.resize(t, c, *zyx_shape)
         # write data
         array[time_index, channel_index] = data
-
-    def _old_channel_attributes(
-        self, chan_names, position: zarr.Group, clims=None
-    ):
-        """
-        .. deprecated:: 0.0.1
-          `_old_channel_attributes` is implemented for OME-NGFF v0.1
-
-        A method for creating ome-zarr metadata dictionary.
-        Channel names are defined by the user, everything else
-        is pre-defined.
-
-        Parameters
-        ----------
-        chan_names:     (list) List of channel names in the order of the channel dimensions
-                                i.e. if 3D Phase is C = 0, list '3DPhase' first.
-
-        position: Group
-            Position group to write metadata
-
-        clims:          (list of tuples) contrast limits to display for every channel
-
-        """
-
-        rdefs = {
-            "defaultT": 0,
-            "model": "color",
-            "projection": "normal",
-            "defaultZ": 0,
-        }
-
-        multiscale_dict = [{"datasets": [{"path": "arr_0"}], "version": "0.1"}]
-        dict_list = []
-
-        if clims and len(chan_names) < len(clims):
-            raise ValueError(
-                "Contrast Limits specified exceed the number of channels given"
+        # write metadata
+        dsm, chm = self._array_meta(channel_index, name)
+        pos_meta = self.positions[position.name]
+        if "attrs" not in pos_meta:
+            multiscales = MultiScalesMeta(
+                version=self.version,
+                axes=self.axes,
+                datasets=[dsm],
+                metadata=additional_meta,
             )
+            omero = OMEROMeta(
+                version=self.version,
+                id=pos_meta["id"],
+                name=position.name,
+                channels=[chm],
+                rdefs=RDefsMeta(0, 0),
+            )
+            images_meta = ImagesMeta(multiscales, omero)
+            pos_meta["attrs"] = images_meta
+            array.attrs.put(images_meta.json(exclude_none=True))
 
-        for i in range(len(chan_names)):
-            if clims:
-                if len(clims[i]) == 2:
-                    if "float" in self.dtype.name:
-                        clim = (
-                            float(clims[i][0]),
-                            float(clims[i][1]),
-                            -1000,
-                            1000,
-                        )
-                    else:
-                        info = np.iinfo(self.dtype)
-                        clim = (
-                            float(clims[i][0]),
-                            float(clims[i][1]),
-                            info.min,
-                            info.max,
-                        )
-                elif len(clims[i]) == 4:
-                    clim = (
-                        float(clims[i][0]),
-                        float(clims[i][1]),
-                        float(clims[i][2]),
-                        float(clims[i][3]),
-                    )
-                else:
-                    raise ValueError(
-                        "clim specification must a tuple of length 2 or 4"
-                    )
 
-            first_chan = True if i == 0 else False
-            if not clims or i >= len(clims):
-                dict_list.append(
-                    _channel_display_settings(
-                        chan_names[i], first_chan=first_chan
-                    )
-                )
-            else:
-                dict_list.append(
-                    _channel_display_settings(
-                        chan_names[i], clim, first_chan=first_chan
-                    )
-                )
-
-        full_dict = {
-            "multiscales": multiscale_dict,
-            "omero": {"channels": dict_list, "rdefs": rdefs, "version": 0.1},
-        }
-
-        position.attrs.put(full_dict)
+    def _array_meta(
+        self,
+        channel_index,
+        name: str,
+        clim: Tuple[float] = None,
+        transform: TransformationMeta = None,
+    ):
+        if not transform:
+            transform = TransformationMeta("identity")
+        dataset_meta = DatasetMeta(name, transform)
+        channel_name = self.channel_names[channel_index]
+        first_chan = True if channel_index == 0 else False
+        channel_meta = _channel_display_settings(
+            channel_name, clim=clim, first_chan=first_chan
+        )
+        return dataset_meta, channel_meta
 
 
 class HCSWriter(OMEZarrWriter):
