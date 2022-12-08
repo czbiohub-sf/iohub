@@ -109,7 +109,7 @@ class OMEZarrWriter:
     ):
         self.root = root
         self.fmt = format_from_version(str(version))
-        self.positions: Dict[int, str] = {}
+        self.positions: Dict[int, Tuple[str, ]] = {}
         self.arr_name = arr_name
         self.axes = axes if axes else self._DEFAULT_AXES
         self._overwrite = False
@@ -248,9 +248,6 @@ class OMEZarrWriter:
             array.resize(t, c, *zyx_shape)
         # write data
         array[time_index, channel_index] = data
-
-    def _position_metadata(self, position):
-        pass
 
     def _old_channel_attributes(
         self, chan_names, position: zarr.Group, clims=None

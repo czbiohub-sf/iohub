@@ -24,7 +24,9 @@ from typing import (
 )
 
 
-def unique_validator(data: List[Union[dataclass, TypedDict]], field: Union[str, List[str]]):
+def unique_validator(
+    data: List[Union[dataclass, TypedDict]], field: Union[str, List[str]]
+):
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
@@ -261,6 +263,14 @@ class OMEROMeta(VersionMeta):
     name: Optional[str]
     channels: List[ChannelMeta]
     rdefs: RDefsMeta
+
+
+@dataclass
+class ImagesMeta:
+    """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset."""
+
+    multiscales: MultiScalesMeta
+    omero: OMEROMeta
 
 
 @dataclass
