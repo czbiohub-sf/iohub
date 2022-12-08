@@ -267,7 +267,8 @@ class OMEROMeta(VersionMeta):
 
 @dataclass
 class ImagesMeta:
-    """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset."""
+    """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
+    https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
 
     multiscales: MultiScalesMeta
     omero: OMEROMeta
