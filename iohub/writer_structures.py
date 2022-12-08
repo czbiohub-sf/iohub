@@ -2,13 +2,14 @@ import os, logging
 from numcodecs import Blosc
 import numpy as np
 import zarr
+from ome_zarr.reader import Reader
 from ome_zarr.writer import write_image
 from ome_zarr.format import format_from_version, FormatV04, FormatV01
 
 from iohub.ngff_meta import AxisMeta, WindowDict, ChannelMeta
 
 from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
-from numpy.typing import ArrayLike, DTypeLike
+from numpy.typing import NDArray, DTypeLike
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -75,7 +76,7 @@ class OMEZarrWriter:
     version : Literal["0.1", "0.4"]
         OME-NGFF version, by default 0.4
     arr_name : str
-        Base name of the arrays
+        Base name of the arrays, by default '0'
     axes : Union[str, List[str], Dict[str, str]], optional
         OME axes metadata, by default:
         `
@@ -93,11 +94,17 @@ class OMEZarrWriter:
         *[AxisMeta(i, "space", "micrometer") for i in ("Z", "Y", "X")],
     ]
 
+    @classmethod
+    def from_ome_reader(cls, reader: Reader):
+        # TODO: get metadata from reader
+        writer = cls()
+        return writer
+
     def __init__(
         self,
         root: zarr.Group,
         version: Literal["0.1", "0.4"] = "0.4",
-        arr_name: str = "arr",
+        arr_name: str = "0",
         axes: Union[str, List[str], List[Dict[str, str]]] = None,
     ):
         self.root = root
@@ -105,14 +112,15 @@ class OMEZarrWriter:
         self.positions: Dict[int, str] = {}
         self.arr_name = arr_name
         self.axes = axes if axes else self._DEFAULT_AXES
+        self._overwrite = False
 
-    def storage_options(self, chunks: Tuple[int], overwrite: bool = False):
+    @property
+    def _storage_options(self):
         return {
-            "chunks": chunks,
             "compressor": Blosc(
                 cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
             ),
-            "overwrite": overwrite,
+            "overwrite": self._overwrite,
         }
 
     def _rel_keys(self, rel_path: str) -> List[str]:
@@ -123,20 +131,78 @@ class OMEZarrWriter:
         """The next auto-generated position index (current max index + 1)"""
         return sorted(self.positions.keys())[-1] + 1
 
-    def init_position(
-        self, name: str, shape: Tuple, dtype: DTypeLike, index: int
+    def require_array(
+        self,
+        group: zarr.Group,
+        name: str,
+        zyx_shape: Tuple[int],
+        dtype: DTypeLike,
+        chunks: Tuple[int] = None,
     ):
-        self.positions[index] = name
-        position = self.root.create_group(name)
-        position.zeros(name=self.arr_name, shape=shape)
+        """Create a new array filled with zeros if it does not exist.
 
-    def require_position(self, name: str, dtype: DTypeLike, index: int = None):
+        Parameters
+        ----------
+        group : zarr.Group
+            Parent zarr group
+        name : str
+            name key of the array
+        zyx_shape : Tuple[int]
+            Shape of the z-stack (Z, Y, X) in the array
+        dtype : DTypeLike
+            Data type
+        chunks : Tuple[int], optional
+            Chunk size for the new array if not present, by default a z-stack (Z, Y, X)
+
+        Returns
+        -------
+        Array
+            Zarr array. Zero-filled with shape (1, 1, Z, Y, X) if created.
+
+        Raises
+        ------
+        ValueError
+        """
+        if len(zyx_shape) != 3:
+            raise ValueError("Shape {shape} does not have 3 dimensions.")
+        value = group.get(name)
+        if value and not isinstance(value, zarr.Array):
+            raise FileExistsError(
+                f"Name '{name}' maps to a non-array object of type {type(value)}."
+            )
+        elif isinstance(value, zarr.Array):
+            if value.shape[-3:] == zyx_shape:
+                return value
+            else:
+                raise FileExistsError(
+                    f"An array exists with incompatible shape {value.shape}."
+                )
+        elif value is None:
+            if not chunks:
+                chunks = zyx_shape
+            return group.zeros(
+                name,
+                shape=(1, 1, *zyx_shape),
+                chunks=chunks,
+                dtype=dtype,
+                **self._storage_options,
+            )
+
+    def require_position(
+        self,
+        name: str,
+        index: int = None,
+    ):
         """Creates a new position group if it does not exist.
 
         Parameters
         ----------
         name : str
             Name (absolute path under the store root) of position group
+        zyx_shape : Tuple[int]
+            Shape of the Z-stack (Z, Y, X)
+        dtype: DTypeLike, optional
+            Data type, by default np.uint16
         index : int, optional
             Index of the position if a new one is created, by default incremented by 1
 
@@ -146,52 +212,42 @@ class OMEZarrWriter:
             Zarr group for the required position
         """
         if index not in self.positions.keys():
-            index = index if index is not None else self.next_position_index
-            self.init_position(name, dtype, index)
+            if not index:
+                index = self.next_position_index
+            self.positions[index] = name
+            return self.root.create_group(name)
         elif self.positions[index] != name:
-            raise ValueError(
-                f"The specified index {index} does not match an existing name {name}."
+            raise KeyError(
+                f"The specified index {index} does not match an existing name '{name}'."
             )
-        return self.root.require_group(name)
+        else:
+            return self.root.require_group(name)
 
-    def write_position(
+    def write_zstack(
         self,
-        data: ArrayLike,
-        channel_names: List[str],
-        pos: int,
-        chunks: Tuple[int] = None,
-        overwrite: bool = False,
+        data: NDArray,
+        position: zarr.Group,
+        time_index: int,
+        channel_index: int,
+        name: str = None,
     ):
-        """Write 5-D data to a position group.
-
-        Parameters
-        ----------
-        data : ArrayLike
-            Data array
-        channel_names: List[str]
-            Channel names to write to metadata
-        pos : int
-            path name of the position group to write into
-        chunks : Tuple[int], optional
-            Chunk size, by default None
-        overwrite : bool, optional
-            Overwrite if the position exists, by default False
-        """
-        group = self.require_position(self.positions[pos])
-        if self.fmt == FormatV01:
-            self._old_channel_attributes(channel_names, group)
-            metadata = None
-        elif self.fmt == FormatV04:
-            metadata = self._position_metadata(group)
-        write_image(
-            data,
-            group=group,
-            axes=self.axes,
-            scaler=None,
-            fmt=self.version,
-            storage_options=self.storage_options(chunks, overwrite),
-            metadata=metadata,
+        if len(data.shape) < 3:
+            raise ValueError("Data has less than 3 dimensions.")
+        if time_index < 0 or channel_index < 0:
+            raise ValueError("Time and channel indices must be non-negative.")
+        if not name:
+            name = self.arr_name
+        zyx_shape = data.shape[-3:]
+        # get 5D array
+        array = self.require_array(
+            position, name, zyx_shape=zyx_shape, dtype=data.dtype
         )
+        if time_index >= array.shape[0] or channel_index >= array.shape[1]:
+            t = max(time_index, array.shape[0])
+            c = max(channel_index, array.shape[1])
+            array.resize(t, c, *zyx_shape)
+        # write data
+        array[time_index, channel_index] = data
 
     def _position_metadata(self, position):
         pass
