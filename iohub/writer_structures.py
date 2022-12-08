@@ -288,7 +288,7 @@ class OMEZarrWriter:
                 channels=[chm],
                 rdefs=RDefsMeta(default_t=0, default_z=0),
             )
-            images_meta = ImagesMeta(multiscales, omero)
+            images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
             pos_meta["attrs"] = images_meta
             array.attrs.put(images_meta.json(exclude_none=True))
 
