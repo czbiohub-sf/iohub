@@ -290,7 +290,11 @@ class OMEZarrWriter:
             )
             images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
             pos_meta["attrs"] = images_meta
-            array.attrs.put(images_meta.json(exclude_none=True))
+        else:
+            images_meta: ImagesMeta = pos_meta["attrs"]
+            images_meta.multiscales.datasets.append(dsm)
+            images_meta.omero.channels.append(chm)
+        position.attrs.put(images_meta.json(exclude_none=True))
 
     def _array_meta(
         self,
