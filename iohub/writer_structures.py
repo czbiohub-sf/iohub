@@ -294,7 +294,7 @@ class OMEZarrWriter:
             ):
                 pos_meta["attrs"].multiscales.datasets.append(dataset_meta)
         position.attrs.put(
-            pos_meta["attrs"].json(exclude_none=True, by_alias=True)
+            pos_meta["attrs"].dict(exclude_none=True, by_alias=True)
         )
 
     def _dataset_meta(
