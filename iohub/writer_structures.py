@@ -272,28 +272,31 @@ class OMEZarrWriter:
         # write data
         array[time_index, channel_index] = data
         # write metadata
-        dsm, chm = self._array_meta(channel_index, name)
+        dataset_meta = self._dataset_meta(channel_index, name)
         pos_meta = self.positions[position.name]
         if "attrs" not in pos_meta:
             multiscales = MultiScalesMeta(
                 version=self.version,
                 axes=self.axes,
-                datasets=[dsm],
+                datasets=[dataset_meta],
                 metadata=additional_meta,
             )
             omero = self._omero_meta(position)
             images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
             pos_meta["attrs"] = images_meta
         else:
-            if dsm.path not in pos_meta["attrs"].multiscales.get_dataset_paths():
-                pos_meta["attrs"].multiscales.datasets.append(dsm)
-        position.attrs.put(pos_meta["attrs"].json(exclude_none=True))
+            if (
+                dataset_meta.path
+                not in pos_meta["attrs"].multiscales.get_dataset_paths()
+            ):
+                pos_meta["attrs"].multiscales.datasets.append(dataset_meta)
+        position.attrs.put(
+            pos_meta["attrs"].json(exclude_none=True, by_alias=True)
+        )
 
     def _dataset_meta(
         self,
-        channel_index,
         name: str,
-        clim: Tuple[float] = None,
         transform: List[TransformationMeta] = None,
     ):
         if not transform:
@@ -303,24 +306,31 @@ class OMEZarrWriter:
         )
         return dataset_meta
 
-    def _omero_meta(self, position: zarr.Group, clims: List[Tuple[float, float, float, float]] = None):
+    def _omero_meta(
+        self,
+        position: zarr.Group,
+        clims: List[Tuple[float, float, float, float]] = None,
+    ):
         id = self.positions[position.name]["id"]
         channels = []
-        for i, (channel_name, clim) in enumerate(zip(self.channel_names, clims)):
-            if i ==0:
+        for i, (channel_name, clim) in enumerate(
+            zip(self.channel_names, clims)
+        ):
+            if i == 0:
                 first_chan = True
-            channels.append(_channel_display_settings(
-                channel_name, clim=clim, first_chan=first_chan
-            ))
-        omero_meta = OMEROMeta(
-                version=self.version,
-                id=id,
-                name=position.name,
-                channels=channels,
-                rdefs=RDefsMeta(default_t=0, default_z=0),
+            channels.append(
+                _channel_display_settings(
+                    channel_name, clim=clim, first_chan=first_chan
+                )
             )
+        omero_meta = OMEROMeta(
+            version=self.version,
+            id=id,
+            name=position.name,
+            channels=channels,
+            rdefs=RDefsMeta(default_t=0, default_z=0),
+        )
         return omero_meta
-
 
 
 class HCSWriter(OMEZarrWriter):
