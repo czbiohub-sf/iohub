@@ -193,9 +193,6 @@ class OMEZarrWriter:
     def require_position(
         self,
         name: str,
-        z_step: float,
-        pixel_y: float,
-        pixel_x: float = None,
         overwrite: bool = False,
     ):
         """Creates a new position group if it does not exist.
@@ -204,12 +201,6 @@ class OMEZarrWriter:
         ----------
         name : str
             Name (absolute path under the store root) of position group
-        z_step : float
-            Z step size in micrometers
-        pixel_y : float
-            Pixel size (Y) in micrometers
-        pixel_x : float, optional
-            Pixel size (X) in micrometers, by default equal to `pixel_y`
         overwrite : bool, optional
             Delete all existing data in the position group, by default False
 
@@ -219,19 +210,8 @@ class OMEZarrWriter:
         Group
             Zarr group for the required position
         """
-        if not pixel_x:
-            pixel_x = pixel_y
-        if any([bool(s <= 0) for s in (z_step, pixel_y, pixel_x)]):
-            raise ValueError(
-                f"(Z, Y, X) pixel size {(z_step, pixel_y, pixel_x)} must be positive!"
-            )
         if name not in self.positions:
-            self.positions[name] = {
-                "id": len(self.positions),
-                "z_step": z_step,
-                "pixel_x": pixel_y,
-                "pixel_x": pixel_y,
-            }
+            self.positions[name] = {"id": len(self.positions)}
         return self.root.require_group(name, overwrite=overwrite)
 
     def write_zstack(
@@ -258,7 +238,7 @@ class OMEZarrWriter:
         channel_index : int
             Channel index
         transform: List[TransformationMeta], optional
-            Coordinate transformations for the z-stack, by default identity
+            Coordinate transformations (see iohub.ngff_meta.TransformationMeta) for the array, by default identity
         name : str, optional
             Name key of the 5D array, by default None
         auto_meta : bool, optional
@@ -484,6 +464,7 @@ class HCSWriter(OMEZarrWriter):
         self,
         row_name: str,
         col_name: str,
+        row_index: int = None,
         col_index: int = None,
         overwrite: bool = False,
     ):
@@ -496,6 +477,8 @@ class HCSWriter(OMEZarrWriter):
             Name of the parent row
         col_name : str
             Name of the column
+        row_index: int, optional
+            Unique index of the new row, by default incremented by 1
         col_index: int, optional
             Unique index of the new column, by default incremented by 1
         overwrite : bool, optional
@@ -507,7 +490,7 @@ class HCSWriter(OMEZarrWriter):
             Zarr group for the required well
         """
         well_name = os.path.join(row_name, col_name)
-        row = self.root.require_group(row_name)
+        row = self.require_row(row_name, index=row_index)
         if not col_index:
             col_index = max(col["id"] for col in self.columns) + 1
         if col_name in self.columns:
@@ -532,11 +515,8 @@ class HCSWriter(OMEZarrWriter):
             }
         return row.require_group(col_name, overwrite=overwrite)
 
-    def rquire_position(
-        self, row: str, column: str, fov: str, px_size: Tuple[float], **kwargs
-    ):
+    def rquire_position(self, row: str, column: str, fov: str, **kwargs):
         """Create a row, a column, and a FOV/position if they do not exist.
-        Row/column indices are defaults (see `require_row()` and `require_column()`).
 
         Parameters
         ----------
@@ -546,17 +526,13 @@ class HCSWriter(OMEZarrWriter):
             Name key of the column, e.g. '12'
         fov : str
             Name key of the FOV/position, e.g. '0'
-        px_size : Tuple[float]
-            Pixel sizes in micrometers (Z, Y, (X))
-        **kwargs:
-            Keyword arguments for `OMEZarrWriter.require_position()`
+        **kwargs :
+            Keyword arguments for `require_well()`
         """
         well = self.require_well(row, column, **kwargs)
         position_name = os.path.join(well.name, fov)
         self.wells[well.name]["positions"].append(position_name)
-        return super().require_position(
-            position_name, *px_size, **kwargs
-        )
+        return super().require_position(position_name)
 
     def write_zstack(
         self,
