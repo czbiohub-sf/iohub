@@ -41,6 +41,8 @@ def unique_validator(
         raised if any value is not unique
     """
     fields = [field] if isinstance(field, str) else field
+    if not isinstance(data[0], dict):
+        data = [d.dict() for d in data]
     df = pd.DataFrame(data)
     for key in fields:
         if not df[key].is_unique:
@@ -198,12 +200,12 @@ class VersionMeta(MetaBase):
 class MultiScalesMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
-    # SHOULD
-    name: Optional[str]
     # MUST
     axes: List[AxisMeta]
     # MUST
     datasets: List[DatasetMeta]
+    # SHOULD
+    name: Optional[str] = None
     # MAY
     coordinate_transformations: Optional[List[TransformationMeta]] = Field(
         alias="coordinateTransformations"
@@ -316,7 +318,7 @@ class AcquisitionMeta(MetaBase):
     # MUST
     id: int
     # SHOULD
-    name: Optional[str]
+    name: Optional[str] = None
     # SHOULD
     maximum_field_count: Optional[int] = Field(alias="maximumfieldcount")
     # MAY
