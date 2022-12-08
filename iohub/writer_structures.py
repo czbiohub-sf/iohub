@@ -191,7 +191,12 @@ class OMEZarrWriter:
             )
 
     def require_position(
-        self, name: str, z_step: float, pixel_y: float, pixel_x: float = None
+        self,
+        name: str,
+        z_step: float,
+        pixel_y: float,
+        pixel_x: float = None,
+        overwrite: bool = False,
     ):
         """Creates a new position group if it does not exist.
 
@@ -205,6 +210,9 @@ class OMEZarrWriter:
             Pixel size (Y) in micrometers
         pixel_x : float, optional
             Pixel size (X) in micrometers, by default equal to `pixel_y`
+        overwrite : bool, optional
+            Delete all existing data in the position group, by default False
+
 
         Returns
         -------
@@ -224,9 +232,7 @@ class OMEZarrWriter:
                 "pixel_x": pixel_y,
                 "pixel_x": pixel_y,
             }
-            return self.root.create_group(name)
-        else:
-            return self.root.require_group(name)
+        return self.root.require_group(name, overwrite=True)
 
     def write_zstack(
         self,
@@ -236,6 +242,7 @@ class OMEZarrWriter:
         channel_index: int,
         transform: List[TransformationMeta] = None,
         name: str = None,
+        auto_meta=True,
         additional_meta: dict = None,
     ):
         """Write a z-stack with OME-NGFF metadata.
@@ -254,6 +261,8 @@ class OMEZarrWriter:
             Coordinate transformations for the z-stack, by default identity
         name : str, optional
             Name key of the 5D array, by default None
+        auto_meta : bool, optional
+            Whether to track and store metadata automatically, by default True
         additional_meta : dict, optional
             Additional metadata, by default None
         """
@@ -274,7 +283,16 @@ class OMEZarrWriter:
             array.resize(t, c, *zyx_shape)
         # write data
         array[time_index, channel_index] = data
-        # write metadata
+        if auto_meta:
+            self._write_zstack_meta(position, name, transform, additional_meta)
+
+    def _write_zstack_meta(
+        self,
+        position: zarr.Group,
+        name: str,
+        transform: List[TransformationMeta],
+        additional_meta: dict,
+    ):
         dataset_meta = self._dataset_meta(name, transform=transform)
         pos_meta = self.positions[position.name]
         if "attrs" not in pos_meta:
