@@ -518,7 +518,7 @@ class HCSWriter(OMEZarrWriter):
             }
         return row.require_group(col_name, overwrite=overwrite)
 
-    def rquire_position(
+    def require_position(
         self, row: str, column: str, fov: str, acq_id: int = 0, **kwargs
     ):
         """Create a row, a column, and a FOV/position if they do not exist.
@@ -583,7 +583,7 @@ class HCSWriter(OMEZarrWriter):
             rows=[row["meta"] for _, row in self.rows],
             columns=[col["meta"] for _, col in self.columns],
             wells=[well["meta"] for _, well in self.wells],
-            field_count=len(self.positions)
+            field_count=len(self.positions),
         )
         self.root.attrs["plate"] = self.plate_meta.dict(**TO_DICT_SETTINGS)
 
