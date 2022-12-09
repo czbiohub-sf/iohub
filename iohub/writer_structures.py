@@ -343,6 +343,8 @@ class HCSWriter(OMEZarrWriter):
         The root group of the Zarr store, dimension separator should be '/'
     channel_names: List[str]
         Names of all the channels present in data ordered according to channel indices
+    plate_name: str, optional
+        Name of the plate, by default None
     version : Literal["0.1", "0.4"], optional
         OME-NGFF version, by default 0.4
     arr_name : str, optional
@@ -362,12 +364,14 @@ class HCSWriter(OMEZarrWriter):
         self,
         root: zarr.Group,
         channel_names: List[str],
+        plate_name: str = None,
         version: Literal["0.1", "0.4"] = "0.4",
         arr_name: str = "0",
         axes: Union[str, List[str], List[Dict[str, str]]] = None,
         acquisitions: List[AcquisitionMeta] = None,
     ):
         super().__init__(root, channel_names, version, arr_name, axes)
+        self.plate_name = plate_name
         self.plate_meta: PlateMeta = None
         self.acquisitions = (
             [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
@@ -571,23 +575,19 @@ class HCSWriter(OMEZarrWriter):
         self._dump_well_meta(well)
         self._dump_plate_meta()
 
-    def _dump_zstack_meta(
-        self,
-        position: zarr.Group,
-        name: str,
-        transform: List[TransformationMeta],
-        additional_meta: dict,
-    ):
-        super()._dump_zstack_meta(position, name, transform, additional_meta)
-
     def _dump_plate_meta(self):
-        
+        self.plate_meta = PlateMeta(
+            version=self.version,
+            name=self.plate_name,
+            acquisitions=self.acquisitions,
+            rows=[row["meta"] for _, row in self.rows],
+            columns=[col["meta"] for _, col in self.columns],
+            wells=[well["meta"] for _, well in self.wells],
+            field_count=len(self.positions)
+        )
         self.root.attrs["plate"] = self.plate_meta.dict(**TO_DICT_SETTINGS)
 
-    def _dump_well_meta(
-        self,
-        well: zarr.Group,
-    ):
+    def _dump_well_meta(self, well: zarr.Group):
         well_group_meta = WellGroupMeta(
             version=self.version,
             images=self.wells[well.name]["image_meta_list"],
