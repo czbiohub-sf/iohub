@@ -451,15 +451,15 @@ class HCSWriter(OMEZarrWriter):
         Group
             Zarr group for the required row
         """
-        if not index:
-            index = len(self.rows)
-        if name in self.rows:
+        if name in self.rows and index:
             _id = self.rows[name]["id"]
             if _id != index:
                 raise ValueError(
                     f"Requested index {index} conflicts with existing row {name} index {_id}."
                 )
         else:
+            if not index:
+                index = len(self.rows)
             self.rows[name] = {
                 "id": index,
                 "meta": PlateAxisMeta(name=name),
@@ -497,15 +497,15 @@ class HCSWriter(OMEZarrWriter):
         """
         well_name = os.path.join(row_name, col_name)
         row = self.require_row(row_name, index=row_index)
-        if not col_index:
-            col_index = len(self.columns)
-        if col_name in self.columns:
+        if col_name in self.columns and col_index:
             _id = self.columns[col_name]["id"]
             if _id != col_index:
                 raise ValueError(
                     f"Requested index {col_index} conflicts with existing column {col_name} index {_id}."
                 )
         else:
+            if not col_index:
+                col_index = len(self.columns)
             self.columns[col_name] = {
                 "id": col_index,
                 "meta": PlateAxisMeta(name=col_name),
