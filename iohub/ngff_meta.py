@@ -200,7 +200,7 @@ class VersionMeta(MetaBase):
     version: Optional[Literal["0.1", "0.2", "0.3", "0.4"]]
 
 
-class MultiScalesMeta(VersionMeta):
+class MultiScaleMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # MUST
@@ -275,7 +275,7 @@ class ImagesMeta(MetaBase):
     """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
     https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
 
-    multiscales: MultiScalesMeta
+    multiscales: List[MultiScaleMeta]
     omero: OMEROMeta
 
 

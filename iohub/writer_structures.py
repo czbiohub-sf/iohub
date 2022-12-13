@@ -258,9 +258,11 @@ class OMEZarrWriter:
             position, name, zyx_shape=zyx_shape, dtype=data.dtype
         )
         if time_index >= array.shape[0] or channel_index >= array.shape[1]:
-            t = max(time_index, array.shape[0])
-            c = max(channel_index, array.shape[1])
-            array.resize(t, c, *zyx_shape)
+            array.resize(
+                max(time_index + 1, array.shape[0]),
+                max(channel_index + 1, array.shape[1]),
+                *zyx_shape,
+            )
         # write data
         array[time_index, channel_index] = data
         if auto_meta:
@@ -276,21 +278,23 @@ class OMEZarrWriter:
         dataset_meta = self._dataset_meta(name, transform=transform)
         pos_meta = self.positions[position.name]
         if "attrs" not in pos_meta:
-            multiscales = MultiScalesMeta(
-                version=self.version,
-                axes=self.axes,
-                datasets=[dataset_meta],
-                metadata=additional_meta,
-            )
+            multiscales = [
+                MultiScaleMeta(
+                    version=self.version,
+                    axes=self.axes,
+                    datasets=[dataset_meta],
+                    metadata=additional_meta,
+                )
+            ]
             omero = self._omero_meta(position)
             images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
             pos_meta["attrs"] = images_meta
         else:
             if (
                 dataset_meta.path
-                not in pos_meta["attrs"].multiscales.get_dataset_paths()
+                not in pos_meta["attrs"].multiscales[0].get_dataset_paths()
             ):
-                pos_meta["attrs"].multiscales.datasets.append(dataset_meta)
+                pos_meta["attrs"].multiscales[0].datasets.append(dataset_meta)
         position.attrs.put(pos_meta["attrs"].dict(**TO_DICT_SETTINGS))
 
     def _dataset_meta(
