@@ -211,6 +211,7 @@ class OMEZarrWriter:
             Zarr group for the required position
         """
         if name not in self.root:
+            name = "/" + name.strip("/")
             self.positions[name] = {"id": len(self.positions)}
         return self.root.require_group(name, overwrite=overwrite)
 
