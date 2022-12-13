@@ -381,7 +381,7 @@ class WellIndexMeta(MetaBase):
     def row_slash_column(cls, v: str):
         # MUST
         # regex: one line that is exactly two words separated by one forward slash
-        if len(re.findall(r"^\w\/\w$", v)) != 1:
+        if len(re.findall(r"^\w+\/\w+$", v)) != 1:
             raise ValueError(
                 f"The well path '{v}' is not in the form of 'row/column'!"
             )
