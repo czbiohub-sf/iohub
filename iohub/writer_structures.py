@@ -448,7 +448,7 @@ class HCSWriter(OMEZarrWriter):
             Zarr group for the required row
         """
         if not index:
-            index = max(row["id"] for row in self.rows) + 1
+            index = len(self.rows)
         if name in self.rows:
             _id = self.rows[name]["id"]
             if _id != index:
@@ -494,7 +494,7 @@ class HCSWriter(OMEZarrWriter):
         well_name = os.path.join(row_name, col_name)
         row = self.require_row(row_name, index=row_index)
         if not col_index:
-            col_index = max(col["id"] for col in self.columns) + 1
+            col_index = len(self.columns)
         if col_name in self.columns:
             _id = self.columns[col_name]["id"]
             if _id != col_index:
@@ -506,8 +506,9 @@ class HCSWriter(OMEZarrWriter):
                 "id": col_index,
                 "meta": PlateAxisMeta(name=col_name),
             }
-        if well_name not in self.wells:
-            self.wells[well_name] = {
+        well = row.require_group(col_name, overwrite=overwrite)
+        if well.name not in self.wells:
+            self.wells[well.name] = {
                 "meta": WellIndexMeta(
                     path=well_name,
                     rowIndex=self.rows[row_name]["id"],
@@ -516,7 +517,7 @@ class HCSWriter(OMEZarrWriter):
                 "positions": [],
                 "image_meta_list": [],
             }
-        return row.require_group(col_name, overwrite=overwrite)
+        return well
 
     def require_position(
         self, row: str, column: str, fov: str, acq_id: int = 0, **kwargs
@@ -542,7 +543,7 @@ class HCSWriter(OMEZarrWriter):
             overwrite=bool(kwargs.get("overwrite")),
         )
         if position.name not in self.wells[well.name]["positions"]:
-            image_meta = ImageMeta(acquisition=acq_id, path=position.name)
+            image_meta = ImageMeta(acquisition=acq_id, path=position.basename)
             self.wells[well.name]["image_meta_list"].append(image_meta)
             self.wells[well.name]["positions"].append(position.name)
         return position
@@ -570,8 +571,7 @@ class HCSWriter(OMEZarrWriter):
         )
         if auto_meta:
             self._dump_zstack_meta(position, name, transform, additional_meta)
-        well = self.root.get(self.positions[position.name]["well"])
-
+        well = self.root.get(os.path.dirname(position.name))
         self._dump_well_meta(well)
         self._dump_plate_meta()
 
@@ -580,9 +580,9 @@ class HCSWriter(OMEZarrWriter):
             version=self.version,
             name=self.plate_name,
             acquisitions=self.acquisitions,
-            rows=[row["meta"] for _, row in self.rows],
-            columns=[col["meta"] for _, col in self.columns],
-            wells=[well["meta"] for _, well in self.wells],
+            rows=[row["meta"] for _, row in self.rows.items()],
+            columns=[col["meta"] for _, col in self.columns.items()],
+            wells=[well["meta"] for _, well in self.wells.items()],
             field_count=len(self.positions),
         )
         self.root.attrs["plate"] = self.plate_meta.dict(**TO_DICT_SETTINGS)
@@ -592,7 +592,7 @@ class HCSWriter(OMEZarrWriter):
             version=self.version,
             images=self.wells[well.name]["image_meta_list"],
         )
-        well.attrs["wells"] = well_group_meta.dict(**TO_DICT_SETTINGS)
+        well.attrs["well"] = well_group_meta.dict(**TO_DICT_SETTINGS)
 
 
 class DefaultZarr(HCSWriter):

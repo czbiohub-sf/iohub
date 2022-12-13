@@ -64,7 +64,7 @@ def alpha_numeric_validator(data: str):
     """
     if not (data.isalnum() or data.isnumeric()):
         raise ValueError(
-            f"The column name must be alphanumerical! Got invalid value: '{data}'."
+            f"The path name must be alphanumerical! Got invalid value: '{data}'."
         )
 
 
