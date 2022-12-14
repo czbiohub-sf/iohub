@@ -116,7 +116,6 @@ class OMEZarrWriter:
         self.channel_names = channel_names
         self.version = version
         self.fmt = format_from_version(str(version))
-        self.positions: Dict[str, Dict[str, Any]] = {}
         self.arr_name = arr_name
         self.axes = axes if axes else self._DEFAULT_AXES
         self._overwrite = False
@@ -190,35 +189,10 @@ class OMEZarrWriter:
                 **self._storage_options,
             )
 
-    def require_position(
-        self,
-        name: str,
-        overwrite: bool = False,
-    ):
-        """Creates a new position group if it does not exist.
-
-        Parameters
-        ----------
-        name : str
-            Name (absolute path under the store root) of position group
-        overwrite : bool, optional
-            Delete all existing data in the position group, by default False
-
-
-        Returns
-        -------
-        Group
-            Zarr group for the required position
-        """
-        if name not in self.root:
-            name = "/" + name.strip("/")
-            self.positions[name] = {"id": len(self.positions)}
-        return self.root.require_group(name, overwrite=overwrite)
-
     def write_zstack(
         self,
         data: NDArray,
-        position: zarr.Group,
+        group: zarr.Group,
         time_index: int,
         channel_index: int,
         transform: List[TransformationMeta] = None,
@@ -232,8 +206,8 @@ class OMEZarrWriter:
         ----------
         data : NDArray
             Image data with shape (Z, Y, X)
-        position : zarr.Group
-            Parent position group
+        group : zarr.Group
+            Parent Zarr group
         time_index : int
             Time index
         channel_index : int
@@ -256,7 +230,7 @@ class OMEZarrWriter:
         zyx_shape = data.shape[-3:]
         # get 5D array
         array = self.require_array(
-            position, name, zyx_shape=zyx_shape, dtype=data.dtype
+            group, name, zyx_shape=zyx_shape, dtype=data.dtype
         )
         if time_index >= array.shape[0] or channel_index >= array.shape[1]:
             array.resize(
@@ -267,18 +241,16 @@ class OMEZarrWriter:
         # write data
         array[time_index, channel_index] = data
         if auto_meta:
-            self._dump_zstack_meta(position, name, transform, additional_meta)
+            self._dump_zstack_meta(name, transform, additional_meta)
 
     def _dump_zstack_meta(
         self,
-        position: zarr.Group,
         name: str,
         transform: List[TransformationMeta],
         additional_meta: dict,
     ):
         dataset_meta = self._dataset_meta(name, transform=transform)
-        pos_meta = self.positions[position.name]
-        if "attrs" not in pos_meta:
+        if "multiscales" not in self.root.attrs:
             multiscales = [
                 MultiScaleMeta(
                     version=self.version,
@@ -287,16 +259,15 @@ class OMEZarrWriter:
                     metadata=additional_meta,
                 )
             ]
-            omero = self._omero_meta(position)
-            images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
-            pos_meta["attrs"] = images_meta
+            omero = self._omero_meta(0, self.root)
+            self.images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
         else:
             if (
                 dataset_meta.path
-                not in pos_meta["attrs"].multiscales[0].get_dataset_paths()
+                not in self.images_meta.multiscales[0].get_dataset_paths()
             ):
-                pos_meta["attrs"].multiscales[0].datasets.append(dataset_meta)
-        position.attrs.put(pos_meta["attrs"].dict(**TO_DICT_SETTINGS))
+                self.images_meta.multiscales[0].datasets.append(dataset_meta)
+        self.root.attrs.put(self.images_meta.dict(**TO_DICT_SETTINGS))
 
     def _dataset_meta(
         self,
@@ -312,10 +283,10 @@ class OMEZarrWriter:
 
     def _omero_meta(
         self,
-        position: zarr.Group,
+        id: int,
+        group: zarr.Group,
         clims: List[Tuple[float, float, float, float]] = None,
     ):
-        id = self.positions[position.name]["id"]
         if not clims:
             clims = [None] * 4
         channels = []
@@ -332,7 +303,7 @@ class OMEZarrWriter:
         omero_meta = OMEROMeta(
             version=self.version,
             id=id,
-            name=position.name,
+            name=group.name,
             channels=channels,
             rdefs=RDefsMeta(default_t=0, default_z=0),
         )
@@ -384,6 +355,7 @@ class HCSWriter(OMEZarrWriter):
         self.rows: Dict[str, Union[PlateAxisMeta, int, float]] = {}
         self.columns: Dict[str, Union[PlateAxisMeta, int, float]] = {}
         self.wells: Dict[str, Union[WellIndexMeta, int, float]] = {}
+        self.positions: Dict[str, Dict[str, Any]] = {}
 
     @property
     def row_names(self) -> List[str]:
@@ -543,10 +515,8 @@ class HCSWriter(OMEZarrWriter):
             Keyword arguments for `require_well()` and `require_position`
         """
         well = self.require_well(row, column, **kwargs)
-        position = super().require_position(
-            os.path.join(well.name, fov),
-            overwrite=bool(kwargs.get("overwrite")),
-        )
+        position = well.require_group(fov)
+        self.positions[position.name] = {"id": len(self.positions)}
         if position.name not in self.wells[well.name]["positions"]:
             image_meta = ImageMeta(acquisition=acq_id, path=position.basename)
             self.wells[well.name]["image_meta_list"].append(image_meta)
@@ -579,6 +549,36 @@ class HCSWriter(OMEZarrWriter):
         well = self.root.get(os.path.dirname(position.name))
         self._dump_well_meta(well)
         self._dump_plate_meta()
+
+    def _dump_zstack_meta(
+        self,
+        position: zarr.Group,
+        name: str,
+        transform: List[TransformationMeta],
+        additional_meta: dict,
+    ):
+        dataset_meta = self._dataset_meta(name, transform=transform)
+        pos_meta = self.positions[position.name]
+        if "attrs" not in pos_meta:
+            multiscales = [
+                MultiScaleMeta(
+                    version=self.version,
+                    axes=self.axes,
+                    datasets=[dataset_meta],
+                    metadata=additional_meta,
+                )
+            ]
+            id = self.positions[position.name]["id"]
+            omero = self._omero_meta(id, position)
+            images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
+            pos_meta["attrs"] = images_meta
+        else:
+            if (
+                dataset_meta.path
+                not in pos_meta["attrs"].multiscales[0].get_dataset_paths()
+            ):
+                pos_meta["attrs"].multiscales[0].datasets.append(dataset_meta)
+        position.attrs.put(pos_meta["attrs"].dict(**TO_DICT_SETTINGS))
 
     def _dump_plate_meta(self):
         self.plate_meta = PlateMeta(
