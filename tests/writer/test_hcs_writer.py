@@ -3,7 +3,7 @@ import os
 import zarr
 import numpy as np
 from iohub.writer import WaveorderWriter
-from iohub.writer_structures import DefaultZarr, HCSZarr, WriterBase
+from iohub.writer import DefaultZarr, HCSZarr, WriterBase
 
 hcs_meta = {
     "plate": {
