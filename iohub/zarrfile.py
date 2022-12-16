@@ -4,9 +4,13 @@ from copy import copy
 from iohub.reader_base import ReaderBase
 
 
-class ZarrReader(ReaderBase):
+class LegacyZarrReader(ReaderBase):
 
     """
+    .. deprecated:: 0.0.1
+          `LegacyZarrReader` will be removed in future iohub releases, it is replaced by
+          `HCSReader` to enforce upgrade to version 0.4 of the OME-Zarr specification.
+
     Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
     Also collects the HCS metadata so it can be later copied.
     """
