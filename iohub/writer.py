@@ -373,12 +373,13 @@ class HCSWriter(OMEZarrWriter):
         Group
             Zarr group for the required row
         """
-        if name in self.rows and index:
-            _id = self.rows[name]["id"]
-            if _id != index:
-                raise ValueError(
-                    f"Requested index {index} conflicts with existing row {name} index {_id}."
-                )
+        if name in self.rows:
+            if index:
+                existing_id = self.rows[name]["id"]
+                if existing_id != index:
+                    raise ValueError(
+                        f"Requested index {index} conflicts with existing row {name} index {existing_id}."
+                    )
         else:
             if not index:
                 index = len(self.rows)

@@ -427,7 +427,7 @@ class PlateMeta(VersionMeta):
     @validator("wells")
     def unique_well(cls, v):
         # CUSTOM
-        unique_validator(v, ["path", "row_index", "column_index"])
+        unique_validator(v, "path")
         return v
 
     @validator("field_count")
