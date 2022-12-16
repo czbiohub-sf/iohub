@@ -1,9 +1,9 @@
 import os
 from numcodecs import Blosc
 import zarr
-from ome_zarr.reader import Reader
 from ome_zarr.format import format_from_version
 
+from iohub.zarrfile import OMEZarrReader, HCSReader
 from iohub.ngff_meta import *
 from iohub.lf_utils import channel_display_settings
 
@@ -48,9 +48,13 @@ class OMEZarrWriter:
     ]
 
     @classmethod
-    def from_ome_reader(cls, reader: Reader):
-        # TODO: get metadata from reader
-        writer = cls()
+    def from_reader(cls, reader: OMEZarrReader):
+        writer = cls(
+            reader.root,
+            reader.channel_names,
+            version=reader.version,
+            arr_name=reader.array_keys[0],
+        )
         return writer
 
     def __init__(
@@ -59,7 +63,7 @@ class OMEZarrWriter:
         channel_names: List[str],
         version: Literal["0.1", "0.4"] = "0.4",
         arr_name: str = "0",
-        axes: Union[str, List[str], List[Dict[str, str]]] = None,
+        axes: AxisMeta = None,
     ):
         self.root = root
         self.channel_names = channel_names

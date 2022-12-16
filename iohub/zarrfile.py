@@ -6,6 +6,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.format import format_from_version
 
 from iohub.reader_base import ReaderBase
+from iohub.ngff_meta import AxisMeta
 
 from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
 
@@ -36,15 +37,29 @@ class OMEZarrReader(ReaderBase):
             raise FileNotFoundError(
                 "Array and group metadata not found. Is it an empty store?"
             )
+        self.version = version
         self.store = location.store
         self.root = zarr.group(self.store)
-        channels: list = self.root.attrs.get("omero").get("channels")
-        if channels:
-            self.channel_names = [c["label"] for c in channels]
+        array_keys = list(self.root.array_keys())
+        if array_keys:
+            self.array_keys = array_keys
         else:
-            logging.warn(
-                "OMERO Channel metadata not found. Channel names cannot be determined."
+            raise FileNotFoundError(
+                "Array not found at top level. Is this an HCS store?"
             )
+        try:
+            channels: list = self.root.attrs.get("omero").get("channels")
+            self.channel_names = [c["label"] for c in channels]
+        except KeyError:
+            logging.warn(
+                "OMERO channel metadata not found. Channel names cannot be determined."
+            )
+        try:
+            self.axes = [
+                AxisMeta(**ax) for ax in self.root.attrs["multiscales"][0]["axes"]
+            ]
+        except KeyError:
+            logging.warn("Axes meta data not found.")
 
 
 class ZarrReader(ReaderBase):
@@ -370,3 +385,8 @@ class ZarrReader(ReaderBase):
 
     def get_num_positions(self) -> int:
         return self.positions
+
+
+class HCSReader(ZarrReader):
+    def __init__(self, store_path: Union[Path, str]):
+        super().__init__(store_path)
