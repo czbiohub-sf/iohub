@@ -255,7 +255,6 @@ class OMEZarrWriter:
         for i, (channel_name, clim) in enumerate(
             zip(self.channel_names, clims)
         ):
-            print(i)
             if i == 0:
                 first_chan = True
             channels.append(
