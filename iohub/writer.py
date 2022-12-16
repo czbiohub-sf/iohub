@@ -49,11 +49,16 @@ class OMEZarrWriter:
 
     @classmethod
     def from_reader(cls, reader: OMEZarrReader):
+        reader.store.close()
+        root = zarr.open(reader.store.path, mode="a")
         writer = cls(
-            reader.root,
+            root,
             reader.channel_names,
             version=reader.version,
             arr_name=reader.array_keys[0],
+        )
+        writer.images_meta = ImagesMeta(
+            multiscales=root.attrs["multiscales"], omero=root.attrs["omero"]
         )
         return writer
 
@@ -66,12 +71,16 @@ class OMEZarrWriter:
         axes: AxisMeta = None,
     ):
         self.root = root
-        self.channel_names = channel_names
+        self._channel_names = channel_names
         self.version = version
         self.fmt = format_from_version(str(version))
         self.arr_name = arr_name
         self.axes = axes if axes else self._DEFAULT_AXES
         self._overwrite = False
+
+    @property
+    def channel_names(self):
+        return self._channel_names
 
     @property
     def _storage_options(self):
@@ -246,6 +255,7 @@ class OMEZarrWriter:
         for i, (channel_name, clim) in enumerate(
             zip(self.channel_names, clims)
         ):
+            print(i)
             if i == 0:
                 first_chan = True
             channels.append(
@@ -261,6 +271,27 @@ class OMEZarrWriter:
             rdefs=RDefsMeta(default_t=0, default_z=0),
         )
         return omero_meta
+
+    def append_channel(self, chan_name: str):
+        """Append a channel to the end of the channel list.
+
+        Parameters
+        ----------
+        chan_name : str
+            Name of the new channel
+        """
+        if chan_name in self._channel_names:
+            raise ValueError(
+                f"Channel name {chan_name} already exists in the dataset."
+            )
+        self._channel_names.append(chan_name)
+        if "omero" in self.root.attrs:
+            self.images_meta.omero.channels.append(
+                channel_display_settings(chan_name)
+            )
+            self.root.attrs["omero"] = self.images_meta.omero.dict(
+                **TO_DICT_SETTINGS
+            )
 
 
 class HCSWriter(OMEZarrWriter):
