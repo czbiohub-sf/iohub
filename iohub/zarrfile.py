@@ -1,14 +1,57 @@
-import os
+import os, logging
+from pathlib import Path
 import zarr
 from copy import copy
+from ome_zarr.io import parse_url
+from ome_zarr.format import format_from_version
+
 from iohub.reader_base import ReaderBase
 
+from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
 
-class LegacyZarrReader(ReaderBase):
+
+class OMEZarrReader(ReaderBase):
+    def __init__(
+        self,
+        store_path: Union[Path, str],
+        version: Literal["0.1", "0.4"] = "0.4",
+    ):
+        super().__init__()
+        # check zarr store
+        if not version == "0.4":
+            logging.warn(
+                "\n".join(
+                    "The OMEZarrReader is only tested against OME-NGFF v0.4.",
+                    f"Requested version {version} may not work properly.",
+                )
+            )
+        location = parse_url(
+            store_path, mode="r", fmt=format_from_version(version)
+        )
+        if not location:
+            raise FileNotFoundError(
+                f"OME-Zarr store not found at {store_path}."
+            )
+        if not location.exists():
+            raise FileNotFoundError(
+                "Array and group metadata not found. Is it an empty store?"
+            )
+        self.store = location.store
+        self.root = zarr.group(self.store)
+        channels: list = self.root.attrs.get("omero").get("channels")
+        if channels:
+            self.channel_names = [c["label"] for c in channels]
+        else:
+            logging.warn(
+                "OMERO Channel metadata not found. Channel names cannot be determined."
+            )
+
+
+class ZarrReader(ReaderBase):
 
     """
     .. deprecated:: 0.0.1
-          `LegacyZarrReader` will be removed in future iohub releases, it is replaced by
+          `ZarrReader` will be removed in future iohub releases, it is replaced by
           `HCSReader` to enforce upgrade to version 0.4 of the OME-Zarr specification.
 
     Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
