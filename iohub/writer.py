@@ -14,6 +14,24 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
+def create_zarr_store(store_path: StrOrBytesPath):
+    """Create a new Zarr store at a give path
+
+    Parameters
+    ----------
+    store_path : StrOrBytesPath
+        Path of the new store
+
+    Returns
+    -------
+    DirectoryStore
+        Zarr directory store with `/` as the dimension separator
+    """
+    if os.path.exists(store_path):
+        raise FileExistsError(f"{store_path} already exists.")
+    return zarr.DirectoryStore(str(store_path), dimension_separator="/")
+
+
 class OMEZarrWriter:
     """Generic OME-Zarr writer instance for an existing Zarr store.
 
