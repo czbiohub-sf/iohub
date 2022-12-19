@@ -1,9 +1,12 @@
+# TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
+from __future__ import annotations
+
 import os
 from numcodecs import Blosc
 import zarr
 from ome_zarr.format import format_from_version
 
-from iohub.zarrfile import OMEZarrReader, HCSReader
+from iohub.zarrfile import OMEZarrReader, HCSReader, _DEFAULT_AXES
 from iohub.ngff_meta import *
 from iohub.lf_utils import channel_display_settings
 
@@ -42,10 +45,10 @@ class OMEZarrWriter:
     channel_names: List[str]
         Names of all the channels present in data ordered according to channel indices
     version : Literal["0.1", "0.4"], optional
-        OME-NGFF version, by default 0.4
+        OME-NGFF version, default to "0.4" if not provided
     arr_name : str, optional
         Base name of the arrays, by default '0'
-    axes : Union[str, List[str], Dict[str, str]], optional
+    axes : List[AxisMeta], optional
         OME axes metadata, by default:
         `
         [{'name': 'T', 'type': 'time', 'unit': 'second'},
@@ -55,15 +58,6 @@ class OMEZarrWriter:
         {'name': 'X', 'type': 'space', 'unit': 'micrometer'}]
         `
     """
-
-    _DEFAULT_AXES = [
-        AxisMeta(name="T", type="time", unit="second"),
-        AxisMeta(name="C", type="channel"),
-        *[
-            AxisMeta(name=i, type="space", unit="micrometer")
-            for i in ("Z", "Y", "X")
-        ],
-    ]
 
     @classmethod
     def from_reader(cls, reader: OMEZarrReader):
@@ -78,22 +72,23 @@ class OMEZarrWriter:
         writer.images_meta = ImagesMeta(
             multiscales=root.attrs["multiscales"], omero=root.attrs["omero"]
         )
+        writer.axes = reader.axes
         return writer
 
     def __init__(
         self,
         root: zarr.Group,
         channel_names: List[str],
-        version: Literal["0.1", "0.4"] = "0.4",
+        version: Literal["0.1", "0.4"] = None,
         arr_name: str = "0",
-        axes: AxisMeta = None,
+        axes: List[AxisMeta] = None,
     ):
         self.root = root
         self._channel_names = channel_names
         self.version = version
-        self.fmt = format_from_version(str(version))
+        self.fmt = format_from_version(str(version)) if version else "0.4"
         self.arr_name = arr_name
-        self.axes = axes if axes else self._DEFAULT_AXES
+        self.axes = axes if axes else _DEFAULT_AXES
         self._overwrite = False
 
     @property
@@ -326,7 +321,7 @@ class HCSWriter(OMEZarrWriter):
         OME-NGFF version, by default 0.4
     arr_name : str, optional
         Base name of the arrays, by default '0'
-    axes : Union[str, List[str], Dict[str, str]], optional
+    axes : List[AxisMeta], optional
         OME axes metadata, by default:
         `
         [{'name': 'T', 'type': 'time', 'unit': 'second'},
@@ -337,6 +332,34 @@ class HCSWriter(OMEZarrWriter):
         `
     """
 
+    @classmethod
+    def from_reader(
+        cls,
+        reader: HCSReader,
+        detect_arr_name: bool = True,
+        detect_layout: bool = True
+    ):
+        # TODO: update reader API to use `reader.store` instead of `reader.root.store`
+        reader.root.store.close()
+        root = zarr.open(reader.root.store, mode="a")
+        writer = cls(
+            root=root,
+            channel_names=reader.channel_names,
+            plate_name=root.attrs.get("name"),
+            version=reader.plate_meta.version,
+            axes=reader.axes,
+            acquisitions=reader.plate_meta.acquisitions
+        )
+        if detect_arr_name:
+            writer.arr_name = reader.arr_name
+        if detect_layout:
+            writer.rows = reader.rows_meta
+            writer.columns = reader.columns_meta
+            writer.wells = reader.wells_meta
+            writer.positions = reader.positions_meta
+            writer.plate_meta = reader.plate_meta
+        return writer
+
     def __init__(
         self,
         root: zarr.Group,
@@ -344,7 +367,7 @@ class HCSWriter(OMEZarrWriter):
         plate_name: str = None,
         version: Literal["0.1", "0.4"] = "0.4",
         arr_name: str = "0",
-        axes: Union[str, List[str], List[Dict[str, str]]] = None,
+        axes: List[AxisMeta] = None,
         acquisitions: List[AcquisitionMeta] = None,
     ):
         super().__init__(root, channel_names, version, arr_name, axes)
@@ -560,8 +583,7 @@ class HCSWriter(OMEZarrWriter):
         additional_meta: dict,
     ):
         dataset_meta = self._dataset_meta(name, transform=transform)
-        pos_meta = self.positions[position.name]
-        if "attrs" not in pos_meta:
+        if "attrs" not in self.positions[position.name]:
             multiscales = [
                 MultiScaleMeta(
                     version=self.version,
@@ -573,14 +595,20 @@ class HCSWriter(OMEZarrWriter):
             id = self.positions[position.name]["id"]
             omero = self._omero_meta(id, position)
             images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
-            pos_meta["attrs"] = images_meta
+            self.positions[position.name]["attrs"] = images_meta
         else:
             if (
                 dataset_meta.path
-                not in pos_meta["attrs"].multiscales[0].get_dataset_paths()
+                not in self.positions[position.name]["attrs"]
+                .multiscales[0]
+                .get_dataset_paths()
             ):
-                pos_meta["attrs"].multiscales[0].datasets.append(dataset_meta)
-        position.attrs.put(pos_meta["attrs"].dict(**TO_DICT_SETTINGS))
+                self.positions[position.name]["attrs"].multiscales[
+                    0
+                ].datasets.append(dataset_meta)
+        position.attrs.put(
+            self.positions[position.name]["attrs"].dict(**TO_DICT_SETTINGS)
+        )
 
     def _dump_plate_meta(self):
         self.plate_meta = PlateMeta(

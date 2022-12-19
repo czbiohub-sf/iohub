@@ -267,8 +267,8 @@ class OMEROMeta(VersionMeta):
 
     id: int
     name: Optional[str]
-    channels: List[ChannelMeta]
-    rdefs: RDefsMeta
+    channels: Optional[List[ChannelMeta]]
+    rdefs: Optional[RDefsMeta]
 
 
 class ImagesMeta(MetaBase):
@@ -443,7 +443,7 @@ class ImageMeta(MetaBase):
     https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
 
     # MUST if `PlateMeta.acquisitions` contains multiple acquisitions
-    acquisition: int
+    acquisition: Optional[int]
     # MUST
     path: str
 

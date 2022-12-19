@@ -1,20 +1,36 @@
+# TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
+from __future__ import annotations
+
 import os, logging
-from pathlib import Path
 import zarr
+import numpy as np
 from copy import copy
 from ome_zarr.io import parse_url
 from ome_zarr.format import format_from_version
 
 from iohub.reader_base import ReaderBase
-from iohub.ngff_meta import AxisMeta
+from iohub.ngff_meta import *
 
 from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
+
+if TYPE_CHECKING:
+    from _typeshed import StrOrBytesPath
+
+
+_DEFAULT_AXES = [
+    AxisMeta(name="T", type="time", unit="second"),
+    AxisMeta(name="C", type="channel"),
+    *[
+        AxisMeta(name=i, type="space", unit="micrometer")
+        for i in ("Z", "Y", "X")
+    ],
+]
 
 
 class OMEZarrReader(ReaderBase):
     def __init__(
         self,
-        store_path: Union[Path, str],
+        store_path: StrOrBytesPath,
         version: Literal["0.1", "0.4"] = "0.4",
     ):
         super().__init__()
@@ -56,7 +72,8 @@ class OMEZarrReader(ReaderBase):
             )
         try:
             self.axes = [
-                AxisMeta(**ax) for ax in self.root.attrs["multiscales"][0]["axes"]
+                AxisMeta(**ax)
+                for ax in self.root.attrs["multiscales"][0]["axes"]
             ]
         except KeyError:
             logging.warn("Axes meta data not found.")
@@ -87,6 +104,7 @@ class ZarrReader(ReaderBase):
         except:
             raise FileNotFoundError("Supplies path is not a valid zarr store")
 
+        self.root = self.store  # TODO: fix `self.store`
         try:
             row = self.store[list(self.store.group_keys())[0]]
             col = row[list(row.group_keys())[0]]
@@ -103,17 +121,21 @@ class ZarrReader(ReaderBase):
         self._get_positions()
 
         # structure of zarr array
+        first_arr_shape = self.store[self.position_map[0]["well"]][
+            self.position_map[0]["name"]
+        ][self.arr_name].shape
         (
             self.frames,
             self.channels,
             self.slices,
             self.height,
             self.width,
-        ) = self.store[self.position_map[0]["well"]][
-            self.position_map[0]["name"]
-        ][
-            self.arr_name
-        ].shape
+        ) = np.pad(
+            first_arr_shape,
+            (5 - len(first_arr_shape), 0),
+            "constant",
+            constant_values=(1),
+        )
         self.positions = len(self.position_map)
         self.channel_names = []
         self.stage_positions = 0
@@ -388,5 +410,65 @@ class ZarrReader(ReaderBase):
 
 
 class HCSReader(ZarrReader):
-    def __init__(self, store_path: Union[Path, str]):
+    def __init__(self, store_path: StrOrBytesPath):
         super().__init__(store_path)
+        self._get_axes_meta()
+        self.plate_meta = PlateMeta(**self.root.attrs["plate"])
+
+    def _get_rows(self):
+        self.rows = []
+        self.rows_meta = {}
+        for i, row in enumerate(self.plate_meta["rows"]):
+            self.rows.append(row["name"])
+            self.rows_meta[row["name"]] = {
+                "id": i,
+                "meta": PlateAxisMeta(**row),
+            }
+
+    def _get_columns(self):
+        self.columns = []
+        self.columns_meta = {}
+        for i, column in enumerate(self.plate_meta["columns"]):
+            self.columns.append(column["name"])
+            self.columns_meta[column["name"]] = {
+                "id": i,
+                "meta": PlateAxisMeta(**column),
+            }
+
+    def _get_wells(self):
+        self.wells = []
+        self.wells_meta = {}
+        self.positions_meta = {}
+        for well in self.plate_meta["wells"]:
+            well_name = well["path"]
+            self.wells.append(well_name)
+            self.wells_meta[well_name] = {
+                "meta": WellIndexMeta(**well),
+                "positions": [],
+                "image_meta_list": [
+                    ImageMeta(**image_meta)
+                    for image_meta in self.root[well_name].attrs["well"][
+                        "images"
+                    ]
+                ],
+            }
+            for _, position in self.root[well_name].groups():
+                self.wells_meta[well_name]["positions"].append(position.name)
+                pos_attrs = ImagesMeta(**position.attrs)
+                self.positions_meta[position.name] = {
+                    "attrs": pos_attrs,
+                    "id": pos_attrs.omero.id,
+                }
+
+    def _get_axes_meta(self):
+        ms = self.get_zarr(0).attrs.get("multiscales")
+        warning = "Axes metadata not found. Using default."
+        if ms:
+            try:
+                self.axes = MultiScaleMeta(**ms).axes
+                return
+            except KeyError:
+                logging.warn(warning)
+        else:
+            logging.warn(warning)
+        self.axes = _DEFAULT_AXES
