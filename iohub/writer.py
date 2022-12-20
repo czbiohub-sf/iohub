@@ -62,7 +62,12 @@ class OMEZarrWriter:
     @classmethod
     def from_reader(cls, reader: OMEZarrReader):
         reader.store.close()
-        root = zarr.open(reader.store.path, mode="a")
+        root = zarr.open(
+            zarr.DirectoryStore(
+                str(reader.store.path), dimension_separator="/"
+            ),
+            mode="a",
+        )
         writer = cls(
             root,
             reader.channel_names,
@@ -337,18 +342,23 @@ class HCSWriter(OMEZarrWriter):
         cls,
         reader: HCSReader,
         detect_arr_name: bool = True,
-        detect_layout: bool = True
+        detect_layout: bool = True,
     ):
         # TODO: update reader API to use `reader.store` instead of `reader.root.store`
         reader.root.store.close()
-        root = zarr.open(reader.root.store, mode="a")
+        root = zarr.open(
+            zarr.DirectoryStore(
+                str(reader.root.store.path), dimension_separator="/"
+            ),
+            mode="a",
+        )
         writer = cls(
             root=root,
             channel_names=reader.channel_names,
             plate_name=root.attrs.get("name"),
             version=reader.plate_meta.version,
             axes=reader.axes,
-            acquisitions=reader.plate_meta.acquisitions
+            acquisitions=reader.plate_meta.acquisitions,
         )
         if detect_arr_name:
             writer.arr_name = reader.arr_name

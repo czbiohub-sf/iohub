@@ -121,7 +121,7 @@ class ZarrReader(ReaderBase):
         self._get_positions()
 
         # structure of zarr array
-        first_arr_shape = self.store[self.position_map[0]["well"]][
+        first_arr_shape = self.root[self.position_map[0]["well"]][
             self.position_map[0]["name"]
         ][self.arr_name].shape
         (
@@ -461,7 +461,8 @@ class HCSReader(ZarrReader):
                 }
 
     def _get_axes_meta(self):
-        ms = self.get_zarr(0).attrs.get("multiscales")
+        first_position = self.root[next(iter(self.positions_meta))]
+        ms = first_position.attrs.get("multiscales")[0]
         warning = "Axes metadata not found. Using default."
         if ms:
             try:
