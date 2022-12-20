@@ -28,6 +28,32 @@ _DEFAULT_AXES = [
 
 
 class OMEZarrReader(ReaderBase):
+    """Reader for non-HCS OME-Zarr stores.
+    Zarr array containing a single position/FOV under root is anticipated.
+
+    Parameters
+    ----------
+    store_path : StrOrBytesPath
+        Path to the data store
+    version : Literal["0.1", "0.4"], optional
+        OME-NGFF specification version, by default "0.4"
+
+    Attributes
+    ----------
+    version : Literal["0.1", "0.4"]
+        OME-NGFF specification version
+    store : FSStore
+        Zarr file system store
+    root : Group
+        Root Zarr group holding arrays
+    array_keys : List[str]
+        Name keys of arrays under root (not recursive)
+    channel_names : List[str]
+        Name of the channels
+    axes : List[AxisMeta]
+        Axes metadata
+    """
+
     def __init__(
         self,
         store_path: StrOrBytesPath,
