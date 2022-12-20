@@ -310,6 +310,9 @@ class OMEZarrWriter:
                 **TO_DICT_SETTINGS
             )
 
+    def close(self):
+        self.root.store.close()
+
 
 class HCSWriter(OMEZarrWriter):
     """High-content screening OME-Zarr writer instance for an existing Zarr store.

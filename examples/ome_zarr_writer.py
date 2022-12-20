@@ -8,7 +8,7 @@ import numpy as np
 from iohub.writer import create_zarr_store, OMEZarrWriter
 
 # %%
-# Create a new zarr store
+# Create a new zarr store and open it
 
 store = create_zarr_store("ome.zarr")
 root = zarr.open(store, mode="a")
@@ -33,6 +33,11 @@ for t, czyx in enumerate(tczyx):
         writer.write_zstack(
             zyx, writer.root, time_index=t, channel_index=c, auto_meta=True
         )
+
+# %%
+# Done!
+
+writer.close()
 
 # %%
 # The sections below shows how to add a new channel
