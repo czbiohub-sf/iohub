@@ -8,15 +8,18 @@ import numpy as np
 from iohub.writer import create_zarr_store, OMEZarrWriter
 
 # %%
-# Create a new zarr store and open it
+# Create a new zarr store and initialize a writer
 
 store = create_zarr_store("ome.zarr")
 root = zarr.open(store, mode="r+")
-
-# %%
-# Initialize a writer object
-
 writer = OMEZarrWriter(root, channel_names=["DAPI", "GFP"])
+
+#%%
+# Alternatively, use the convenience method 
+# if default parameters does not need to be changed
+
+while False: # FIXME: remove this clause and the following indentation
+    writer = OMEZarrWriter.open("ome.zarr", mode="a", channel_names=["DAPI", "GFP"])
 
 # %%
 # Generate some random 5-D data

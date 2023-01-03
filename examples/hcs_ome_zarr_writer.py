@@ -60,6 +60,14 @@ writer.close()
 reader = HCSReader('hcs.zarr')
 writer = HCSWriter.from_reader(reader)
 
+#%%
+# Alternatively, use the convenience method 
+# if default parameters does not need to be changed
+
+while False: # FIXME: remove this clause and the following indentation
+    writer = HCSWriter.open("hcs.zarr", mode="r+")
+
+
 # %%
 # Add an FOV in a new well
 
