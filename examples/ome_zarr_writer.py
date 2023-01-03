@@ -11,7 +11,7 @@ from iohub.writer import create_zarr_store, OMEZarrWriter
 # Create a new zarr store and open it
 
 store = create_zarr_store("ome.zarr")
-root = zarr.open(store, mode="a")
+root = zarr.open(store, mode="r+")
 
 # %%
 # Initialize a writer object

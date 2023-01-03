@@ -1,7 +1,7 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import os
+import os, logging
 from numcodecs import Blosc
 import zarr
 from ome_zarr.format import format_from_version
@@ -59,6 +59,8 @@ class OMEZarrWriter:
         `
     """
 
+    _READER_TYPE = OMEZarrReader
+
     @classmethod
     def from_reader(cls, reader: OMEZarrReader):
         reader.store.close()
@@ -79,6 +81,57 @@ class OMEZarrWriter:
         )
         writer.axes = reader.axes
         return writer
+
+    @classmethod
+    def open(
+        cls,
+        store_path: StrOrBytesPath,
+        mode: Literal["r+", "a", "w-"] = "a",
+        channel_names: List[str] = None,
+        version: Literal["0.1", "0.4"] = "0.4",
+    ):
+        """Convenience method to open Zarr stores.
+        Uses default parameters to initiate readers/writers. Initiate manually to alter them.
+
+        Parameters
+        ----------
+        store_path : StrOrBytesPath
+            Path to the Zarr store to open
+        mode : Literal["r+", "a", "w-"], optional
+            Persistence mode: 'r+' means read/write (must exist); 'a' means read/write (create if doesn't exist); 'w-' means create (fail if exists), by default 'a'
+        channel_names : List[str], optional
+            Channel names (must be provided to create a new data store), by default None
+        version : Literal["0.1", "0.4"], optional
+            OME-NGFF version, by default "0.4"
+
+        Returns
+        -------
+        OMEZarrWriter
+            writer instance
+        """
+        try:
+            reader = cls._READER_TYPE(store_path, version=version)
+            logging.info(f"Found existing OME-Zarr dataset at {store_path}")
+            if mode in {"r+", "a"}:
+                return cls.from_reader(reader)
+            elif mode == "w-":
+                raise FileExistsError(
+                    f"Persistence mode 'w-' does not allow overwriting."
+                )
+        except:
+            not_found_msg = f"OME-Zarr dataset not found at {store_path}"
+            if mode == "r+":
+                raise FileNotFoundError(not_found_msg)
+            elif mode in {"a", "w-"}:
+                logging.info(not_found_msg)
+                if not channel_names:
+                    raise ValueError(
+                        "Cannot initiate writer without channel names."
+                    )
+                store = create_zarr_store(store_path)
+                root = zarr.open(store, mode=mode)
+                logging.info(f"Creating new data store at {store_path}")
+                return cls(root, channel_names, version=version)
 
     def __init__(
         self,
@@ -339,6 +392,8 @@ class HCSWriter(OMEZarrWriter):
         {'name': 'X', 'type': 'space', 'unit': 'micrometer'}]
         `
     """
+
+    _READER_TYPE = HCSReader
 
     @classmethod
     def from_reader(
