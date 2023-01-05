@@ -1,255 +1,109 @@
 import pytest
 import os
+from contextlib import contextmanager
+from tempfile import TemporaryDirectory
 import zarr
-import numpy as np
-from iohub.writer import WaveorderWriter
-from iohub.writer import DefaultZarr, HCSZarr, WriterBase
+from ome_zarr.io import parse_url
+from ome_zarr.reader import Reader
+from numpy.testing import assert_array_almost_equal
+from hypothesis import given, settings, strategies as st
+import hypothesis.extra.numpy as npst
+from typing import List
+from numpy.typing import NDArray
+
+from iohub.writer import new_zarr, OMEZarrWriter
 
 
-def test_constructor(setup_writer_folder):
-    """
-    Test that constructor finds correct save directory
-
-    Returns
-    -------
-
-    """
-    folder = setup_writer_folder
-    writer_def = WaveorderWriter(
-        os.path.join(folder, "Test"), hcs=False, hcs_meta=None, verbose=False
+short_text_st = st.text(min_size=1, max_size=16)
+t_dim_st = st.shared(st.integers(1, 4))
+c_dim_st = st.shared(st.integers(1, 4))
+z_dim_st = st.shared(st.integers(1, 4))
+y_dim_st = st.shared(st.integers(1, 32))
+x_dim_st = st.shared(st.integers(1, 32))
+channel_names_st = c_dim_st.flatmap(
+    (
+        lambda c_dim: st.lists(
+            short_text_st, min_size=c_dim, max_size=c_dim, unique=True
+        )
     )
-
-    assert isinstance(writer_def.sub_writer, DefaultZarr)
-    assert isinstance(writer_def.sub_writer, WriterBase)
+)
 
 
-def test_constructor_existing(setup_writer_folder):
-    """
-    Test isntantiating the writer into an existing zarr directory
-
-    Parameters
-    ----------
-    setup_folder
-
-    Returns
-    -------
-
-    """
-
-    folder = setup_writer_folder
-
-    writer = WaveorderWriter(os.path.join(folder, "Test"))
-    writer.create_zarr_root("existing.zarr")
-
-    writer_existing = WaveorderWriter(
-        os.path.join(folder, "Test", "existing.zarr")
+@st.composite
+def _random_5d_with_channels(draw):
+    channel_names = draw(channel_names_st)
+    arr_shape = (
+        draw(t_dim_st),
+        draw(c_dim_st),
+        draw(z_dim_st),
+        draw(y_dim_st),
+        draw(x_dim_st),
     )
-
-    assert writer_existing.sub_writer.root_path == os.path.join(
-        folder, "Test", "existing.zarr"
+    dtype = draw(
+        st.one_of(
+            npst.integer_dtypes(),
+            npst.unsigned_integer_dtypes(),
+            npst.floating_dtypes(),
+            npst.boolean_dtypes(),
+        )
     )
-    assert writer_existing.sub_writer.store is not None
+    random_5d = draw(npst.arrays(dtype, shape=arr_shape))
+    return (channel_names, random_5d)
 
 
-def test_create_functions(setup_writer_folder):
-    """
-    Test create root zarr, create position subfolders, and switching between
-    position substores
-
-    Parameters
-    ----------
-    setup_folder
-
-    Returns
-    -------
-
-    """
-
-    folder = setup_writer_folder
-    writer = WaveorderWriter(
-        os.path.join(folder, "Test"), hcs=False, hcs_meta=None, verbose=False
-    )
-
-    writer.create_zarr_root("test_zarr_root")
-
-    assert writer.sub_writer.root_path == os.path.join(
-        folder, "Test", "test_zarr_root.zarr"
-    )
-    assert writer.sub_writer.store is not None
-    assert isinstance(writer.sub_writer.store["Row_0"], zarr.Group)
-
-    # Check Plate Metadata
-    assert "plate" in writer.sub_writer.plate_meta
-    assert "rows" in writer.sub_writer.plate_meta.get("plate").keys()
-    assert "columns" in writer.sub_writer.plate_meta.get("plate").keys()
-    assert "wells" in writer.sub_writer.plate_meta.get("plate").keys()
-    assert len(writer.sub_writer.plate_meta.get("plate").get("wells")) == 0
-    assert len(writer.sub_writer.plate_meta.get("plate").get("columns")) == 0
-    assert len(writer.sub_writer.plate_meta.get("plate").get("rows")) == 1
-
-    # Check Well metadata
-    assert "well" in writer.sub_writer.well_meta
-    assert len(writer.sub_writer.well_meta.get("well").get("images")) == 0
+def test_new_zarr():
+    """Test `iohub.writer.new_zarr()"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "new.zarr")
+        root = new_zarr(store_path)
+        assert isinstance(root, zarr.Group)
+        assert isinstance(root.store, zarr.DirectoryStore)
+        assert root.store._dimension_separator == "/"
+        assert root.store.path == store_path
 
 
-def test_init_array(setup_writer_folder):
-    """
-    Test the correct initialization of desired array and the associated
-    metadata
-
-    Parameters
-    ----------
-    setup_folder
-
-    Returns
-    -------
-
-    """
-
-    folder = setup_writer_folder
-    writer = WaveorderWriter(
-        os.path.join(folder, "Test"), hcs=False, hcs_meta=None, verbose=False
-    )
-    writer.create_zarr_root("test_zarr_root")
-
-    data_shape = (3, 3, 21, 128, 128)  # T, C, Z, Y, X
-    chunk_size = (1, 1, 1, 128, 128)
-    chan_names = ["State0", "State1", "State3"]
-    clims = [(-0.5, 0.5), (0, 25), (0, 10000)]
-    dtype = "uint16"
-
-    writer.init_array(
-        0,
-        data_shape,
-        chunk_size,
-        chan_names,
-        dtype,
-        clims,
-        position_name=None,
-        overwrite=False,
-    )
-    writer.init_array(
-        1,
-        data_shape,
-        chunk_size,
-        chan_names,
-        dtype,
-        clims,
-        position_name="Test",
-        overwrite=False,
-    )
-
-    assert isinstance(
-        writer.sub_writer.store["Row_0"]["Col_0"]["Pos_000"], zarr.Group
-    )
-    meta_folder = writer.store["Row_0"]["Col_0"]["Pos_000"]
-    meta = meta_folder.attrs.asdict()
-    array = meta_folder["arr_0"]
-
-    assert meta_folder is not None
-    assert array is not None
-    assert array.shape == data_shape
-    assert array.chunks == chunk_size
-    assert array.dtype == dtype
-
-    assert meta is not None
-    assert "multiscales" in meta
-    assert "omero" in meta
-    assert "rdefs" in meta["omero"]
-
-    print(meta["omero"]["channels"])
-    # Test Chan Names and clims
-    for i in range(len(meta["omero"]["channels"])):
-        assert meta["omero"]["channels"][i]["label"] == chan_names[i]
-        assert meta["omero"]["channels"][i]["window"]["start"] == clims[i][0]
-        assert meta["omero"]["channels"][i]["window"]["end"] == clims[i][1]
-
-    assert isinstance(
-        writer.sub_writer.store["Row_0"]["Col_1"]["Test"], zarr.Group
-    )
-    meta_folder = writer.store["Row_0"]["Col_1"]["Test"]
-    meta = meta_folder.attrs.asdict()
-    array = meta_folder["arr_0"]
-
-    assert meta_folder is not None
-    assert array is not None
-    assert array.shape == data_shape
-    assert array.chunks == chunk_size
-    assert array.dtype == dtype
-
-    assert meta is not None
-    assert "multiscales" in meta
-    assert "omero" in meta
-    assert "rdefs" in meta["omero"]
-
-    # Test Chan Names and clims
-    for i in range(len(meta["omero"]["channels"])):
-        assert meta["omero"]["channels"][i]["label"] == chan_names[i]
-        assert meta["omero"]["channels"][i]["window"]["start"] == clims[i][0]
-        assert meta["omero"]["channels"][i]["window"]["end"] == clims[i][1]
+def test_new_zarr_same_path():
+    """Test `iohub.writer.new_zarr()"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "new.zarr")
+        os.mkdir(store_path)
+        with pytest.raises(FileExistsError):
+            _ = new_zarr(store_path)
 
 
-def test_write(setup_writer_folder):
-    """
-    Test the write function of the writer
+@given(channel_names=channel_names_st, arr_name=short_text_st)
+@settings(max_examples=16)
+def test_init_ome_zarr(channel_names, arr_name):
+    """Test `iohub.writer.OMEZarrWriter.__call__()`"""
+    with TemporaryDirectory() as temp_dir:
+        root = new_zarr(os.path.join(temp_dir, "ome.zarr"))
+        writer = OMEZarrWriter(root, channel_names, arr_name=arr_name)
+        assert writer.channel_names == channel_names
+        assert writer.arr_name == arr_name
+        assert writer._rel_keys("/") == []
 
-    Parameters
-    ----------
-    setup_folder
 
-    Returns
-    -------
+@contextmanager
+def _temp_writer(image_5d: NDArray, channel_names: List[str]):
+    try:
+        temp_dir = TemporaryDirectory()
+        writer = OMEZarrWriter.open(
+            os.path.join(temp_dir.name, "ome.zarr"),
+            mode="a",
+            channel_names=channel_names,
+        )
+        for t, time_point in enumerate(image_5d):
+            for c, zstack in enumerate(time_point):
+                writer.write_zstack(zstack, writer.root, t, c)
+        yield writer
+    finally:
+        writer.close()
+        temp_dir.cleanup()
 
-    """
 
-    folder = setup_writer_folder
-    writer = WaveorderWriter(
-        os.path.join(folder, "Test"), hcs=False, hcs_meta=None, verbose=False
-    )
-    writer.create_zarr_root("test_zarr_root")
-
-    data = np.random.randint(
-        1, 60000, size=(3, 3, 11, 128, 128), dtype="uint16"
-    )
-
-    data_shape = data.shape
-    chunk_size = (1, 1, 1, 128, 128)
-    chan_names = ["State0", "State1", "State3"]
-    clims = [(-0.5, 0.5), (0, 25), (0, 10000)]
-    dtype = "uint16"
-
-    writer.init_array(
-        0,
-        data_shape,
-        chunk_size,
-        chan_names,
-        dtype,
-        clims,
-        position_name=None,
-        overwrite=True,
-    )
-
-    # Write single index for each channel
-    writer.write(data[0, 0, 0], p=0, t=0, c=0, z=0)
-    assert np.array_equal(
-        writer.sub_writer.store["Row_0"]["Col_0"]["Pos_000"]["arr_0"][0, 0, 0],
-        data[0, 0, 0],
-    )
-
-    # Write full data
-    writer.write(data, p=0, t=slice(0, 3), c=slice(0, 3), z=slice(0, 11))
-    assert np.array_equal(
-        writer.sub_writer.store["Row_0"]["Col_0"]["Pos_000"]["arr_0"][
-            :, :, :, :, :
-        ],
-        data,
-    )
-
-    # Write full data with alt method
-    writer.write(data, p=0)
-    assert np.array_equal(
-        writer.sub_writer.store["Row_0"]["Col_0"]["Pos_000"]["arr_0"][
-            :, :, :, :, :
-        ],
-        data,
-    )
+@given(random_5d=_random_5d_with_channels())
+@settings(max_examples=16, deadline=1000)
+def test_write(random_5d):
+    channel_names, random_5d = random_5d
+    with _temp_writer(random_5d, channel_names) as writer:
+        assert_array_almost_equal(writer.root["0"][:], random_5d)
