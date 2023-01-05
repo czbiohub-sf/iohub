@@ -17,22 +17,29 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-def create_zarr_store(store_path: StrOrBytesPath):
-    """Create a new Zarr store at a give path
+def new_zarr(
+    store_path: StrOrBytesPath, mode: Literal["r", "r+", "a", "w", "w-"] = "a"
+):
+    """Open the root group of a new Zarr store at a give path.
+    Create a OME-NGFF-compatible store on the local file system if not present.
 
     Parameters
     ----------
     store_path : StrOrBytesPath
         Path of the new store
+    mode : Literal["r", "r+", "a", "w", "w-"], optional
+        File mode (passed to `zarr.open()`) used to open the root group,
+        by default "a" (read/write, create if not present)
 
     Returns
     -------
-    DirectoryStore
-        Zarr directory store with `/` as the dimension separator
+    Group
+        Root Zarr group of a directory store with `/` as the dimension separator
     """
     if os.path.exists(store_path):
         raise FileExistsError(f"{store_path} already exists.")
-    return zarr.DirectoryStore(str(store_path), dimension_separator="/")
+    store = zarr.DirectoryStore(str(store_path), dimension_separator="/")
+    return zarr.open(store, mode=mode)
 
 
 class OMEZarrWriter:
@@ -128,8 +135,7 @@ class OMEZarrWriter:
                     raise ValueError(
                         "Cannot initiate writer without channel names."
                     )
-                store = create_zarr_store(store_path)
-                root = zarr.open(store, mode=mode)
+                root = new_zarr(store_path)
                 logging.info(f"Creating new data store at {store_path}")
                 return cls(root, channel_names, version=version)
 

@@ -7,13 +7,12 @@
 import zarr
 import numpy as np
 from iohub.zarrfile import HCSReader
-from iohub.writer import create_zarr_store, HCSWriter
+from iohub.writer import new_zarr, HCSWriter
 
 # %%
 # Create a new zarr store and open it
 
-store = create_zarr_store("hcs.zarr")
-root = zarr.open(store, mode="a")
+root = new_zarr("hcs.zarr")
 
 # %%
 # Initialize a writer object
@@ -22,6 +21,7 @@ writer = HCSWriter(root, channel_names=["Retardance", "Orientation"])
 writer.channel_names.append("Phase")
 # %%
 # This function writes some random 5-D data to a given position
+
 
 def write_dummy_5d(writer: HCSWriter, position: zarr.Group):
     tczyx = np.random.randint(
@@ -57,19 +57,19 @@ writer.close()
 #%%
 # Populate a new writer from the reader.
 
-reader = HCSReader('hcs.zarr')
+reader = HCSReader("hcs.zarr")
 writer = HCSWriter.from_reader(reader)
 
 #%%
-# Alternatively, use the convenience method 
+# Alternatively, use the convenience method
 # if default parameters does not need to be changed
 
-while False: # FIXME: remove this clause and the following indentation
+while False:  # FIXME: remove this clause and the following indentation
     writer = HCSWriter.open("hcs.zarr", mode="r+")
 
 
 # %%
 # Add an FOV in a new well
 
-position = writer.require_position("D", "8", '0')
+position = writer.require_position("D", "8", "0")
 write_dummy_5d(writer, position)

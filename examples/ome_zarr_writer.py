@@ -3,15 +3,13 @@
 # and how to append an extra channel to an existing dataset.
 # It can be run as a plain Python script, or as interactive cells in some IDEs.
 
-import zarr
 import numpy as np
-from iohub.writer import create_zarr_store, OMEZarrWriter
+from iohub.writer import new_zarr, OMEZarrWriter
 
 # %%
 # Create a new zarr store and initialize a writer
 
-store = create_zarr_store("ome.zarr")
-root = zarr.open(store, mode="r+")
+root = new_zarr("ome.zarr")
 writer = OMEZarrWriter(root, channel_names=["DAPI", "GFP"])
 
 #%%
