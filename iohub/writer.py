@@ -20,8 +20,7 @@ if TYPE_CHECKING:
 def new_zarr(
     store_path: StrOrBytesPath, mode: Literal["r", "r+", "a", "w", "w-"] = "a"
 ):
-    """Open the root group of a new Zarr store at a give path.
-    Create a OME-NGFF-compatible store on the local file system if not present.
+    """Open the root group of a new OME-NGFF-compatible Zarr store if not present.
 
     Parameters
     ----------
@@ -57,13 +56,13 @@ class OMEZarrWriter:
         Base name of the arrays, by default '0'
     axes : List[AxisMeta], optional
         OME axes metadata, by default:
-        `
-        [{'name': 'T', 'type': 'time', 'unit': 'second'},
-        {'name': 'C', 'type': 'channel'},
-        {'name': 'Z', 'type': 'space', 'unit': 'micrometer'},
-        {'name': 'Y', 'type': 'space', 'unit': 'micrometer'},
-        {'name': 'X', 'type': 'space', 'unit': 'micrometer'}]
-        `
+        ```
+        [AxisMeta(name='T', type='time', unit='second'),
+        AxisMeta(name='C', type='channel', unit=None),
+        AxisMeta(name='Z', type='space', unit='micrometer'),
+        AxisMeta(name='Y', type='space', unit='micrometer'),
+        AxisMeta(name='X', type='space', unit='micrometer')]
+        ````
     """
 
     _READER_TYPE = OMEZarrReader
