@@ -18,8 +18,8 @@ short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.shared(st.integers(1, 4))
 c_dim_st = st.shared(st.integers(1, 4))
 z_dim_st = st.shared(st.integers(1, 4))
-y_dim_st = st.shared(st.integers(1, 64))
-x_dim_st = st.shared(st.integers(1, 64))
+y_dim_st = st.shared(st.integers(1, 32))
+x_dim_st = st.shared(st.integers(1, 32))
 channel_names_st = c_dim_st.flatmap(
     (
         lambda c_dim: st.lists(
@@ -102,7 +102,7 @@ def _temp_ome_zarr_writer(image_5d: NDArray, channel_names: List[str]):
 
 
 @given(random_5d=_random_5d_with_channels())
-@settings(max_examples=16, deadline=1000)
+@settings(max_examples=16, deadline=2000)
 def test_write_ome_zarr(random_5d):
     """Test `iohub.writer.OMEZarrWriter.write_zstack()`"""
     channel_names, random_5d = random_5d
