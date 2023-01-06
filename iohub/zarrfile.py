@@ -436,7 +436,11 @@ class ZarrReader(ReaderBase):
 
 
 class HCSReader(ZarrReader):
-    def __init__(self, store_path: StrOrBytesPath):
+    def __init__(
+        self,
+        store_path: StrOrBytesPath,
+        version: Literal["0.1", "0.4"] = None,
+    ):
         super().__init__(store_path)
         self._get_axes_meta()
         self.plate_meta = PlateMeta(**self.root.attrs["plate"])
