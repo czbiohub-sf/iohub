@@ -197,7 +197,7 @@ class OMEZarrWriter:
         dtype : DTypeLike
             Data type
         chunks : Tuple[int], optional
-            Chunk size for the new array if not present, by default a z-stack (Z, Y, X)
+            Chunk size for the new array if not present, by default a z-stack (1, 1, Z, Y, X)
 
         Returns
         -------
@@ -224,7 +224,7 @@ class OMEZarrWriter:
                 )
         elif value is None:
             if not chunks:
-                chunks = zyx_shape
+                chunks = (1, 1) + zyx_shape
             return group.zeros(
                 name,
                 shape=(1, 1, *zyx_shape),
