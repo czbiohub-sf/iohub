@@ -119,7 +119,7 @@ class OMEZarrWriter:
         """
         try:
             reader = cls._READER_TYPE(store_path, version=version)
-            logging.info(f"Found existing OME-Zarr dataset at {store_path}")
+            logging.info(f"Found existing OME-NGFF dataset at {store_path}")
             if mode in {"r+", "a"}:
                 return cls.from_reader(reader)
             elif mode == "w-":
@@ -127,7 +127,7 @@ class OMEZarrWriter:
                     f"Persistence mode 'w-' does not allow overwriting."
                 )
         except:
-            not_found_msg = f"OME-Zarr dataset not found at {store_path}"
+            not_found_msg = f"OME-NGFF dataset not found at {store_path}"
             if mode == "r+":
                 raise FileNotFoundError(not_found_msg)
             elif mode in {"a", "w-"}:
@@ -136,7 +136,10 @@ class OMEZarrWriter:
                     raise ValueError(
                         "Cannot initiate writer without channel names."
                     )
-                root = new_zarr(store_path)
+                try:
+                    root = new_zarr(store_path)
+                except FileExistsError:
+                    raise ValueError(f"Existing data at {store_path} is not a compatible store.")
                 logging.info(f"Creating new data store at {store_path}")
                 return cls(root, channel_names, version=version)
 
