@@ -104,10 +104,10 @@ class OMEZarrWriter:
         store_path : StrOrBytesPath
             Path to the Zarr store to open
         mode : Literal["r+", "a", "w-"], optional
-            Persistence mode: 'r+' means read/write (must exist); 'a' means read/write (create if doesn't exist); 'w-' means create (fail if exists), 
+            Persistence mode: 'r+' means read/write (must exist); 'a' means read/write (create if doesn't exist); 'w-' means create (fail if exists),
             by default 'a'
         channel_names : List[str], optional
-            Channel names used to create a new data store, ignored for existing stores, 
+            Channel names used to create a new data store, ignored for existing stores,
             by default None
         version : Literal["0.1", "0.4"], optional
             OME-NGFF version, by default "0.4"
@@ -117,20 +117,19 @@ class OMEZarrWriter:
         OMEZarrWriter
             writer instance
         """
+        if mode == "w-" and os.path.exists(store_path):
+            raise FileExistsError(
+                f"Persistence mode 'w-' does not allow overwriting data at {store_path}."
+            )
         try:
             reader = cls._READER_TYPE(store_path, version=version)
             logging.info(f"Found existing OME-NGFF dataset at {store_path}")
-            if mode in {"r+", "a"}:
-                return cls.from_reader(reader)
-            elif mode == "w-":
-                raise FileExistsError(
-                    f"Persistence mode 'w-' does not allow overwriting."
-                )
+            return cls.from_reader(reader)
         except:
             not_found_msg = f"OME-NGFF dataset not found at {store_path}"
             if mode == "r+":
                 raise FileNotFoundError(not_found_msg)
-            elif mode in {"a", "w-"}:
+            else:
                 logging.info(not_found_msg)
                 if not channel_names:
                     raise ValueError(
@@ -139,7 +138,9 @@ class OMEZarrWriter:
                 try:
                     root = new_zarr(store_path)
                 except FileExistsError:
-                    raise ValueError(f"Existing data at {store_path} is not a compatible store.")
+                    raise ValueError(
+                        f"Existing data at {store_path} is not a compatible store."
+                    )
                 logging.info(f"Creating new data store at {store_path}")
                 return cls(root, channel_names, version=version)
 
