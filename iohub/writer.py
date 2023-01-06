@@ -104,9 +104,11 @@ class OMEZarrWriter:
         store_path : StrOrBytesPath
             Path to the Zarr store to open
         mode : Literal["r+", "a", "w-"], optional
-            Persistence mode: 'r+' means read/write (must exist); 'a' means read/write (create if doesn't exist); 'w-' means create (fail if exists), by default 'a'
+            Persistence mode: 'r+' means read/write (must exist); 'a' means read/write (create if doesn't exist); 'w-' means create (fail if exists), 
+            by default 'a'
         channel_names : List[str], optional
-            Channel names (must be provided to create a new data store), by default None
+            Channel names used to create a new data store, ignored for existing stores, 
+            by default None
         version : Literal["0.1", "0.4"], optional
             OME-NGFF version, by default "0.4"
 
