@@ -32,6 +32,7 @@ def channel_display_settings(
     channel_settings = {
         "Retardance": (0.0, 100.0, 0.0, 1000.0),
         "Orientation": (0.0, np.pi, 0.0, np.pi),
+        "Phase2D": (-0.2, 0.2, -10, 10),
         "Phase3D": (-0.2, 0.2, -10, 10),
         "BF": (0.0, 5.0, 0.0, U16_FMAX),
         "S0": (0.0, 1.0, 0.0, U16_FMAX),
