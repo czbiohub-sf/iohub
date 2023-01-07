@@ -81,7 +81,7 @@ class OMEZarrReader(ReaderBase):
             )
         self.version = version
         self.store = location.store
-        self.root = zarr.group(self.store)
+        self.root = zarr.open(self.store, mode="r")
         array_keys = list(self.root.array_keys())
         if array_keys:
             self.array_keys = array_keys
