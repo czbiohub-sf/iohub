@@ -1,5 +1,6 @@
 import pytest
 import os
+import string
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
 import zarr
@@ -11,21 +12,34 @@ import hypothesis.extra.numpy as npst
 from typing import List
 from numpy.typing import NDArray
 
-from iohub.writer import new_zarr, OMEZarrWriter
+from iohub.writer import new_zarr, OMEZarrWriter, HCSWriter
 
 
 short_text_st = st.text(min_size=1, max_size=16)
-t_dim_st = st.shared(st.integers(1, 4))
-c_dim_st = st.shared(st.integers(1, 4))
-z_dim_st = st.shared(st.integers(1, 4))
-y_dim_st = st.shared(st.integers(1, 32))
-x_dim_st = st.shared(st.integers(1, 32))
+t_dim_st = st.integers(1, 4)
+c_dim_st = st.integers(1, 4)
+z_dim_st = st.integers(1, 4)
+y_dim_st = st.integers(1, 32)
+x_dim_st = st.integers(1, 32)
 channel_names_st = c_dim_st.flatmap(
     (
         lambda c_dim: st.lists(
             short_text_st, min_size=c_dim, max_size=c_dim, unique=True
         )
     )
+)
+short_alpha_numeric = st.text(
+    alphabet=list(
+        string.ascii_lowercase + string.ascii_uppercase + string.digits
+    ),
+    min_size=1,
+    max_size=16,
+)
+row_names_st = st.lists(
+    short_alpha_numeric, min_size=1, max_size=8, unique=True
+)
+col_names_st = st.lists(
+    short_alpha_numeric, min_size=1, max_size=8, unique=True
 )
 
 
@@ -34,7 +48,7 @@ def _random_5d_with_channels(draw):
     channel_names = draw(channel_names_st)
     arr_shape = (
         draw(t_dim_st),
-        draw(c_dim_st),
+        len(channel_names),
         draw(z_dim_st),
         draw(y_dim_st),
         draw(x_dim_st),
@@ -115,3 +129,41 @@ def test_write_ome_zarr(random_5d):
         assert node.specs[0].datasets == [writer.arr_name]
         assert node.data[0].shape == random_5d.shape
         assert node.data[0].dtype == random_5d.dtype
+
+
+@given(channel_names=channel_names_st, arr_name=short_text_st)
+@settings(max_examples=16)
+def test_init_hcs(channel_names, arr_name):
+    with TemporaryDirectory() as temp_dir:
+        root = new_zarr(os.path.join(temp_dir, "hcs.zarr"))
+        writer = HCSWriter(root, channel_names, arr_name=arr_name)
+        assert writer.channel_names == channel_names
+        assert writer.arr_name == arr_name
+        assert writer._rel_keys("/") == []
+
+
+def test_open_hcs_create_empty():
+    """Test `iohub.writer.HCSWriter.open()`"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "hcs.zarr")
+        writer = HCSWriter.open(store_path, mode="a", channel_names=["GFP"])
+        assert writer.root.store.path == store_path
+        writer.close()
+        with pytest.raises(FileExistsError):
+            _ = HCSWriter.open(store_path, mode="w-", channel_names=["GFP"])
+        with pytest.raises(ValueError):
+            _ = HCSWriter.open(store_path, mode="a", channel_names=["GFP"])
+        with pytest.raises(FileNotFoundError):
+            _ = HCSWriter.open(store_path, mode="r+")
+        with pytest.raises(FileNotFoundError):
+            _ = HCSWriter.open("do-not-exist.zarr", mode="r+")
+
+
+@given(row_names=row_names_st)
+def test_require_row(row_names: list[str]):
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "hcs.zarr")
+        writer = HCSWriter.open(store_path, mode="a", channel_names=["GFP"])
+        for row_name in row_names:
+            writer.require_row(row_name)
+        assert list(writer.rows.keys()) == row_names
