@@ -630,7 +630,7 @@ class HCSWriter(OMEZarrWriter):
     def write_zstack(
         self,
         data: NDArray,
-        position: zarr.Group,
+        group: zarr.Group,
         time_index: int,
         channel_index: int,
         transform: List[TransformationMeta] = None,
@@ -642,15 +642,15 @@ class HCSWriter(OMEZarrWriter):
             name = self.arr_name
         super().write_zstack(
             data,
-            position,
+            group,
             time_index,
             channel_index,
             name=name,
             auto_meta=False,
         )
         if auto_meta:
-            self._dump_zstack_meta(position, name, transform, additional_meta)
-        well = self.root.get(os.path.dirname(position.name))
+            self._dump_zstack_meta(group, name, transform, additional_meta)
+        well = self.root.get(os.path.dirname(group.name))
         self._dump_well_meta(well)
         self._dump_plate_meta()
 
