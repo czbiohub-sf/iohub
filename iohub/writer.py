@@ -613,7 +613,7 @@ class HCSWriter(OMEZarrWriter):
             Name key of the column, e.g. '12'
         fov : str
             Name key of the FOV/position, e.g. '0'
-        acq_id : str, optional
+        acq_id : int, optional
             Acquisition ID, by default 0
         **kwargs :
             Keyword arguments for `require_well()` and `require_position`
