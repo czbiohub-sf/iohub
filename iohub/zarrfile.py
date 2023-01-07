@@ -116,30 +116,32 @@ class ZarrReader(ReaderBase):
     Also collects the HCS metadata so it can be later copied.
     """
 
-    def __init__(self, zarrfile: str):
+    def __init__(
+        self, store_path: str, version: Literal["0.1", "0.4"] = "0.4"
+    ):
         super().__init__()
 
         # zarr files (.zarr) are directories
-        if not os.path.isdir(zarrfile):
+        if not os.path.isdir(store_path):
             raise ValueError("file does not exist")
-
-        self.zf = zarrfile
-
         try:
-            self.store = zarr.open(self.zf, "r")
+            if version == "0.4":
+                dimension_separator = "/"
+            self.store = zarr.DirectoryStore(
+                store_path, dimension_separator=dimension_separator
+            )
+            self.root = zarr.open(self.store, "r")
         except:
-            raise FileNotFoundError("Supplies path is not a valid zarr store")
-
-        self.root = self.store  # TODO: fix `self.store`
+            raise FileNotFoundError("Supplies path is not a valid zarr root")
         try:
-            row = self.store[list(self.store.group_keys())[0]]
+            row = self.root[list(self.root.group_keys())[0]]
             col = row[list(row.group_keys())[0]]
             pos = col[list(col.group_keys())[0]]
             self.arr_name = list(pos.array_keys())[0]
         except IndexError:
             raise IndexError("Incompatible zarr format")
 
-        self.plate_meta = self.store.attrs.get("plate")
+        self.plate_meta = self.root.attrs.get("plate")
         self._get_rows()
         self._get_columns()
         self._get_wells()
@@ -232,7 +234,7 @@ class ZarrReader(ReaderBase):
         idx = 0
         # Assumes that the positions are indexed in the order of Row-->Well-->FOV
         for well in self.wells:
-            for pos in self.store[well].attrs.get("well").get("images"):
+            for pos in self.root[well].attrs.get("well").get("images"):
                 name = pos["path"]
                 self.position_map[idx] = {"name": name, "well": well}
                 idx += 1
@@ -251,7 +253,7 @@ class ZarrReader(ReaderBase):
 
         well_metas = []
         for well in self.wells:
-            meta = self.store[well].attrs.get("well")
+            meta = self.root[well].attrs.get("well")
             well_metas.append(meta)
 
         self.hcs_meta["well"] = well_metas
@@ -264,7 +266,7 @@ class ZarrReader(ReaderBase):
         -------
 
         """
-        self.mm_meta = self.store.attrs.get("Summary")
+        self.mm_meta = self.root.attrs.get("Summary")
         mm_version = self.mm_meta["MicroManagerVersion"]
 
         if mm_version != "pycromanager":
@@ -301,7 +303,7 @@ class ZarrReader(ReaderBase):
         well = self.hcs_meta["plate"]["wells"][0]["path"]
         pos = self.hcs_meta["well"][0]["images"][0]["path"]
 
-        omero_meta = self.store[well][pos].attrs.asdict()["omero"]
+        omero_meta = self.root[well][pos].attrs.asdict()["omero"]
 
         for chan in omero_meta["channels"]:
             self.channel_names.append(chan["label"])
@@ -375,7 +377,7 @@ class ZarrReader(ReaderBase):
 
         """
         coord_str = f"({p}, 0, {c}, {z})"
-        return self.store.attrs.get("ImagePlaneMetadata").get(coord_str)
+        return self.root.attrs.get("ImagePlaneMetadata").get(coord_str)
 
     def get_zarr(self, position):
         """
@@ -393,7 +395,7 @@ class ZarrReader(ReaderBase):
         pos_info = self.position_map[position]
         well = pos_info["well"]
         pos = pos_info["name"]
-        return self.store[well][pos][self.arr_name]
+        return self.root[well][pos][self.arr_name]
 
     def get_array(self, position):
         """
@@ -439,9 +441,9 @@ class HCSReader(ZarrReader):
     def __init__(
         self,
         store_path: StrOrBytesPath,
-        version: Literal["0.1", "0.4"] = None,
+        version: Literal["0.1", "0.4"] = "0.4",
     ):
-        super().__init__(store_path)
+        super().__init__(store_path, version)
         self._get_axes_meta()
         self.plate_meta = PlateMeta(**self.root.attrs["plate"])
 
