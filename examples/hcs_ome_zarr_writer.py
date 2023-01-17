@@ -18,7 +18,7 @@ root = new_zarr("hcs.zarr")
 # Initialize a writer object
 writer = HCSWriter(root, channel_names=["Retardance", "Orientation"])
 
-writer.channel_names.append("Phase")
+writer.append_channel("Phase")
 # %%
 # This function writes some random 5-D data to a given position
 
