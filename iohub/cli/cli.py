@@ -9,7 +9,7 @@ VERSION = __version__
 
 @click.version_option(version=VERSION)
 def cli():
-    """aydin cli
+    """cli
 
     Parameters
     ----------
