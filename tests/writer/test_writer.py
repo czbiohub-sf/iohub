@@ -1,16 +1,23 @@
+from __future__ import annotations
+
 import pytest
 import os
 import string
+import shutil
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
 import zarr
+import numpy as np
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
 from numpy.testing import assert_array_almost_equal
 from hypothesis import given, settings, strategies as st
 import hypothesis.extra.numpy as npst
-from typing import List
+from typing import TYPE_CHECKING
 from numpy.typing import NDArray
+
+if TYPE_CHECKING:
+    from _typeshed import StrPath
 
 from iohub.writer import new_zarr, OMEZarrWriter, HCSWriter
 
@@ -44,11 +51,10 @@ col_names_st = st.lists(
 
 
 @st.composite
-def _random_5d_with_channels(draw):
-    channel_names = draw(channel_names_st)
+def _random_5d_with_channels(draw, c_dim: int):
     arr_shape = (
         draw(t_dim_st),
-        len(channel_names),
+        c_dim,
         draw(z_dim_st),
         draw(y_dim_st),
         draw(x_dim_st),
@@ -61,8 +67,14 @@ def _random_5d_with_channels(draw):
             npst.boolean_dtypes(),
         )
     )
-    random_5d = draw(npst.arrays(dtype, shape=arr_shape))
-    return (channel_names, random_5d)
+    return draw(npst.arrays(dtype, shape=arr_shape))
+
+
+@st.composite
+def _channels_and_random_5d(draw):
+    channel_names = draw(channel_names_st)
+    random_5d = draw(_random_5d_with_channels(c_dim=len(channel_names)))
+    return channel_names, random_5d
 
 
 def test_new_zarr():
@@ -98,7 +110,7 @@ def test_init_ome_zarr(channel_names, arr_name):
 
 
 @contextmanager
-def _temp_ome_zarr_writer(image_5d: NDArray, channel_names: List[str]):
+def _temp_ome_zarr_writer(image_5d: NDArray, channel_names: list[str]):
     try:
         temp_dir = TemporaryDirectory()
         writer = OMEZarrWriter.open(
@@ -115,11 +127,11 @@ def _temp_ome_zarr_writer(image_5d: NDArray, channel_names: List[str]):
         temp_dir.cleanup()
 
 
-@given(random_5d=_random_5d_with_channels())
+@given(channels_and_random_5d=_channels_and_random_5d())
 @settings(max_examples=16, deadline=2000)
-def test_write_ome_zarr(random_5d):
+def test_write_ome_zarr(channels_and_random_5d):
     """Test `iohub.writer.OMEZarrWriter.write_zstack()`"""
-    channel_names, random_5d = random_5d
+    channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr_writer(random_5d, channel_names) as writer:
         assert_array_almost_equal(writer.root["0"][:], random_5d)
         # round-trip test with the offical reader implementation
@@ -157,6 +169,26 @@ def test_open_hcs_create_empty():
             _ = HCSWriter.open(store_path, mode="r+")
         with pytest.raises(FileNotFoundError):
             _ = HCSWriter.open("do-not-exist.zarr", mode="r+")
+
+
+@contextmanager
+def _temp_copy(src: StrPath):
+    """Create a temporary copy of data on disk."""
+    try:
+        temp_dir = TemporaryDirectory()
+        yield shutil.copytree(src, temp_dir.name, dirs_exist_ok=True)
+    finally:
+        temp_dir.cleanup()
+
+
+def test_modify_hcs_ref(setup_hcs_ref):
+    """Test `iohub.writer.HCSWriter.open()`"""
+    with _temp_copy(setup_hcs_ref) as store_path:
+        writer = HCSWriter.open(store_path, mode="r+")
+        assert writer.axes[0].name == "c"
+        assert writer.channel_names == ["DAPI"]
+        writer.append_channel("GFP")
+        assert writer.channel_names == ["DAPI", "GFP"]
 
 
 @given(row_names=row_names_st)
