@@ -1,17 +1,18 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import os, logging
-import zarr
-import numpy as np
+import logging
+import os
 from copy import copy
-from ome_zarr.io import parse_url
-from ome_zarr.format import format_from_version
-
-from iohub.reader_base import ReaderBase
-from iohub.ngff_meta import *
-
 from typing import TYPE_CHECKING, Literal
+
+import numpy as np
+import zarr
+from ome_zarr.format import format_from_version
+from ome_zarr.io import parse_url
+
+from iohub.ngff_meta import *
+from iohub.reader_base import ReaderBase
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
