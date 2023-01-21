@@ -41,6 +41,89 @@ def new_zarr(
     return zarr.open(store, mode=mode)
 
 
+class NGFFNode:
+    """A node (group level in Zarr) in an NGFF dataset."""
+
+    _CHILD_TYPE = None
+
+    def __init__(self, group: zarr.Group):
+        self._group = group
+        self.metadata = self._parse_meta()
+
+    @property
+    def zgroup(self):
+        """Correspondinf Zarr group of the node"""
+        return self._group
+
+    @property
+    def parent_group(self):
+        if self._group.name == "/":
+            return None
+        else:
+            parent_path = os.path.dirname(self._group.name)
+            return self._group.store.root[parent_path]
+
+    def group_keys(self):
+        return list(self._group.group_keys())
+
+    def is_root(self):
+        return self._group.name == "/"
+
+    def is_leaf(self):
+        return not self.group_keys()
+
+    def _raise_invalid_meta_error(self):
+        raise KeyError(
+            f"Zarr group at {self._group.path} \
+            does not have valid metadata for {type(self)}"
+        )
+
+    def _parse_meta(self):
+        raise NotImplementedError
+
+    def dump_meta(self):
+        raise NotImplementedError
+
+    def __getitem__(self, key):
+        raise NotImplementedError
+
+    def __setitem__(self, key, value):
+        raise NotImplementedError
+
+    def __delitem__(self, key):
+        raise NotImplementedError
+
+
+class Position(NGFFNode):
+    def __init__(self, group: zarr.Group):
+        super().__init__(group)
+
+    def array_keys(self):
+        return list(self._group.array_keys())
+
+    def _parse_meta(self):
+        zattrs = self._group.attrs
+        if zattrs.get("multiscales") and zattrs.get("omero"):
+            pass
+        else:
+            self._raise_invalid_meta_error()
+
+
+class Well(NGFFNode):
+    _CHILD_TYPE = Position
+    pass
+
+
+class Row(NGFFNode):
+    _CHILD_TYPE = Well
+    pass
+
+
+class Plate(NGFFNode):
+    def __init__(self, group: zarr.Group):
+        super().__init__(group)
+
+
 class OMEZarrWriter:
     """Generic OME-Zarr writer instance for an existing Zarr store.
 
