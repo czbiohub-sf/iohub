@@ -52,7 +52,7 @@ class NGFFNode:
 
     @property
     def zgroup(self):
-        """Correspondinf Zarr group of the node"""
+        """Corresponding Zarr group of the node"""
         return self._group
 
     @property
