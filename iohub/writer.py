@@ -1,17 +1,18 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import os, logging
-from numcodecs import Blosc
+import logging
+import os
+from typing import TYPE_CHECKING, Dict, List, Literal, Tuple, Union
+
 import zarr
+from numcodecs import Blosc
+from numpy.typing import DTypeLike, NDArray
 from ome_zarr.format import format_from_version
 
-from iohub.zarrfile import OMEZarrReader, HCSReader, _DEFAULT_AXES
-from iohub.ngff_meta import *
 from iohub.lf_utils import channel_display_settings
-
-from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
-from numpy.typing import NDArray, DTypeLike
+from iohub.ngff_meta import *
+from iohub.zarrfile import _DEFAULT_AXES, HCSReader, OMEZarrReader
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
