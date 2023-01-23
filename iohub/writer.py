@@ -44,48 +44,44 @@ def new_zarr(
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
-    _CHILD_TYPE = None
+    _MEMBER_TYPE = None
 
-    def __init__(self, group: zarr.Group):
+    def __init__(self, group: zarr.Group, parse_meta: bool = True):
         self._group = group
-        self.metadata = self._parse_meta()
+        if parse_meta:
+            self._parse_meta()
 
     @property
     def zgroup(self):
-        """Corresponding Zarr group of the node"""
+        """Corresponding Zarr group of the node."""
         return self._group
 
     @property
+    def zattrs(self):
+        """Zarr attributes of the node.
+        Assignments will modify the metadata file."""
+        return self._group.attrs
+
+    @property
     def parent_group(self):
+        """The parent Zarr group of the node.
+        None for the root node."""
         if self._group.name == "/":
             return None
         else:
             parent_path = os.path.dirname(self._group.name)
             return self._group.store.root[parent_path]
 
-    def group_keys(self):
-        return list(self._group.group_keys())
-
-    def is_root(self):
-        return self._group.name == "/"
-
-    def is_leaf(self):
-        return not self.group_keys()
-
-    def _raise_invalid_meta_error(self):
-        raise KeyError(
-            f"Zarr group at {self._group.path} \
-            does not have valid metadata for {type(self)}"
-        )
-
-    def _parse_meta(self):
-        raise NotImplementedError
-
-    def dump_meta(self):
-        raise NotImplementedError
+    @property
+    def _member_names(self):
+        """Group keys (default) or array keys (overridden)."""
+        return self.group_keys()
 
     def __getitem__(self, key):
-        raise NotImplementedError
+        if key in self._member_names:
+            return self._MEMBER_TYPE(self._group[key])
+        else:
+            raise KeyError(key)
 
     def __setitem__(self, key, value):
         raise NotImplementedError
@@ -93,35 +89,128 @@ class NGFFNode:
     def __delitem__(self, key):
         raise NotImplementedError
 
+    def group_keys(self):
+        """List of keys to all the child zgroups (if any).
 
-class Position(NGFFNode):
-    def __init__(self, group: zarr.Group):
-        super().__init__(group)
+        Returns
+        -------
+        list[str]
+        """
+        return list(self._group.group_keys())
 
     def array_keys(self):
+        """List of keys to all the child zarrays (if any).
+
+        Returns
+        -------
+        list[str]
+        """
         return list(self._group.array_keys())
 
+    def is_root(self):
+        """Whether this node is the root node
+
+        Returns
+        -------
+        bool
+        """
+        return self._group.name == "/"
+
+    def is_leaf(self):
+        """Wheter this node is a leaf node,
+        meaning that no child Zarr group is present.
+        Usually a position/fov node for NGFF-HCS if True.
+
+        Returns
+        -------
+        bool
+        """
+        return not self.group_keys()
+
+    def _warn_invalid_meta(self):
+        msg = f"Zarr group at {self._group.path} \
+            does not have valid metadata for {type(self)}"
+        logging.warn(msg)
+
     def _parse_meta(self):
-        zattrs = self._group.attrs
-        if zattrs.get("multiscales") and zattrs.get("omero"):
-            pass
+        """Parse and set NGFF metadata from `.zattrs`."""
+        raise NotImplementedError
+
+    def dump_meta(self):
+        raise NotImplementedError
+
+
+class ImageArray(zarr.Array):
+    def __init__(self, zarray: zarr.Array):
+        super().__init__(
+            store=zarray._store,
+            path=zarray._path,
+            read_only=zarray._read_only,
+            chunk_store=zarray._chunk_store,
+            synchronizer=zarray._synchronizer,
+            cache_metadata=zarray._cache_metadata,
+            cache_attrs=zarray._attrs.cache,
+            partial_decompress=zarray._partial_decompress,
+            write_empty_chunks=zarray._write_empty_chunks,
+            zarr_version=zarray._version,
+            meta_array=zarray._meta_array,
+        )
+
+    def numpy(self):
+        """Return the whole image as an in-RAM NumPy array.
+        `self.numpy()` is equivalent to `self[:]`."""
+        return self[:]
+
+
+class Position(NGFFNode):
+    _MEMBER_TYPE = ImageArray
+
+    def __init__(self, group: zarr.Group, parse_meta: bool = True):
+        super().__init__(group, parse_meta)
+
+    @property
+    def _member_names(self):
+        return self.array_keys()
+
+    def __getitem__(self, key: Union[int, str]):
+        """Get an image array member of the position.
+        E.g. Raw-coordinates image, a multi-scale level, or labels
+
+        Parameters
+        ----------
+        key : Union[int, str]
+            Name or path to the image array.
+            Integer key is converted to string (name).
+
+        Returns
+        -------
+        ImageArray
+            A container for image stored as a zarr array (up to 5D)
+        """
+        return super().__getitem__(key)
+
+    def _parse_meta(self):
+        multiscales = self.zattrs.get("multiscales")
+        omero = self.zattrs.get("omero")
+        if multiscales and omero:
+            self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
         else:
-            self._raise_invalid_meta_error()
+            self._warn_invalid_meta()
 
 
 class Well(NGFFNode):
-    _CHILD_TYPE = Position
+    _MEMBER_TYPE = Position
     pass
 
 
 class Row(NGFFNode):
-    _CHILD_TYPE = Well
+    _MEMBER_TYPE = Well
     pass
 
 
 class Plate(NGFFNode):
-    def __init__(self, group: zarr.Group):
-        super().__init__(group)
+    def __init__(self, group: zarr.Group, parse_meta: bool = True):
+        super().__init__(group, parse_meta)
 
 
 class OMEZarrWriter:
