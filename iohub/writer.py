@@ -17,6 +17,12 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
+def _pad_shape(shape: tuple[int]):
+    """Pad shape tuple to 5D"""
+    pad = 5 - len(shape)
+    return (1,) * pad + shape
+
+
 def new_zarr(
     store_path: StrOrBytesPath, mode: Literal["r", "r+", "a", "w", "w-"] = "a"
 ):
@@ -46,8 +52,14 @@ class NGFFNode:
 
     _MEMBER_TYPE = None
 
-    def __init__(self, group: zarr.Group, parse_meta: bool = True):
+    def __init__(
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        overwriting_creation: bool = False,
+    ):
         self._group = group
+        self._overwrite = overwriting_creation
         if parse_meta:
             self._parse_meta()
 
@@ -63,14 +75,13 @@ class NGFFNode:
         return self._group.attrs
 
     @property
-    def parent_group(self):
-        """The parent Zarr group of the node.
+    def _parent_path(self):
+        """The parent Zarr group path of the node.
         None for the root node."""
         if self._group.name == "/":
             return None
         else:
-            parent_path = os.path.dirname(self._group.name)
-            return self._group.store.root[parent_path]
+            return os.path.dirname(self._group.name)
 
     @property
     def _member_names(self):
@@ -137,7 +148,7 @@ class NGFFNode:
         raise NotImplementedError
 
     def dump_meta(self):
-        raise NotImplementedError
+        self.zattrs.update(**self.metadata.dict(**TO_DICT_SETTINGS))
 
 
 class ImageArray(zarr.Array):
@@ -155,18 +166,49 @@ class ImageArray(zarr.Array):
             zarr_version=zarray._version,
             meta_array=zarray._meta_array,
         )
+        self._get_dims()
+
+    def _get_dims(self):
+        (
+            self.frames,
+            self.channels,
+            self.slices,
+            self.height,
+            self.width,
+        ) = _pad_shape(self.shape)
 
     def numpy(self):
         """Return the whole image as an in-RAM NumPy array.
         `self.numpy()` is equivalent to `self[:]`."""
         return self[:]
 
+    def downscale(self):
+        raise NotImplementedError
+
+    def tensorstore(self):
+        raise NotImplementedError
+
 
 class Position(NGFFNode):
     _MEMBER_TYPE = ImageArray
 
-    def __init__(self, group: zarr.Group, parse_meta: bool = True):
+    def __init__(
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        axes: list[AxisMeta] = _DEFAULT_AXES,
+    ):
         super().__init__(group, parse_meta)
+        self.axes = axes
+
+    @property
+    def _storage_options(self):
+        return {
+            "compressor": Blosc(
+                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+            ),
+            "overwrite": self._overwrite,
+        }
 
     @property
     def _member_names(self):
@@ -185,9 +227,46 @@ class Position(NGFFNode):
         Returns
         -------
         ImageArray
-            A container for image stored as a zarr array (up to 5D)
+            Container object for image stored as a zarr array (up to 5D)
         """
         return super().__getitem__(key)
+
+    def __setitem__(self, key, value: NDArray):
+        """Write an up-to-5D image with default settings."""
+        if not isinstance(value, NDArray):
+            raise TypeError(
+                f"Value must be a NumPy array. Got type {type(value)}."
+            )
+        self.create_image(key, value)
+
+    def create_image(
+        self,
+        name: str,
+        data: NDArray,
+        chunks=None,
+        transform: List[TransformationMeta] = None,
+    ):
+        if not chunks:
+            chunks = data.shape[-min(3, len(data.shape)) :]
+        img_arr = ImageArray(
+            self._group.array(
+                name, data, chunks=chunks, **self._storage_options
+            )
+        )
+        self._create_image_meta(img_arr.basename, transform=transform)
+        return img_arr
+
+    def _create_image_meta(
+        self, name: str, transform: List[TransformationMeta] = None
+    ):
+        dataset_meta = DatasetMeta(
+            path=name, coordinate_transformations=transform
+        )
+        if (
+            dataset_meta.path
+            not in self.metadata.multiscales[0].get_dataset_paths()
+        ):
+            self.metadata.multiscales[0].datasets.append(dataset_meta)
 
     def _parse_meta(self):
         multiscales = self.zattrs.get("multiscales")
