@@ -17,14 +17,7 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-_DEFAULT_AXES = [
-    AxisMeta(name="T", type="time", unit="second"),
-    AxisMeta(name="C", type="channel"),
-    *[
-        AxisMeta(name=i, type="space", unit="micrometer")
-        for i in ("Z", "Y", "X")
-    ],
-]
+
 
 
 class OMEZarrReader(ReaderBase):
@@ -60,49 +53,7 @@ class OMEZarrReader(ReaderBase):
         version: Literal["0.1", "0.4"] = "0.4",
     ):
         super().__init__()
-        # check zarr store
-        if not version == "0.4":
-            logging.warn(
-                "\n".join(
-                    "The OMEZarrReader is only tested against OME-NGFF v0.4.",
-                    f"Requested version {version} may not work properly.",
-                )
-            )
-        location = parse_url(
-            store_path, mode="r", fmt=format_from_version(version)
-        )
-        if not location:
-            raise FileNotFoundError(
-                f"OME-Zarr store not found at {store_path}."
-            )
-        if not location.exists():
-            raise FileNotFoundError(
-                "Array and group metadata not found. Is it an empty store?"
-            )
-        self.version = version
-        self.store = location.store
-        self.root = zarr.open(self.store, mode="r")
-        array_keys = list(self.root.array_keys())
-        if array_keys:
-            self.array_keys = array_keys
-        else:
-            raise FileNotFoundError(
-                "Array not found at top level. Is this an HCS store?"
-            )
-        try:
-            channels: list = self.root.attrs.get("omero").get("channels")
-            self.channel_names = [c["label"] for c in channels]
-        except KeyError:
-            logging.warn(
-                "OMERO channel metadata not found. Channel names cannot be determined."
-            )
-        try:
-            self.axes = [
-                AxisMeta(**ax)
-                for ax in self.root.attrs["multiscales"][0]["axes"]
-            ]
-        except KeyError:
-            logging.warn("Axes meta data not found.")
+
 
 
 class ZarrReader(ReaderBase):

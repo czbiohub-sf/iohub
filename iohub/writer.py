@@ -6,7 +6,6 @@ from numcodecs import Blosc
 import zarr
 from ome_zarr.format import format_from_version
 
-from iohub.zarrfile import OMEZarrReader, HCSReader, _DEFAULT_AXES
 from iohub.ngff_meta import *
 from iohub.lf_utils import channel_display_settings
 
@@ -21,6 +20,38 @@ def _pad_shape(shape: tuple[int]):
     """Pad shape tuple to 5D"""
     pad = 5 - len(shape)
     return (1,) * pad + shape
+
+
+def _open_store(
+    store_path: StrOrBytesPath,
+    mode: Literal["r", "r+", "a", "w", "w-"],
+    version: Literal["0.1", "0.4"],
+    synchronizer=None,
+):
+    if not version == "0.4":
+        logging.warn(
+            "\n".join(
+                "IOHub is only tested against OME-NGFF v0.4.",
+                f"Requested version {version} may not work properly.",
+            )
+        )
+        dimension_separator = None
+    else:
+        dimension_separator = "/"
+    if not os.path.isdir(store_path):
+        raise FileNotFoundError(
+            f"Dataset directory not found at {store_path}."
+        )
+    try:
+        store = zarr.DirectoryStore(
+            store_path, dimension_separator=dimension_separator
+        )
+        root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
+    except:
+        raise FileNotFoundError(
+            f"Cannot open Zarr root group at {store_path}."
+        )
+    return root
 
 
 def new_zarr(
@@ -153,6 +184,7 @@ class NGFFNode:
 
 class ImageArray(zarr.Array):
     """Container object for image stored as a zarr array (up to 5D)"""
+
     def __init__(self, zarray: zarr.Array):
         super().__init__(
             store=zarray._store,
@@ -191,16 +223,28 @@ class ImageArray(zarr.Array):
 
 
 class Position(NGFFNode):
+    """The Zarr group level directly containing multiscale image arrays."""
+
     _MEMBER_TYPE = ImageArray
+    _DEFAULT_AXES = [
+        AxisMeta(name="T", type="time", unit="second"),
+        AxisMeta(name="C", type="channel"),
+        *[
+            AxisMeta(name=i, type="space", unit="micrometer")
+            for i in ("Z", "Y", "X")
+        ],
+    ]
 
     def __init__(
         self,
         group: zarr.Group,
+        channel_names: list[str],
         parse_meta: bool = True,
-        axes: list[AxisMeta] = _DEFAULT_AXES,
+        axes: list[AxisMeta] = None,
     ):
         super().__init__(group, parse_meta)
-        self.axes = axes
+        self._channel_names = channel_names
+        self.axes = axes if axes else self._DEFAULT_AXES
 
     @property
     def _storage_options(self):
@@ -214,6 +258,10 @@ class Position(NGFFNode):
     @property
     def _member_names(self):
         return self.array_keys()
+
+    @property
+    def channel_names(self):
+        return self._channel_names
 
     def __getitem__(self, key: Union[int, str]):
         """Get an image array member of the position.
@@ -313,8 +361,8 @@ class Plate(NGFFNode):
         super().__init__(group, parse_meta)
 
 
-class OMEZarrWriter:
-    """Generic OME-Zarr writer instance for an existing Zarr store.
+class OMEZarr(Position):
+    """Generic OME-Zarr container for an existing Zarr store.
 
     Parameters
     ----------
@@ -337,34 +385,79 @@ class OMEZarrWriter:
         ````
     """
 
-    _READER_TYPE = OMEZarrReader
+    @classmethod
+    def _read(
+        cls,
+        store_path: StrOrBytesPath,
+        mode: Literal["r", "r+"] = "r",
+        version: Literal["0.1", "0.4"] = "0.4",
+    ):
+        """Load existing dataset.
+
+        Parameters
+        ----------
+        store_path : StrOrBytesPath
+            Store path.
+        mode : Literal["r", "r+"], optional
+            Persistence mode:
+            'r' means read only (must exist);
+            'r+' means read/write (must exist);
+            by default "r".
+        version : Literal[&quot;0.1&quot;, &quot;0.4&quot;], optional
+            NGFF version, by default "0.4"
+        """
+        root = _open_store(store_path, mode, version)
+        array_keys = list(root.array_keys())
+        if array_keys:
+            array_keys = array_keys
+        else:
+            raise FileNotFoundError(
+                "Array not found at top level. Is this an HCS store?"
+            )
+        try:
+            channels: list = root.attrs.get("omero").get("channels")
+            channel_names = [c["label"] for c in channels]
+        except KeyError:
+            logging.warn(
+                "OMERO channel metadata not found. Channel names cannot be determined."
+            )
+        try:
+            axes = [
+                AxisMeta(**ax) for ax in root.attrs["multiscales"][0]["axes"]
+            ]
+        except KeyError:
+            logging.warn("Axes metadata not found, using default.")
+        return cls.__init__(
+            root=root, channel_names=channel_names, version=version, axes=axes
+        )
 
     @classmethod
-    def from_reader(cls, reader: OMEZarrReader):
-        reader.store.close()
-        root = zarr.open(
-            zarr.DirectoryStore(
-                str(reader.store.path), dimension_separator="/"
-            ),
-            mode="a",
-        )
-        writer = cls(
-            root,
-            reader.channel_names,
-            version=reader.version,
-            arr_name=reader.array_keys[0],
-        )
-        writer.images_meta = ImagesMeta(
-            multiscales=root.attrs["multiscales"], omero=root.attrs["omero"]
-        )
-        writer.axes = reader.axes
-        return writer
+    def _create(
+        cls,
+        store_path: StrOrBytesPath,
+        mode: Literal["w", "w-"] = "w-",
+        version: Literal["0.1", "0.4"] = "0.4",
+    ):
+        """_summary_
+
+        Parameters
+        ----------
+        store_path : StrOrBytesPath
+            _description_
+        mode : Literal["w", "w-"], optional
+            Persistence mode:
+            'w' means create (overwrite if exists);
+            'w-' means create (fail if exists);
+            by default "w-".
+        version : Literal[&quot;0.1&quot;, &quot;0.4&quot;], optional
+            NGFF version, by default "0.4"
+        """
 
     @classmethod
     def open(
         cls,
         store_path: StrOrBytesPath,
-        mode: Literal["r+", "a", "w-"] = "a",
+        mode: Literal["r", "r+", "a", "w", "w-"] = "r",
         channel_names: List[str] = None,
         version: Literal["0.1", "0.4"] = "0.4",
     ):
@@ -376,8 +469,14 @@ class OMEZarrWriter:
         store_path : StrOrBytesPath
             Path to the Zarr store to open
         mode : Literal["r+", "a", "w-"], optional
-            Persistence mode: 'r+' means read/write (must exist); 'a' means read/write (create if doesn't exist); 'w-' means create (fail if exists),
-            by default 'a'
+            mode : Literal["r", "r+"], optional
+            Persistence mode:
+            'r' means read only (must exist);
+            'r+' means read/write (must exist);
+            'a' means read/write (create if doesn't exist);
+            'w' means create (overwrite if exists);
+            'w-' means create (fail if exists),
+            by default "r".
         channel_names : List[str], optional
             Channel names used to create a new data store, ignored for existing stores,
             by default None
@@ -419,34 +518,12 @@ class OMEZarrWriter:
     def __init__(
         self,
         root: zarr.Group,
-        channel_names: List[str],
-        version: Literal["0.1", "0.4"] = None,
-        arr_name: str = "0",
-        axes: List[AxisMeta] = None,
+        parse_meta: bool = True,
+        axes: list[AxisMeta] = None,
+        version: Literal["0.1", "0.4"] = "0.4",
     ):
-        self.root = root
-        self._channel_names = channel_names
-        self.version = version
-        self.fmt = format_from_version(str(version)) if version else "0.4"
-        self.arr_name = arr_name
-        self.axes = axes if axes else _DEFAULT_AXES
-        self._overwrite = False
-
-    @property
-    def channel_names(self):
-        return self._channel_names
-
-    @property
-    def _storage_options(self):
-        return {
-            "compressor": Blosc(
-                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-            ),
-            "overwrite": self._overwrite,
-        }
-
-    def _rel_keys(self, rel_path: str) -> List[str]:
-        return [name for name in self.root[rel_path].group_keys()]
+        super().__init__(group=root, parse_meta=parse_meta, axes=axes)
+        self._version = version
 
     def require_array(
         self,
