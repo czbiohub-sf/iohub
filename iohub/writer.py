@@ -152,6 +152,7 @@ class NGFFNode:
 
 
 class ImageArray(zarr.Array):
+    """Container object for image stored as a zarr array (up to 5D)"""
     def __init__(self, zarray: zarr.Array):
         super().__init__(
             store=zarray._store,
@@ -243,9 +244,29 @@ class Position(NGFFNode):
         self,
         name: str,
         data: NDArray,
-        chunks=None,
+        chunks: tuple[int] = None,
         transform: List[TransformationMeta] = None,
     ):
+        """Create a new image array in the position.
+
+        Parameters
+        ----------
+        name : str
+            Name key of the new image.
+        data : NDArray
+            Image data.
+        chunks : tuple[int], optional
+            Chunk size, by default None.
+            ZYX stack size will be used if not specified.
+        transform : List[TransformationMeta], optional
+            List of coordinate transformations, by default None.
+            Should be specified for a non-native resolution level.
+
+        Returns
+        -------
+        ImageArray
+            Container object for image stored as a zarr array (up to 5D)
+        """
         if not chunks:
             chunks = data.shape[-min(3, len(data.shape)) :]
         img_arr = ImageArray(
