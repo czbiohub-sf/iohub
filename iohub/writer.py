@@ -314,6 +314,7 @@ class Position(NGFFNode):
 
     def __setitem__(self, key, value: NDArray):
         """Write an up-to-5D image with default settings."""
+        key = zarr.util.normalize_storage_path(key)
         if not isinstance(value, np.ndarray):
             raise TypeError(
                 f"Value must be a NumPy array. Got type {type(value)}."
@@ -399,6 +400,7 @@ class Position(NGFFNode):
             not in self.metadata.multiscales[0].get_dataset_paths()
         ):
             self.metadata.multiscales[0].datasets.append(dataset_meta)
+        self.dump_meta()
 
     def _omero_meta(
         self,
