@@ -596,9 +596,60 @@ class Well(NGFFNode):
 
 
 class Row(NGFFNode):
-    _MEMBER_TYPE = Well
-    pass
+    """The Zarr group level containing wells.
 
+    Parameters
+    ----------
+    group : zarr.Group
+        Zarr heirarchy group object
+    parse_meta : bool, optional
+        Whether to parse NGFF metadata in `.zattrs`, by default True
+    version : Literal["0.1", "0.4"]
+        OME-NGFF specification version
+    overwriting_creation : bool, optional
+        Whether to overwrite or error upon creating an existing child item,
+        by default False
+
+    Attributes
+    ----------
+    version : Literal["0.1", "0.4"]
+        OME-NGFF specification version
+    zgroup : Group
+        Root Zarr group holding arrays
+    zattr : Attributes
+        Zarr attributes of the group
+    """
+
+    _MEMBER_TYPE = Well
+
+    def __init__(
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        version: Literal["0.1", "0.4"] = "0.4",
+        overwriting_creation: bool = False,
+    ):
+        super().__init__(
+            group=group,
+            parse_meta=parse_meta,
+            version=version,
+            overwriting_creation=overwriting_creation,
+        )
+
+    def __getitem__(self, key: str):
+        """Get a well member of the row.
+
+        Parameters
+        ----------
+        key : str
+            Name or path to the image array.
+
+        Returns
+        -------
+        Well
+            Container object for the well group
+        """
+        return super().__getitem__(key)
 
 class Plate(NGFFNode):
     def __init__(self, group: zarr.Group, parse_meta: bool = True):
