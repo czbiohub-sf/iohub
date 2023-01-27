@@ -511,7 +511,7 @@ class Dataset:
 
 
 class OMEZarr(Dataset, Position):
-    """Generic OME-Zarr container for an existing Zarr store.
+    """Generic OME-Zarr dataset container.
 
     Parameters
     ----------
@@ -538,10 +538,11 @@ class OMEZarr(Dataset, Position):
         self,
         root: zarr.Group,
         parse_meta: bool = True,
+        channel_names: list[str] = None,
         axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
     ):
-        super().__init__(group=root, parse_meta=parse_meta, axes=axes)
+        super().__init__(group=root, parse_meta=parse_meta, channel_names=channel_names, axes=axes)
         self._version = version
 
     def require_array(
@@ -725,7 +726,7 @@ class OMEZarr(Dataset, Position):
         self.root.store.close()
 
 
-class HCSWriter(OMEZarrWriter):
+class HCSWriter(Dataset, Plate):
     """High-content screening OME-Zarr writer instance for an existing Zarr store.
 
     Parameters
@@ -750,8 +751,6 @@ class HCSWriter(OMEZarrWriter):
         {'name': 'X', 'type': 'space', 'unit': 'micrometer'}]
         `
     """
-
-    _READER_TYPE = HCSReader
 
     @classmethod
     def from_reader(
