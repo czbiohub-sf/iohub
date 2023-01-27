@@ -19,7 +19,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.writer import new_zarr, OMEZarrWriter, HCSWriter
+from iohub.ngff import new_zarr, OMEZarrWriter, HCSWriter
 
 
 short_text_st = st.text(min_size=1, max_size=16)

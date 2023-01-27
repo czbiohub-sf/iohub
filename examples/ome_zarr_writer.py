@@ -4,7 +4,7 @@
 # It can be run as a plain Python script, or as interactive cells in some IDEs.
 
 import numpy as np
-from iohub.writer import OMEZarr
+from iohub.ngff import OMEZarr
 
 # %%
 # Write 5D data to a new Zarr store

@@ -7,7 +7,7 @@
 import zarr
 import numpy as np
 from iohub.zarrfile import HCSReader
-from iohub.writer import new_zarr, HCSWriter
+from iohub.ngff import new_zarr, HCSWriter
 
 # %%
 # Create a new zarr store and open it
