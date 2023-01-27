@@ -362,6 +362,7 @@ class Position(NGFFNode):
         """
         if not chunks:
             chunks = data.shape[-min(3, len(data.shape)) :]
+            chunks = _pad_shape(chunks, target=len(data.shape))
         img_arr = ImageArray(
             self._group.array(
                 name, data, chunks=chunks, **self._storage_options
