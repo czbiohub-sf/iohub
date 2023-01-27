@@ -29,8 +29,8 @@ with OMEZarr.open("ome.zarr", mode="r") as dataset:
     print(img.numpy())
     try:
         img[0, 0, 0, 0, 0] = 0
-    except:
-        print("Writing was rejected.")
+    except Exception as e:
+        print(f"Writing was rejected: {e}")
 
 # %%
 # Append a new timepoint to an existing dataset
