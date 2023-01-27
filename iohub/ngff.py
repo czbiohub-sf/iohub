@@ -359,7 +359,10 @@ class Position(NGFFNode):
             Name and image array object.
         """
         for key in self.array_keys():
-            yield key, self[key]
+            try:
+                yield key, self[key]
+            except:
+                logging.warn(f"Skipped array at {key}: invalid image array.")
 
     def create_image(
         self,
@@ -517,6 +520,37 @@ class Well(NGFFNode):
     ):
         super().__init__(group, parse_meta, version, overwriting_creation)
 
+    def _parse_meta(self):
+        well_group_meta = self.zattrs.get("well")
+        if well_group_meta:
+            self.metadata = WellGroupMeta(well_group_meta)
+        else:
+            self._warn_invalid_meta()
+
+    def create_position(self, name, acquisition: int = 0):
+        pos_grp = self._group.create_group(name, overwrite=self._overwrite)
+        # build metadata
+        image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
+        if not hasattr(self, "metadata"):
+            self.metadata = WellGroupMeta(images=[image_meta])
+        else:
+            self.metadata.images.append(image_meta)
+
+    def positions(self):
+        """Returns a generator that iterate over the name and value
+        of all the image arrays in the group.
+
+        Yields
+        ------
+        tuple[str, ImageArray]
+            Name and image array object.
+        """
+        for key in self.group_keys():
+            try:
+                yield key, self[key]
+            except:
+                logging.warn(f"Skipped group at {key}: invalid position.")
+
 
 class Row(NGFFNode):
     _MEMBER_TYPE = Well
@@ -659,143 +693,6 @@ class OMEZarr(Dataset, Position):
         )
         self._version = version
 
-    def require_array(
-        self,
-        group: zarr.Group,
-        name: str,
-        zyx_shape: Tuple[int],
-        dtype: DTypeLike,
-        chunks: Tuple[int] = None,
-    ):
-        """Create a new array filled with zeros if it does not exist.
-
-        Parameters
-        ----------
-        group : zarr.Group
-            Parent zarr group
-        name : str
-            name key of the array
-        zyx_shape : Tuple[int]
-            Shape of the z-stack (Z, Y, X) in the array
-        dtype : DTypeLike
-            Data type
-        chunks : Tuple[int], optional
-            Chunk size for the new array if not present, by default a z-stack (1, 1, Z, Y, X)
-
-        Returns
-        -------
-        Array
-            Zarr array. Zero-filled with shape (1, 1, Z, Y, X) if created.
-
-        Raises
-        ------
-        ValueError
-        """
-        if len(zyx_shape) != 3:
-            raise ValueError("Shape {shape} does not have 3 dimensions.")
-        value = group.get(name)
-        if value and not isinstance(value, zarr.Array):
-            raise FileExistsError(
-                f"Name '{name}' maps to a non-array object of type {type(value)}."
-            )
-        elif isinstance(value, zarr.Array):
-            if value.shape[-3:] == zyx_shape:
-                return value
-            else:
-                raise FileExistsError(
-                    f"An array exists with incompatible shape {value.shape}."
-                )
-        elif value is None:
-            if not chunks:
-                chunks = (1, 1) + zyx_shape
-            return group.zeros(
-                name,
-                shape=(1, 1, *zyx_shape),
-                chunks=chunks,
-                dtype=dtype,
-                **self._storage_options,
-            )
-
-    def write_zstack(
-        self,
-        data: NDArray,
-        group: zarr.Group,
-        time_index: int,
-        channel_index: int,
-        transform: List[TransformationMeta] = None,
-        name: str = None,
-        auto_meta=True,
-        additional_meta: dict = None,
-    ):
-        """Write a z-stack with OME-NGFF metadata.
-
-        Parameters
-        ----------
-        data : NDArray
-            Image data with shape (Z, Y, X)
-        group : zarr.Group
-            Parent Zarr group
-        time_index : int
-            Time index
-        channel_index : int
-            Channel index
-        transform: List[TransformationMeta], optional
-            Coordinate transformations (see iohub.ngff_meta.TransformationMeta) for the array, by default identity
-        name : str, optional
-            Name key of the 5D array, by default None
-        auto_meta : bool, optional
-            Whether to track and store metadata automatically, by default True
-        additional_meta : dict, optional
-            Additional metadata, by default None
-        """
-        if len(data.shape) < 3:
-            raise ValueError("Data has less than 3 dimensions.")
-        if time_index < 0 or channel_index < 0:
-            raise ValueError("Time and channel indices must be non-negative.")
-        if not name:
-            name = self.arr_name
-        zyx_shape = data.shape[-3:]
-        # get 5D array
-        array = self.require_array(
-            group, name, zyx_shape=zyx_shape, dtype=data.dtype
-        )
-        if time_index >= array.shape[0] or channel_index >= array.shape[1]:
-            array.resize(
-                max(time_index + 1, array.shape[0]),
-                max(channel_index + 1, array.shape[1]),
-                *zyx_shape,
-            )
-        # write data
-        array[time_index, channel_index] = data
-        if auto_meta:
-            self._dump_zstack_meta(name, transform, additional_meta)
-
-    def _dump_zstack_meta(
-        self,
-        name: str,
-        transform: List[TransformationMeta],
-        additional_meta: dict,
-    ):
-        dataset_meta = self._dataset_meta(name, transform=transform)
-        if "multiscales" not in self.root.attrs:
-            multiscales = [
-                MultiScaleMeta(
-                    version=self.version,
-                    axes=self.axes,
-                    datasets=[dataset_meta],
-                    metadata=additional_meta,
-                )
-            ]
-            omero = self._omero_meta(0, self.root)
-            self.images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
-        else:
-            if (
-                dataset_meta.path
-                not in self.images_meta.multiscales[0].get_dataset_paths()
-            ):
-                self.images_meta.multiscales[0].datasets.append(dataset_meta)
-        self.root.attrs.put(self.images_meta.dict(**TO_DICT_SETTINGS))
-
 
 class HCSWriter(Dataset, Plate):
     """High-content screening OME-Zarr writer instance for an existing Zarr store.
@@ -876,41 +773,6 @@ class HCSWriter(Dataset, Plate):
         self.columns: Dict[str, Union[PlateAxisMeta, int, float]] = {}
         self.wells: Dict[str, Union[WellIndexMeta, int, float]] = {}
         self.positions: Dict[str, Dict[str, Any]] = {}
-
-    @property
-    def row_names(self) -> List[str]:
-        """Row names in the plate (sub-groups under root)"""
-        return self._rel_keys("")
-
-    def get_cols_in_row(self, row_name: str) -> List[str]:
-        """Get column names in a row (wells).
-
-        Parameters
-        ----------
-        row_name : str
-            Name path of the parent row, e.g. `"A"`, `"H"`
-
-        Returns
-        -------
-        List[str]
-            list of the names of the columns
-        """
-        return self._rel_keys(row_name)
-
-    def get_pos_in_well(self, well_name: str) -> List[str]:
-        """Get column names in a row (wells).
-
-        Parameters
-        ----------
-        well_name : str
-            Name path of the well relative to the root, e.g. `"A/1"`, `"H/12"`
-
-        Returns
-        -------
-        List[str]
-            list of the names of the positions
-        """
-        return self._rel_keys(well_name)
 
     @property
     def plate_layout(self) -> Dict[str, List[str]]:
