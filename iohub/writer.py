@@ -4,7 +4,7 @@ from __future__ import annotations
 import os, logging
 from numcodecs import Blosc
 import zarr
-from ome_zarr.format import format_from_version
+from pydantic import ValidationError
 
 from iohub.ngff_meta import *
 from iohub.lf_utils import channel_display_settings
@@ -22,12 +22,16 @@ def _pad_shape(shape: tuple[int], target: int = 5):
     return (1,) * pad + shape
 
 
-def _open_store(
+def open_store(
     store_path: StrOrBytesPath,
     mode: Literal["r", "r+", "a", "w", "w-"],
     version: Literal["0.1", "0.4"],
     synchronizer=None,
 ):
+    if not os.path.isdir(store_path) and mode in ("r", "r+"):
+        raise FileNotFoundError(
+            f"Dataset directory not found at {store_path}."
+        )
     if not version == "0.4":
         logging.warn(
             "\n".join(
@@ -38,10 +42,6 @@ def _open_store(
         dimension_separator = None
     else:
         dimension_separator = "/"
-    if not os.path.isdir(store_path):
-        raise FileNotFoundError(
-            f"Dataset directory not found at {store_path}."
-        )
     try:
         store = zarr.DirectoryStore(
             store_path, dimension_separator=dimension_separator
@@ -52,30 +52,6 @@ def _open_store(
             f"Cannot open Zarr root group at {store_path}."
         )
     return root
-
-
-def new_zarr(
-    store_path: StrOrBytesPath, mode: Literal["r", "r+", "a", "w", "w-"] = "a"
-):
-    """Open the root group of a new OME-NGFF-compatible Zarr store if not present.
-
-    Parameters
-    ----------
-    store_path : StrOrBytesPath
-        Path of the new store
-    mode : Literal["r", "r+", "a", "w", "w-"], optional
-        File mode (passed to `zarr.open()`) used to open the root group,
-        by default "a" (read/write, create if not present)
-
-    Returns
-    -------
-    Group
-        Root Zarr group of a directory store with `/` as the dimension separator
-    """
-    if os.path.exists(store_path):
-        raise FileExistsError(f"{store_path} already exists.")
-    store = zarr.DirectoryStore(str(store_path), dimension_separator="/")
-    return zarr.open(store, mode=mode)
 
 
 class NGFFNode:
@@ -254,13 +230,33 @@ class Position(NGFFNode):
     def __init__(
         self,
         group: zarr.Group,
-        channel_names: list[str],
         parse_meta: bool = True,
+        channel_names: list[str] = None,
         axes: list[AxisMeta] = None,
     ):
+        if channel_names:
+            self._channel_names = channel_names
+        elif not parse_meta:
+            raise ValueError(
+                "Channel names need to be provided or in metadata."
+            )
         super().__init__(group, parse_meta)
-        self._channel_names = channel_names
         self.axes = axes if axes else self._DEFAULT_AXES
+
+    def _parse_meta(self):
+        multiscales = self.zattrs.get("multiscales")
+        omero = self.zattrs.get("omero")
+        if multiscales and omero:
+            try:
+                self.metadata = ImagesMeta(
+                    multiscales=multiscales, omero=omero
+                )
+                self._channel_names = [c.label for c in omero[0].channels]
+                self.axes = multiscales[0].axes
+            except ValidationError:
+                self._warn_invalid_meta()
+        else:
+            self._warn_invalid_meta()
 
     @property
     def _storage_options(self):
@@ -365,14 +361,6 @@ class Position(NGFFNode):
         ):
             self.metadata.multiscales[0].datasets.append(dataset_meta)
 
-    def _parse_meta(self):
-        multiscales = self.zattrs.get("multiscales")
-        omero = self.zattrs.get("omero")
-        if multiscales and omero:
-            self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
-        else:
-            self._warn_invalid_meta()
-
     def _find_axis(self, axis_name):
         for i, axis in enumerate(self.axes):
             if axis.name == axis_name:
@@ -386,7 +374,7 @@ class Position(NGFFNode):
         ----------
         chan_name : str
             Name of the new channel
-        resize_arrays: bool, optional
+        resize_arrays : bool, optional
             Whether to resize all the image arrays for the new channel,
             by default True
         """
@@ -434,77 +422,8 @@ class Plate(NGFFNode):
         super().__init__(group, parse_meta)
 
 
-class DataStore:
-    """Mix in file mode class methods for `NGFFNode` subclasses"""
-
-    @classmethod
-    def _read(
-        cls,
-        store_path: StrOrBytesPath,
-        mode: Literal["r", "r+"] = "r",
-        version: Literal["0.1", "0.4"] = "0.4",
-    ):
-        """Load existing dataset.
-
-        Parameters
-        ----------
-        store_path : StrOrBytesPath
-            Store path.
-        mode : Literal["r", "r+"], optional
-            Persistence mode:
-            'r' means read only (must exist);
-            'r+' means read/write (must exist);
-            by default "r".
-        version : Literal[&quot;0.1&quot;, &quot;0.4&quot;], optional
-            NGFF version, by default "0.4"
-        """
-        root = _open_store(store_path, mode, version)
-        array_keys = list(root.array_keys())
-        if array_keys:
-            array_keys = array_keys
-        else:
-            raise FileNotFoundError(
-                "Array not found at top level. Is this an HCS store?"
-            )
-        try:
-            channels: list = root.attrs.get("omero").get("channels")
-            channel_names = [c["label"] for c in channels]
-        except KeyError:
-            logging.warn(
-                "OMERO channel metadata not found. "
-                + "Channel names cannot be determined."
-            )
-        try:
-            axes = [
-                AxisMeta(**ax) for ax in root.attrs["multiscales"][0]["axes"]
-            ]
-        except KeyError:
-            logging.warn("Axes metadata not found, using default.")
-        return cls.__init__(
-            root=root, channel_names=channel_names, version=version, axes=axes
-        )
-
-    @classmethod
-    def _create(
-        cls,
-        store_path: StrOrBytesPath,
-        mode: Literal["w", "w-"] = "w-",
-        version: Literal["0.1", "0.4"] = "0.4",
-    ):
-        """_summary_
-
-        Parameters
-        ----------
-        store_path : StrOrBytesPath
-            _description_
-        mode : Literal["w", "w-"], optional
-            Persistence mode:
-            'w' means create (overwrite if exists);
-            'w-' means create (fail if exists);
-            by default "w-".
-        version : Literal[&quot;0.1&quot;, &quot;0.4&quot;], optional
-            NGFF version, by default "0.4"
-        """
+class Dataset:
+    """Mix in file mode class method for `NGFFNode` subclasses"""
 
     @classmethod
     def open(
@@ -512,7 +431,11 @@ class DataStore:
         store_path: StrOrBytesPath,
         mode: Literal["r", "r+", "a", "w", "w-"] = "r",
         channel_names: List[str] = None,
+        axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
+        synchronizer: Union[
+            zarr.ThreadSynchronizer, zarr.ProcessSynchronizer
+        ] = None,
     ):
         """Convenience method to open Zarr stores.
         Uses default parameters to initiate readers/writers. Initiate manually to alter them.
@@ -522,7 +445,7 @@ class DataStore:
         store_path : StrOrBytesPath
             Path to the Zarr store to open
         mode : Literal["r+", "a", "w-"], optional
-            mode : Literal["r", "r+"], optional
+            mode : Literal["r", "r+", "a", "w", "w-"], optional
             Persistence mode:
             'r' means read only (must exist);
             'r+' means read/write (must exist);
@@ -533,59 +456,61 @@ class DataStore:
         channel_names : List[str], optional
             Channel names used to create a new data store, ignored for existing stores,
             by default None
+        axes : list[AxisMeta], optional
+            OME axes metadata, by default:
+            ```
+            [AxisMeta(name='T', type='time', unit='second'),
+            AxisMeta(name='C', type='channel', unit=None),
+            AxisMeta(name='Z', type='space', unit='micrometer'),
+            AxisMeta(name='Y', type='space', unit='micrometer'),
+            AxisMeta(name='X', type='space', unit='micrometer')]
+            ````
         version : Literal["0.1", "0.4"], optional
             OME-NGFF version, by default "0.4"
+        synchronizer : object, optional
+            Zarr thread or process synchronizer, by default None
+
 
         Returns
         -------
-        OMEZarrWriter
-            writer instance
+        Dataset
+            NGFF dataset object (`OMEZarr` or `HCSZarr')
         """
-        if mode == "w-" and os.path.exists(store_path):
-            raise FileExistsError(
-                f"Persistence mode 'w-' does not allow overwriting data at {store_path}."
-            )
-        try:
-            reader = cls._READER_TYPE(store_path, version=version)
-            logging.info(f"Found existing OME-NGFF dataset at {store_path}")
-            return cls.from_reader(reader)
-        except:
-            not_found_msg = f"OME-NGFF dataset not found at {store_path}"
-            if mode == "r+":
-                raise FileNotFoundError(not_found_msg)
-            else:
-                logging.info(not_found_msg)
-                if not channel_names:
-                    raise ValueError(
-                        "Cannot initiate writer without channel names."
-                    )
-                try:
-                    root = new_zarr(store_path)
-                except FileExistsError:
-                    raise ValueError(
-                        f"Existing data at {store_path} is not a compatible store."
-                    )
-                logging.info(f"Creating new data store at {store_path}")
-                return cls(root, channel_names, version=version)
+        if mode == "a":
+            mode = ("w-", "r+")[int(os.path.exists(store_path))]
+        parse_meta = False
+        if mode in ("r", "r+"):
+            parse_meta=True
+        elif mode == "w-":
+            if os.path.exists(store_path):
+                raise FileExistsError(store_path)
+        elif mode == "w":
+            logging.warn(f"Overwriting data at {store_path}")
+        else:
+            raise ValueError(f"Invalid persistence mode '{mode}'.")
+        root = open_store(store_path, mode, version, synchronizer)
+        return cls.__init__(
+            root=root, parse_meta=parse_meta, channel_names=channel_names, axes=axes
+        )
 
     def __init__(
         self,
         root: zarr.Group,
-        channel_names: list[str],
         parse_meta: bool = True,
+        channel_names: list[str] = None,
         axes: list[AxisMeta] = None,
     ):
         # this should call `Position.__init__()` for `OMEZarr`
         # or `Plate.__init__()` for `HCSZarr`
         super().__init__(
             group=root,
-            channel_names=channel_names,
             parse_meta=parse_meta,
+            channel_names=channel_names,
             axes=axes,
         )
 
 
-class OMEZarr(DataStore, Position):
+class OMEZarr(Dataset, Position):
     """Generic OME-Zarr container for an existing Zarr store.
 
     Parameters
