@@ -560,6 +560,21 @@ class Well(NGFFNode):
         else:
             self._warn_invalid_meta()
 
+    def __getitem__(self, key: str):
+        """Get a position member of the well.
+
+        Parameters
+        ----------
+        key : str
+            Name or path to the position.
+
+        Returns
+        -------
+        Position
+            Container object for the position group
+        """
+        return super().__getitem__(key)
+
     def create_position(self, name: str, acquisition: int = 0):
         """Creates a new position group in the well group.
 
