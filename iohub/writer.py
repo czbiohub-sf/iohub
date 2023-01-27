@@ -184,8 +184,9 @@ class NGFFNode:
         return not self.group_keys()
 
     def _warn_invalid_meta(self):
-        msg = f"Zarr group at {self._group.path} \
-            does not have valid metadata for {type(self)}"
+        msg = "Zarr group at {} does not have valid metadata for {}".format(
+            self._group.path, type(self)
+        )
         logging.warn(msg)
 
     def _parse_meta(self):
@@ -433,29 +434,8 @@ class Plate(NGFFNode):
         super().__init__(group, parse_meta)
 
 
-class OMEZarr(Position):
-    """Generic OME-Zarr container for an existing Zarr store.
-
-    Parameters
-    ----------
-    root : zarr.Group
-        The root group of the Zarr store, dimension separator should be '/'
-    channel_names: List[str]
-        Names of all the channels present in data ordered according to channel indices
-    version : Literal["0.1", "0.4"], optional
-        OME-NGFF version, default to "0.4" if not provided
-    arr_name : str, optional
-        Base name of the arrays, by default '0'
-    axes : List[AxisMeta], optional
-        OME axes metadata, by default:
-        ```
-        [AxisMeta(name='T', type='time', unit='second'),
-        AxisMeta(name='C', type='channel', unit=None),
-        AxisMeta(name='Z', type='space', unit='micrometer'),
-        AxisMeta(name='Y', type='space', unit='micrometer'),
-        AxisMeta(name='X', type='space', unit='micrometer')]
-        ````
-    """
+class DataStore:
+    """Mix in file mode class methods for `NGFFNode` subclasses"""
 
     @classmethod
     def _read(
@@ -491,7 +471,8 @@ class OMEZarr(Position):
             channel_names = [c["label"] for c in channels]
         except KeyError:
             logging.warn(
-                "OMERO channel metadata not found. Channel names cannot be determined."
+                "OMERO channel metadata not found. "
+                + "Channel names cannot be determined."
             )
         try:
             axes = [
@@ -586,6 +567,47 @@ class OMEZarr(Position):
                     )
                 logging.info(f"Creating new data store at {store_path}")
                 return cls(root, channel_names, version=version)
+
+    def __init__(
+        self,
+        root: zarr.Group,
+        channel_names: list[str],
+        parse_meta: bool = True,
+        axes: list[AxisMeta] = None,
+    ):
+        # this should call `Position.__init__()` for `OMEZarr`
+        # or `Plate.__init__()` for `HCSZarr`
+        super().__init__(
+            group=root,
+            channel_names=channel_names,
+            parse_meta=parse_meta,
+            axes=axes,
+        )
+
+
+class OMEZarr(DataStore, Position):
+    """Generic OME-Zarr container for an existing Zarr store.
+
+    Parameters
+    ----------
+    root : zarr.Group
+        The root group of the Zarr store, dimension separator should be '/'
+    channel_names: List[str]
+        Names of all the channels present in data ordered according to channel indices
+    version : Literal["0.1", "0.4"], optional
+        OME-NGFF version, default to "0.4" if not provided
+    arr_name : str, optional
+        Base name of the arrays, by default '0'
+    axes : List[AxisMeta], optional
+        OME axes metadata, by default:
+        ```
+        [AxisMeta(name='T', type='time', unit='second'),
+        AxisMeta(name='C', type='channel', unit=None),
+        AxisMeta(name='Z', type='space', unit='micrometer'),
+        AxisMeta(name='Y', type='space', unit='micrometer'),
+        AxisMeta(name='X', type='space', unit='micrometer')]
+        ````
+    """
 
     def __init__(
         self,
