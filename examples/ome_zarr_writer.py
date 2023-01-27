@@ -23,7 +23,7 @@ with OMEZarr.open(
 
 with OMEZarr.open("ome.zarr", mode="r") as dataset:
     img = dataset[0]
-    print(img.shape)
+    print(img.numpy())
     try:
         img[0, 0, 0, 0, 0] = 0
     except:
