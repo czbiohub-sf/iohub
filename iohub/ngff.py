@@ -276,6 +276,7 @@ class Position(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] = None,
         axes: list[AxisMeta] = None,
+        version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
         if channel_names:
@@ -285,7 +286,10 @@ class Position(NGFFNode):
                 "Channel names need to be provided or in metadata."
             )
         super().__init__(
-            group, parse_meta, overwriting_creation=overwriting_creation
+            group,
+            parse_meta,
+            version=version,
+            overwriting_creation=overwriting_creation,
         )
         self.axes = axes if axes else self._DEFAULT_AXES
 
@@ -509,6 +513,30 @@ class Position(NGFFNode):
 
 
 class Well(NGFFNode):
+    """The Zarr group level containing position groups.
+
+    Parameters
+    ----------
+    group : zarr.Group
+        Zarr heirarchy group object
+    parse_meta : bool, optional
+        Whether to parse NGFF metadata in `.zattrs`, by default True
+    version : Literal["0.1", "0.4"]
+        OME-NGFF specification version
+    overwriting_creation : bool, optional
+        Whether to overwrite or error upon creating an existing child item,
+        by default False
+
+    Attributes
+    ----------
+    version : Literal["0.1", "0.4"]
+        OME-NGFF specification version
+    zgroup : Group
+        Root Zarr group holding arrays
+    zattr : Attributes
+        Zarr attributes of the group
+    """
+
     _MEMBER_TYPE = Position
 
     def __init__(
@@ -518,7 +546,12 @@ class Well(NGFFNode):
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
-        super().__init__(group, parse_meta, version, overwriting_creation)
+        super().__init__(
+            group=group,
+            parse_meta=parse_meta,
+            version=version,
+            overwriting_creation=overwriting_creation,
+        )
 
     def _parse_meta(self):
         well_group_meta = self.zattrs.get("well")
@@ -527,7 +560,16 @@ class Well(NGFFNode):
         else:
             self._warn_invalid_meta()
 
-    def create_position(self, name, acquisition: int = 0):
+    def create_position(self, name: str, acquisition: int = 0):
+        """Creates a new position group in the well group.
+
+        Parameters
+        ----------
+        name : str
+            Name key of the new position
+        acquisition : int, optional
+            The index of the acquisition, by default 0
+        """
         pos_grp = self._group.create_group(name, overwrite=self._overwrite)
         # build metadata
         image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
@@ -535,14 +577,15 @@ class Well(NGFFNode):
             self.metadata = WellGroupMeta(images=[image_meta])
         else:
             self.metadata.images.append(image_meta)
+        return self[name]
 
     def positions(self):
         """Returns a generator that iterate over the name and value
-        of all the image arrays in the group.
+        of all the positions in the well.
 
         Yields
         ------
-        tuple[str, ImageArray]
+        tuple[str, Position]
             Name and image array object.
         """
         for key in self.group_keys():
