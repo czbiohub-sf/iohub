@@ -9,16 +9,16 @@ from ome_zarr.format import format_from_version
 from iohub.ngff_meta import *
 from iohub.lf_utils import channel_display_settings
 
-from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal
+from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal, Generator
 from numpy.typing import NDArray, DTypeLike
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-def _pad_shape(shape: tuple[int]):
-    """Pad shape tuple to 5D"""
-    pad = 5 - len(shape)
+def _pad_shape(shape: tuple[int], target: int = 5):
+    """Pad shape tuple to a target length."""
+    pad = target - len(shape)
     return (1,) * pad + shape
 
 
@@ -129,25 +129,39 @@ class NGFFNode:
         raise NotImplementedError
 
     def __delitem__(self, key):
-        raise NotImplementedError
+        if key in self._member_names:
+            del self[key]
+
+    def __contains__(self, key):
+        return key in self._member_names
+
+    def __iter__(self):
+        for key in self._member_names:
+            yield key
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self):
+        self._group.store.close()
 
     def group_keys(self):
-        """List of keys to all the child zgroups (if any).
+        """Sorted list of keys to all the child zgroups (if any).
 
         Returns
         -------
         list[str]
         """
-        return list(self._group.group_keys())
+        return sorted(list(self._group.group_keys()))
 
     def array_keys(self):
-        """List of keys to all the child zarrays (if any).
+        """Sorted list of keys to all the child zarrays (if any).
 
         Returns
         -------
         list[str]
         """
-        return list(self._group.array_keys())
+        return sorted(list(self._group.array_keys()))
 
     def is_root(self):
         """Whether this node is the root node
@@ -179,6 +193,7 @@ class NGFFNode:
         raise NotImplementedError
 
     def dump_meta(self):
+        """Dumps metadata JSON to the `.zattrs` file."""
         self.zattrs.update(**self.metadata.dict(**TO_DICT_SETTINGS))
 
 
@@ -208,7 +223,7 @@ class ImageArray(zarr.Array):
             self.slices,
             self.height,
             self.width,
-        ) = _pad_shape(self.shape)
+        ) = _pad_shape(self.shape, target=5)
 
     def numpy(self):
         """Return the whole image as an in-RAM NumPy array.
@@ -288,6 +303,18 @@ class Position(NGFFNode):
             )
         self.create_image(key, value)
 
+    def images(self) -> Generator[tuple[str, ImageArray]]:
+        """Returns a generator that iterate over the name and value
+        of all the image arrays in the group.
+
+        Yields
+        ------
+        tuple[str, ImageArray]
+            Name and image array object.
+        """
+        for key in self.array_keys():
+            yield key, self[key]
+
     def create_image(
         self,
         name: str,
@@ -344,6 +371,51 @@ class Position(NGFFNode):
             self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
         else:
             self._warn_invalid_meta()
+
+    def _find_axis(self, axis_name):
+        for i, axis in enumerate(self.axes):
+            if axis.name == axis_name:
+                return i
+        return None
+
+    def append_channel(self, chan_name: str, resize_arrays: bool = True):
+        """Append a channel to the end of the channel list.
+
+        Parameters
+        ----------
+        chan_name : str
+            Name of the new channel
+        resize_arrays: bool, optional
+            Whether to resize all the image arrays for the new channel,
+            by default True
+        """
+        if chan_name in self._channel_names:
+            raise ValueError(f"Channel name {chan_name} already exists.")
+        self._channel_names.append(chan_name)
+        if resize_arrays:
+            ch_ax = self._find_axis("channel")
+            if ch_ax is None:
+                raise KeyError(
+                    "Axis 'channel' does not exist."
+                    + "Please update `self.axes` first."
+                )
+            for _, img in self.images():
+                shape = img.shape
+                if ch_ax < len(shape):
+                    shape[ch_ax] += 1
+                # prepend axis
+                elif ch_ax == len(shape):
+                    shape = _pad_shape(shape, target=len(shape) + 1)
+                else:
+                    raise IndexError(
+                        f"Cannot infer channel axis for shape {shape}."
+                    )
+                img.resize(shape)
+        if "omero" in self.metadata.dict().keys():
+            self.metadata.omero.channels.append(
+                channel_display_settings(chan_name)
+            )
+            self.dump_meta()
 
 
 class Well(NGFFNode):
@@ -701,27 +773,6 @@ class OMEZarr(Position):
             rdefs=RDefsMeta(default_t=0, default_z=0),
         )
         return omero_meta
-
-    def append_channel(self, chan_name: str):
-        """Append a channel to the end of the channel list.
-
-        Parameters
-        ----------
-        chan_name : str
-            Name of the new channel
-        """
-        if chan_name in self._channel_names:
-            raise ValueError(
-                f"Channel name {chan_name} already exists in the dataset."
-            )
-        self._channel_names.append(chan_name)
-        if "omero" in self.root.attrs:
-            self.images_meta.omero.channels.append(
-                channel_display_settings(chan_name)
-            )
-            self.root.attrs["omero"] = self.images_meta.omero.dict(
-                **TO_DICT_SETTINGS
-            )
 
     def close(self):
         self.root.store.close()
