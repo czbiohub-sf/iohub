@@ -192,6 +192,10 @@ class NGFFNode:
         """Parse and set NGFF metadata from `.zattrs`."""
         raise NotImplementedError
 
+    def dump_meta(self):
+        """Dumps metadata JSON to the `.zattrs` file."""
+        raise NotImplementedError
+
     def close(self):
         """Close Zarr store."""
         self._group.store.close()
