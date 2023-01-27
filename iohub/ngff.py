@@ -714,8 +714,7 @@ class Dataset:
             zarr.ThreadSynchronizer, zarr.ProcessSynchronizer
         ] = None,
     ):
-        """Convenience method to open Zarr stores.
-        Uses default parameters to initiate readers/writers. Initiate manually to alter them.
+        """Convenience method to open NGFF data stores.
 
         Parameters
         ----------
@@ -731,7 +730,8 @@ class Dataset:
             'w-' means create (fail if exists),
             by default "r".
         channel_names : List[str], optional
-            Channel names used to create a new data store, ignored for existing stores,
+            Channel names used to create a new data store,
+            ignored for existing stores,
             by default None
         axes : list[AxisMeta], optional
             OME axes metadata, by default:
@@ -796,9 +796,11 @@ class OMEZarr(Dataset, Position):
     Parameters
     ----------
     root : zarr.Group
-        The root group of the Zarr store, dimension separator should be '/'
+        The root group of the Zarr store,
+        dimension separator should be '/'
     channel_names: List[str]
-        Names of all the channels present in data ordered according to channel indices
+        Names of all the channels present in data
+        ordered according to channel indices
     version : Literal["0.1", "0.4"], optional
         OME-NGFF version, default to "0.4" if not provided
     arr_name : str, optional
