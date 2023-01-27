@@ -1,7 +1,10 @@
 # %%
-# This script shows how to write a single-FOV, single-scale OME-Zarr dataset,
-# and how to append an extra channel to an existing dataset.
-# It can be run as a plain Python script, or as interactive cells in some IDEs.
+# This script shows how to create a single-FOV, single-scale OME-Zarr dataset,
+# read data in read-only mode,
+# append an extra time point to an existing dataset,
+# and adding a new channel to an existing dataset.
+# It can be run as a plain Python script,
+# or as interactive cells in some IDEs.
 
 import numpy as np
 from iohub.ngff import OMEZarr
