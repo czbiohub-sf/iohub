@@ -4,67 +4,55 @@
 # It can be run as a plain Python script, or as interactive cells in some IDEs.
 
 import numpy as np
-from iohub.writer import new_zarr, OMEZarrWriter
+from iohub.writer import OMEZarr
 
 # %%
-# Create a new zarr store and initialize a writer
-
-root = new_zarr("ome.zarr")
-writer = OMEZarrWriter(root, channel_names=["DAPI", "GFP"])
-
-#%%
-# Alternatively, use the convenience method 
-# if default parameters does not need to be changed
-
-while False: # FIXME: remove this clause and the following indentation
-    writer = OMEZarrWriter.open("ome.zarr", mode="a", channel_names=["DAPI", "GFP"])
-
-# %%
-# Generate some random 5-D data
+# Write 5D data to a new Zarr store
 
 tczyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16
 )
 
-# %%
-# Write Z-stacks with metadata
-
-for t, czyx in enumerate(tczyx):
-    for c, zyx in enumerate(czyx):
-        writer.write_zstack(
-            zyx, writer.root, time_index=t, channel_index=c, auto_meta=True
-        )
+with OMEZarr.open(
+    "ome.zarr", mode="a", channel_names=["DAPI", "GFP"]
+) as dataset:
+    dataset[0] = tczyx
 
 # %%
-# Done!
+# Opening in read-only mode prevents writing
 
-writer.close()
-
-# %%
-# The sections below shows how to add a new channel
-# to an existing store (that we just created).
-# It should run without the results from previous steps in RAM.
-
-import zarr
-import numpy as np
-from iohub.writer import OMEZarrWriter
-from iohub.zarrfile import OMEZarrReader
+with OMEZarr.open("ome.zarr", mode="r") as dataset:
+    img = dataset[0]
+    print(img.shape)
+    try:
+        img[0, 0, 0, 0, 0] = 0
+    except:
+        print("Writing was rejected.")
 
 # %%
-# Populate a new writer from the reader.
+# Append a new timepoint to an existing dataset
 
-reader = OMEZarrReader("ome.zarr")
-writer = OMEZarrWriter.from_reader(reader)
-print(writer.channel_names)
-
-# %%
-# Add a new channel
-
-writer.append_channel("Phase3D")
-
-new_tczyx = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(5, 1, 3, 32, 32), dtype=np.uint16
+new_1czyx = np.random.randint(
+    0, np.iinfo(np.uint16).max, size=(1, 2, 3, 32, 32), dtype=np.uint16
 )
 
-for t, new_czyx in enumerate(new_tczyx):
-    writer.write_zstack(new_czyx[0], writer.root, t, 2)
+with OMEZarr.open("ome.zarr", mode="r+") as dataset:
+    img = dataset[0]
+    print(img.shape)
+    img.append(new_1czyx, axis=0)
+    print(img.shape)
+
+# %%
+# Add a new channel and write a Z-stack
+
+new_zyx = np.random.randint(
+    0, np.iinfo(np.uint16).max, size=(3, 32, 32), dtype=np.uint16
+)
+
+dataset = OMEZarr.open("ome.zarr", mode="r+")
+dataset.append_channel("New", resize_arrays=True)
+dataset[0][0, 2] = new_zyx
+dataset.close()
+
+# %%
+# Try viewing the images with napari-ome-zarr
