@@ -4,6 +4,7 @@ from __future__ import annotations
 import os, logging
 from numcodecs import Blosc
 import zarr
+import numpy as np
 from pydantic import ValidationError
 
 from iohub.ngff_meta import *
@@ -63,10 +64,12 @@ class NGFFNode:
         self,
         group: zarr.Group,
         parse_meta: bool = True,
+        version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
         self._group = group
         self._overwrite = overwriting_creation
+        self._version = version
         if parse_meta:
             self._parse_meta()
 
@@ -80,6 +83,11 @@ class NGFFNode:
         """Zarr attributes of the node.
         Assignments will modify the metadata file."""
         return self._group.attrs
+
+    @property
+    def version(self):
+        """NGFF version"""
+        return self._version
 
     @property
     def _parent_path(self):
@@ -96,6 +104,7 @@ class NGFFNode:
         return self.group_keys()
 
     def __getitem__(self, key):
+        key = zarr.util.normalize_storage_path(key)
         if key in self._member_names:
             return self._MEMBER_TYPE(self._group[key])
         else:
@@ -105,10 +114,12 @@ class NGFFNode:
         raise NotImplementedError
 
     def __delitem__(self, key):
+        key = zarr.util.normalize_storage_path(key)
         if key in self._member_names:
             del self[key]
 
     def __contains__(self, key):
+        key = zarr.util.normalize_storage_path(key)
         return key in self._member_names
 
     def __iter__(self):
@@ -119,7 +130,7 @@ class NGFFNode:
         return self
 
     def __exit__(self):
-        self._group.store.close()
+        self.close()
 
     def group_keys(self):
         """Sorted list of keys to all the child zgroups (if any).
@@ -172,6 +183,10 @@ class NGFFNode:
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
         self.zattrs.update(**self.metadata.dict(**TO_DICT_SETTINGS))
+
+    def close(self):
+        """Close Zarr store."""
+        self._group.store.close()
 
 
 class ImageArray(zarr.Array):
@@ -233,6 +248,7 @@ class Position(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] = None,
         axes: list[AxisMeta] = None,
+        overwriting_creation: bool = False,
     ):
         if channel_names:
             self._channel_names = channel_names
@@ -240,7 +256,9 @@ class Position(NGFFNode):
             raise ValueError(
                 "Channel names need to be provided or in metadata."
             )
-        super().__init__(group, parse_meta)
+        super().__init__(
+            group, parse_meta, overwriting_creation=overwriting_creation
+        )
         self.axes = axes if axes else self._DEFAULT_AXES
 
     def _parse_meta(self):
@@ -251,8 +269,10 @@ class Position(NGFFNode):
                 self.metadata = ImagesMeta(
                     multiscales=multiscales, omero=omero
                 )
-                self._channel_names = [c.label for c in omero[0].channels]
-                self.axes = multiscales[0].axes
+                self._channel_names = [
+                    c.label for c in self.metadata.omero.channels
+                ]
+                self.axes = self.metadata.multiscales[0].axes
             except ValidationError:
                 self._warn_invalid_meta()
         else:
@@ -294,7 +314,7 @@ class Position(NGFFNode):
 
     def __setitem__(self, key, value: NDArray):
         """Write an up-to-5D image with default settings."""
-        if not isinstance(value, NDArray):
+        if not isinstance(value, np.ndarray):
             raise TypeError(
                 f"Value must be a NumPy array. Got type {type(value)}."
             )
@@ -350,16 +370,63 @@ class Position(NGFFNode):
         return img_arr
 
     def _create_image_meta(
-        self, name: str, transform: List[TransformationMeta] = None
+        self,
+        name: str,
+        transform: List[TransformationMeta] = None,
+        extra_meta: dict = None,
     ):
+        if not transform:
+            transform = [TransformationMeta(type="identity")]
         dataset_meta = DatasetMeta(
             path=name, coordinate_transformations=transform
         )
-        if (
+        if not hasattr(self, "metadata"):
+            self.metadata = ImagesMeta(
+                multiscales=[
+                    MultiScaleMeta(
+                        version=self.version,
+                        axes=self.axes,
+                        datasets=[dataset_meta],
+                        name=name,
+                        coordinateTransformations=transform,
+                        metadata=extra_meta,
+                    )
+                ],
+                omero=self._omero_meta(id=0, name=self._group.basename),
+            )
+        elif (
             dataset_meta.path
             not in self.metadata.multiscales[0].get_dataset_paths()
         ):
             self.metadata.multiscales[0].datasets.append(dataset_meta)
+
+    def _omero_meta(
+        self,
+        id: int,
+        name: str,
+        clims: List[Tuple[float, float, float, float]] = None,
+    ):
+        if not clims:
+            clims = [None] * 4
+        channels = []
+        for i, (channel_name, clim) in enumerate(
+            zip(self.channel_names, clims)
+        ):
+            if i == 0:
+                first_chan = True
+            channels.append(
+                channel_display_settings(
+                    channel_name, clim=clim, first_chan=first_chan
+                )
+            )
+        omero_meta = OMEROMeta(
+            version=self.version,
+            id=id,
+            name=name,
+            channels=channels,
+            rdefs=RDefsMeta(default_t=0, default_z=0),
+        )
+        return omero_meta
 
     def _find_axis(self, axis_name):
         for i, axis in enumerate(self.axes):
@@ -480,7 +547,7 @@ class Dataset:
             mode = ("w-", "r+")[int(os.path.exists(store_path))]
         parse_meta = False
         if mode in ("r", "r+"):
-            parse_meta=True
+            parse_meta = True
         elif mode == "w-":
             if os.path.exists(store_path):
                 raise FileExistsError(store_path)
@@ -489,8 +556,11 @@ class Dataset:
         else:
             raise ValueError(f"Invalid persistence mode '{mode}'.")
         root = open_store(store_path, mode, version, synchronizer)
-        return cls.__init__(
-            root=root, parse_meta=parse_meta, channel_names=channel_names, axes=axes
+        return cls(
+            root=root,
+            parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
         )
 
     def __init__(
@@ -542,7 +612,12 @@ class OMEZarr(Dataset, Position):
         axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
     ):
-        super().__init__(group=root, parse_meta=parse_meta, channel_names=channel_names, axes=axes)
+        super().__init__(
+            root=root,
+            parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
+        )
         self._version = version
 
     def require_array(
@@ -682,49 +757,6 @@ class OMEZarr(Dataset, Position):
                 self.images_meta.multiscales[0].datasets.append(dataset_meta)
         self.root.attrs.put(self.images_meta.dict(**TO_DICT_SETTINGS))
 
-    def _dataset_meta(
-        self,
-        name: str,
-        transform: List[TransformationMeta] = None,
-    ):
-        if not transform:
-            transform = [TransformationMeta(type="identity")]
-        dataset_meta = DatasetMeta(
-            path=name, coordinate_transformations=transform
-        )
-        return dataset_meta
-
-    def _omero_meta(
-        self,
-        id: int,
-        group: zarr.Group,
-        clims: List[Tuple[float, float, float, float]] = None,
-    ):
-        if not clims:
-            clims = [None] * 4
-        channels = []
-        for i, (channel_name, clim) in enumerate(
-            zip(self.channel_names, clims)
-        ):
-            if i == 0:
-                first_chan = True
-            channels.append(
-                channel_display_settings(
-                    channel_name, clim=clim, first_chan=first_chan
-                )
-            )
-        omero_meta = OMEROMeta(
-            version=self.version,
-            id=id,
-            name=group.name,
-            channels=channels,
-            rdefs=RDefsMeta(default_t=0, default_z=0),
-        )
-        return omero_meta
-
-    def close(self):
-        self.root.store.close()
-
 
 class HCSWriter(Dataset, Plate):
     """High-content screening OME-Zarr writer instance for an existing Zarr store.
@@ -755,7 +787,7 @@ class HCSWriter(Dataset, Plate):
     @classmethod
     def from_reader(
         cls,
-        reader: HCSReader,
+        reader,
         detect_arr_name: bool = True,
         detect_layout: bool = True,
     ):
