@@ -230,7 +230,35 @@ class ImageArray(zarr.Array):
 
 
 class Position(NGFFNode):
-    """The Zarr group level directly containing multiscale image arrays."""
+    """The Zarr group level directly containing multiscale image arrays.
+
+    Parameters
+    ----------
+    group : zarr.Group
+        Zarr heirarchy group object
+    parse_meta : bool, optional
+        Whether to parse NGFF metadata in `.zattrs`, by default True
+    channel_names : list[str], optional
+        List of channel names, by default None
+    axes : list[AxisMeta], optional
+        List of axes (`ngff_meta.AxisMeta`, up to 5D), by default None
+    overwriting_creation : bool, optional
+        Whether to overwrite or error upon creating an existing child item,
+        by default False
+
+    Attributes
+    ----------
+    version : Literal["0.1", "0.4"]
+        OME-NGFF specification version
+    zgroup : Group
+        Root Zarr group holding arrays
+    zattr : Attributes
+        Zarr attributes of the group
+    channel_names : List[str]
+        Name of the channels
+    axes : List[AxisMeta]
+        Axes metadata
+    """
 
     _MEMBER_TYPE = ImageArray
     _DEFAULT_AXES = [
@@ -479,7 +507,15 @@ class Position(NGFFNode):
 
 class Well(NGFFNode):
     _MEMBER_TYPE = Position
-    pass
+
+    def __init__(
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        version: Literal["0.1", "0.4"] = "0.4",
+        overwriting_creation: bool = False,
+    ):
+        super().__init__(group, parse_meta, version, overwriting_creation)
 
 
 class Row(NGFFNode):
