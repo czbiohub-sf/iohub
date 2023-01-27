@@ -431,9 +431,9 @@ class Position(NGFFNode):
         )
         return omero_meta
 
-    def _find_axis(self, axis_name):
+    def _find_axis(self, axis_type):
         for i, axis in enumerate(self.axes):
-            if axis.name == axis_name:
+            if axis.type == axis_type:
                 return i
         return None
 
