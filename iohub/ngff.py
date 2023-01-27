@@ -170,6 +170,17 @@ class NGFFNode:
         """
         return not self.group_keys()
 
+    def iteritems(self):
+        for key in self._member_names:
+            try:
+                yield key, self[key]
+            except:
+                logging.warn(
+                    "Skipped item at {}: invalid {}.".format(
+                        key, type(self._MEMBER_TYPE)
+                    )
+                )
+
     def _warn_invalid_meta(self):
         msg = "Zarr group at {} does not have valid metadata for {}".format(
             self._group.path, type(self)
@@ -362,11 +373,7 @@ class Position(NGFFNode):
         tuple[str, ImageArray]
             Name and image array object.
         """
-        for key in self.array_keys():
-            try:
-                yield key, self[key]
-            except:
-                logging.warn(f"Skipped array at {key}: invalid image array.")
+        yield from self.iteritems()
 
     def create_image(
         self,
@@ -560,6 +567,10 @@ class Well(NGFFNode):
         else:
             self._warn_invalid_meta()
 
+    @property
+    def _member_names(self):
+        return self.group_keys()
+
     def __getitem__(self, key: str):
         """Get a position member of the well.
 
@@ -601,13 +612,9 @@ class Well(NGFFNode):
         Yields
         ------
         tuple[str, Position]
-            Name and image array object.
+            Name and position object.
         """
-        for key in self.group_keys():
-            try:
-                yield key, self[key]
-            except:
-                logging.warn(f"Skipped group at {key}: invalid position.")
+        yield from self.iteritems()
 
 
 class Row(NGFFNode):
@@ -651,13 +658,17 @@ class Row(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
 
+    @property
+    def _member_names(self):
+        return self.group_keys()
+
     def __getitem__(self, key: str):
         """Get a well member of the row.
 
         Parameters
         ----------
         key : str
-            Name or path to the image array.
+            Name or path to the well.
 
         Returns
         -------
@@ -665,6 +676,18 @@ class Row(NGFFNode):
             Container object for the well group
         """
         return super().__getitem__(key)
+
+    def wells(self):
+        """Returns a generator that iterate over the name and value
+        of all the wells in the row.
+
+        Yields
+        ------
+        tuple[str, Well]
+            Name and well object.
+        """
+        yield from self.iteritems()
+
 
 class Plate(NGFFNode):
     def __init__(self, group: zarr.Group, parse_meta: bool = True):
