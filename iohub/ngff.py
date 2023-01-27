@@ -192,10 +192,6 @@ class NGFFNode:
         """Parse and set NGFF metadata from `.zattrs`."""
         raise NotImplementedError
 
-    def dump_meta(self):
-        """Dumps metadata JSON to the `.zattrs` file."""
-        self.zattrs.update(**self.metadata.dict(**TO_DICT_SETTINGS))
-
     def close(self):
         """Close Zarr store."""
         self._group.store.close()
@@ -321,6 +317,10 @@ class Position(NGFFNode):
                 self._warn_invalid_meta()
         else:
             self._warn_invalid_meta()
+
+    def dump_meta(self):
+        """Dumps metadata JSON to the `.zattrs` file."""
+        self.zattrs.update(**self.metadata.dict(**TO_DICT_SETTINGS))
 
     @property
     def _storage_options(self):
@@ -564,9 +564,13 @@ class Well(NGFFNode):
     def _parse_meta(self):
         well_group_meta = self.zattrs.get("well")
         if well_group_meta:
-            self.metadata = WellGroupMeta(well_group_meta)
+            self.metadata = WellGroupMeta(**well_group_meta)
         else:
             self._warn_invalid_meta()
+
+    def dump_meta(self):
+        """Dumps metadata JSON to the `.zattrs` file."""
+        self.zattrs.update({"well": self.metadata.dict(**TO_DICT_SETTINGS)})
 
     @property
     def _member_names(self):
@@ -604,6 +608,7 @@ class Well(NGFFNode):
             self.metadata = WellGroupMeta(images=[image_meta])
         else:
             self.metadata.images.append(image_meta)
+        self.dump_meta()
         return self[name]
 
     def positions(self):
@@ -695,8 +700,31 @@ class Row(NGFFNode):
 
 
 class Plate(NGFFNode):
-    def __init__(self, group: zarr.Group, parse_meta: bool = True):
-        super().__init__(group, parse_meta)
+
+    _MEMBER_TYPE = Row
+
+    def __init__(
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        version: Literal["0.1", "0.4"] = "0.4",
+        overwriting_creation: bool = False,
+    ):
+        super().__init__(
+            group=group,
+            parse_meta=parse_meta,
+            version=version,
+            overwriting_creation=overwriting_creation,
+        )
+
+    def _parse_meta(self):
+        plate_meta = self.zattrs.get("plate")
+        if plate_meta:
+            self.metadata = PlateMeta(**plate_meta)
+
+    def dump_meta(self):
+        """Dumps metadata JSON to the `.zattrs` file."""
+        self.zattrs.update({"plate": self.metadata.dict(**TO_DICT_SETTINGS)})
 
 
 class Dataset:

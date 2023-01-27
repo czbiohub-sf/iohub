@@ -6,7 +6,7 @@ Attributes are 'snake_case' with aliases to match NGFF names in JSON output.
 See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase' inconsistency.
 """
 
-import re, json
+import re
 from pydantic import BaseModel, validator, root_validator, Field
 from pydantic.color import Color, ColorTuple, ColorType
 import pandas as pd
