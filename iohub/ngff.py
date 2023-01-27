@@ -114,6 +114,7 @@ class NGFFNode:
         raise NotImplementedError
 
     def __delitem__(self, key):
+        """.. Warning: this does NOT clean up metadata!"""
         key = zarr.util.normalize_storage_path(key)
         if key in self._member_names:
             del self[key]
@@ -687,6 +688,10 @@ class Row(NGFFNode):
             Name and well object.
         """
         yield from self.iteritems()
+
+    def _parse_meta(self):
+        # this node does not have NGFF metadata
+        return
 
 
 class Plate(NGFFNode):
