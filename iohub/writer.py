@@ -459,12 +459,12 @@ class Position(NGFFNode):
                     + "Please update `self.axes` first."
                 )
             for _, img in self.images():
-                shape = img.shape
+                shape = list(img.shape)
                 if ch_ax < len(shape):
                     shape[ch_ax] += 1
                 # prepend axis
                 elif ch_ax == len(shape):
-                    shape = _pad_shape(shape, target=len(shape) + 1)
+                    shape = _pad_shape(tuple(shape), target=len(shape) + 1)
                 else:
                     raise IndexError(
                         f"Cannot infer channel axis for shape {shape}."
