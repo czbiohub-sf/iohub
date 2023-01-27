@@ -5,8 +5,6 @@ import os, logging
 import zarr
 import numpy as np
 from copy import copy
-from ome_zarr.io import parse_url
-from ome_zarr.format import format_from_version
 
 from iohub.reader_base import ReaderBase
 from iohub.ngff_meta import *
