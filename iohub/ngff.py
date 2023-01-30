@@ -4,6 +4,7 @@ from __future__ import annotations
 import os, logging
 from numcodecs import Blosc
 import zarr
+from zarr.util import normalize_storage_path
 import numpy as np
 from pydantic import ValidationError
 
@@ -59,14 +60,31 @@ class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
     _MEMBER_TYPE = None
+    _DEFAULT_AXES = [
+        AxisMeta(name="T", type="time", unit="second"),
+        AxisMeta(name="C", type="channel"),
+        *[
+            AxisMeta(name=i, type="space", unit="micrometer")
+            for i in ("Z", "Y", "X")
+        ],
+    ]
 
     def __init__(
         self,
         group: zarr.Group,
         parse_meta: bool = True,
+        channel_names: list[str] = None,
+        axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
+        if channel_names:
+            self._channel_names = channel_names
+        elif not parse_meta:
+            raise ValueError(
+                "Channel names need to be provided or in metadata."
+            )
+        self.axes = axes if axes else self._DEFAULT_AXES
         self._group = group
         self._overwrite = overwriting_creation
         self._version = version
@@ -90,6 +108,10 @@ class NGFFNode:
         return self._version
 
     @property
+    def channel_names(self):
+        return self._channel_names
+
+    @property
     def _parent_path(self):
         """The parent Zarr group path of the node.
         None for the root node."""
@@ -103,31 +125,41 @@ class NGFFNode:
         """Group keys (default) or array keys (overridden)."""
         return self.group_keys()
 
+    @property
+    def _child_attrs(self):
+        """Attributes to pass on when constructing child type instances"""
+        return dict(
+            version=self._version,
+            axes=self.axes,
+            channel_names=self._channel_names,
+            overwriting_creation=self._overwrite,
+        )
+
     def __len__(self):
         return len(self._member_names)
 
     def __getitem__(self, key):
-        key = zarr.util.normalize_storage_path(key)
-        levels = key.count("/")
-        item_type = self._MEMBER_TYPE
-        for _ in range(levels):
-            item_type = item_type._MEMBER_TYPE
-        if key in self._member_names:
-            return item_type(self._group[key])
-        else:
+        key = normalize_storage_path(key)
+        node_group =self._group.get(key)
+        if not node_group:
             raise KeyError(key)
+        levels = key.split("/")
+        item_type = self._MEMBER_TYPE
+        for _ in levels:
+            item_type = item_type._MEMBER_TYPE
+            return item_type(node_group)
 
     def __setitem__(self, key, value):
         raise NotImplementedError
 
     def __delitem__(self, key):
         """.. Warning: this does NOT clean up metadata!"""
-        key = zarr.util.normalize_storage_path(key)
+        key = normalize_storage_path(key)
         if key in self._member_names:
             del self[key]
 
     def __contains__(self, key):
-        key = zarr.util.normalize_storage_path(key)
+        key = normalize_storage_path(key)
         return key in self._member_names
 
     def __iter__(self):
@@ -280,14 +312,6 @@ class Position(NGFFNode):
     """
 
     _MEMBER_TYPE = ImageArray
-    _DEFAULT_AXES = [
-        AxisMeta(name="T", type="time", unit="second"),
-        AxisMeta(name="C", type="channel"),
-        *[
-            AxisMeta(name=i, type="space", unit="micrometer")
-            for i in ("Z", "Y", "X")
-        ],
-    ]
 
     def __init__(
         self,
@@ -298,19 +322,14 @@ class Position(NGFFNode):
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
-        if channel_names:
-            self._channel_names = channel_names
-        elif not parse_meta:
-            raise ValueError(
-                "Channel names need to be provided or in metadata."
-            )
         super().__init__(
-            group,
-            parse_meta,
+            group=group,
+            parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
             version=version,
             overwriting_creation=overwriting_creation,
         )
-        self.axes = axes if axes else self._DEFAULT_AXES
 
     def _parse_meta(self):
         multiscales = self.zattrs.get("multiscales")
@@ -346,10 +365,6 @@ class Position(NGFFNode):
     def _member_names(self):
         return self.array_keys()
 
-    @property
-    def channel_names(self):
-        return self._channel_names
-
     def __getitem__(self, key: Union[int, str]):
         """Get an image array member of the position.
         E.g. Raw-coordinates image, a multi-scale level, or labels
@@ -369,7 +384,7 @@ class Position(NGFFNode):
 
     def __setitem__(self, key, value: NDArray):
         """Write an up-to-5D image with default settings."""
-        key = zarr.util.normalize_storage_path(key)
+        key = normalize_storage_path(key)
         if not isinstance(value, np.ndarray):
             raise TypeError(
                 f"Value must be a NumPy array. Got type {type(value)}."
@@ -562,12 +577,16 @@ class Well(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
+        channel_names: list[str] = None,
+        axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
             group=group,
             parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
             version=version,
             overwriting_creation=overwriting_creation,
         )
@@ -620,7 +639,7 @@ class Well(NGFFNode):
         else:
             self.metadata.images.append(image_meta)
         self.dump_meta()
-        return self[name]
+        return Position(group=pos_grp, parse_meta=False, **self._child_attrs)
 
     def positions(self):
         """Returns a generator that iterate over the name and value
@@ -665,12 +684,16 @@ class Row(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
+        channel_names: list[str] = None,
+        axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
             group=group,
             parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
             version=version,
             overwriting_creation=overwriting_creation,
         )
@@ -728,11 +751,11 @@ class Plate(NGFFNode):
         super().__init__(
             group=group,
             parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
             version=version,
             overwriting_creation=overwriting_creation,
         )
-        self._channel_names = channel_names
-        self.axes = axes
         self._name = name
         self._acquisitions = (
             [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
@@ -744,10 +767,6 @@ class Plate(NGFFNode):
         plate_meta = self.zattrs.get("plate")
         if plate_meta:
             self.metadata = PlateMeta(**plate_meta)
-
-    @property
-    def channel_names(self):
-        return self._channel_names
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
@@ -774,7 +793,10 @@ class Plate(NGFFNode):
             return max(used) + 1 if used else 0
 
     def _build_meta(
-        self, first_row_meta: PlateAxisMeta, first_col_meta: PlateAxisMeta
+        self,
+        first_row_meta: PlateAxisMeta,
+        first_col_meta: PlateAxisMeta,
+        first_well_meta: WellIndexMeta,
     ):
         """Initiate metadata attribute if not present."""
         if not hasattr(self, "metadata"):
@@ -784,6 +806,7 @@ class Plate(NGFFNode):
                 acquisitions=self._acquisitions,
                 rows=[first_row_meta],
                 columns=[first_col_meta],
+                wells=[first_well_meta],
             )
 
     def create_well(
@@ -817,26 +840,74 @@ class Plate(NGFFNode):
         Well
             Well node object
         """
-        col_meta = PlateAxisMeta(name=col_grp.basename)
-        # create new row
+        # normalize input
+        row_name = normalize_storage_path(row_name)
+        col_name = normalize_storage_path(col_name)
+        row_index = self._auto_idx(row_index, self._rows)
+        col_index = self._auto_idx(col_index, self._cols)
+        # build well metadata
+        well_index_meta = WellIndexMeta(
+            path=os.path.join(row_name, col_name),
+            row_index=row_index,
+            column_index=col_index,
+        )
+        col_meta = PlateAxisMeta(name=col_name)
+        # create new row if needed
         if row_name not in self:
             row_grp = self.zgroup.create_group(
                 row_name, overwrite=self._overwrite
             )
             row_meta = PlateAxisMeta(name=row_name)
-            self._build_meta(row_meta, col_meta)
+            self._build_meta(row_meta, col_meta, well_index_meta)
             self.metadata.rows.append(row_meta)
             self._rows[row_name] = row_index
-        col_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
+        else:
+            row_grp = self.zgroup[row_name]
+            self.metadata.wells.append(well_index_meta)
+        well_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
         self._cols[col_name] = col_index
-        well_index_meta = WellIndexMeta(
-            path=os.path.join(row_grp.basename, col_grp.basename),
-            row_index=row_index,
-            column_index=col_index,
-        )
-        self.metadata.wells.append(well_index_meta)
         self.dump_meta()
-        return self[row_name][col_name]
+        return Well(group=well_grp, parse_meta=False, **self._child_attrs)
+
+    def create_position(
+        self,
+        row_name: str,
+        col_name: str,
+        pos_name: str,
+        row_index: int = None,
+        col_index: int = None,
+        acq_index: int = 0,
+    ):
+        """Creates a new position group in the plate.
+        The new position will have empty group metadata,
+        which will not be created until an image is written.
+
+        Parameters
+        ----------
+        row_name : str
+            Name key of the row
+        col_name : str
+            Name key of the column
+        row_index : int, optional
+            Index of the row,
+            will be set by the sequence of creation if not provided,
+            by default None
+        col_index : int, optional
+            Index of the column,
+            will be set by the sequence of creation if not provided,
+            by default None
+        acq_index : int, optional
+            Index of the acquisition, by default 0
+
+        Returns
+        -------
+        Position
+            Position node object
+        """
+        well = self.create_well(
+            row_name, col_name, row_index=row_index, col_index=col_index
+        )
+        return well.create_position(pos_name, acquisition=acq_index)
 
     def rows(self):
         """Returns a generator that iterate over the name and value
