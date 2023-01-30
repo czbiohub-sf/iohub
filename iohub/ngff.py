@@ -773,6 +773,19 @@ class Plate(NGFFNode):
             used = known.values()
             return max(used) + 1 if used else 0
 
+    def _build_meta(
+        self, first_row_meta: PlateAxisMeta, first_col_meta: PlateAxisMeta
+    ):
+        """Initiate metadata attribute if not present."""
+        if not hasattr(self, "metadata"):
+            self.metadata = PlateMeta(
+                version=self.version,
+                name=self._name,
+                acquisitions=self._acquisitions,
+                rows=[first_row_meta],
+                columns=[first_col_meta],
+            )
+
     def create_well(
         self,
         row_name: str,
@@ -809,14 +822,7 @@ class Plate(NGFFNode):
                 row_name, overwrite=self._overwrite
             )
             row_meta = PlateAxisMeta(name=row_name)
-            if not hasattr(self, "metadata"):
-                self.metadata = PlateMeta(
-                    version=self.version,
-                    name=self._name,
-                    acquisitions=self._acquisitions,
-                    rows=[row_meta],
-                    columns=[col_meta],
-                )
+            self._build_meta(row_meta, col_meta)
             self.metadata.rows.append(row_meta)
             self._rows[row_name] = row_index
         col_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
