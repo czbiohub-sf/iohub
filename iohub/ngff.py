@@ -900,7 +900,7 @@ class Dataset:
             ignored for existing stores,
             by default None
         axes : list[AxisMeta], optional
-            OME axes metadata, by default:
+            OME axes metadata, by default None:
             ```
             [AxisMeta(name='T', type='time', unit='second'),
             AxisMeta(name='C', type='channel', unit=None),
@@ -956,18 +956,13 @@ class OMEZarr(Dataset, Position):
     ----------
     root : zarr.Group
         The root group of the Zarr store,
-        dimension separator should be '/'
     parse_meta : bool, optional
         Whether to parse metadata from file, by default True
     channel_names: List[str]
         Names of all the channels present in data
         ordered according to channel indices
-    version : Literal["0.1", "0.4"], optional
-        OME-NGFF version, default to "0.4" if not provided
-    arr_name : str, optional
-        Base name of the arrays, by default '0'
     axes : List[AxisMeta], optional
-        OME axes metadata, by default:
+        OME axes metadata, by default None:
         ```
         [AxisMeta(name='T', type='time', unit='second'),
         AxisMeta(name='C', type='channel', unit=None),
@@ -978,6 +973,8 @@ class OMEZarr(Dataset, Position):
     version : Literal["0.1", "0.4"], optional
         OME-NGFF version, by default "0.4"
     overwriting_creation : bool
+        Whether to overwrite or error upon creating an existing child item,
+        by default False
     """
 
     def __init__(
@@ -1002,27 +999,34 @@ class OMEZarr(Dataset, Position):
 class HCSZarr(Dataset, Plate):
     """High-content screening OME-Zarr dataset container.
 
+
     Parameters
     ----------
     root : zarr.Group
-        The root group of the Zarr store, dimension separator should be '/'
+        The root group of the Zarr store,
+    parse_meta : bool, optional
+        Whether to parse metadata from file, by default True
     channel_names: List[str]
-        Names of all the channels present in data ordered according to channel indices
-    plate_name: str, optional
-        Name of the plate, by default None
-    version : Literal["0.1", "0.4"], optional
-        OME-NGFF version, by default 0.4
-    arr_name : str, optional
-        Base name of the arrays, by default '0'
+        Names of all the channels present in data
+        ordered according to channel indices
     axes : List[AxisMeta], optional
-        OME axes metadata, by default:
-        `
-        [{'name': 'T', 'type': 'time', 'unit': 'second'},
-        {'name': 'C', 'type': 'channel'},
-        {'name': 'Z', 'type': 'space', 'unit': 'micrometer'},
-        {'name': 'Y', 'type': 'space', 'unit': 'micrometer'},
-        {'name': 'X', 'type': 'space', 'unit': 'micrometer'}]
-        `
+        OME axes metadata, default to:
+        ```
+        [AxisMeta(name='T', type='time', unit='second'),
+        AxisMeta(name='C', type='channel', unit=None),
+        AxisMeta(name='Z', type='space', unit='micrometer'),
+        AxisMeta(name='Y', type='space', unit='micrometer'),
+        AxisMeta(name='X', type='space', unit='micrometer')]
+        ````
+    version : Literal["0.1", "0.4"], optional
+        OME-NGFF version, by default "0.4"
+    overwriting_creation : bool
+        Whether to overwrite or error upon creating an existing child item,
+        by default False
+    plate_name: str, optional
+        Name of the plate, default to filename if not provided
+    acquisitions: list[AcquisitionMeta], optional
+        List of acquisitions, by default None
     """
 
     def __init__(
@@ -1034,7 +1038,7 @@ class HCSZarr(Dataset, Plate):
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
         plate_name: str = None,
-        acquisitions: List[AcquisitionMeta] = None,
+        acquisitions: list[AcquisitionMeta] = None,
     ):
         super().__init__(
             group=root,
