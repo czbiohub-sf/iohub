@@ -878,6 +878,7 @@ class Dataset:
         synchronizer: Union[
             zarr.ThreadSynchronizer, zarr.ProcessSynchronizer
         ] = None,
+        **kwargs,
     ):
         """Convenience method to open NGFF data stores.
 
@@ -911,6 +912,9 @@ class Dataset:
             OME-NGFF version, by default "0.4"
         synchronizer : object, optional
             Zarr thread or process synchronizer, by default None
+        kwargs : dict, optional
+            Keyword arguments to underlying NGFF node constructor,
+            by default None
 
 
         Returns
@@ -936,33 +940,25 @@ class Dataset:
             parse_meta=parse_meta,
             channel_names=channel_names,
             axes=axes,
+            **kwargs,
         )
 
-    def __init__(
-        self,
-        root: zarr.Group,
-        parse_meta: bool = True,
-        channel_names: list[str] = None,
-        axes: list[AxisMeta] = None,
-    ):
+    def __init__(self, *args, **kwargs):
         # this should call `Position.__init__()` for `OMEZarr`
         # or `Plate.__init__()` for `HCSZarr`
-        super().__init__(
-            group=root,
-            parse_meta=parse_meta,
-            channel_names=channel_names,
-            axes=axes,
-        )
+        super().__init__(*args, **kwargs)
 
 
 class OMEZarr(Dataset, Position):
-    """Generic OME-Zarr dataset container.
+    """Single-FOV OME-Zarr dataset container.
 
     Parameters
     ----------
     root : zarr.Group
         The root group of the Zarr store,
         dimension separator should be '/'
+    parse_meta : bool, optional
+        Whether to parse metadata from file, by default True
     channel_names: List[str]
         Names of all the channels present in data
         ordered according to channel indices
@@ -979,6 +975,9 @@ class OMEZarr(Dataset, Position):
         AxisMeta(name='Y', type='space', unit='micrometer'),
         AxisMeta(name='X', type='space', unit='micrometer')]
         ````
+    version : Literal["0.1", "0.4"], optional
+        OME-NGFF version, by default "0.4"
+    overwriting_creation : bool
     """
 
     def __init__(
@@ -988,18 +987,20 @@ class OMEZarr(Dataset, Position):
         channel_names: list[str] = None,
         axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
+        overwriting_creation: bool = False,
     ):
         super().__init__(
-            root=root,
+            group=root,
             parse_meta=parse_meta,
             channel_names=channel_names,
             axes=axes,
+            version=version,
+            overwriting_creation=overwriting_creation,
         )
-        self._version = version
 
 
-class HCSWriter(Dataset, Plate):
-    """High-content screening OME-Zarr writer instance for an existing Zarr store.
+class HCSZarr(Dataset, Plate):
+    """High-content screening OME-Zarr dataset container.
 
     Parameters
     ----------
@@ -1024,269 +1025,24 @@ class HCSWriter(Dataset, Plate):
         `
     """
 
-    @classmethod
-    def from_reader(
-        cls,
-        reader,
-        detect_arr_name: bool = True,
-        detect_layout: bool = True,
-    ):
-        # TODO: update reader API to use `reader.store` instead of `reader.root.store`
-        reader.root.store.close()
-        root = zarr.open(
-            zarr.DirectoryStore(
-                str(reader.root.store.path), dimension_separator="/"
-            ),
-            mode="a",
-        )
-        writer = cls(
-            root=root,
-            channel_names=reader.channel_names,
-            plate_name=root.attrs.get("name"),
-            version=reader.plate_meta.version,
-            axes=reader.axes,
-            acquisitions=reader.plate_meta.acquisitions,
-        )
-        if detect_arr_name:
-            writer.arr_name = reader.arr_name
-        if detect_layout:
-            writer.rows = reader.rows_meta
-            writer.columns = reader.columns_meta
-            writer.wells = reader.wells_meta
-            writer.positions = reader.positions_meta
-            writer.plate_meta = reader.plate_meta
-        return writer
-
     def __init__(
         self,
         root: zarr.Group,
-        channel_names: List[str],
-        plate_name: str = None,
+        parse_meta: bool = True,
+        channel_names: list[str] = None,
+        axes: list[AxisMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
-        arr_name: str = "0",
-        axes: List[AxisMeta] = None,
+        overwriting_creation: bool = False,
+        plate_name: str = None,
         acquisitions: List[AcquisitionMeta] = None,
     ):
-        super().__init__(root, channel_names, version, arr_name, axes)
-        self.plate_name = plate_name
-        self.plate_meta: PlateMeta = None
-        self.acquisitions = (
-            [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
+        super().__init__(
+            group=root,
+            parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
+            name=plate_name,
+            acquisitions=acquisitions,
+            version=version,
+            overwriting_creation=overwriting_creation,
         )
-        self.rows: Dict[str, Union[PlateAxisMeta, int, float]] = {}
-        self.columns: Dict[str, Union[PlateAxisMeta, int, float]] = {}
-        self.wells: Dict[str, Union[WellIndexMeta, int, float]] = {}
-        self.positions: Dict[str, Dict[str, Any]] = {}
-
-    @property
-    def plate_layout(self) -> Dict[str, List[str]]:
-        """Names of rows and columns of non-empty wells.
-
-        Returns
-        -------
-        Dict[str, List[str]]
-            {"A": ["1", ...],...}
-        """
-        return {
-            row_name: self.get_cols_in_row() for row_name in self.row_names
-        }
-
-    def require_row(
-        self, name: str, index: int = None, overwrite: bool = False
-    ):
-        """Creates a row in the hierarchy (first level below zarr root) if it does not exist.
-
-        Parameters
-        ----------
-        name : str
-            Name of the row
-        index : int, optional
-            Unique index of the new row, by default incremented by 1
-        overwrite : bool, optional
-            Delete all existing data in the row group, by default false
-
-        Returns
-        -------
-        Group
-            Zarr group for the required row
-        """
-        if name in self.rows:
-            if index:
-                existing_id = self.rows[name]["id"]
-                if existing_id != index:
-                    raise ValueError(
-                        f"Requested index {index} conflicts with existing row {name} index {existing_id}."
-                    )
-        else:
-            if not index:
-                index = len(self.rows)
-            self.rows[name] = {
-                "id": index,
-                "meta": PlateAxisMeta(name=name),
-            }
-        return self.root.require_group(name, overwrite=overwrite)
-
-    def require_well(
-        self,
-        row_name: str,
-        col_name: str,
-        row_index: int = None,
-        col_index: int = None,
-        overwrite: bool = False,
-    ):
-        """Creates a well ('row_name/col_name') in the hierarchy if it does not exist.
-        Will also create the parent row if it does not exist
-
-        Parameters
-        ----------
-        row_name : str
-            Name of the parent row
-        col_name : str
-            Name of the column
-        row_index: int, optional
-            Unique index of the new row, by default incremented by 1
-        col_index: int, optional
-            Unique index of the new column, by default incremented by 1
-        overwrite : bool, optional
-            Delete all existing data in the row group, by default false
-
-        Returns
-        -------
-        Group
-            Zarr group for the required well
-        """
-        well_name = os.path.join(row_name, col_name)
-        row = self.require_row(row_name, index=row_index)
-        if col_name in self.columns and col_index:
-            _id = self.columns[col_name]["id"]
-            if _id != col_index:
-                raise ValueError(
-                    f"Requested index {col_index} conflicts with existing column {col_name} index {_id}."
-                )
-        else:
-            if not col_index:
-                col_index = len(self.columns)
-            self.columns[col_name] = {
-                "id": col_index,
-                "meta": PlateAxisMeta(name=col_name),
-            }
-        well = row.require_group(col_name, overwrite=overwrite)
-        if well.name not in self.wells:
-            self.wells[well.name] = {
-                "meta": WellIndexMeta(
-                    path=well_name,
-                    rowIndex=self.rows[row_name]["id"],
-                    columnIndex=self.columns[col_name]["id"],
-                ),
-                "positions": [],
-                "image_meta_list": [],
-            }
-        return well
-
-    def require_position(
-        self, row: str, column: str, fov: str, acq_id: int = 0, **kwargs
-    ):
-        """Create a row, a column, and a FOV/position if they do not exist.
-
-        Parameters
-        ----------
-        row : str
-            Name key of the row, e.g. 'A'
-        column : str
-            Name key of the column, e.g. '12'
-        fov : str
-            Name key of the FOV/position, e.g. '0'
-        acq_id : int, optional
-            Acquisition ID, by default 0
-        **kwargs :
-            Keyword arguments for `require_well()` and `require_position`
-        """
-        well = self.require_well(row, column, **kwargs)
-        position = well.require_group(fov)
-        self.positions[position.name] = {"id": len(self.positions)}
-        if position.name not in self.wells[well.name]["positions"]:
-            image_meta = ImageMeta(acquisition=acq_id, path=position.basename)
-            self.wells[well.name]["image_meta_list"].append(image_meta)
-            self.wells[well.name]["positions"].append(position.name)
-        return position
-
-    def write_zstack(
-        self,
-        data: NDArray,
-        group: zarr.Group,
-        time_index: int,
-        channel_index: int,
-        transform: List[TransformationMeta] = None,
-        name: str = None,
-        auto_meta=True,
-        additional_meta: dict = None,
-    ):
-        if not name:
-            name = self.arr_name
-        super().write_zstack(
-            data,
-            group,
-            time_index,
-            channel_index,
-            name=name,
-            auto_meta=False,
-        )
-        if auto_meta:
-            self._dump_zstack_meta(group, name, transform, additional_meta)
-        well = self.root.get(os.path.dirname(group.name))
-        self._dump_well_meta(well)
-        self._dump_plate_meta()
-
-    def _dump_zstack_meta(
-        self,
-        position: zarr.Group,
-        name: str,
-        transform: List[TransformationMeta],
-        additional_meta: dict,
-    ):
-        dataset_meta = self._dataset_meta(name, transform=transform)
-        if "attrs" not in self.positions[position.name]:
-            multiscales = [
-                MultiScaleMeta(
-                    version=self.version,
-                    axes=self.axes,
-                    datasets=[dataset_meta],
-                    metadata=additional_meta,
-                )
-            ]
-            id = self.positions[position.name]["id"]
-            omero = self._omero_meta(id, position)
-            images_meta = ImagesMeta(multiscales=multiscales, omero=omero)
-            self.positions[position.name]["attrs"] = images_meta
-        else:
-            if (
-                dataset_meta.path
-                not in self.positions[position.name]["attrs"]
-                .multiscales[0]
-                .get_dataset_paths()
-            ):
-                self.positions[position.name]["attrs"].multiscales[
-                    0
-                ].datasets.append(dataset_meta)
-        position.attrs.put(
-            self.positions[position.name]["attrs"].dict(**TO_DICT_SETTINGS)
-        )
-
-    def _dump_plate_meta(self):
-        self.plate_meta = PlateMeta(
-            version=self.version,
-            name=self.plate_name,
-            acquisitions=self.acquisitions,
-            rows=[row["meta"] for _, row in self.rows.items()],
-            columns=[col["meta"] for _, col in self.columns.items()],
-            wells=[well["meta"] for _, well in self.wells.items()],
-            field_count=len(self.positions),
-        )
-        self.root.attrs["plate"] = self.plate_meta.dict(**TO_DICT_SETTINGS)
-
-    def _dump_well_meta(self, well: zarr.Group):
-        well_group_meta = WellGroupMeta(
-            version=self.version,
-            images=self.wells[well.name]["image_meta_list"],
-        )
-        well.attrs["well"] = well_group_meta.dict(**TO_DICT_SETTINGS)
