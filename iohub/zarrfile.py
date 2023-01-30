@@ -1,7 +1,7 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import os, logging
+import os
 import zarr
 import numpy as np
 from copy import copy
@@ -9,49 +9,7 @@ from copy import copy
 from iohub.reader_base import ReaderBase
 from iohub.ngff_meta import *
 
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from _typeshed import StrOrBytesPath
-
-
-
-
-
-class OMEZarrReader(ReaderBase):
-    """Reader for non-HCS OME-Zarr stores.
-    Zarr array containing a single position/FOV under root is anticipated.
-
-    Parameters
-    ----------
-    store_path : StrOrBytesPath
-        Path to the data store
-    version : Literal["0.1", "0.4"], optional
-        OME-NGFF specification version, by default "0.4"
-
-    Attributes
-    ----------
-    version : Literal["0.1", "0.4"]
-        OME-NGFF specification version
-    store : FSStore
-        Zarr file system store
-    root : Group
-        Root Zarr group holding arrays
-    array_keys : List[str]
-        Name keys of arrays under root (not recursive)
-    channel_names : List[str]
-        Name of the channels
-    axes : List[AxisMeta]
-        Axes metadata
-    """
-
-    def __init__(
-        self,
-        store_path: StrOrBytesPath,
-        version: Literal["0.1", "0.4"] = "0.4",
-    ):
-        super().__init__()
-
+from typing import Literal
 
 
 class ZarrReader(ReaderBase):
