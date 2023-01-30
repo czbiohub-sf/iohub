@@ -798,16 +798,15 @@ class Plate(NGFFNode):
         first_col_meta: PlateAxisMeta,
         first_well_meta: WellIndexMeta,
     ):
-        """Initiate metadata attribute if not present."""
-        if not hasattr(self, "metadata"):
-            self.metadata = PlateMeta(
-                version=self.version,
-                name=self._name,
-                acquisitions=self._acquisitions,
-                rows=[first_row_meta],
-                columns=[first_col_meta],
-                wells=[first_well_meta],
-            )
+        """Initiate metadata attribute."""
+        self.metadata = PlateMeta(
+            version=self.version,
+            name=self._name,
+            acquisitions=self._acquisitions,
+            rows=[first_row_meta],
+            columns=[first_col_meta],
+            wells=[first_well_meta],
+        )
 
     def create_well(
         self,
@@ -853,19 +852,25 @@ class Plate(NGFFNode):
         )
         col_meta = PlateAxisMeta(name=col_name)
         # create new row if needed
-        if row_name not in self:
+        if row_name not in self._rows:
             row_grp = self.zgroup.create_group(
                 row_name, overwrite=self._overwrite
             )
             row_meta = PlateAxisMeta(name=row_name)
-            self._build_meta(row_meta, col_meta, well_index_meta)
-            self.metadata.rows.append(row_meta)
             self._rows[row_name] = row_index
+            if not hasattr(self, "metadata"):
+                self._build_meta(row_meta, col_meta, well_index_meta)
+            else:
+                self.metadata.rows.append(row_meta)
+                self.metadata.wells.append(well_index_meta)
         else:
             row_grp = self.zgroup[row_name]
             self.metadata.wells.append(well_index_meta)
+        if col_meta not in self.metadata.columns:
+            self.metadata.columns.append(col_meta)
+            self._cols[col_name] = col_index
+        # create well
         well_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
-        self._cols[col_name] = col_index
         self.dump_meta()
         return Well(group=well_grp, parse_meta=False, **self._child_attrs)
 
