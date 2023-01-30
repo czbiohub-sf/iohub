@@ -843,7 +843,7 @@ class Plate(NGFFNode):
 
     def positions(self):
         """Returns a generator that iterate over the path and value
-        of all the positions(along rows, columns, and wells) in the plate.
+        of all the positions (along rows, columns, and wells) in the plate.
 
         Yields
         ------
