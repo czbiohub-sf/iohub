@@ -794,6 +794,8 @@ class Plate(NGFFNode):
         col_index: int = None,
     ):
         """Creates a new well group in the plate.
+        The new well will have empty group metadata,
+        which will not be created until a position is written.
 
         Parameters
         ----------
