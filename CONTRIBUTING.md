@@ -23,7 +23,7 @@ When reporting a bug (something should work but does not), please include:
 
 - A concise summary of the symptom in the title
 - A description of the problem
-- Error message, log output, or sreenshot
+- Error message, log output, or screenshot
 - Minimal code/command examples to reproduce
 - `iohub` version, Python version and build, and platform/OS information
 - (Optional) potential cause
