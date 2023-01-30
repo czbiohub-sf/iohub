@@ -103,10 +103,17 @@ class NGFFNode:
         """Group keys (default) or array keys (overridden)."""
         return self.group_keys()
 
+    def __len__(self):
+        return len(self._member_names)
+
     def __getitem__(self, key):
         key = zarr.util.normalize_storage_path(key)
+        levels = key.count("/")
+        item_type = self._MEMBER_TYPE
+        for _ in range(levels):
+            item_type = item_type._MEMBER_TYPE
         if key in self._member_names:
-            return self._MEMBER_TYPE(self._group[key])
+            return item_type(self._group[key])
         else:
             raise KeyError(key)
 
@@ -711,6 +718,10 @@ class Plate(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
+        channel_names: List[str] = None,
+        axes: list[AxisMeta] = None,
+        name: str = None,
+        acquisitions: List[AcquisitionMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
@@ -720,15 +731,129 @@ class Plate(NGFFNode):
             version=version,
             overwriting_creation=overwriting_creation,
         )
+        self._channel_names = channel_names
+        self.axes = axes
+        self._name = name
+        self._acquisitions = (
+            [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
+        )
+        self._rows = {}
+        self._cols = {}
 
     def _parse_meta(self):
         plate_meta = self.zattrs.get("plate")
         if plate_meta:
             self.metadata = PlateMeta(**plate_meta)
 
-    def dump_meta(self):
-        """Dumps metadata JSON to the `.zattrs` file."""
+    @property
+    def channel_names(self):
+        return self._channel_names
+
+    def dump_meta(self, field_count: bool = False):
+        """Dumps metadata JSON to the `.zattrs` file.
+
+        Parameters
+        ----------
+        field_count : bool, optional
+            Whether to count all the FOV/positions
+            and populate the metadata field 'plate.field_count';
+            this operation can be expensive if the number of positions is large,
+            by default False
+        """
+        if field_count:
+            self.metadata.field_count = len([kv for kv in self.positions()])
         self.zattrs.update({"plate": self.metadata.dict(**TO_DICT_SETTINGS)})
+
+    @staticmethod
+    def _auto_idx(name: str, known: dict[str, int]):
+        idx = known.get(name)
+        if idx:
+            return idx
+        else:
+            used = known.values()
+            return max(used) + 1 if used else 0
+
+    def create_well(
+        self,
+        row_name: str,
+        col_name: str,
+        row_index: int = None,
+        col_index: int = None,
+    ):
+        """Creates a new well group in the plate.
+
+        Parameters
+        ----------
+        row_name : str
+            Name key of the row
+        col_name : str
+            Name key of the column
+        row_index : int, optional
+            Index of the row,
+            will be set by the sequence of creation if not provided,
+            by default None
+        col_index : int, optional
+            Index of the column,
+            will be set by the sequence of creation if not provided,
+            by default None
+
+        Returns
+        -------
+        Well
+            Well node object
+        """
+        col_meta = PlateAxisMeta(name=col_grp.basename)
+        # create new row
+        if row_name not in self:
+            row_grp = self.zgroup.create_group(
+                row_name, overwrite=self._overwrite
+            )
+            row_meta = PlateAxisMeta(name=row_name)
+            if not hasattr(self, "metadata"):
+                self.metadata = PlateMeta(
+                    version=self.version,
+                    name=self._name,
+                    acquisitions=self._acquisitions,
+                    rows=[row_meta],
+                    columns=[col_meta],
+                )
+            self.metadata.rows.append(row_meta)
+            self._rows[row_name] = row_index
+        col_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
+        self._cols[col_name] = col_index
+        well_index_meta = WellIndexMeta(
+            path=os.path.join(row_grp.basename, col_grp.basename),
+            row_index=row_index,
+            column_index=col_index,
+        )
+        self.metadata.wells.append(well_index_meta)
+        self.dump_meta()
+        return self[row_name][col_name]
+
+    def rows(self):
+        """Returns a generator that iterate over the name and value
+        of all the rows in the plate.
+
+        Yields
+        ------
+        tuple[str, Row]
+            Name and row object.
+        """
+        yield from self.iteritems()
+
+    def positions(self):
+        """Returns a generator that iterate over the path and value
+        of all the positions(along rows, columns, and wells) in the plate.
+
+        Yields
+        ------
+        [str, Position]
+            Path and position object.
+        """
+        for _, row in self.rows():
+            for _, well in row.wells():
+                for _, position in well:
+                    yield position.zgroup.path, position
 
 
 class Dataset:
