@@ -140,14 +140,17 @@ class NGFFNode:
 
     def __getitem__(self, key):
         key = normalize_storage_path(key)
-        node_group =self._group.get(key)
-        if not node_group:
+        znode = self.zgroup.get(key)
+        if not znode:
             raise KeyError(key)
-        levels = key.split("/")
+        levels = len(key.split("/")) - 1
         item_type = self._MEMBER_TYPE
-        for _ in levels:
+        for _ in range(levels):
             item_type = item_type._MEMBER_TYPE
-            return item_type(node_group)
+        if issubclass(item_type, zarr.Array):
+            return item_type(znode)
+        else:
+            return item_type(group=znode, parse_meta=True, **self._child_attrs)
 
     def __setitem__(self, key, value):
         raise NotImplementedError
@@ -602,10 +605,6 @@ class Well(NGFFNode):
         """Dumps metadata JSON to the `.zattrs` file."""
         self.zattrs.update({"well": self.metadata.dict(**TO_DICT_SETTINGS)})
 
-    @property
-    def _member_names(self):
-        return self.group_keys()
-
     def __getitem__(self, key: str):
         """Get a position member of the well.
 
@@ -698,10 +697,6 @@ class Row(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
 
-    @property
-    def _member_names(self):
-        return self.group_keys()
-
     def __getitem__(self, key: str):
         """Get a well member of the row.
 
@@ -766,7 +761,13 @@ class Plate(NGFFNode):
     def _parse_meta(self):
         plate_meta = self.zattrs.get("plate")
         if plate_meta:
+            logging.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
+        if not hasattr(self, "_channel_names"):
+            row_grp = next(self.zgroup.groups())[1]
+            well_grp = next(row_grp.groups())[1]
+            pos_grp = next(well_grp.groups())[1]
+            self._channel_names = Position(pos_grp)._channel_names
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
@@ -909,9 +910,15 @@ class Plate(NGFFNode):
         Position
             Position node object
         """
-        well = self.create_well(
-            row_name, col_name, row_index=row_index, col_index=col_index
-        )
+        row_name = normalize_storage_path(row_name)
+        col_name = normalize_storage_path(col_name)
+        well_path = os.path.join(row_name, col_name)
+        if well_path in self.zgroup:
+            well = self[well_path]
+        else:
+            well = self.create_well(
+                row_name, col_name, row_index=row_index, col_index=col_index
+            )
         return well.create_position(pos_name, acquisition=acq_index)
 
     def rows(self):
@@ -925,6 +932,19 @@ class Plate(NGFFNode):
         """
         yield from self.iteritems()
 
+    def wells(self):
+        """Returns a generator that iterate over the path and value
+        of all the wells (along rows, columns) in the plate.
+
+        Yields
+        ------
+        [str, Well]
+            Path and well object.
+        """
+        for _, row in self.rows():
+            for _, well in row.wells():
+                yield well.zgroup.path, well
+
     def positions(self):
         """Returns a generator that iterate over the path and value
         of all the positions (along rows, columns, and wells) in the plate.
@@ -934,10 +954,9 @@ class Plate(NGFFNode):
         [str, Position]
             Path and position object.
         """
-        for _, row in self.rows():
-            for _, well in row.wells():
-                for _, position in well:
-                    yield position.zgroup.path, position
+        for _, well in self.wells():
+            for _, position in well.positions():
+                yield position.zgroup.path, position
 
 
 class Dataset:
