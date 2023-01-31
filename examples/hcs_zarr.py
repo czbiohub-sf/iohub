@@ -4,72 +4,37 @@
 # and how to add an extra well-position to an existing dataset.
 # It can be run as a plain Python script, or as interactive cells in some IDEs.
 
-import zarr
 import numpy as np
-from iohub.zarrfile import HCSReader
-from iohub.ngff import new_zarr, HCSWriter
+from iohub.ngff import HCSZarr
 
 # %%
-# Create a new zarr store and open it
+# Write 5D data to multiple wells
 
-root = new_zarr("hcs.zarr")
-
-# %%
-# Initialize a writer object
-writer = HCSWriter(root, channel_names=["Retardance", "Orientation"])
-
-writer.append_channel("Phase")
-# %%
-# This function writes some random 5-D data to a given position
-
-
-def write_dummy_5d(writer: HCSWriter, position: zarr.Group):
-    tczyx = np.random.randint(
-        0, np.iinfo(np.uint16).max, size=(5, 3, 3, 32, 32), dtype=np.uint16
-    )
-    for t, czyx in enumerate(tczyx):
-        for c, zyx in enumerate(czyx):
-            writer.write_zstack(zyx, position, t, c)
-
-
-# %%
-# Define some positions (row, column, FOV)
-
-positions = (
+position_list = (
     ("A", "1", "0"),
-    ("A", "12", "0"),
-    ("H", "6", "0"),
+    ("H", 12, 0),
+    ("Control", "Blank", 0),
 )
 
-# %%
-# Write to the positions
-
-for pos in positions:
-    p = writer.require_position(*pos)
-    write_dummy_5d(writer, p)
-
-writer.close()
-
-# %%
-# The sections below shows how to add a new position
-# to an existing store (that we just created).
-
-#%%
-# Populate a new writer from the reader.
-
-reader = HCSReader("hcs.zarr")
-writer = HCSWriter.from_reader(reader)
-
-#%%
-# Alternatively, use the convenience method
-# if default parameters does not need to be changed
-
-while False:  # FIXME: remove this clause and the following indentation
-    writer = HCSWriter.open("hcs.zarr", mode="r+")
-
+with HCSZarr.open(
+    "hcs.zarr", mode="a", channel_names=["DAPI", "GFP"]
+) as dataset:
+    for row, col, fov in position_list:
+        position = dataset.create_position(row, col, fov)
+        position[0] = np.random.randint(
+            0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16
+        )
 
 # %%
-# Add an FOV in a new well
+# Append a channel to all the positions
 
-position = writer.require_position("D", "8", "0")
-write_dummy_5d(writer, position)
+with HCSZarr.open("hcs.zarr", mode="r+") as dataset:
+    for name, position in dataset.positions():
+        print(name)
+        position.append_channel("New", resize_arrays=True)
+        position[0][:, 2] = np.random.randint(
+            0, np.iinfo(np.uint16).max, size=(5, 3, 32, 32), dtype=np.uint16
+        )
+
+# %%
+# Try viewing the images with napari-ome-zarr
