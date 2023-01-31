@@ -482,7 +482,7 @@ class Position(NGFFNode):
         clims: List[Tuple[float, float, float, float]] = None,
     ):
         if not clims:
-            clims = [None] * 4
+            clims = [None] * len(self.channel_names)
         channels = []
         for i, (channel_name, clim) in enumerate(
             zip(self.channel_names, clims)
