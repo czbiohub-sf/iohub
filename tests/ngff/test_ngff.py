@@ -19,7 +19,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import _pad_shape, open_store
+from iohub.ngff import _pad_shape, open_store, OMEZarr
 
 
 short_text_st = st.text(min_size=1, max_size=16)
@@ -119,48 +119,47 @@ def test_open_store_read_nonexist():
                 _ = open_store(store_path, mode=mode, version="0.4")
 
 
-@given(channel_names=channel_names_st, arr_name=short_text_st)
+@given(channel_names=channel_names_st)
 @settings(max_examples=16)
-def test_init_ome_zarr(channel_names, arr_name):
+def test_init_ome_zarr(channel_names):
     """Test `iohub.writer.OMEZarrWriter.__call__()`"""
     with TemporaryDirectory() as temp_dir:
-        root = new_zarr(os.path.join(temp_dir, "ome.zarr"))
-        writer = OMEZarrWriter(root, channel_names, arr_name=arr_name)
-        assert writer.channel_names == channel_names
-        assert writer.arr_name == arr_name
-        assert writer._rel_keys("/") == []
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        dataset = OMEZarr.open(
+            store_path, mode="w-", channel_names=channel_names
+        )
+        assert os.path.isdir(store_path)
+        assert dataset.channel_names == channel_names
 
 
 @contextmanager
-def _temp_ome_zarr_writer(image_5d: NDArray, channel_names: list[str]):
+def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
     try:
         temp_dir = TemporaryDirectory()
-        writer = OMEZarrWriter.open(
+        dataset = OMEZarr.open(
             os.path.join(temp_dir.name, "ome.zarr"),
             mode="a",
-            channel_names=channel_names,
+            channel_names=channel_names
         )
-        for t, time_point in enumerate(image_5d):
-            for c, zstack in enumerate(time_point):
-                writer.write_zstack(zstack, writer.root, t, c)
-        yield writer
+        dataset[arr_name] = image_5d
+        yield dataset
     finally:
-        writer.close()
+        dataset.close()
         temp_dir.cleanup()
 
 
-@given(channels_and_random_5d=_channels_and_random_5d())
+@given(channels_and_random_5d=_channels_and_random_5d(), arr_name=short_alpha_numeric)
 @settings(max_examples=16, deadline=2000)
-def test_write_ome_zarr(channels_and_random_5d):
+def test_write_ome_zarr(channels_and_random_5d, arr_name):
     """Test `iohub.writer.OMEZarrWriter.write_zstack()`"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr_writer(random_5d, channel_names) as writer:
-        assert_array_almost_equal(writer.root["0"][:], random_5d)
+    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+        assert_array_almost_equal(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
-        ext_reader = Reader(parse_url(writer.root.store.path))
+        ext_reader = Reader(parse_url(dataset.zgroup.store.path))
         node = list(ext_reader())[0]
         assert node.metadata["name"] == channel_names
-        assert node.specs[0].datasets == [writer.arr_name]
+        assert node.specs[0].datasets == [arr_name]
         assert node.data[0].shape == random_5d.shape
         assert node.data[0].dtype == random_5d.dtype
 
