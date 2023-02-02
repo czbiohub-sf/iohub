@@ -97,12 +97,15 @@ class NGFFNode:
             raise ValueError(
                 "Channel names need to be provided or in metadata."
             )
-        self.axes = axes if axes else self._DEFAULT_AXES
+        if axes:
+            self.axes = axes
         self._group = group
         self._overwrite = overwriting_creation
         self._version = version
         if parse_meta:
             self._parse_meta()
+        if not self.axes:
+            self.axes = self._DEFAULT_AXES
 
     @property
     def zgroup(self):
