@@ -1,7 +1,8 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import os, logging
+import os
+import logging
 from numcodecs import Blosc
 import zarr
 from zarr.util import normalize_storage_path
@@ -26,8 +27,8 @@ from iohub.ngff_meta import (
 )
 from iohub.lf_utils import channel_display_settings
 
-from typing import TYPE_CHECKING, Union, Tuple, List, Dict, Literal, Generator
-from numpy.typing import NDArray, DTypeLike
+from typing import TYPE_CHECKING, Union, Tuple, List, Literal, Generator
+from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -64,8 +65,8 @@ def open_store(
             store_path, dimension_separator=dimension_separator
         )
         root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
-    except:
-        raise RuntimeError(f"Cannot open Zarr root group at {store_path}.")
+    except Exception as e:
+        raise RuntimeError(f"Cannot open Zarr root group at {store_path}: {e}")
     return root
 
 
@@ -233,7 +234,7 @@ class NGFFNode:
         for key in self._member_names:
             try:
                 yield key, self[key]
-            except:
+            except Exception:
                 logging.warning(
                     "Skipped item at {}: invalid {}.".format(
                         key, type(self._MEMBER_TYPE)
@@ -809,7 +810,7 @@ class Plate(NGFFNode):
         field_count : bool, optional
             Whether to count all the FOV/positions
             and populate the metadata field 'plate.field_count';
-            this operation can be expensive if the number of positions is large,
+            this operation can be expensive if there are many positions,
             by default False
         """
         if field_count:
