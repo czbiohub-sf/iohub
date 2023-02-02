@@ -11,7 +11,7 @@ import numpy as np
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
 from numpy.testing import assert_array_almost_equal
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings, assume, strategies as st
 import hypothesis.extra.numpy as npst
 from typing import TYPE_CHECKING
 from numpy.typing import NDArray
@@ -19,7 +19,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import new_zarr, OMEZarrWriter, HCSWriter
+from iohub.ngff import _pad_shape, open_store
 
 
 short_text_st = st.text(min_size=1, max_size=16)
@@ -77,24 +77,46 @@ def _channels_and_random_5d(draw):
     return channel_names, random_5d
 
 
-def test_new_zarr():
-    """Test `iohub.writer.new_zarr()"""
-    with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "new.zarr")
-        root = new_zarr(store_path)
-        assert isinstance(root, zarr.Group)
-        assert isinstance(root.store, zarr.DirectoryStore)
-        assert root.store._dimension_separator == "/"
-        assert root.store.path == store_path
+@given(shape=st.lists(x_dim_st, min_size=1, max_size=10), target=x_dim_st)
+@settings(max_examples=16, deadline=1000)
+def test_pad_shape(shape, target):
+    """Test `iohub.ngff._pad_shape()`"""
+    shape = tuple(shape)
+    assume(len(shape) <= target)
+    new_shape = _pad_shape(shape=shape, target=target)
+    assert len(new_shape) == target
+    assert new_shape[-len(shape) :] == shape
 
 
-def test_new_zarr_same_path():
-    """Test `iohub.writer.new_zarr()"""
+def test_open_store_create():
+    """Test `iohub.ngff.open_store()"""
+    for mode in ("a", "w", "w-"):
+        with TemporaryDirectory() as temp_dir:
+            store_path = os.path.join(temp_dir, "new.zarr")
+            root = open_store(store_path, mode=mode, version="0.4")
+            assert isinstance(root, zarr.Group)
+            assert isinstance(root.store, zarr.DirectoryStore)
+            assert root.store._dimension_separator == "/"
+            assert root.store.path == store_path
+
+
+def test_open_store_create_existing():
+    """Test `iohub.ngff.open_store()"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "new.zarr")
-        os.mkdir(store_path)
-        with pytest.raises(FileExistsError):
-            _ = new_zarr(store_path)
+        g = zarr.open_group(store_path, mode="w")
+        g.store.close()
+        with pytest.raises(FileNotFoundError):
+            _ = open_store(store_path, mode="w-", version="0.4")
+
+
+def test_open_store_read_nonexist():
+    """Test `iohub.writer.new_zarr()"""
+    for mode in ("r", "r+"):
+        with TemporaryDirectory() as temp_dir:
+            store_path = os.path.join(temp_dir, "new.zarr")
+            with pytest.raises(RuntimeError):
+                _ = open_store(store_path, mode=mode, version="0.4")
 
 
 @given(channel_names=channel_names_st, arr_name=short_text_st)
