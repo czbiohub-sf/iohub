@@ -1,11 +1,13 @@
-import numpy as np
+import glob
 import os
+import warnings
+from copy import copy
+
+import numpy as np
+import tifffile as tiff
 import zarr
 from tifffile import TiffFile
-import tifffile as tiff
-from copy import copy
-import glob
-import warnings
+
 from iohub.reader_base import ReaderBase
 
 
