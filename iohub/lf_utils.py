@@ -1,10 +1,9 @@
 # Utility functions for label-free microscopy data
 
+import numpy as np
 from typing import Tuple
 
-import numpy as np
-
-from iohub.ngff_meta import ChannelMeta, WindowDict
+from iohub.ngff_meta import WindowDict, ChannelMeta
 
 
 def channel_display_settings(

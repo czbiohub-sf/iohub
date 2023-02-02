@@ -1,10 +1,8 @@
 import warnings
-
 import numpy as np
 import zarr
-from pycromanager import Dataset
-
 from iohub.reader_base import ReaderBase
+from pycromanager import Dataset
 
 
 class PycromanagerReader(ReaderBase):

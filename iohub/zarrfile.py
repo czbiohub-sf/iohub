@@ -6,7 +6,6 @@ import zarr
 import numpy as np
 from copy import copy
 
-from iohub.ngff_meta import *
 from iohub.reader_base import ReaderBase
 
 from typing import Literal

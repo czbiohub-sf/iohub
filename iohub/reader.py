@@ -1,16 +1,14 @@
-import glob
-import logging
+import zarr
 import os
-
+import glob
 import natsort
 import tifffile as tiff
-import zarr
-
-from iohub.multipagetiff import MicromanagerOmeTiffReader
-from iohub.pycromanager import PycromanagerReader
 from iohub.singlepagetiff import MicromanagerSequenceReader
+from iohub.multipagetiff import MicromanagerOmeTiffReader
 from iohub.upti import UPTIReader
 from iohub.zarrfile import ZarrReader
+from iohub.pycromanager import PycromanagerReader
+import logging
 
 # replicate from aicsimageio logging mechanism
 ###############################################################################

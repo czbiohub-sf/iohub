@@ -1,13 +1,13 @@
+import numpy as np
+import os
+import zarr
+import tifffile as tiff
+import logging
+
 # libraries for singlepage tiff sequence reading
 import glob
 import json
-import logging
-import os
-
 import natsort
-import numpy as np
-import tifffile as tiff
-import zarr
 
 from iohub.reader_base import ReaderBase
 

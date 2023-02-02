@@ -1,5 +1,5 @@
-import numpy as np
 import zarr
+import numpy as np
 
 
 class ReaderBase:
