@@ -777,17 +777,25 @@ class Plate(NGFFNode):
             self.metadata = PlateMeta(**plate_meta)
         else:
             self._warn_invalid_meta()
-        if not hasattr(self, "_channel_names"):
-            try:
-                row_grp = next(self.zgroup.groups())[1]
-                well_grp = next(row_grp.groups())[1]
-                pos_grp = next(well_grp.groups())[1]
-                self._channel_names = Position(pos_grp)._channel_names
-            except StopIteration:
-                logging.warning(
-                    "Channel names cannot be determined. "
-                    + "Please set `self._channel_names` manually."
-                )
+        for attr in ("_channel_names", "axes"):
+            if not hasattr(self, attr):
+                self._first_pos_attr(attr)
+
+    def _first_pos_attr(self, attr: str):
+        """Get attribute value from the first position."""
+        name = " ".join(attr.split("_")).strip()
+        msg = f"Cannot determine {name}: "
+        try:
+            row_grp = next(self.zgroup.groups())[1]
+            well_grp = next(row_grp.groups())[1]
+            pos_grp = next(well_grp.groups())[1]
+        except StopIteration:
+            logging.warning(msg + "No position is found in the dataset.")
+        try:
+            pos = Position(pos_grp)
+            setattr(self, attr, getattr(pos, attr))
+        except AttributeError:
+            logging.warning(msg + "Invalid metadata at the first position")
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
