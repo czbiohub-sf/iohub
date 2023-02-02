@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import logging
 import os
 import string
 import shutil
@@ -19,7 +20,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import _pad_shape, open_store, OMEZarr
+from iohub.ngff import _pad_shape, open_store, OMEZarr, HCSZarr
 
 
 short_text_st = st.text(min_size=1, max_size=16)
@@ -111,7 +112,7 @@ def test_open_store_create_existing():
 
 
 def test_open_store_read_nonexist():
-    """Test `iohub.writer.new_zarr()"""
+    """Test `iohub.ngff.open_store()"""
     for mode in ("r", "r+"):
         with TemporaryDirectory() as temp_dir:
             store_path = os.path.join(temp_dir, "new.zarr")
@@ -122,7 +123,7 @@ def test_open_store_read_nonexist():
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_init_ome_zarr(channel_names):
-    """Test `iohub.writer.OMEZarrWriter.__call__()`"""
+    """Test `iohub.ngff.OMEZarr.open()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
         dataset = OMEZarr.open(
@@ -139,7 +140,7 @@ def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
         dataset = OMEZarr.open(
             os.path.join(temp_dir.name, "ome.zarr"),
             mode="a",
-            channel_names=channel_names
+            channel_names=channel_names,
         )
         dataset[arr_name] = image_5d
         yield dataset
@@ -148,10 +149,13 @@ def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
         temp_dir.cleanup()
 
 
-@given(channels_and_random_5d=_channels_and_random_5d(), arr_name=short_alpha_numeric)
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+)
 @settings(max_examples=16, deadline=2000)
 def test_write_ome_zarr(channels_and_random_5d, arr_name):
-    """Test `iohub.writer.OMEZarrWriter.write_zstack()`"""
+    """Test `iohub.ngff.OMEZarr.__setitem__()`"""
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
@@ -164,32 +168,37 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
         assert node.data[0].dtype == random_5d.dtype
 
 
-@given(channel_names=channel_names_st, arr_name=short_text_st)
+@given(channel_names=channel_names_st)
 @settings(max_examples=16)
-def test_init_hcs(channel_names, arr_name):
-    with TemporaryDirectory() as temp_dir:
-        root = new_zarr(os.path.join(temp_dir, "hcs.zarr"))
-        writer = HCSWriter(root, channel_names, arr_name=arr_name)
-        assert writer.channel_names == channel_names
-        assert writer.arr_name == arr_name
-        assert writer._rel_keys("/") == []
-
-
-def test_open_hcs_create_empty():
-    """Test `iohub.writer.HCSWriter.open()`"""
+def test_create_hcs(channel_names):
+    """Test `iohub.ngff.HCSZarr.open()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        writer = HCSWriter.open(store_path, mode="a", channel_names=["GFP"])
-        assert writer.root.store.path == store_path
-        writer.close()
+        dataset = HCSZarr.open(
+            store_path, mode="a", channel_names=channel_names
+        )
+        assert os.path.isdir(store_path)
+        assert dataset.channel_names == channel_names
+
+
+def test_open_hcs_create_empty(caplog):
+    """Test `iohub.ngff.HCSZarr.open()`"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "hcs.zarr")
+        dataset = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
+        assert dataset.zgroup.store.path == store_path
+        dataset.close()
         with pytest.raises(FileExistsError):
-            _ = HCSWriter.open(store_path, mode="w-", channel_names=["GFP"])
+            _ = HCSZarr.open(store_path, mode="w-", channel_names=["GFP"])
         with pytest.raises(ValueError):
-            _ = HCSWriter.open(store_path, mode="a", channel_names=["GFP"])
+            _ = HCSZarr.open(store_path, mode="x")
         with pytest.raises(FileNotFoundError):
-            _ = HCSWriter.open(store_path, mode="r+")
-        with pytest.raises(FileNotFoundError):
-            _ = HCSWriter.open("do-not-exist.zarr", mode="r+")
+            _ = HCSZarr.open("do-not-exist.zarr", mode="r+")
+        # avoid capturing warning in test report with fixture
+        with caplog.at_level(logging.INFO):
+            dataset = HCSZarr.open(store_path, mode="r+")
+            assert "Channel names" in caplog.text
+
 
 
 @contextmanager
@@ -203,9 +212,9 @@ def _temp_copy(src: StrPath):
 
 
 def test_modify_hcs_ref(setup_hcs_ref):
-    """Test `iohub.writer.HCSWriter.open()`"""
+    """Test `iohub.writer.HCSZarr.open()`"""
     with _temp_copy(setup_hcs_ref) as store_path:
-        writer = HCSWriter.open(store_path, mode="r+")
+        writer = HCSZarr.open(store_path, mode="r+")
         assert writer.axes[0].name == "c"
         assert writer.channel_names == ["DAPI"]
         writer.append_channel("GFP")
@@ -216,7 +225,7 @@ def test_modify_hcs_ref(setup_hcs_ref):
 def test_require_row(row_names: list[str]):
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        writer = HCSWriter.open(store_path, mode="a", channel_names=["GFP"])
+        writer = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
         for row_name in row_names:
             writer.require_row(row_name)
         assert list(writer.rows.keys()) == row_names
