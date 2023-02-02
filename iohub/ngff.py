@@ -775,6 +775,8 @@ class Plate(NGFFNode):
         if plate_meta:
             logging.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
+        else:
+            self._warn_invalid_meta()
         if not hasattr(self, "_channel_names"):
             row_grp = next(self.zgroup.groups())[1]
             well_grp = next(row_grp.groups())[1]
