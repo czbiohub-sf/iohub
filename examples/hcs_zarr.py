@@ -1,7 +1,7 @@
 # %%
-# This script shows how to write a high content screening (HCS) OME-Zarr dataset
+# This script writes a high content screening (HCS) OME-Zarr dataset
 # with a single FOV and a single scaling level per well,
-# and how to add an extra well-position to an existing dataset.
+# and adds an extra well-position to an existing dataset.
 # It can be run as a plain Python script, or as interactive cells in some IDEs.
 
 import numpy as np
