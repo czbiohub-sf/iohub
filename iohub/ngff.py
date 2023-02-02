@@ -1,34 +1,34 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import os
 import logging
-from numcodecs import Blosc
-import zarr
-from zarr.util import normalize_storage_path
+import os
+from typing import TYPE_CHECKING, Generator, List, Literal, Tuple, Union
+
 import numpy as np
-from pydantic import ValidationError
-
-from iohub.ngff_meta import (
-    AxisMeta,
-    TransformationMeta,
-    DatasetMeta,
-    MultiScaleMeta,
-    RDefsMeta,
-    OMEROMeta,
-    ImagesMeta,
-    AcquisitionMeta,
-    PlateAxisMeta,
-    WellIndexMeta,
-    PlateMeta,
-    ImageMeta,
-    WellGroupMeta,
-    TO_DICT_SETTINGS,
-)
-from iohub.lf_utils import channel_display_settings
-
-from typing import TYPE_CHECKING, Union, Tuple, List, Literal, Generator
+import zarr
+from numcodecs import Blosc
 from numpy.typing import NDArray
+from pydantic import ValidationError
+from zarr.util import normalize_storage_path
+
+from iohub.lf_utils import channel_display_settings
+from iohub.ngff_meta import (
+    TO_DICT_SETTINGS,
+    AcquisitionMeta,
+    AxisMeta,
+    DatasetMeta,
+    ImageMeta,
+    ImagesMeta,
+    MultiScaleMeta,
+    OMEROMeta,
+    PlateAxisMeta,
+    PlateMeta,
+    RDefsMeta,
+    TransformationMeta,
+    WellGroupMeta,
+    WellIndexMeta,
+)
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath

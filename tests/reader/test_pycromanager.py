@@ -1,5 +1,6 @@
-import numpy as np
 import dask.array
+import numpy as np
+
 from iohub.pycromanager import PycromanagerReader
 
 

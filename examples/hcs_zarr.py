@@ -5,6 +5,7 @@
 # It can be run as a plain Python script, or as interactive cells in some IDEs.
 
 import numpy as np
+
 from iohub.ngff import HCSZarr
 
 # %%

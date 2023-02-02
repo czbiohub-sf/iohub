@@ -1,11 +1,12 @@
-import pytest
 import dask.array
-import zarr
 import numpy as np
-from iohub.reader import WaveorderReader
-from iohub.singlepagetiff import MicromanagerSequenceReader
+import pytest
+import zarr
+
 from iohub.multipagetiff import MicromanagerOmeTiffReader
 from iohub.pycromanager import PycromanagerReader
+from iohub.reader import WaveorderReader
+from iohub.singlepagetiff import MicromanagerSequenceReader
 
 # todo: consider tests for handling ometiff
 # when singlepagetifff is specified (or vice versa)

@@ -1,7 +1,8 @@
-from iohub.zarrfile import ZarrReader
-from iohub.reader import WaveorderReader
-import zarr
 import numpy as np
+import zarr
+
+from iohub.reader import WaveorderReader
+from iohub.zarrfile import ZarrReader
 
 
 def test_constructor_mm2gamma(setup_test_data, setup_mm2gamma_zarr):

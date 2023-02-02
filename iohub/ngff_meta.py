@@ -8,20 +8,20 @@ about 'camelCase' inconsistency.
 """
 
 import re
-from pydantic import BaseModel, validator, root_validator, Field
-from pydantic.color import Color, ColorTuple, ColorType
-import pandas as pd
-
 from typing import (
-    Optional,
-    Union,
-    Literal,
     Any,
-    List,
-    Dict,
-    TypedDict,
     ClassVar,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    TypedDict,
+    Union,
 )
+
+import pandas as pd
+from pydantic import BaseModel, Field, root_validator, validator
+from pydantic.color import Color, ColorTuple, ColorType
 
 
 def unique_validator(

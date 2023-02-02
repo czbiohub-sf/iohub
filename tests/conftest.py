@@ -1,8 +1,9 @@
-import pytest
-import shutil
 import os
-from os.path import join as pjoin
 import random
+import shutil
+from os.path import join as pjoin
+
+import pytest
 from wget import download
 
 MM2GAMMA_OMETIFF_SUBFOLDERS = {

@@ -1,5 +1,6 @@
-import zarr
 import numpy as np
+import zarr
+
 from iohub.multipagetiff import MicromanagerOmeTiffReader
 
 

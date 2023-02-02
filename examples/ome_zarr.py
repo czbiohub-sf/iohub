@@ -7,6 +7,7 @@
 # or as interactive cells in some IDEs.
 
 import numpy as np
+
 from iohub.ngff import OMEZarr
 
 # %%

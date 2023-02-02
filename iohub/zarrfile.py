@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import os
-import zarr
-import numpy as np
 from copy import copy
+from typing import Literal
+
+import numpy as np
+import zarr
 
 from iohub.reader_base import ReaderBase
-
-from typing import Literal
 
 
 class ZarrReader(ReaderBase):

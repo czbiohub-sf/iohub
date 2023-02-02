@@ -1,26 +1,27 @@
 from __future__ import annotations
 
-import pytest
 import logging
 import os
-import string
 import shutil
+import string
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING
+
+import hypothesis.extra.numpy as npst
+import pytest
 import zarr
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
+from numpy.testing import assert_array_almost_equal
+from numpy.typing import NDArray
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
-from numpy.testing import assert_array_almost_equal
-from hypothesis import given, settings, assume, strategies as st
-import hypothesis.extra.numpy as npst
-from typing import TYPE_CHECKING
-from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import _pad_shape, open_store, OMEZarr, HCSZarr
-
+from iohub.ngff import HCSZarr, OMEZarr, _pad_shape, open_store
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
