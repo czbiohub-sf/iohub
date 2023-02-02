@@ -44,10 +44,16 @@ short_alpha_numeric = st.text(
     max_size=16,
 )
 row_names_st = st.lists(
-    short_alpha_numeric, min_size=1, max_size=8, unique=True
+    short_alpha_numeric,
+    min_size=1,
+    max_size=8,
+    unique_by=(lambda x: x.lower()),
 )
 col_names_st = st.lists(
-    short_alpha_numeric, min_size=1, max_size=8, unique=True
+    short_alpha_numeric,
+    min_size=1,
+    max_size=8,
+    unique_by=(lambda x: x.lower()),
 )
 
 
@@ -198,7 +204,7 @@ def test_open_hcs_create_empty(caplog):
         with caplog.at_level(logging.INFO):
             dataset = HCSZarr.open(store_path, mode="r+")
             assert "Channel names" in caplog.text
-
+            dataset.close()
 
 
 @contextmanager
@@ -214,18 +220,28 @@ def _temp_copy(src: StrPath):
 def test_modify_hcs_ref(setup_hcs_ref):
     """Test `iohub.writer.HCSZarr.open()`"""
     with _temp_copy(setup_hcs_ref) as store_path:
-        writer = HCSZarr.open(store_path, mode="r+")
-        assert writer.axes[0].name == "c"
-        assert writer.channel_names == ["DAPI"]
-        writer.append_channel("GFP")
-        assert writer.channel_names == ["DAPI", "GFP"]
+        with HCSZarr.open(store_path, mode="r+") as dataset:
+            assert dataset.axes[0].name == "c"
+            assert dataset.channel_names == ["DAPI"]
+            position = dataset["B/03/0"]
+            assert position[0].shape == (1, 2, 2160, 5120)
+            position.append_channel("GFP", resize_arrays=True)
+            assert position.channel_names == ["DAPI", "GFP"]
+            assert position[0].shape == (2, 2, 2160, 5120)
 
 
-@given(row_names=row_names_st)
-def test_require_row(row_names: list[str]):
+@given(row_names=row_names_st, col_names=col_names_st)
+# @settings(max_examples=32)
+def test_create_well(row_names: list[str], col_names: list[str]):
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        writer = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
+        dataset = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
         for row_name in row_names:
-            writer.require_row(row_name)
-        assert list(writer.rows.keys()) == row_names
+            for col_name in col_names:
+                dataset.create_well(row_name, col_name)
+        assert [
+            c["name"] for c in dataset.zattrs["plate"]["columns"]
+        ] == col_names
+        assert [
+            r["name"] for r in dataset.zattrs["plate"]["rows"]
+        ] == row_names
