@@ -50,7 +50,7 @@ def open_store(
             f"Dataset directory not found at {store_path}."
         )
     if not version == "0.4":
-        logging.warn(
+        logging.warning(
             "\n".join(
                 "IOHub is only tested against OME-NGFF v0.4.",
                 f"Requested version {version} may not work properly.",
@@ -231,7 +231,7 @@ class NGFFNode:
             try:
                 yield key, self[key]
             except:
-                logging.warn(
+                logging.warning(
                     "Skipped item at {}: invalid {}.".format(
                         key, type(self._MEMBER_TYPE)
                     )
@@ -241,7 +241,7 @@ class NGFFNode:
         msg = "Zarr group at {} does not have valid metadata for {}".format(
             self._group.path, type(self)
         )
-        logging.warn(msg)
+        logging.warning(msg)
 
     def _parse_meta(self):
         """Parse and set NGFF metadata from `.zattrs`."""
@@ -1040,7 +1040,7 @@ class Dataset:
             if os.path.exists(store_path):
                 raise FileExistsError(store_path)
         elif mode == "w":
-            logging.warn(f"Overwriting data at {store_path}")
+            logging.warning(f"Overwriting data at {store_path}")
         else:
             raise ValueError(f"Invalid persistence mode '{mode}'.")
         root = open_store(store_path, mode, version, synchronizer)
