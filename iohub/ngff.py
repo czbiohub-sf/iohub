@@ -50,7 +50,7 @@ def open_store(
         )
         root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
     except:
-        raise FileNotFoundError(
+        raise RuntimeError(
             f"Cannot open Zarr root group at {store_path}."
         )
     return root
