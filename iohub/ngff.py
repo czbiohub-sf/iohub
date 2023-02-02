@@ -778,10 +778,16 @@ class Plate(NGFFNode):
         else:
             self._warn_invalid_meta()
         if not hasattr(self, "_channel_names"):
-            row_grp = next(self.zgroup.groups())[1]
-            well_grp = next(row_grp.groups())[1]
-            pos_grp = next(well_grp.groups())[1]
-            self._channel_names = Position(pos_grp)._channel_names
+            try:
+                row_grp = next(self.zgroup.groups())[1]
+                well_grp = next(row_grp.groups())[1]
+                pos_grp = next(well_grp.groups())[1]
+                self._channel_names = Position(pos_grp)._channel_names
+            except StopIteration:
+                logging.warning(
+                    "Channel names cannot be determined. "
+                    + "Please set `self._channel_names` manually."
+                )
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
