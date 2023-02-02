@@ -794,6 +794,7 @@ class Plate(NGFFNode):
             pos_grp = next(well_grp.groups())[1]
         except StopIteration:
             logging.warning(msg + "No position is found in the dataset.")
+            return
         try:
             pos = Position(pos_grp)
             setattr(self, attr, getattr(pos, attr))
