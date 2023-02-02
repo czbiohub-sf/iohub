@@ -8,7 +8,7 @@ def test_constructor(setup_test_data, setup_pycromanager_test_data):
     test that the constructor parses metadata properly
     """
 
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
     mmr = PycromanagerReader(rand_dir)
@@ -25,7 +25,7 @@ def test_output_dims(setup_test_data, setup_pycromanager_test_data):
     """
     test that output dimensions are always (t, c, z, y, x)
     """
-    fold = setup_test_data
+    _ = setup_test_data
 
     # run test on 3 random folders
     for i in range(3):
@@ -46,7 +46,7 @@ def test_output_dims_incomplete(setup_test_data, setup_pycromanager_test_data):
 
 
 def test_get_zarr(setup_test_data, setup_pycromanager_test_data):
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
 
@@ -57,7 +57,7 @@ def test_get_zarr(setup_test_data, setup_pycromanager_test_data):
 
 
 def test_get_array(setup_test_data, setup_pycromanager_test_data):
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
 
@@ -68,7 +68,7 @@ def test_get_array(setup_test_data, setup_pycromanager_test_data):
 
 
 def test_get_num_positions(setup_test_data, setup_pycromanager_test_data):
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
 

@@ -12,7 +12,7 @@ def test_constructor_mm2gamma(
     """
 
     # choose a specific folder
-    fold = setup_test_data
+    _ = setup_test_data
     _, one_folder, _ = setup_mm2gamma_singlepage_tiffs
     mmr = MicromanagerSequenceReader(one_folder, extract_data=False)
 
@@ -32,7 +32,7 @@ def test_output_dims_mm2gamma(
     """
 
     # choose a random folder
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=False)
 
@@ -51,7 +51,7 @@ def test_output_dims_mm2gamma_incomplete(
     """
 
     # choose a random folder
-    fold = setup_test_data
+    _ = setup_test_data
     folder = setup_mm2gamma_singlepage_tiffs_incomplete
     mmr = MicromanagerSequenceReader(folder, extract_data=True)
 
@@ -65,7 +65,7 @@ def test_output_dims_mm2gamma_incomplete(
 
 def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):
 
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=True)
     for i in range(mmr.get_num_positions()):
@@ -76,7 +76,7 @@ def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):
 
 def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_singlepage_tiffs):
 
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=True)
     for i in range(mmr.get_num_positions()):
@@ -89,7 +89,7 @@ def test_get_num_positions_mm2gamma(
     setup_test_data, setup_mm2gamma_singlepage_tiffs
 ):
 
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=True)
     assert mmr.get_num_positions() >= 1
@@ -105,7 +105,7 @@ def test_constructor_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
     """
 
     # choose a specific folder
-    fold = setup_test_data
+    _ = setup_test_data
     _, one_folder, _ = setup_mm1422_singlepage_tiffs
     mmr = MicromanagerSequenceReader(one_folder, extract_data=False)
 
@@ -123,7 +123,7 @@ def test_output_dims_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
     """
 
     # choose a random folder
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=False)
 
@@ -136,7 +136,7 @@ def test_output_dims_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
 
 def test_get_zarr_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
 
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=True)
     for i in range(mmr.get_num_positions()):
@@ -147,7 +147,7 @@ def test_get_zarr_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
 
 def test_get_array_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
 
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=True)
     for i in range(mmr.get_num_positions()):
@@ -160,7 +160,7 @@ def test_get_num_positions_mm1422(
     setup_test_data, setup_mm1422_singlepage_tiffs
 ):
 
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
     mmr = MicromanagerSequenceReader(rand_folder, extract_data=True)
     assert mmr.get_num_positions() >= 1

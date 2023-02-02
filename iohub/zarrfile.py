@@ -7,7 +7,6 @@ import numpy as np
 from copy import copy
 
 from iohub.reader_base import ReaderBase
-from iohub.ngff_meta import *
 
 from typing import Literal
 
@@ -16,10 +15,12 @@ class ZarrReader(ReaderBase):
 
     """
     .. deprecated:: 0.0.1
-          `ZarrReader` will be removed in future iohub releases, it is replaced by
-          `HCSZarr` to enforce upgrade to version 0.4 of the OME-Zarr specification.
+        `ZarrReader` will be removed in future iohub releases,
+        it is replaced by `HCSZarr` to enforce upgrade
+        to version 0.4 of the OME-Zarr specification.
 
-    Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
+    Reader for HCS ome-zarr arrays.
+    OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
     Also collects the HCS metadata so it can be later copied.
     """
 
@@ -38,7 +39,7 @@ class ZarrReader(ReaderBase):
                 store_path, dimension_separator=dimension_separator
             )
             self.root = zarr.open(self.store, "r")
-        except:
+        except Exception:
             raise FileNotFoundError("Supplies path is not a valid zarr root")
         try:
             row = self.root[list(self.root.group_keys())[0]]
@@ -118,7 +119,8 @@ class ZarrReader(ReaderBase):
 
     def _get_wells(self):
         """
-        Function to get the wells (Row/Col) of the zarr hierarchy from HCS metadata
+        Function to get the wells (Row/Col)
+        of the zarr hierarchy from HCS metadata
 
         Returns
         -------
@@ -139,7 +141,8 @@ class ZarrReader(ReaderBase):
         """
 
         idx = 0
-        # Assumes that the positions are indexed in the order of Row-->Well-->FOV
+        # Assumes that the positions are indexed in the order of
+        # Row-->Well-->FOV
         for well in self.wells:
             for pos in self.root[well].attrs.get("well").get("images"):
                 name = pos["path"]
@@ -206,7 +209,6 @@ class ZarrReader(ReaderBase):
         self.z_step_size = self.mm_meta["z-step_um"]
 
     def _get_channel_names(self):
-
         well = self.hcs_meta["plate"]["wells"][0]["path"]
         pos = self.hcs_meta["well"][0]["images"][0]["path"]
 
@@ -217,11 +219,13 @@ class ZarrReader(ReaderBase):
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
-        flattens the nested dictionary structure of stage_pos and removes superfluous keys
+        flattens the nested dictionary structure of stage_pos
+        and removes superfluous keys
 
         Parameters
         ----------
-        stage_pos:      (dict) dictionary containing a single position's device info
+        stage_pos:      (dict)
+            dictionary containing a single position's device info
 
         Returns
         -------
@@ -236,16 +240,18 @@ class ZarrReader(ReaderBase):
 
     def _simplify_stage_position_beta(self, stage_pos: dict):
         """
-        flattens the nested dictionary structure of stage_pos and removes superfluous keys
-        for MM2.0 Beta versions
+        flattens the nested dictionary structure of stage_pos
+        and removes superfluous keys for MM2.0 Beta versions
 
         Parameters
         ----------
-        stage_pos:      (dict) dictionary containing a single position's device info
+        stage_pos:      (dict)
+            dictionary containing a single position's device info
 
         Returns
         -------
-        new_dict:       (dict) flattened dictionary
+        new_dict:       (dict)
+            flattened dictionary
 
         """
 
@@ -268,8 +274,10 @@ class ZarrReader(ReaderBase):
 
     def get_image_plane_metadata(self, p, c, z):
         """
-        For the sake of not keeping an enormous amount of metadta, only the microscope conditions
-        for the first timepoint are kept in the zarr metadata during write.  User can only query image
+        For the sake of not keeping an enormous amount of metadta,
+        only the microscope conditions
+        for the first timepoint are kept in the zarr metadata during write.
+        User can only query image
          plane metadata at p, c, z
 
         Parameters
@@ -292,11 +300,13 @@ class ZarrReader(ReaderBase):
 
         Parameters
         ----------
-        position:       (int) position index
+        position:       (int)
+            position index
 
         Returns
         -------
-        (ZarrArray) Zarr array containing the (T, C, Z, Y, X) array at given position
+        (ZarrArray)
+            Zarr array containing the (T, C, Z, Y, X) array at given position
 
         """
         pos_info = self.position_map[position]

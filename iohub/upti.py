@@ -10,11 +10,11 @@ from iohub.reader_base import ReaderBase
 class UPTIReader(ReaderBase):
 
     """
-    Reader for UPTI raw data.  Accepts both new live UPTI and older UPTI format.
+    Reader for UPTI raw data.
+    Accepts both new live UPTI and older UPTI format.
     """
 
     def __init__(self, folder: str, extract_data: bool = False):
-
         # check if folder exists
         if not os.path.isdir(folder):
             raise ValueError("folder does not exist")
@@ -50,7 +50,8 @@ class UPTIReader(ReaderBase):
 
     def _map_files(self):
         """
-        Creates a map of (pattern, state, slice) coordinate with corresponding file.
+        Creates a map of (pattern, state, slice) coordinate
+        with corresponding file.
         Uses regex parsing and assumes a consistent file naming structure.
 
         Returns
@@ -67,7 +68,7 @@ class UPTIReader(ReaderBase):
         for file in self.files:
             pattern = re.search(r"pattern_\d\d\d", file).group(0)
             pattern_idx = int(pattern.strip("pattern_"))
-            if re.search(r"z_\d\d\d", file) == None:
+            if re.search(r"z_\d\d\d", file) is None:
                 z = 0
             else:
                 z = int(re.search(r"z_\d\d\d", file).group(0).strip("z_"))
@@ -103,7 +104,8 @@ class UPTIReader(ReaderBase):
 
     def _create_position_array(self, pos):
         """
-        maps all of the tiff data into a virtual zarr store in memory for a given position
+        maps all of the tiff data into a virtual zarr store in memory
+        for a given position
 
         Parameters
         ----------
@@ -125,7 +127,8 @@ class UPTIReader(ReaderBase):
             chunks=(1, 1, 1, self.height, self.width),
             dtype=self.dtype,
         )
-        # add all the images with this specific dimension.  Will be blank images if dataset
+        # add all the images with this specific dimension.
+        # Will be blank images if dataset
         # is incomplete
         for t in range(self.frames):
             for c in range(self.channels):
@@ -134,7 +137,8 @@ class UPTIReader(ReaderBase):
 
     def _get_image(self, c, z):
         """
-        Gets image at specific channel, z coordinate.  Makes sure that the channel index
+        Gets image at specific channel, z coordinate.
+        Makes sure that the channel index
         specified corresponds to the channel_name index.
 
         Parameters
@@ -174,7 +178,8 @@ class UPTIReader(ReaderBase):
         """
         if position > self.positions - 1:
             raise ValueError(
-                "Entered position is greater than the number of positions in the data"
+                "Entered position is greater than "
+                "the number of positions in the data"
             )
 
         if position not in self.position_arrays.keys():
@@ -183,7 +188,8 @@ class UPTIReader(ReaderBase):
 
     def get_array(self, position):
         """
-        return a numpy array for a given position.  Allows for only one position
+        return a numpy array for a given position.
+        Allows for only one position
 
         Parameters
         ----------
@@ -197,7 +203,8 @@ class UPTIReader(ReaderBase):
 
         if position > self.positions - 1:
             raise ValueError(
-                "Entered position is greater than the number of positions in the data"
+                "Entered position is greater than "
+                "the number of positions in the data"
             )
 
         # if position hasn't been initialized in memory, do that.

@@ -16,15 +16,18 @@ class MicromanagerOmeTiffReader(ReaderBase):
         """
         Parameters
         ----------
-        folder:         (str) folder or file containing all ome-tiff files
-        extract_data:   (bool) True if ome_series should be extracted immediately
+        folder:         (str)
+            folder or file containing all ome-tiff files
+        extract_data:   (bool)
+            True if ome_series should be extracted immediately
 
         """
 
         # Add Initial Checks
         if len(glob.glob(os.path.join(folder, "*.ome.tif"))) == 0:
             raise ValueError(
-                "Specific input contains no ome.tif files, please specify a valid input directory"
+                "Specific input contains no ome.tif files, "
+                + "please specify a valid input directory"
             )
 
         # ignore tiffile warnings, doesn't work
@@ -67,7 +70,8 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
     def _gather_index_maps(self):
         """
-        Will return a dictionary of {coord: (filepath, page, byte_offset)} of length(N_Images) to later query
+        Will return a dictionary of {coord: (filepath, page, byte_offset)}
+        of length (N_Images) to later query
 
         Returns
         -------
@@ -93,7 +97,8 @@ class MicromanagerOmeTiffReader(ReaderBase):
                 offset = self._get_byte_offset(offsets, page)
                 self.coord_map[tuple(coord)] = (file, page, offset)
 
-                # update dimensions as we go along, helps with incomplete datasets
+                # update dimensions as we go along,
+                # helps with incomplete datasets
                 if coord[0] + 1 > positions:
                     positions = coord[0] + 1
 
@@ -158,12 +163,13 @@ class MicromanagerOmeTiffReader(ReaderBase):
                         )
                         self.stage_positions.append(pos)
 
-                # MM beta versions sometimes don't have 'ChNames', so I'm wrapping in a try-except and setting the
+                # MM beta versions sometimes don't have 'ChNames',
+                # so I'm wrapping in a try-except and setting the
                 # channel names to empty strings if it fails.
                 try:
                     for ch in self.mm_meta["Summary"]["ChNames"]:
                         self.channel_names.append(ch)
-                except:
+                except Exception:
                     self.channel_names = self.mm_meta["Summary"][
                         "Channels"
                     ] * [
@@ -187,7 +193,8 @@ class MicromanagerOmeTiffReader(ReaderBase):
                 for ch in self.mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
 
-            # dimensions based on mm metadata do not reflect final written dimensions
+            # dimensions based on mm metadata
+            # do not reflect final written dimensions
             # these will change after data is loaded
             self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
             self.height = self.mm_meta["Summary"]["Height"]
@@ -198,15 +205,18 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
-        flattens the nested dictionary structure of stage_pos and removes superfluous keys
+        flattens the nested dictionary structure of stage_pos
+        and removes superfluous keys
 
         Parameters
         ----------
-        stage_pos:      (dict) dictionary containing a single position's device info
+        stage_pos:      (dict)
+            dictionary containing a single position's device info
 
         Returns
         -------
-        out:            (dict) flattened dictionary
+        out:            (dict)
+            flattened dictionary
         """
 
         out = copy(stage_pos)
@@ -217,16 +227,19 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
     def _simplify_stage_position_beta(self, stage_pos: dict):
         """
-        flattens the nested dictionary structure of stage_pos and removes superfluous keys
+        flattens the nested dictionary structure of stage_pos
+        and removes superfluous keys
         for MM2.0 Beta versions
 
         Parameters
         ----------
-        stage_pos:      (dict) dictionary containing a single position's device info
+        stage_pos:      (dict)
+            dictionary containing a single position's device info
 
         Returns
         -------
-        new_dict:       (dict) flattened dictionary
+        new_dict:       (dict)
+            flattened dictionary
 
         """
 
@@ -248,8 +261,8 @@ class MicromanagerOmeTiffReader(ReaderBase):
         return new_dict
 
     def _create_position_array(self, pos):
-        """
-        maps all of the tiff data into a virtual zarr store in memory for a given position
+        """maps all of the tiff data into a virtual zarr store
+        in memory for a given position
 
         Parameters
         ----------
@@ -267,7 +280,8 @@ class MicromanagerOmeTiffReader(ReaderBase):
             chunks=(1, 1, 1, self.height, self.width),
             dtype=self.dtype,
         )
-        # add all the images with this specific dimension.  Will be blank images if dataset
+        # add all the images with this specific dimension.
+        # Will be blank images if dataset
         # is incomplete
         for p, t, c, z in self.coord_map.keys():
             if p == pos:
@@ -291,7 +305,8 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
     def _get_dimensions(self, position):
         """
-        Gets the max dimensions from the current position in case of incomplete datasets
+        Gets the max dimensions from the current position
+        in case of incomplete datasets
 
         Parameters
         ----------
@@ -333,7 +348,8 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         Returns
         -------
-        image:          (np-array) numpy array of shape (Y, X) at given coordinate
+        image:          (np-array)
+            numpy array of shape (Y, X) at given coordinate
 
         """
 

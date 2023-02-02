@@ -7,30 +7,31 @@ from iohub.singlepagetiff import MicromanagerSequenceReader
 from iohub.multipagetiff import MicromanagerOmeTiffReader
 from iohub.pycromanager import PycromanagerReader
 
-# todo: consider tests for handling ometiff when singlepagetifff is specified (or vice versa)
-# todo: consider tests for handling of positions when extract_data is True and False.
+# todo: consider tests for handling ometiff
+# when singlepagetifff is specified (or vice versa)
+# todo: consider tests for handling of positions
+# when extract_data is True and False.
 
 
 # test exceptions
 def test_datatype(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a specific folder
     _, one_folder, _ = setup_mm2gamma_ome_tiffs
     with pytest.raises(NotImplementedError):
-        mmr = WaveorderReader(
+        _ = WaveorderReader(
             one_folder, data_type="unsupportedformat", extract_data=False
         )
 
 
 # ===== test mm2gamma =========== #
 
+
 # test ometiff reader
 def test_ometiff_constructor_mm2gamma(
     setup_test_data, setup_mm2gamma_ome_tiffs
 ):
-
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a specific folder
     _, one_folder, _ = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(one_folder, extract_data=False)
@@ -51,8 +52,7 @@ def test_ometiff_constructor_mm2gamma(
 
 
 def test_ometiff_zarr_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
     assert isinstance(mmr.reader, MicromanagerOmeTiffReader)
@@ -64,8 +64,7 @@ def test_ometiff_zarr_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_ometiff_array_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
 
@@ -81,8 +80,7 @@ def test_ometiff_array_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_sequence_constructor_mm2gamma(
     setup_test_data, setup_mm2gamma_singlepage_tiffs
 ):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, one_folder, _ = setup_mm2gamma_singlepage_tiffs
     mmr = WaveorderReader(one_folder, extract_data=False)
 
@@ -103,8 +101,7 @@ def test_sequence_constructor_mm2gamma(
 def test_sequence_zarr_mm2gamma(
     setup_test_data, setup_mm2gamma_singlepage_tiffs
 ):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
 
@@ -118,8 +115,7 @@ def test_sequence_zarr_mm2gamma(
 def test_sequence_array_zarr_mm2gamma(
     setup_test_data, setup_mm2gamma_singlepage_tiffs
 ):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
 
@@ -134,8 +130,7 @@ def test_sequence_array_zarr_mm2gamma(
 def test_pycromanager_constructor(
     setup_test_data, setup_pycromanager_test_data
 ):
-
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a specific folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
     mmr = WaveorderReader(rand_dir, extract_data=False)
@@ -156,8 +151,7 @@ def test_pycromanager_constructor(
 
 
 def test_pycromanager_get_zarr(setup_test_data, setup_pycromanager_test_data):
-
-    fold = setup_test_data
+    _ = setup_test_data
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
     mmr = WaveorderReader(rand_dir)
     assert isinstance(mmr.reader, PycromanagerReader)
@@ -169,8 +163,7 @@ def test_pycromanager_get_zarr(setup_test_data, setup_pycromanager_test_data):
 
 
 def test_pycromanager_get_array(setup_test_data, setup_pycromanager_test_data):
-
-    fold = setup_test_data
+    _ = setup_test_data
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
     mmr = WaveorderReader(rand_dir)
     assert isinstance(mmr.reader, PycromanagerReader)
@@ -183,8 +176,7 @@ def test_pycromanager_get_array(setup_test_data, setup_pycromanager_test_data):
 
 # ===== test mm1.4.22  =========== #
 def test_ometiff_constructor_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     # choose a specific folder
     _, one_folder, _ = setup_mm1422_ome_tiffs
     mmr = WaveorderReader(one_folder, extract_data=False)
@@ -205,8 +197,7 @@ def test_ometiff_constructor_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 
 
 def test_ometiff_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
 
@@ -219,8 +210,7 @@ def test_ometiff_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 
 
 def test_ometiff_array_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
 
@@ -236,8 +226,7 @@ def test_ometiff_array_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 def test_sequence_constructor_mm1422(
     setup_test_data, setup_mm1422_singlepage_tiffs
 ):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, one_folder, _ = setup_mm1422_singlepage_tiffs
     mmr = WaveorderReader(one_folder, extract_data=False)
 
@@ -256,8 +245,7 @@ def test_sequence_constructor_mm1422(
 
 
 def test_sequence_zarr_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
 
@@ -272,8 +260,7 @@ def test_sequence_zarr_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
 def test_sequence_array_zarr_mm1422(
     setup_test_data, setup_mm1422_singlepage_tiffs
 ):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=True)
 
@@ -287,8 +274,7 @@ def test_sequence_array_zarr_mm1422(
 
 # ===== test property setters =========== #
 def test_height(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -299,8 +285,7 @@ def test_height(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_width(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -311,8 +296,7 @@ def test_width(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_frames(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -323,8 +307,7 @@ def test_frames(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_slices(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -335,8 +318,7 @@ def test_slices(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_channels(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -347,8 +329,7 @@ def test_channels(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_channel_names(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -359,8 +340,7 @@ def test_channel_names(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_mm_meta(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -374,8 +354,7 @@ def test_mm_meta(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_stage_positions(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
@@ -389,8 +368,7 @@ def test_stage_positions(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_z_step_size(setup_test_data, setup_mm2gamma_ome_tiffs):
-
-    fold = setup_test_data
+    _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = WaveorderReader(rand_folder, extract_data=False)
 
