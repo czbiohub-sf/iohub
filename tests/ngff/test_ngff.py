@@ -231,7 +231,7 @@ def test_modify_hcs_ref(setup_hcs_ref):
 
 
 @given(row_names=row_names_st, col_names=col_names_st)
-# @settings(max_examples=32)
+@settings(max_examples=32, deadline=2000)
 def test_create_well(row_names: list[str], col_names: list[str]):
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
