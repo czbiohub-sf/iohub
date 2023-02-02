@@ -113,7 +113,7 @@ def test_open_store_create_existing():
         store_path = os.path.join(temp_dir, "new.zarr")
         g = zarr.open_group(store_path, mode="w")
         g.store.close()
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(RuntimeError):
             _ = open_store(store_path, mode="w-", version="0.4")
 
 
@@ -122,7 +122,7 @@ def test_open_store_read_nonexist():
     for mode in ("r", "r+"):
         with TemporaryDirectory() as temp_dir:
             store_path = os.path.join(temp_dir, "new.zarr")
-            with pytest.raises(RuntimeError):
+            with pytest.raises(FileNotFoundError):
                 _ = open_store(store_path, mode=mode, version="0.4")
 
 
@@ -203,7 +203,7 @@ def test_open_hcs_create_empty(caplog):
         # avoid capturing warning in test report with fixture
         with caplog.at_level(logging.INFO):
             dataset = HCSZarr.open(store_path, mode="r+")
-            assert "Channel names" in caplog.text
+            assert "Cannot determine" in caplog.text
             dataset.close()
 
 
