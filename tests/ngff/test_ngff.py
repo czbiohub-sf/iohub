@@ -8,7 +8,6 @@ import shutil
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
 import zarr
-import numpy as np
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
 from numpy.testing import assert_array_almost_equal
