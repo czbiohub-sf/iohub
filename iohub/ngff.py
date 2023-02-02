@@ -104,7 +104,7 @@ class NGFFNode:
         self._version = version
         if parse_meta:
             self._parse_meta()
-        if not self.axes:
+        if hasattr(self, "axes"):
             self.axes = self._DEFAULT_AXES
 
     @property
