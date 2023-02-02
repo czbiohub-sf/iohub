@@ -217,7 +217,7 @@ def _temp_copy(src: StrPath):
         temp_dir.cleanup()
 
 
-def test_modify_hcs_ref(setup_hcs_ref):
+def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
     """Test `iohub.writer.HCSZarr.open()`"""
     with _temp_copy(setup_hcs_ref) as store_path:
         with HCSZarr.open(store_path, mode="r+") as dataset:
