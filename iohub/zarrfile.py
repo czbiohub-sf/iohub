@@ -1,39 +1,148 @@
+# TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
+from __future__ import annotations
+
+import logging
 import os
-import zarr
 from copy import copy
+from typing import TYPE_CHECKING, Literal
+
+import numpy as np
+import zarr
+from ome_zarr.format import format_from_version
+from ome_zarr.io import parse_url
+
+from iohub.ngff_meta import *
 from iohub.reader_base import ReaderBase
+
+if TYPE_CHECKING:
+    from _typeshed import StrOrBytesPath
+
+
+_DEFAULT_AXES = [
+    AxisMeta(name="T", type="time", unit="second"),
+    AxisMeta(name="C", type="channel"),
+    *[
+        AxisMeta(name=i, type="space", unit="micrometer")
+        for i in ("Z", "Y", "X")
+    ],
+]
+
+
+class OMEZarrReader(ReaderBase):
+    """Reader for non-HCS OME-Zarr stores.
+    Zarr array containing a single position/FOV under root is anticipated.
+
+    Parameters
+    ----------
+    store_path : StrOrBytesPath
+        Path to the data store
+    version : Literal["0.1", "0.4"], optional
+        OME-NGFF specification version, by default "0.4"
+
+    Attributes
+    ----------
+    version : Literal["0.1", "0.4"]
+        OME-NGFF specification version
+    store : FSStore
+        Zarr file system store
+    root : Group
+        Root Zarr group holding arrays
+    array_keys : List[str]
+        Name keys of arrays under root (not recursive)
+    channel_names : List[str]
+        Name of the channels
+    axes : List[AxisMeta]
+        Axes metadata
+    """
+
+    def __init__(
+        self,
+        store_path: StrOrBytesPath,
+        version: Literal["0.1", "0.4"] = "0.4",
+    ):
+        super().__init__()
+        # check zarr store
+        if not version == "0.4":
+            logging.warn(
+                "\n".join(
+                    "The OMEZarrReader is only tested against OME-NGFF v0.4.",
+                    f"Requested version {version} may not work properly.",
+                )
+            )
+        location = parse_url(
+            store_path, mode="r", fmt=format_from_version(version)
+        )
+        if not location:
+            raise FileNotFoundError(
+                f"OME-Zarr store not found at {store_path}."
+            )
+        if not location.exists():
+            raise FileNotFoundError(
+                "Array and group metadata not found. Is it an empty store?"
+            )
+        self.version = version
+        self.store = location.store
+        self.root = zarr.open(self.store, mode="r")
+        array_keys = list(self.root.array_keys())
+        if array_keys:
+            self.array_keys = array_keys
+        else:
+            raise FileNotFoundError(
+                "Array not found at top level. Is this an HCS store?"
+            )
+        try:
+            channels: list = self.root.attrs.get("omero").get("channels")
+            self.channel_names = [c["label"] for c in channels]
+        except KeyError:
+            logging.warn(
+                "OMERO channel metadata not found. Channel names cannot be determined."
+            )
+        try:
+            self.axes = [
+                AxisMeta(**ax)
+                for ax in self.root.attrs["multiscales"][0]["axes"]
+            ]
+        except KeyError:
+            logging.warn("Axes meta data not found.")
 
 
 class ZarrReader(ReaderBase):
 
     """
+    .. deprecated:: 0.0.1
+          `ZarrReader` will be removed in future iohub releases, it is replaced by
+          `HCSReader` to enforce upgrade to version 0.4 of the OME-Zarr specification.
+
     Reader for HCS ome-zarr arrays.  OME-zarr structure can be found here: https://ngff.openmicroscopy.org/0.1/
     Also collects the HCS metadata so it can be later copied.
     """
 
-    def __init__(self, zarrfile: str):
+    def __init__(
+        self, store_path: str, version: Literal["0.1", "0.4"] = "0.4"
+    ):
         super().__init__()
 
         # zarr files (.zarr) are directories
-        if not os.path.isdir(zarrfile):
+        if not os.path.isdir(store_path):
             raise ValueError("file does not exist")
-
-        self.zf = zarrfile
-
         try:
-            self.store = zarr.open(self.zf, "r")
+            if version == "0.4":
+                dimension_separator = "/"
+            self.store = zarr.DirectoryStore(
+                store_path, dimension_separator=dimension_separator
+            )
+            self.root = zarr.open(self.store, "r")
         except:
-            raise FileNotFoundError("Supplies path is not a valid zarr store")
-
+            raise FileNotFoundError("Supplies path is not a valid zarr root")
         try:
-            row = self.store[list(self.store.group_keys())[0]]
+            row = self.root[list(self.root.group_keys())[0]]
             col = row[list(row.group_keys())[0]]
             pos = col[list(col.group_keys())[0]]
             self.arr_name = list(pos.array_keys())[0]
         except IndexError:
             raise IndexError("Incompatible zarr format")
 
-        self.plate_meta = self.store.attrs.get("plate")
+        self.plate_meta = self.root.attrs.get("plate")
         self._get_rows()
         self._get_columns()
         self._get_wells()
@@ -41,17 +150,21 @@ class ZarrReader(ReaderBase):
         self._get_positions()
 
         # structure of zarr array
+        first_arr_shape = self.root[self.position_map[0]["well"]][
+            self.position_map[0]["name"]
+        ][self.arr_name].shape
         (
             self.frames,
             self.channels,
             self.slices,
             self.height,
             self.width,
-        ) = self.store[self.position_map[0]["well"]][
-            self.position_map[0]["name"]
-        ][
-            self.arr_name
-        ].shape
+        ) = np.pad(
+            first_arr_shape,
+            (5 - len(first_arr_shape), 0),
+            "constant",
+            constant_values=(1),
+        )
         self.positions = len(self.position_map)
         self.channel_names = []
         self.stage_positions = 0
@@ -122,7 +235,7 @@ class ZarrReader(ReaderBase):
         idx = 0
         # Assumes that the positions are indexed in the order of Row-->Well-->FOV
         for well in self.wells:
-            for pos in self.store[well].attrs.get("well").get("images"):
+            for pos in self.root[well].attrs.get("well").get("images"):
                 name = pos["path"]
                 self.position_map[idx] = {"name": name, "well": well}
                 idx += 1
@@ -141,7 +254,7 @@ class ZarrReader(ReaderBase):
 
         well_metas = []
         for well in self.wells:
-            meta = self.store[well].attrs.get("well")
+            meta = self.root[well].attrs.get("well")
             well_metas.append(meta)
 
         self.hcs_meta["well"] = well_metas
@@ -154,7 +267,7 @@ class ZarrReader(ReaderBase):
         -------
 
         """
-        self.mm_meta = self.store.attrs.get("Summary")
+        self.mm_meta = self.root.attrs.get("Summary")
         mm_version = self.mm_meta["MicroManagerVersion"]
 
         if mm_version != "pycromanager":
@@ -191,7 +304,7 @@ class ZarrReader(ReaderBase):
         well = self.hcs_meta["plate"]["wells"][0]["path"]
         pos = self.hcs_meta["well"][0]["images"][0]["path"]
 
-        omero_meta = self.store[well][pos].attrs.asdict()["omero"]
+        omero_meta = self.root[well][pos].attrs.asdict()["omero"]
 
         for chan in omero_meta["channels"]:
             self.channel_names.append(chan["label"])
@@ -265,7 +378,7 @@ class ZarrReader(ReaderBase):
 
         """
         coord_str = f"({p}, 0, {c}, {z})"
-        return self.store.attrs.get("ImagePlaneMetadata").get(coord_str)
+        return self.root.attrs.get("ImagePlaneMetadata").get(coord_str)
 
     def get_zarr(self, position):
         """
@@ -283,7 +396,7 @@ class ZarrReader(ReaderBase):
         pos_info = self.position_map[position]
         well = pos_info["well"]
         pos = pos_info["name"]
-        return self.store[well][pos][self.arr_name]
+        return self.root[well][pos][self.arr_name]
 
     def get_array(self, position):
         """
@@ -323,3 +436,73 @@ class ZarrReader(ReaderBase):
 
     def get_num_positions(self) -> int:
         return self.positions
+
+
+class HCSReader(ZarrReader):
+    def __init__(
+        self,
+        store_path: StrOrBytesPath,
+        version: Literal["0.1", "0.4"] = "0.4",
+    ):
+        super().__init__(store_path, version)
+        self._get_axes_meta()
+        self.plate_meta = PlateMeta(**self.root.attrs["plate"])
+
+    def _get_rows(self):
+        self.rows = []
+        self.rows_meta = {}
+        for i, row in enumerate(self.plate_meta["rows"]):
+            self.rows.append(row["name"])
+            self.rows_meta[row["name"]] = {
+                "id": i,
+                "meta": PlateAxisMeta(**row),
+            }
+
+    def _get_columns(self):
+        self.columns = []
+        self.columns_meta = {}
+        for i, column in enumerate(self.plate_meta["columns"]):
+            self.columns.append(column["name"])
+            self.columns_meta[column["name"]] = {
+                "id": i,
+                "meta": PlateAxisMeta(**column),
+            }
+
+    def _get_wells(self):
+        self.wells = []
+        self.wells_meta = {}
+        self.positions_meta = {}
+        for well in self.plate_meta["wells"]:
+            well_name = well["path"]
+            self.wells.append(well_name)
+            self.wells_meta[well_name] = {
+                "meta": WellIndexMeta(**well),
+                "positions": [],
+                "image_meta_list": [
+                    ImageMeta(**image_meta)
+                    for image_meta in self.root[well_name].attrs["well"][
+                        "images"
+                    ]
+                ],
+            }
+            for _, position in self.root[well_name].groups():
+                self.wells_meta[well_name]["positions"].append(position.name)
+                pos_attrs = ImagesMeta(**position.attrs)
+                self.positions_meta[position.name] = {
+                    "attrs": pos_attrs,
+                    "id": pos_attrs.omero.id,
+                }
+
+    def _get_axes_meta(self):
+        first_position = self.root[next(iter(self.positions_meta))]
+        ms = first_position.attrs.get("multiscales")[0]
+        warning = "Axes metadata not found. Using default."
+        if ms:
+            try:
+                self.axes = MultiScaleMeta(**ms).axes
+                return
+            except KeyError:
+                logging.warn(warning)
+        else:
+            logging.warn(warning)
+        self.axes = _DEFAULT_AXES

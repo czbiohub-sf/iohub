@@ -1,9 +1,11 @@
-import numpy as np
+import glob
 import os
 import re
-import zarr
+
+import numpy as np
 import tifffile as tiff
-import glob
+import zarr
+
 from iohub.reader_base import ReaderBase
 
 
