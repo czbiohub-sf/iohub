@@ -1,20 +1,31 @@
 # iohub
 
-This library provides io utilites for ND image data. 
+N-dimensional bioimaging produces data and metadata in various formats,
+and iohub aims to become a unified Python interface to the most common formats
+used at the Biohub and in the broader imaging community.
 
-Supported formats: 
+## Supported formats
 
-Read (iohub.reader): 
-- single-page TIFF, OME-TIFF, NDTiff written by micro-manager, 
-- custom data formats used by Biohub microscopes (e.g., PTI, DaXi, mantis).
-- all the formats writte by this library.
+### Read
 
-Write (iohub.writer): 
-- OME-TIFF, 
-- OME-zarr, 
-- TIFF stacks that mimic OME-zarr structure. This format provides benefits of a chunked format like zarr for visualizaion tools and [analysis pipelines that only support TIFF](https://github.com/mehta-lab/recOrder/issues/276).
+- OME-Zarr
+- Single-page TIFF, OME-TIFF, and NDTiff images written by Micro-Manager/pycro-manager
+- Custom data formats used by Biohub microscopes (e.g., PTI, Mantis (WIP), DaXi (TBD))
 
-Data access API (under discussion):
-- to visualize data in above formats using napari and Fiji.
-- enable efficient, paraellel, and lazy loading of data in deconvolution and DL pipelines via iohub.reader module.
- 
+### Write
+
+- OME-Zarr
+- Multi-page TIFF stacks organized in a directory hierarchy that mimics OME-NGFF (WIP)
+
+## Quick start
+
+Install iohub locally:
+
+```sh
+git clone https://github.com/czbiohub/iohub.git
+pip install iohub
+```
+
+> For more details about installation, see the [related section in the contribution guide](CONTRIBUTING.md#setting-up-developing-environment).
+
+See usage, see [examples](https://github.com/czbiohub/iohub/tree/main/examples).
