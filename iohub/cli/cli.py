@@ -70,7 +70,7 @@ def print_reader_info(reader):
     type=bool,
     help='whether or not to format the data as an HCS "well-plate"',
 )
-def convert(input, output, data_type, replace_pos_name, format_hcs):
+def convert2zarr(input, output, data_type, replace_pos_name, format_hcs):
     """Convert MicroManager ome-tiff to ome-zarr
 
     Example:
