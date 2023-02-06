@@ -131,7 +131,6 @@ class ZarrConverter:
             not self.summary_metadata
             or "AxisOrder" not in self.summary_metadata.keys()
         ):
-
             self.p_dim = 0
             self.t_dim = 1
             self.c_dim = 2
@@ -184,7 +183,6 @@ class ZarrConverter:
         ]
 
     def _get_position_coords(self):
-
         row_max = 0
         col_max = 0
         coords_list = []
@@ -201,7 +199,6 @@ class ZarrConverter:
         return coords_list, row_max + 1, col_max + 1
 
     def _generate_hcs_metadata(self):
-
         position_list, rows, cols = self._get_position_coords()
 
         position_grid = create_grid_from_coordinates(position_list, rows, cols)
@@ -395,7 +392,6 @@ class ZarrConverter:
         chan_names = self._get_channel_names()
         self._get_position_names()
         for pos in range(self.p):
-
             clims = self.get_channel_clims(pos)
             name = self.pos_names[pos] if self.replace_position_names else None
             self.writer.init_array(
@@ -542,7 +538,6 @@ def create_grid_from_coordinates(xy_coords, rows, columns):
 
     for row in range(rows):
         for col in range(columns):
-
             # append position index (key) into a final grid by indexed into the coordinate map (values)
             pos_index_grid[row, col] = keys[vals.index(list(grid[row, col]))]
 
