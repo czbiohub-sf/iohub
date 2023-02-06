@@ -16,7 +16,6 @@ class UPTIReader(ReaderBase):
     """
 
     def __init__(self, folder: str, extract_data: bool = False):
-
         # check if folder exists
         if not os.path.isdir(folder):
             raise ValueError("folder does not exist")
