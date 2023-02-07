@@ -239,7 +239,8 @@ class WindowDict(TypedDict):
 
 class ChannelMeta(MetaBase):
     """Channel display settings without clear documentation from the NGFF spec.
-    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
+    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata
+    """
 
     active: bool = False
     coefficient: float = 1.0
@@ -255,7 +256,8 @@ class ChannelMeta(MetaBase):
 
 class RDefsMeta(MetaBase):
     """Rendering settings without clear documentation from the NGFF spec.
-    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
+    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata
+    """
 
     default_t: int = Field(alias="defaultT")
     default_z: int = Field(alias="defaultZ")

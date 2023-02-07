@@ -300,7 +300,6 @@ class ZarrReader(ReaderBase):
         self.z_step_size = self.mm_meta["z-step_um"]
 
     def _get_channel_names(self):
-
         well = self.hcs_meta["plate"]["wells"][0]["path"]
         pos = self.hcs_meta["well"][0]["images"][0]["path"]
 
