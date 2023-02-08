@@ -66,7 +66,9 @@ def open_store(
         )
         root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
     except Exception as e:
-        raise RuntimeError(f"Cannot open Zarr root group at {store_path}: {e}") from e
+        raise RuntimeError(
+            f"Cannot open Zarr root group at {store_path}"
+        ) from e
     return root
 
 
@@ -132,7 +134,10 @@ class NGFFNode:
     def _parent_path(self):
         """The parent Zarr group path of the node.
         None for the root node."""
-        return None if self._group.name == "/" else os.path.dirname(self._group.name)
+        if self._group.name == "/":
+            return None
+        else:
+            return os.path.dirname(self._group.name)
 
     @property
     def _member_names(self):
@@ -231,10 +236,16 @@ class NGFFNode:
             try:
                 yield key, self[key]
             except Exception:
-                logging.warning(f"Skipped item at {key}: invalid {type(self._MEMBER_TYPE)}.")
+                logging.warning(
+                    "Skipped item at {}: invalid {}.".format(
+                        key, type(self._MEMBER_TYPE)
+                    )
+                )
 
     def _warn_invalid_meta(self):
-        msg = f"Zarr group at {self._group.path} does not have valid metadata for {type(self)}"
+        msg = "Zarr group at {} does not have valid metadata for {}".format(
+            self._group.path, type(self)
+        )
         logging.warning(msg)
 
     def _parse_meta(self):
@@ -440,7 +451,7 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         if not chunks:
-            chunks = data.shape[-min(3, len(data.shape)):]
+            chunks = data.shape[-min(3, len(data.shape)) :]
             chunks = _pad_shape(chunks, target=len(data.shape))
         img_arr = ImageArray(
             self._group.array(
@@ -776,19 +787,19 @@ class Plate(NGFFNode):
     def _first_pos_attr(self, attr: str):
         """Get attribute value from the first position."""
         name = " ".join(attr.split("_")).strip()
-        msg = f"Cannot determine {name}: "
+        msg = f"Cannot determine {name}:"
         try:
             row_grp = next(self.zgroup.groups())[1]
             well_grp = next(row_grp.groups())[1]
             pos_grp = next(well_grp.groups())[1]
         except StopIteration:
-            logging.warning(f"{msg}No position is found in the dataset.")
+            logging.warning(f"{msg} No position is found in the dataset.")
             return
         try:
             pos = Position(pos_grp)
             setattr(self, attr, getattr(pos, attr))
         except AttributeError:
-            logging.warning(f"{msg}Invalid metadata at the first position")
+            logging.warning(f"{msg} Invalid metadata at the first position")
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
