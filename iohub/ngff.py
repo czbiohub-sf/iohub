@@ -768,9 +768,7 @@ class Plate(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
         self._name = name
-        self._acquisitions = (
-            [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
-        )
+        self._acquisitions = acquisitions or [AcquisitionMeta(id=0)]
         self._rows = {}
         self._cols = {}
 
@@ -813,7 +811,7 @@ class Plate(NGFFNode):
             by default False
         """
         if field_count:
-            self.metadata.field_count = len([kv for kv in self.positions()])
+            self.metadata.field_count = len(list(self.positions()))
         self.zattrs.update({"plate": self.metadata.dict(**TO_DICT_SETTINGS)})
 
     @staticmethod
