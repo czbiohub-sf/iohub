@@ -768,7 +768,9 @@ class Plate(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
         self._name = name
-        self._acquisitions = acquisitions or [AcquisitionMeta(id=0)]
+        self._acquisitions = (
+            [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
+        )
         self._rows = {}
         self._cols = {}
 
