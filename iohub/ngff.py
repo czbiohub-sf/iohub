@@ -50,7 +50,7 @@ def open_store(
         raise FileNotFoundError(
             f"Dataset directory not found at {store_path}."
         )
-    if not version == "0.4":
+    if version != "0.4":
         logging.warning(
             "\n".join(
                 "IOHub is only tested against OME-NGFF v0.4.",
@@ -66,7 +66,7 @@ def open_store(
         )
         root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
     except Exception as e:
-        raise RuntimeError(f"Cannot open Zarr root group at {store_path}: {e}")
+        raise RuntimeError(f"Cannot open Zarr root group at {store_path}: {e}") from e
     return root
 
 
@@ -132,10 +132,7 @@ class NGFFNode:
     def _parent_path(self):
         """The parent Zarr group path of the node.
         None for the root node."""
-        if self._group.name == "/":
-            return None
-        else:
-            return os.path.dirname(self._group.name)
+        return None if self._group.name == "/" else os.path.dirname(self._group.name)
 
     @property
     def _member_names(self):
@@ -183,8 +180,7 @@ class NGFFNode:
         return key in self._member_names
 
     def __iter__(self):
-        for key in self._member_names:
-            yield key
+        yield from self._member_names
 
     def __enter__(self):
         return self
@@ -235,16 +231,10 @@ class NGFFNode:
             try:
                 yield key, self[key]
             except Exception:
-                logging.warning(
-                    "Skipped item at {}: invalid {}.".format(
-                        key, type(self._MEMBER_TYPE)
-                    )
-                )
+                logging.warning(f"Skipped item at {key}: invalid {type(self._MEMBER_TYPE)}.")
 
     def _warn_invalid_meta(self):
-        msg = "Zarr group at {} does not have valid metadata for {}".format(
-            self._group.path, type(self)
-        )
+        msg = f"Zarr group at {self._group.path} does not have valid metadata for {type(self)}"
         logging.warning(msg)
 
     def _parse_meta(self):
@@ -450,7 +440,7 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         if not chunks:
-            chunks = data.shape[-min(3, len(data.shape)) :]
+            chunks = data.shape[-min(3, len(data.shape)):]
             chunks = _pad_shape(chunks, target=len(data.shape))
         img_arr = ImageArray(
             self._group.array(
@@ -612,8 +602,7 @@ class Well(NGFFNode):
         )
 
     def _parse_meta(self):
-        well_group_meta = self.zattrs.get("well")
-        if well_group_meta:
+        if well_group_meta := self.zattrs.get("well"):
             self.metadata = WellGroupMeta(**well_group_meta)
         else:
             self._warn_invalid_meta()
@@ -775,8 +764,7 @@ class Plate(NGFFNode):
         self._cols = {}
 
     def _parse_meta(self):
-        plate_meta = self.zattrs.get("plate")
-        if plate_meta:
+        if plate_meta := self.zattrs.get("plate"):
             logging.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
         else:
@@ -794,13 +782,13 @@ class Plate(NGFFNode):
             well_grp = next(row_grp.groups())[1]
             pos_grp = next(well_grp.groups())[1]
         except StopIteration:
-            logging.warning(msg + "No position is found in the dataset.")
+            logging.warning(f"{msg}No position is found in the dataset.")
             return
         try:
             pos = Position(pos_grp)
             setattr(self, attr, getattr(pos, attr))
         except AttributeError:
-            logging.warning(msg + "Invalid metadata at the first position")
+            logging.warning(f"{msg}Invalid metadata at the first position")
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
@@ -819,12 +807,10 @@ class Plate(NGFFNode):
 
     @staticmethod
     def _auto_idx(name: str, known: dict[str, int]):
-        idx = known.get(name)
-        if idx:
+        if idx := known.get(name):
             return idx
-        else:
-            used = known.values()
-            return max(used) + 1 if used else 0
+        used = known.values()
+        return max(used) + 1 if used else 0
 
     def _build_meta(
         self,

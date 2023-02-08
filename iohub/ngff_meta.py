@@ -349,8 +349,7 @@ class AcquisitionMeta(MetaBase):
     @validator("end_time")
     def end_after_start(cls, v: int, values: dict):
         # CUSTOM
-        st = values.get("start_time")
-        if st:
+        if st := values.get("start_time"):
             if st > v:
                 raise ValueError(
                     f"Start timestamp {st} is larger than end timestamp {v}."

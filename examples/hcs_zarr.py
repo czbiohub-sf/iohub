@@ -18,12 +18,12 @@ position_list = (
 )
 
 with HCSZarr.open(
-    "hcs.zarr", mode="a", channel_names=["DAPI", "GFP"]
+    "hcs_wrong.zarr", mode="a", channel_names=["DAPI", "GFP"]
 ) as dataset:
     for row, col, fov in position_list:
         position = dataset.create_position(row, col, fov)
         position[0] = np.random.randint(
-            0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16
+            0, np.iinfo(np.uint16).max, size=(5, 3, 3, 32, 32), dtype=np.uint16
         )
 
 # %%
