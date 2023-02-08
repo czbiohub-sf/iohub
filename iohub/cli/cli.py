@@ -1,5 +1,3 @@
-import sys
-
 import click
 
 from iohub._version import __version__
