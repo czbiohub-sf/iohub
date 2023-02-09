@@ -29,3 +29,13 @@ pip install iohub
 > For more details about installation, see the [related section in the contribution guide](CONTRIBUTING.md#setting-up-developing-environment).
 
 See usage, see [examples](https://github.com/czbiohub/iohub/tree/main/examples).
+
+## Comparison with other data i/o projects
+
+This repo is inspired by [ome-zarr-py](https://github.com/ome/ome-zarr-py) and [aicsimageio](https://github.com/AllenCellModeling/aicsimageio), which mainly support ome-zarr or ome-tiff formats.
+
+iohub bridges the gap between them with the following features:
+
+- Efficient reading of data in various TIFF formats produced by Micro-Manager/Pycro-Manager.
+- Efficient conversion of above data formats to OME-zarr.
+- Appending new channels and dimensions to existing OME-zarr stores during analysis.
