@@ -21,7 +21,7 @@ from ome_zarr.reader import Reader
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import HCSZarr, OMEZarr, _pad_shape, open_store
+from iohub.ngff import HCSZarr, OMEZarrFOV, _pad_shape, open_store
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
@@ -129,10 +129,10 @@ def test_open_store_read_nonexist():
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_init_ome_zarr(channel_names):
-    """Test `iohub.ngff.OMEZarr.open()`"""
+    """Test `iohub.ngff.OMEZarrFOV.open()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
-        dataset = OMEZarr.open(
+        dataset = OMEZarrFOV.open(
             store_path, mode="w-", channel_names=channel_names
         )
         assert os.path.isdir(store_path)
@@ -143,7 +143,7 @@ def test_init_ome_zarr(channel_names):
 def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
     try:
         temp_dir = TemporaryDirectory()
-        dataset = OMEZarr.open(
+        dataset = OMEZarrFOV.open(
             os.path.join(temp_dir.name, "ome.zarr"),
             mode="a",
             channel_names=channel_names,
@@ -161,7 +161,7 @@ def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
 )
 @settings(max_examples=16, deadline=2000)
 def test_write_ome_zarr(channels_and_random_5d, arr_name):
-    """Test `iohub.ngff.OMEZarr.__setitem__()`"""
+    """Test `iohub.ngff.OMEZarrFOV.__setitem__()`"""
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)

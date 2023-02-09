@@ -1045,7 +1045,7 @@ class Dataset:
         Returns
         -------
         Dataset
-            NGFF dataset object (`OMEZarr` or `HCSZarr')
+            NGFF dataset object (`OMEZarrFOV` or `HCSZarr')
         """
         if mode == "a":
             mode = ("w-", "r+")[int(os.path.exists(store_path))]
@@ -1069,12 +1069,12 @@ class Dataset:
         )
 
     def __init__(self, *args, **kwargs):
-        # this should call `Position.__init__()` for `OMEZarr`
+        # this should call `Position.__init__()` for `OMEZarrFOV`
         # or `Plate.__init__()` for `HCSZarr`
         super().__init__(*args, **kwargs)
 
 
-class OMEZarr(Dataset, Position):
+class OMEZarrFOV(Dataset, Position):
     """Single-FOV OME-Zarr dataset container.
 
     Parameters
