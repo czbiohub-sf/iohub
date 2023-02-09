@@ -1076,6 +1076,8 @@ class Dataset:
 
 class OMEZarrFOV(Dataset, Position):
     """Single-FOV OME-Zarr dataset container.
+    Arrays can be stored as direct members.
+    This can also be used to open a single position under the HCS hierarchy.
 
     Parameters
     ----------
@@ -1123,6 +1125,7 @@ class OMEZarrFOV(Dataset, Position):
 
 class HCSZarr(Dataset, Plate):
     """High-content screening OME-Zarr dataset container.
+    Multiple positions are stored under a Plate-Row-Well-Position hierarchy.
 
 
     Parameters
