@@ -20,13 +20,13 @@ tczyx = np.random.randint(
 with OMEZarr.open(
     "ome.zarr", mode="a", channel_names=["DAPI", "GFP"]
 ) as dataset:
-    dataset[0] = tczyx
+    dataset["0"] = tczyx
 
 # %%
 # Opening in read-only mode prevents writing
 
 with OMEZarr.open("ome.zarr", mode="r") as dataset:
-    img = dataset[0]
+    img = dataset["0"]
     print(img.numpy())
     try:
         img[0, 0, 0, 0, 0] = 0
@@ -41,7 +41,7 @@ new_1czyx = np.random.randint(
 )
 
 with OMEZarr.open("ome.zarr", mode="r+") as dataset:
-    img = dataset[0]
+    img = dataset["0"]
     print(img.shape)
     img.append(new_1czyx, axis=0)
     print(img.shape)
@@ -55,7 +55,7 @@ new_zyx = np.random.randint(
 
 dataset = OMEZarr.open("ome.zarr", mode="r+")
 dataset.append_channel("New", resize_arrays=True)
-dataset[0][0, 2] = new_zyx
+dataset["0"][0, 2] = new_zyx
 dataset.close()
 
 # %%

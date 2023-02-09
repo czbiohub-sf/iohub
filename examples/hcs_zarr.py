@@ -22,7 +22,7 @@ with HCSZarr.open(
 ) as dataset:
     for row, col, fov in position_list:
         position = dataset.create_position(row, col, fov)
-        position[0] = np.random.randint(
+        position["raw"] = np.random.randint(
             0, np.iinfo(np.uint16).max, size=(5, 3, 2, 32, 32), dtype=np.uint16
         )
 
