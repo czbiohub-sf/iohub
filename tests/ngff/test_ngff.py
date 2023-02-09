@@ -159,7 +159,11 @@ def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
 )
-@settings(max_examples=16, deadline=2000)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
 def test_write_ome_zarr(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.OMEZarrFOV.__setitem__()`"""
     channel_names, random_5d = channels_and_random_5d
@@ -193,6 +197,24 @@ def test_append_channel(channels_and_random_5d, arr_name):
         dataset.append_channel(channel_names[-1], resize_arrays=True)
         dataset[arr_name][:, -1] = random_5d[:, -1]
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_write_more_channels(channels_and_random_5d, arr_name):
+    """Test `iohub.ngff.OMEZarrFOV.create_image()`"""
+    channel_names, random_5d = channels_and_random_5d
+    assume(len(channel_names) > 1)
+    with pytest.raises(ValueError):
+        with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name) as _:
+            pass
 
 
 @given(channel_names=channel_names_st)

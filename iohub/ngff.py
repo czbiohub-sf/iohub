@@ -429,6 +429,7 @@ class Position(NGFFNode):
         data: NDArray,
         chunks: tuple[int] = None,
         transform: List[TransformationMeta] = None,
+        check_shape: bool = True,
     ):
         """Create a new image array in the position.
 
@@ -444,6 +445,9 @@ class Position(NGFFNode):
         transform : List[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
+        check_shape : bool, optional
+            Whether to check if image shape matches dataset axes,
+            by default True
 
         Returns
         -------
@@ -453,6 +457,8 @@ class Position(NGFFNode):
         if not chunks:
             chunks = data.shape[-min(3, len(data.shape)) :]
             chunks = _pad_shape(chunks, target=len(data.shape))
+        if check_shape:
+            self._check_shape(data.shape)
         img_arr = ImageArray(
             self._group.array(
                 name, data, chunks=chunks, **self._storage_options
@@ -460,6 +466,28 @@ class Position(NGFFNode):
         )
         self._create_image_meta(img_arr.basename, transform=transform)
         return img_arr
+
+    def _check_shape(self, data_shape: tuple[int]):
+        if len(data_shape) != len(self.axes):
+            raise ValueError(
+                f"Image has {len(data_shape)} dimensions, "
+                f"while the dataset has {len(self.axes)}."
+            )
+        num_ch = len(self.channel_names)
+        if ch_axis := self._find_axis("channel"):
+            msg = (
+                f"Image has {data_shape[ch_axis]} channels, "
+                f"while the dataset  has {num_ch}."
+            )
+            if data_shape[ch_axis] > num_ch:
+                raise ValueError(msg)
+            elif data_shape[ch_axis] < num_ch:
+                logging.warning(msg)
+        else:
+            logging.info(
+                "Dataset channel axis is not set. "
+                "Skipping channel shape check."
+            )
 
     def _create_image_meta(
         self,
