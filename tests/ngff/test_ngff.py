@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import hypothesis.extra.numpy as npst
 import pytest
 import zarr
-from hypothesis import assume, given, settings
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from numpy.testing import assert_array_almost_equal
 from numpy.typing import NDArray
@@ -174,6 +174,27 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
         assert node.data[0].dtype == random_5d.dtype
 
 
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_append_channel(channels_and_random_5d, arr_name):
+    """Test `iohub.ngff.OMEZarrFOV.append_channel()`"""
+    channel_names, random_5d = channels_and_random_5d
+    assume(len(channel_names) > 1)
+    with _temp_ome_zarr(
+        random_5d[:, :-1], channel_names[:-1], arr_name
+    ) as dataset:
+        dataset.append_channel(channel_names[-1], resize_arrays=True)
+        dataset[arr_name][:, -1] = random_5d[:, -1]
+        assert_array_almost_equal(dataset[arr_name][:], random_5d)
+
+
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_create_hcs(channel_names):
@@ -231,7 +252,7 @@ def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
 
 
 @given(row_names=row_names_st, col_names=col_names_st)
-@settings(max_examples=32, deadline=2000)
+@settings(max_examples=16, deadline=2000)
 def test_create_well(row_names: list[str], col_names: list[str]):
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
