@@ -43,13 +43,7 @@ short_alpha_numeric = st.text(
     min_size=1,
     max_size=16,
 )
-row_names_st = st.lists(
-    short_alpha_numeric,
-    min_size=1,
-    max_size=8,
-    unique_by=(lambda x: x.lower()),
-)
-col_names_st = st.lists(
+plate_axis_names_st = st.lists(
     short_alpha_numeric,
     min_size=1,
     max_size=8,
@@ -273,9 +267,10 @@ def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
             assert position[0].shape == (2, 2, 2160, 5120)
 
 
-@given(row_names=row_names_st, col_names=col_names_st)
+@given(row_names=plate_axis_names_st, col_names=plate_axis_names_st)
 @settings(max_examples=16, deadline=2000)
 def test_create_well(row_names: list[str], col_names: list[str]):
+    """Test `iohub.writer.HCSZarr.create_well()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
         dataset = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
@@ -288,3 +283,26 @@ def test_create_well(row_names: list[str], col_names: list[str]):
         assert [
             r["name"] for r in dataset.zattrs["plate"]["rows"]
         ] == row_names
+
+
+@given(
+    row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
+)
+def test_create_position(row, col, pos):
+    """Test `iohub.writer.HCSZarr.create_position()`"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "hcs.zarr")
+        dataset = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
+        _ = dataset.create_position(
+            row_name=row,
+            col_name=col,
+            pos_name=pos
+        )
+        assert [
+            c["name"] for c in dataset.zattrs["plate"]["columns"]
+        ] == [col]
+        assert [
+            r["name"] for r in dataset.zattrs["plate"]["rows"]
+        ] == [row]
+        assert os.path.isdir(os.path.join(store_path, row, col, pos))
+        assert dataset[row][col].metadata.images[0].path == pos
