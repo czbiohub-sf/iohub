@@ -21,7 +21,7 @@ from ome_zarr.reader import Reader
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import HCSZarr, OMEZarrFOV, _pad_shape, open_store
+from iohub.ngff import HCSZarr, OMEZarrFOV, _pad_shape, _open_store
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
@@ -90,11 +90,11 @@ def test_pad_shape(shape, target):
 
 
 def test_open_store_create():
-    """Test `iohub.ngff.open_store()"""
+    """Test `iohub.ngff._open_store()"""
     for mode in ("a", "w", "w-"):
         with TemporaryDirectory() as temp_dir:
             store_path = os.path.join(temp_dir, "new.zarr")
-            root = open_store(store_path, mode=mode, version="0.4")
+            root = _open_store(store_path, mode=mode, version="0.4")
             assert isinstance(root, zarr.Group)
             assert isinstance(root.store, zarr.DirectoryStore)
             assert root.store._dimension_separator == "/"
@@ -102,22 +102,22 @@ def test_open_store_create():
 
 
 def test_open_store_create_existing():
-    """Test `iohub.ngff.open_store()"""
+    """Test `iohub.ngff._open_store()"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "new.zarr")
         g = zarr.open_group(store_path, mode="w")
         g.store.close()
         with pytest.raises(RuntimeError):
-            _ = open_store(store_path, mode="w-", version="0.4")
+            _ = _open_store(store_path, mode="w-", version="0.4")
 
 
 def test_open_store_read_nonexist():
-    """Test `iohub.ngff.open_store()"""
+    """Test `iohub.ngff._open_store()"""
     for mode in ("r", "r+"):
         with TemporaryDirectory() as temp_dir:
             store_path = os.path.join(temp_dir, "new.zarr")
             with pytest.raises(FileNotFoundError):
-                _ = open_store(store_path, mode=mode, version="0.4")
+                _ = _open_store(store_path, mode=mode, version="0.4")
 
 
 @given(channel_names=channel_names_st)

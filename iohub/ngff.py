@@ -40,7 +40,7 @@ def _pad_shape(shape: tuple[int], target: int = 5):
     return (1,) * pad + shape
 
 
-def open_store(
+def _open_store(
     store_path: StrOrBytesPath,
     mode: Literal["r", "r+", "a", "w", "w-"],
     version: Literal["0.1", "0.4"],
@@ -1087,7 +1087,7 @@ class Dataset:
             logging.warning(f"Overwriting data at {store_path}")
         else:
             raise ValueError(f"Invalid persistence mode '{mode}'.")
-        root = open_store(store_path, mode, version, synchronizer)
+        root = _open_store(store_path, mode, version, synchronizer)
         return cls(
             root=root,
             parse_meta=parse_meta,
@@ -1282,7 +1282,7 @@ def open_ome_zarr(
             logging.warning(f"Overwriting data at {store_path}")
     else:
         raise ValueError(f"Invalid persistence mode '{mode}'.")
-    root = open_store(store_path, mode, version, synchronizer)
+    root = _open_store(store_path, mode, version, synchronizer)
     meta_keys = root.attrs.keys() if parse_meta else []
     if layout == "auto":
         if parse_meta:
