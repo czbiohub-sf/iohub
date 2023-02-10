@@ -231,6 +231,16 @@ class NGFFNode:
         """
         return not self.group_keys()
 
+    def print_tree(self, level: int = None):
+        """Print hierarchy of the node to stdout.
+
+        Parameters
+        ----------
+        level : int, optional
+            Maximum depth to show, by default None
+        """
+        print(self.zgroup.tree(level=level))
+
     def iteritems(self):
         for key in self._member_names:
             try:
