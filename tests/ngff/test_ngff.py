@@ -305,3 +305,4 @@ def test_create_position(row, col, pos):
             r["name"] for r in dataset.zattrs["plate"]["rows"]
         ] == [row]
         assert os.path.isdir(os.path.join(store_path, row, col, pos))
+        assert dataset[row][col].metadata.images[0].path == pos
