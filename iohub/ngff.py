@@ -1206,3 +1206,115 @@ class HCSZarr(Dataset, Plate):
             version=version,
             overwriting_creation=overwriting_creation,
         )
+
+
+def open_ome_zarr(
+    store_path: StrOrBytesPath,
+    layout: Literal["auto", "fov", "hcs"] = "auto",
+    mode: Literal["r", "r+", "a", "w", "w-"] = "r",
+    channel_names: List[str] = None,
+    axes: list[AxisMeta] = None,
+    version: Literal["0.1", "0.4"] = "0.4",
+    synchronizer: Union[
+        zarr.ThreadSynchronizer, zarr.ProcessSynchronizer
+    ] = None,
+    **kwargs,
+):
+    """Convenience method to open OME-Zarr stores.
+
+    Parameters
+    ----------
+    store_path : StrOrBytesPath
+        File path to the Zarr store to open
+    layout: Literal["auto", "fov", "hcs"], optional
+        NGFF store layout:
+        "auto" will infer layout from existing metadata
+        (cannot be used for creation);
+        "fov" opens a single position/FOV node;
+        "hcs" opens the high-content-screening multi-fov hierarchy;
+        by default "auto"
+    mode : Literal["r+", "a", "w-"], optional
+        mode : Literal["r", "r+", "a", "w", "w-"], optional
+        Persistence mode:
+        'r' means read only (must exist);
+        'r+' means read/write (must exist);
+        'a' means read/write (create if doesn't exist);
+        'w' means create (overwrite if exists);
+        'w-' means create (fail if exists),
+        by default "r".
+    channel_names : List[str], optional
+        Channel names used to create a new data store,
+        ignored for existing stores,
+        by default None
+    axes : list[AxisMeta], optional
+        OME axes metadata, by default None:
+        ```
+        [AxisMeta(name='T', type='time', unit='second'),
+        AxisMeta(name='C', type='channel', unit=None),
+        AxisMeta(name='Z', type='space', unit='micrometer'),
+        AxisMeta(name='Y', type='space', unit='micrometer'),
+        AxisMeta(name='X', type='space', unit='micrometer')]
+        ````
+    version : Literal["0.1", "0.4"], optional
+        OME-NGFF version, by default "0.4"
+    synchronizer : object, optional
+        Zarr thread or process synchronizer, by default None
+    kwargs : dict, optional
+        Keyword arguments to underlying NGFF node constructor,
+        by default None
+
+
+    Returns
+    -------
+    Dataset
+        NGFF node object (`Position` or `Plate')
+    """
+    if mode == "a":
+        mode = ("w-", "r+")[int(os.path.exists(store_path))]
+    parse_meta = False
+    if mode in ("r", "r+"):
+        parse_meta = True
+    elif mode == "w-":
+        if os.path.exists(store_path):
+            raise FileExistsError(store_path)
+    elif mode == "w":
+        if os.path.exists(store_path):
+            logging.warning(f"Overwriting data at {store_path}")
+    else:
+        raise ValueError(f"Invalid persistence mode '{mode}'.")
+    root = open_store(store_path, mode, version, synchronizer)
+    meta_keys = root.attrs.keys() if parse_meta else []
+    if layout == "auto":
+        if parse_meta:
+            if "plate" in meta_keys:
+                layout = "hcs"
+            elif "multiscales" in meta_keys:
+                layout = "fov"
+            else:
+                raise KeyError(
+                    "Dataset metadata keys ('plate'/'multiscales') not in "
+                    f"the found store metadata keys: {meta_keys}. "
+                    "Is this a valid OME-Zarr dataset?"
+                )
+        else:
+            raise ValueError(
+                "Store layout must be specified when creating a new dataset."
+            )
+    msg = f"Specified layout '{layout}' does not match existing metadata."
+    if layout == "fov":
+        if parse_meta and "multiscales" not in meta_keys:
+            raise ValueError(msg)
+        node = Position
+    elif layout == "hcs":
+        if parse_meta and "plate" not in meta_keys:
+            raise ValueError(msg)
+        node = Plate
+    else:
+        raise ValueError(f"Unknown layout: {layout}")
+    return node(
+        group=root,
+        parse_meta=parse_meta,
+        channel_names=channel_names,
+        axes=axes,
+        **kwargs,
+    )
