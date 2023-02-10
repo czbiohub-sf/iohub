@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import shutil
 import string
@@ -21,7 +20,7 @@ from ome_zarr.reader import Reader
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import HCSZarr, OMEZarrFOV, _pad_shape, _open_store
+from iohub.ngff import _open_store, _pad_shape, open_ome_zarr
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
@@ -123,22 +122,35 @@ def test_open_store_read_nonexist():
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_init_ome_zarr(channel_names):
-    """Test `iohub.ngff.OMEZarrFOV.open()`"""
+    """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
-        dataset = OMEZarrFOV.open(
-            store_path, mode="w-", channel_names=channel_names
+        dataset = open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
         )
         assert os.path.isdir(store_path)
         assert dataset.channel_names == channel_names
 
 
 @contextmanager
-def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
+def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name: str):
+    """Helper function to generate a temporary OME-Zarr store.
+
+    Parameters
+    ----------
+    image_5d : NDArray
+    channel_names : list[str]
+    arr_name : str
+
+    Yields
+    ------
+    Position
+    """
     try:
         temp_dir = TemporaryDirectory()
-        dataset = OMEZarrFOV.open(
+        dataset = open_ome_zarr(
             os.path.join(temp_dir.name, "ome.zarr"),
+            layout="fov",
             mode="a",
             channel_names=channel_names,
         )
@@ -159,7 +171,7 @@ def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name):
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_write_ome_zarr(channels_and_random_5d, arr_name):
-    """Test `iohub.ngff.OMEZarrFOV.__setitem__()`"""
+    """Test `iohub.ngff.Position.__setitem__()`"""
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
@@ -182,7 +194,7 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_append_channel(channels_and_random_5d, arr_name):
-    """Test `iohub.ngff.OMEZarrFOV.append_channel()`"""
+    """Test `iohub.ngff.Position.append_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
     with _temp_ome_zarr(
@@ -203,7 +215,7 @@ def test_append_channel(channels_and_random_5d, arr_name):
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_write_more_channels(channels_and_random_5d, arr_name):
-    """Test `iohub.ngff.OMEZarrFOV.create_image()`"""
+    """Test `iohub.ngff.Position.create_image()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
     with pytest.raises(ValueError):
@@ -214,34 +226,35 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_create_hcs(channel_names):
-    """Test `iohub.ngff.HCSZarr.open()`"""
+    """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        dataset = HCSZarr.open(
-            store_path, mode="a", channel_names=channel_names
+        dataset = open_ome_zarr(
+            store_path, layout="hcs", mode="a", channel_names=channel_names
         )
         assert os.path.isdir(store_path)
         assert dataset.channel_names == channel_names
 
 
-def test_open_hcs_create_empty(caplog):
-    """Test `iohub.ngff.HCSZarr.open()`"""
+def test_open_hcs_create_empty():
+    """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        dataset = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
+        dataset = open_ome_zarr(
+            store_path, layout="hcs", mode="a", channel_names=["GFP"]
+        )
         assert dataset.zgroup.store.path == store_path
         dataset.close()
         with pytest.raises(FileExistsError):
-            _ = HCSZarr.open(store_path, mode="w-", channel_names=["GFP"])
+            _ = open_ome_zarr(
+                store_path, layout="hcs", mode="w-", channel_names=["GFP"]
+            )
         with pytest.raises(ValueError):
-            _ = HCSZarr.open(store_path, mode="x")
+            _ = open_ome_zarr(store_path, layout="hcs", mode="x")
         with pytest.raises(FileNotFoundError):
-            _ = HCSZarr.open("do-not-exist.zarr", mode="r+")
-        # avoid capturing warning in test report with fixture
-        with caplog.at_level(logging.INFO):
-            dataset = HCSZarr.open(store_path, mode="r+")
-            assert "Cannot determine" in caplog.text
-            dataset.close()
+            _ = open_ome_zarr("do-not-exist.zarr", layout="hcs", mode="r+")
+        with pytest.raises(ValueError):
+            dataset = open_ome_zarr(store_path, layout="hcs", mode="r+")
 
 
 @contextmanager
@@ -255,9 +268,9 @@ def _temp_copy(src: StrPath):
 
 
 def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
-    """Test `iohub.writer.HCSZarr.open()`"""
+    """Test `iohub.writer.open_ome_zarr()`"""
     with _temp_copy(setup_hcs_ref) as store_path:
-        with HCSZarr.open(store_path, mode="r+") as dataset:
+        with open_ome_zarr(store_path, layout="hcs", mode="r+") as dataset:
             assert dataset.axes[0].name == "c"
             assert dataset.channel_names == ["DAPI"]
             position = dataset["B/03/0"]
@@ -273,7 +286,9 @@ def test_create_well(row_names: list[str], col_names: list[str]):
     """Test `iohub.writer.HCSZarr.create_well()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        dataset = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
+        dataset = open_ome_zarr(
+            store_path, layout="hcs", mode="a", channel_names=["GFP"]
+        )
         for row_name in row_names:
             for col_name in col_names:
                 dataset.create_well(row_name, col_name)
@@ -292,17 +307,11 @@ def test_create_position(row, col, pos):
     """Test `iohub.writer.HCSZarr.create_position()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        dataset = HCSZarr.open(store_path, mode="a", channel_names=["GFP"])
-        _ = dataset.create_position(
-            row_name=row,
-            col_name=col,
-            pos_name=pos
+        dataset = open_ome_zarr(
+            store_path, layout="hcs", mode="a", channel_names=["GFP"]
         )
-        assert [
-            c["name"] for c in dataset.zattrs["plate"]["columns"]
-        ] == [col]
-        assert [
-            r["name"] for r in dataset.zattrs["plate"]["rows"]
-        ] == [row]
+        _ = dataset.create_position(row_name=row, col_name=col, pos_name=pos)
+        assert [c["name"] for c in dataset.zattrs["plate"]["columns"]] == [col]
+        assert [r["name"] for r in dataset.zattrs["plate"]["rows"]] == [row]
         assert os.path.isdir(os.path.join(store_path, row, col, pos))
         assert dataset[row][col].metadata.images[0].path == pos
