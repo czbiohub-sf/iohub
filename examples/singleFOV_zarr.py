@@ -23,6 +23,8 @@ with open_ome_zarr(
     store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP"]
 ) as dataset:
     dataset["img"] = tczyx
+    #dataset.img or dataset.data is a more intuitive way to write and read data. 
+    # Can we implement this?
 
 # %%
 # Opening in read-only mode prevents writing

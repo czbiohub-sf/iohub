@@ -37,8 +37,11 @@ with open_ome_zarr(
     # create and write to positions
     for i, (row, col, fov) in enumerate(position_list):
         position = dataset.create_position(row, col, fov)
-        position["0"] = i*np.ones((2, 3, 5, 32, 32)).astype(np.uint16) 
+        position["0"] = i * np.ones((2, 3, 5, 32, 32)).astype(np.uint16)
         # 2 timepoints, 3 channels, 5 z-slices, 32x32 image
+        
+        #position.img or position.data is a more intuitive way to write and read data. 
+        # Can we implement this?
     # print dataset summary
     dataset.print_tree()
 # Try viewing the hcs.zarr dataset in napari.
