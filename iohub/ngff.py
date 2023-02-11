@@ -603,6 +603,20 @@ class Position(NGFFNode):
                 channel_display_settings(chan_name)
             )
             self.dump_meta()
+            
+    def delete_channel(self, chan_name: str, resize_arrays: bool = True):
+        """Delete a channel from the channel list.
+
+        Parameters
+        ----------
+        chan_name : str
+            Name of the channel to delete.
+        resize_arrays : bool, optional
+            Whether to resize all image arrays after the channel is deleted, 
+            by default True
+        """
+        pass
+
 
 
 class Well(NGFFNode):
