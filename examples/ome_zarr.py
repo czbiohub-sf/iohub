@@ -8,7 +8,7 @@
 
 import numpy as np
 
-from iohub.ngff import OMEZarrFOV
+from iohub.ngff import open_ome_zarr
 
 # %%
 # Write 5D data to a new Zarr store
@@ -17,16 +17,17 @@ tczyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16
 )
 
-with OMEZarrFOV.open(
-    "ome.zarr", mode="a", channel_names=["DAPI", "GFP"]
+with open_ome_zarr(
+    "ome.zarr", layout="fov", mode="a", channel_names=["DAPI", "GFP"]
 ) as dataset:
     dataset["0"] = tczyx
 
 # %%
 # Opening in read-only mode prevents writing
 
-with OMEZarrFOV.open("ome.zarr", mode="r") as dataset:
+with open_ome_zarr("ome.zarr", layout="auto", mode="r") as dataset:
     img = dataset["0"]
+    print(img)
     print(img.numpy())
     try:
         img[0, 0, 0, 0, 0] = 0
@@ -40,7 +41,7 @@ new_1czyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(1, 2, 3, 32, 32), dtype=np.uint16
 )
 
-with OMEZarrFOV.open("ome.zarr", mode="r+") as dataset:
+with open_ome_zarr("ome.zarr", layout="fov", mode="r+") as dataset:
     img = dataset["0"]
     print(img.shape)
     img.append(new_1czyx, axis=0)
@@ -53,7 +54,7 @@ new_zyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(3, 32, 32), dtype=np.uint16
 )
 
-dataset = OMEZarrFOV.open("ome.zarr", mode="r+")
+dataset = open_ome_zarr("ome.zarr", mode="r+")
 dataset.append_channel("New", resize_arrays=True)
 dataset["0"][0, 2] = new_zyx
 dataset.close()
