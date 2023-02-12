@@ -19,34 +19,39 @@ to see if there is an existing discussion about it.
 
 ### Bug report
 
-When reporting a bug (something should work but does not), please include:
+We welcome bug reports!
+
+When reporting a bug (something should work but does not), please include the following in the order mentioned:
 
 - A concise summary of the symptom in the title
 - A description of the problem
-- Error message, log output, or screenshot
 - Minimal code/command examples to reproduce
+- Error message, log output, or screenshot
 - `iohub` version, Python version and build, and platform/OS information
 - (Optional) potential cause
 
 ### Feature request
 
 Feature requests ask for new functionalities or performance improvements to be added to the package.
-Please consider the questions points and address them in the issue:
+Please address following questions in the issue:
 
 - What is the new feature?
-- Is it within the scope of this project?
+- The scope of this project is to provide a performant library and command line interface to access ND data. Is the feature within the scope of this project or another project?
 - Who will be the users?
 - (Optional) what is the best way to implement it?
 - (Optional) what are the alternatives?
 
+### Prioritization
+
+As is the case with any software project, possible improvements vastly out number the community's capacity.
+We use releases as a reference to focus the effort on near-term priorities.
+PRs within the scope of the next release will receive more attention.
+A list of planned release milestones can be found [here](https://github.com/czbiohub/iohub/milestones).
+
 ### Documentation change
 
 If you find that any documentation in this project is incomplete, inaccurate, or ambiguous,
-please open an issue.
-
-### Project management
-
-Issues can also be used to track our project management and higher level decision making process.
+please open an issue. We welcome contributions to the documentation from users, particularly user guides that we can collaboratively edit.
 
 ## Making changes
 
@@ -58,7 +63,7 @@ If there is an issue that can be addressed by the PR, please reference it.
 If there is not a relevant issue, please either open an issue first,
 or describe the bug fixed or feature implemented in the PR.
 
-### Setting up developing environment
+### Setting up development environment
 
 For local development, first install [Git](https://git-scm.com/)
 and Python with an environment management tool
@@ -112,10 +117,3 @@ We use [black](https://black.readthedocs.io/en/stable/) to format our code.
 Black installed with `iohub` should automatically use the [settings](./pyproject.toml) in the repository.
 
 [NumPy style docstrings](https://numpydoc.readthedocs.io/en/latest/format.html) are used for API documentation.
-
-### Focusing effort
-
-As is the case with any software project, possible improvements vastly out number the community's capacity.
-We use releases as a reference to focus the effort on near-term priorities.
-PRs within the scope of the next release should expect to receive more attention.
-A list of planned release milestones can be found [here](https://github.com/czbiohub/iohub/milestones).
