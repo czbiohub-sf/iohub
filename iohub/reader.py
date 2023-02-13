@@ -24,7 +24,7 @@ from iohub.zarrfile import ZarrReader
 # NOTSET
 # logging.basicConfig(
 #     level=logging.DEBUG,
-#     format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
+#     format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s"
 # )
 # log = logging.getLogger(__name__)
 
@@ -41,20 +41,25 @@ class WaveorderReader:
         log_level: int = logging.ERROR,
     ):
         """
-        reads data output from micro-manager and returns a zarr array or numpy array
-        supports singlepage tiff sequences or ome-tiffs
+        reads data output from micro-manager and returns a zarr array
+        or numpy array supports singlepage tiff sequences or ome-tiffs
 
         Parameters
         ----------
-        src:            (str) folder or file containing all ome-tiff files or zarr root
-        data_type:      (str) whether data is 'ometiff', 'singlepagetiff', or 'zarr'
-        extract_data:   (bool) True if ome_series should be extracted immediately
-        log_level:      (int) One of 0, 10, 20, 30, 40, 50 for NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
+        src:            (str)
+            folder or file containing all ome-tiff files or zarr root
+        data_type:      (str)
+            whether data is 'ometiff', 'singlepagetiff', or 'zarr'
+        extract_data:   (bool)
+            True if ome_series should be extracted immediately
+        log_level:      (int)
+            One of 0, 10, 20, 30, 40, 50 for
+            NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
         """
 
         logging.basicConfig(
             level=log_level,
-            format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",
+            format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",  # noqa
         )
         self.log = logging.getLogger(__name__)
 
@@ -70,8 +75,8 @@ class WaveorderReader:
                 data_type = "singlepagetiff"
             else:
                 raise FileNotFoundError(
-                    f"No compatible data found under {src}, please specify the top "
-                    "level micromanager directory."
+                    f"No compatible data found under {src}, "
+                    "please specify the top level micromanager directory."
                 )
         self.data_type = data_type
 
@@ -95,7 +100,7 @@ class WaveorderReader:
     def _check_zarr_data_type(src):
         try:
             zarr.open(src, "r")
-        except:
+        except Exception:
             return False
         return True
 

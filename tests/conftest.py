@@ -1,8 +1,9 @@
-import pytest
-import shutil
 import os
-from os.path import join as pjoin
 import random
+import shutil
+from os.path import join as pjoin
+
+import pytest
 from wget import download
 
 MM2GAMMA_OMETIFF_SUBFOLDERS = {
@@ -28,7 +29,6 @@ MM2GAMMA_OMETIFF_SUBFOLDERS = {
 
 @pytest.fixture(scope="session")
 def setup_test_data():
-
     temp_folder = pjoin(os.getcwd(), "pytest_temp")
     test_data = pjoin(temp_folder, "test_data")
     if not os.path.isdir(temp_folder):
@@ -42,8 +42,9 @@ def setup_test_data():
         "https://zenodo.org/record/6983916/files/waveOrder_test_data.zip"
     )
     # Reference v0.4 HCS dataset from OME
-    # See the last line of https://github.com/ome/ngff/issues/140#issuecomment-1309972511
-    ome_hcs_url = "https://zenodo.org/record/7274533/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"
+    # See the last line of
+    # https://github.com/ome/ngff/issues/140#issuecomment-1309972511
+    ome_hcs_url = "https://zenodo.org/record/7274533/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"  # noqa
 
     # download files to temp folder
     if not os.listdir(test_data):
@@ -58,7 +59,6 @@ def setup_test_data():
 
 @pytest.fixture(scope="function")
 def setup_mm2gamma_ome_tiffs():
-
     test_data = pjoin(
         os.getcwd(), "pytest_temp", "test_data", "MM20_ome-tiffs"
     )
@@ -71,7 +71,8 @@ def setup_mm2gamma_ome_tiffs():
     one_folder = pjoin(test_data, subfolders[0])
     # random folder
     rand_folder = pjoin(test_data, random.choice(subfolders))
-    # return path to unzipped folder containing test images as well as specific folder paths
+    # return path to unzipped folder containing test images
+    # as well as specific folder paths
     yield test_data, one_folder, rand_folder
 
 
@@ -92,7 +93,6 @@ def setup_mm2gamma_ome_tiffs_incomplete():
 
 @pytest.fixture(scope="function")
 def setup_mm2gamma_singlepage_tiffs():
-
     test_data = pjoin(
         os.getcwd(), "pytest_temp", "test_data", "MM20_singlepage-tiffs"
     )
@@ -105,7 +105,8 @@ def setup_mm2gamma_singlepage_tiffs():
     one_folder = pjoin(test_data, subfolders[0])
     # random folder
     rand_folder = pjoin(test_data, random.choice(subfolders))
-    # return path to unzipped folder containing test images as well as specific folder paths
+    # return path to unzipped folder containing test images
+    # as well as specific folder paths
     yield test_data, one_folder, rand_folder
 
 
@@ -127,7 +128,6 @@ def setup_mm2gamma_singlepage_tiffs_incomplete():
 
 @pytest.fixture(scope="function")
 def setup_mm1422_ome_tiffs():
-
     test_data = pjoin(
         os.getcwd(), "pytest_temp", "test_data", "MM1422_ome-tiffs"
     )
@@ -140,13 +140,13 @@ def setup_mm1422_ome_tiffs():
     one_folder = pjoin(test_data, subfolders[0])
     # random folder
     rand_folder = pjoin(test_data, random.choice(subfolders))
-    # return path to unzipped folder containing test images as well as specific folder paths
+    # return path to unzipped folder containing test images
+    # as well as specific folder paths
     yield test_data, one_folder, rand_folder
 
 
 @pytest.fixture(scope="function")
 def setup_mm1422_singlepage_tiffs():
-
     test_data = pjoin(
         os.getcwd(), "pytest_temp", "test_data", "MM1422_singlepage-tiffs"
     )
@@ -159,18 +159,19 @@ def setup_mm1422_singlepage_tiffs():
     one_folder = pjoin(test_data, subfolders[0])
     # random folder
     rand_folder = pjoin(test_data, random.choice(subfolders))
-    # return path to unzipped folder containing test images as well as specific folder paths
+    # return path to unzipped folder containing test images
+    # as well as specific folder paths
     yield test_data, one_folder, rand_folder
 
 
 @pytest.fixture(scope="function")
 def setup_mm2gamma_zarr():
-
     test_data = pjoin(os.getcwd(), "pytest_temp", "test_data", "MM20_zarr")
 
     zp = pjoin(test_data, "mm2.0-20201209_4p_2t_5z_1c_512k_1.zarr")
 
-    # return path to unzipped folder containing test images as well as specific folder paths
+    # return path to unzipped folder containing test images
+    # as well as specific folder paths
     yield zp
 
 

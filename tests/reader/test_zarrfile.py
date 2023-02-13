@@ -1,8 +1,8 @@
-import pytest
-from iohub.zarrfile import ZarrReader
-from iohub.reader import WaveorderReader
-import zarr
 import numpy as np
+import zarr
+
+from iohub.reader import WaveorderReader
+from iohub.zarrfile import ZarrReader
 
 
 def test_constructor_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
@@ -11,7 +11,7 @@ def test_constructor_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
         no data extraction in this test
     """
 
-    fold = setup_test_data
+    _ = setup_test_data
     src = setup_mm2gamma_zarr
 
     reader = WaveorderReader(src)
@@ -47,7 +47,7 @@ def test_output_dims_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
     test that output dimensions are always (t, c, z, y, x)
     """
 
-    fold = setup_test_data
+    _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -60,7 +60,7 @@ def test_output_dims_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
-    fold = setup_test_data
+    _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -71,7 +71,7 @@ def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
-    fold = setup_test_data
+    _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -83,7 +83,7 @@ def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 def test_get_image_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
-    fold = setup_test_data
+    _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
@@ -95,7 +95,7 @@ def test_get_image_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 def test_get_num_positions_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
-    fold = setup_test_data
+    _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
 
