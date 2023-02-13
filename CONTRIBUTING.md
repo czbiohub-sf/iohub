@@ -21,7 +21,8 @@ to see if there is an existing discussion about it.
 
 We welcome bug reports!
 
-When reporting a bug (something should work but does not), please include the following in the order mentioned:
+When reporting a bug (something should work but does not),
+please include the following in the order mentioned:
 
 - A concise summary of the symptom in the title
 - A description of the problem
@@ -36,7 +37,8 @@ Feature requests ask for new functionalities or performance improvements to be a
 Please address following questions in the issue:
 
 - What is the new feature?
-- The scope of this project is to provide a performant library and command line interface to access ND data. Is the feature within the scope of this project or another project?
+- iohub's main mission is to provide an efficient Python library and command line interface to access ND bioimaging data.
+Is the feature within the scope of this project or another project?
 - Who will be the users?
 - (Optional) what is the best way to implement it?
 - (Optional) what are the alternatives?
@@ -51,7 +53,9 @@ A list of planned release milestones can be found [here](https://github.com/czbi
 ### Documentation change
 
 If you find that any documentation in this project is incomplete, inaccurate, or ambiguous,
-please open an issue. We welcome contributions to the documentation from users, particularly user guides that we can collaboratively edit.
+please open an issue.
+We welcome contributions to the documentation from users,
+particularly user guides that we can collaboratively edit.
 
 ## Making changes
 
