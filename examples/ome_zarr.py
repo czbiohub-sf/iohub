@@ -9,28 +9,24 @@
 import numpy as np
 
 from iohub.ngff import open_ome_zarr
-import os
 
 # %%
 # Write 5D data to a new Zarr store
-store_path = f'{os.path.expanduser("~/")}singlePos.zarr'
 
 tczyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16
 )
 
 with open_ome_zarr(
-    store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP"]
+    "ome.zarr", layout="fov", mode="a", channel_names=["DAPI", "GFP"]
 ) as dataset:
-    dataset["img"] = tczyx
-    #dataset.img or dataset.data is a more intuitive way to write and read data. 
-    # Can we implement this?
+    dataset["0"] = tczyx
 
 # %%
 # Opening in read-only mode prevents writing
 
-with open_ome_zarr(store_path, layout="auto", mode="r") as dataset:
-    img = dataset["img"]
+with open_ome_zarr("ome.zarr", layout="auto", mode="r") as dataset:
+    img = dataset["0"]
     print(img)
     print(img.numpy())
     try:
@@ -45,8 +41,8 @@ new_1czyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(1, 2, 3, 32, 32), dtype=np.uint16
 )
 
-with open_ome_zarr(store_path, layout="fov", mode="r+") as dataset:
-    img = dataset["img"]
+with open_ome_zarr("ome.zarr", layout="fov", mode="r+") as dataset:
+    img = dataset["0"]
     print(img.shape)
     img.append(new_1czyx, axis=0)
     print(img.shape)
@@ -58,9 +54,9 @@ new_zyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(3, 32, 32), dtype=np.uint16
 )
 
-dataset = open_ome_zarr(store_path, mode="r+")
+dataset = open_ome_zarr("ome.zarr", mode="r+")
 dataset.append_channel("New", resize_arrays=True)
-dataset["img"][0, 2] = new_zyx
+dataset["0"][0, 2] = new_zyx
 dataset.close()
 
 # %%
