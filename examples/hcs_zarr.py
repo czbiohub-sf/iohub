@@ -17,29 +17,32 @@ store_path = f'{os.path.expanduser("~/")}hcs.zarr'
 
 # %%
 # Write 5D data to multiple wells.
-# While the NGFF specification allows for arbitrary names,
-# the ome-zarr-py library (thus the napari-ome-zarr plugin)
-# only load positions and arrays with name '0'.
+# Integer path names will be automatically converted to strings.
+# While the NGFF specification (and iohub) allows for arbitrary names,
+# the ome-zarr-py library and the napari-ome-zarr viewer
+# can only load positions and arrays with name '0' for the whole plate.
 
 position_list = (
     ("A", "1", "0"),
-    ("H", 10, 0),
+    ("H", 1, "CannotVisualize"),
+    ("H", "12", "CannotVisualize"),
     ("Control", "Blank", 0),
 )
 
 with open_ome_zarr(
     store_path,
     layout="hcs",
-    mode="a",
+    mode="w-",
     channel_names=["DAPI", "GFP", "Brightfield"],
 ) as dataset:
-    # create and write to positions
+    # Create and write to positions
+    # This affects the tile arrangement in visualization
     for row, col, fov in position_list:
         position = dataset.create_position(row, col, fov)
         position["0"] = np.random.randint(
             0, np.iinfo(np.uint16).max, size=(5, 3, 2, 32, 32), dtype=np.uint16
         )
-    # print dataset summary
+    # Print dataset summary
     dataset.print_tree()
 
 # %%
