@@ -28,14 +28,20 @@ pip install iohub
 
 > For more details about installation, see the [related section in the contribution guide](CONTRIBUTING.md#setting-up-developing-environment).
 
-See usage, see [examples](https://github.com/czbiohub/iohub/tree/main/examples).
+For API usage, see [examples](https://github.com/czbiohub/iohub/tree/main/examples).
 
-## Comparison with other data i/o projects
+## Why iohub?
 
-This repo is inspired by [ome-zarr-py](https://github.com/ome/ome-zarr-py) and [aicsimageio](https://github.com/AllenCellModeling/aicsimageio), which mainly support ome-zarr or ome-tiff formats.
+This project is inspired by the existing Python libraries for bioimaging data I/O,
+including [ome-zarr-py](https://github.com/ome/ome-zarr-py), [tifffile](https://github.com/cgohlke/tifffile) and [aicsimageio](https://github.com/AllenCellModeling/aicsimageio).
+They support some of the most widely adopted and/or  promising formats in microscopy,
+such as OME-Zarr and OME-Tiff .
 
-iohub bridges the gap between them with the following features:
+iohub bridges the gaps among them with the following features:
 
-- Efficient reading of data in various TIFF formats produced by Micro-Manager/Pycro-Manager.
-- Efficient conversion of above data formats to OME-zarr.
-- Appending new channels and dimensions to existing OME-zarr stores during analysis.
+- Efficient reading of data in various TIFF-based formats produced by the Micro-Manager/Pycro-Manager acquisition stack.
+- Efficient and customizable conversion of data and metadata from Tiff to OME-Zarr.
+- Pythonic and atomic access of OME-Zarr data with parallelized analysis in mind.
+- OME-Zarr metadata is automatically constructed and updated for writing,
+and verified against the specification when reading.
+- Adherence to the latest OME-NGFF specification (v0.4) whenever possible.
