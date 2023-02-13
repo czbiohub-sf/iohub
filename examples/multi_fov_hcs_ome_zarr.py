@@ -24,7 +24,7 @@ store_path = f'{os.path.expanduser("~/")}hcs.zarr'
 
 position_list = (
     ("A", "1", "0"),
-    ("H", 1, "CannotVisualize"),
+    ("H", 1, "0"),
     ("H", "12", "CannotVisualize"),
     ("Control", "Blank", 0),
 )
