@@ -34,7 +34,7 @@ Load and modify an [official example OME-Zarr](https://zenodo.org/record/7274533
 import numpy as np
 from iohub.ngff import open_ome_zarr
 
-with open_ome_zarr("test.zarr", mode="r", layout="auto") as dataset:
+with open_ome_zarr("20200812-CardiomyocyteDifferentiation14-Cycle1.zarr", mode="r", layout="auto") as dataset:
     dataset.print_tree()  # prints the hierarchy of the zarr store
     channel_names = dataset.channel_names
     print(channel_names)
