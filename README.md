@@ -23,7 +23,7 @@ Install iohub locally:
 
 ```sh
 git clone https://github.com/czbiohub/iohub.git
-pip install iohub
+pip install /path/to/iohub
 ```
 
 > For more details about installation, see the [related section in the contribution guide](CONTRIBUTING.md#setting-up-developing-environment).
