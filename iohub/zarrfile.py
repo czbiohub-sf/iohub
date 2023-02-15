@@ -1,6 +1,7 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
+import logging
 import os
 from copy import copy
 from typing import Literal
@@ -28,6 +29,15 @@ class ZarrReader(ReaderBase):
         self, store_path: str, version: Literal["0.1", "0.4"] = "0.4"
     ):
         super().__init__()
+
+        logging.warning(
+            DeprecationWarning(
+                "`iohub.zarrfile.ZarrReader` is deprecated "
+                "and will be removed in the future. "
+                "For OME-NGFF (OME-Zarr) v0.4 datasets "
+                "please use `iohub.ngff.open_ome_zarr` instead.",
+            )
+        )
 
         # zarr files (.zarr) are directories
         if not os.path.isdir(store_path):
@@ -152,7 +162,7 @@ class ZarrReader(ReaderBase):
     def _generate_hcs_meta(self):
         """
         Pulls the HCS metadata and organizes it into a dictionary structure
-        that can be easily read by the WaveorderWriter.
+        that can be easily read by the deprecated Zarr Writer.
 
         Returns
         -------

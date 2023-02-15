@@ -32,13 +32,89 @@ from iohub.zarrfile import ZarrReader
 
 
 # todo: add dim_order to all reader objects
-class WaveorderReader:
+
+
+def _check_zarr_data_type(src: str):
+    try:
+        zarr.open(src, "r")
+    except Exception:
+        return False
+    return True
+
+
+def _check_single_page_tiff(src: str):
+    # pick parent directory in case a .tif file is selected
+    if src.endswith(".tif"):
+        src = os.path.dirname(src)
+
+    files = glob.glob(os.path.join(src, "*.tif"))
+    if len(files) == 0:
+        sub_dirs = _get_sub_dirs(src)
+        if sub_dirs:
+            path = os.path.join(src, sub_dirs[0])
+            files = glob.glob(os.path.join(path, "*.tif"))
+            if len(files) > 0:
+                with tiff.TiffFile(os.path.join(path, files[0])) as tf:
+                    if (
+                        len(tf.pages) == 1
+                    ):  # and tf.pages[0].is_multipage is False:
+                        return True
+    return False
+
+
+def _check_multipage_tiff(src: str):
+    # pick parent directory in case a .tif file is selected
+    if src.endswith(".tif"):
+        src = os.path.dirname(src)
+
+    files = glob.glob(os.path.join(src, "*.tif"))
+    if len(files) > 0:
+        with tiff.TiffFile(files[0]) as tf:
+            if len(tf.pages) > 1:
+                return True
+            elif tf.is_multipage is False and tf.is_ome is True:
+                return True
+    return False
+
+
+def _check_pycromanager(src: str):
+    # go two levels up in case a .tif file is selected
+    if src.endswith(".tif"):
+        src = os.path.abspath(os.path.join(src, "../.."))
+
+    # shortcut, may not be foolproof
+    if os.path.exists(os.path.join(src, "Full resolution", "NDTiff.index")):
+        return True
+    return False
+
+
+def _get_sub_dirs(f: str):
+    """
+    subdir walk
+    from https://github.com/mehta-lab/reconstruct-order
+
+    Parameters
+    ----------
+    f:              (str)
+
+    Returns
+    -------
+    sub_dir_name    (list) natsorted list of subdirectories
+    """
+
+    sub_dir_path = glob.glob(os.path.join(f, "*/"))
+    sub_dir_name = [os.path.split(subdir[:-1])[1] for subdir in sub_dir_path]
+    #    assert subDirName, 'No sub directories found'
+    return natsort.natsorted(sub_dir_name)
+
+
+class ImageReader:
     def __init__(
         self,
         src: str,
         data_type: str = None,
         extract_data: bool = False,
-        log_level: int = logging.ERROR,
+        log_level: int = logging.WARNING,
     ):
         """
         reads data output from micro-manager and returns a zarr array
@@ -65,13 +141,13 @@ class WaveorderReader:
 
         # try to guess data type
         if data_type is None:
-            if WaveorderReader._check_zarr_data_type(src):
+            if _check_zarr_data_type(src):
                 data_type = "zarr"
-            elif WaveorderReader._check_pycromanager(src):
+            elif _check_pycromanager(src):
                 data_type = "pycromanager"
-            elif WaveorderReader._check_multipage_tiff(src):
+            elif _check_multipage_tiff(src):
                 data_type = "ometiff"
-            elif WaveorderReader._check_single_page_tiff(src):
+            elif _check_single_page_tiff(src):
                 data_type = "singlepagetiff"
             else:
                 raise FileNotFoundError(
@@ -95,84 +171,6 @@ class WaveorderReader:
             raise NotImplementedError(
                 f"Reader of type {data_type} is not implemented"
             )
-
-    @staticmethod
-    def _check_zarr_data_type(src):
-        try:
-            zarr.open(src, "r")
-        except Exception:
-            return False
-        return True
-
-    @staticmethod
-    def _check_single_page_tiff(src):
-        # pick parent directory in case a .tif file is selected
-        if src.endswith(".tif"):
-            src = os.path.dirname(src)
-
-        files = glob.glob(os.path.join(src, "*.tif"))
-        if len(files) == 0:
-            sub_dirs = WaveorderReader._get_sub_dirs(src)
-            if sub_dirs:
-                path = os.path.join(src, sub_dirs[0])
-                files = glob.glob(os.path.join(path, "*.tif"))
-                if len(files) > 0:
-                    with tiff.TiffFile(os.path.join(path, files[0])) as tf:
-                        if (
-                            len(tf.pages) == 1
-                        ):  # and tf.pages[0].is_multipage is False:
-                            return True
-        return False
-
-    @staticmethod
-    def _check_multipage_tiff(src):
-        # pick parent directory in case a .tif file is selected
-        if src.endswith(".tif"):
-            src = os.path.dirname(src)
-
-        files = glob.glob(os.path.join(src, "*.tif"))
-        if len(files) > 0:
-            with tiff.TiffFile(files[0]) as tf:
-                if len(tf.pages) > 1:
-                    return True
-                elif tf.is_multipage is False and tf.is_ome is True:
-                    return True
-        return False
-
-    @staticmethod
-    def _check_pycromanager(src):
-        # go two levels up in case a .tif file is selected
-        if src.endswith(".tif"):
-            src = os.path.abspath(os.path.join(src, "../.."))
-
-        # shortcut, may not be foolproof
-        if os.path.exists(
-            os.path.join(src, "Full resolution", "NDTiff.index")
-        ):
-            return True
-        return False
-
-    @staticmethod
-    def _get_sub_dirs(f):
-        """
-        subdir walk
-        from https://github.com/mehta-lab/reconstruct-order
-
-        Parameters
-        ----------
-        f:              (str)
-
-        Returns
-        -------
-        sub_dir_name    (list) natsorted list of subdirectories
-        """
-
-        sub_dir_path = glob.glob(os.path.join(f, "*/"))
-        sub_dir_name = [
-            os.path.split(subdir[:-1])[1] for subdir in sub_dir_path
-        ]
-        #    assert subDirName, 'No sub directories found'
-        return natsort.natsorted(sub_dir_name)
 
     def get_zarr(self, position=0):
         """

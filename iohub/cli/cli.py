@@ -1,7 +1,7 @@
 import click
 
 from iohub._version import __version__
-from iohub.reader import WaveorderReader
+from iohub.reader import ImageReader
 
 VERSION = __version__
 
@@ -19,7 +19,7 @@ def info(files):
     """View basic metadata from a list of FILES"""
     for file in files:
         print(f"Reading file:\t {file}")
-        reader = WaveorderReader(file)
+        reader = ImageReader(file)
         print_reader_info(reader)
 
 
