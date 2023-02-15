@@ -34,13 +34,25 @@ Load and modify an [official example OME-Zarr](https://zenodo.org/record/7274533
 import numpy as np
 from iohub.ngff import open_ome_zarr
 
-with open_ome_zarr("20200812-CardiomyocyteDifferentiation14-Cycle1.zarr") as dataset:
+with open_ome_zarr("test.zarr", mode="r", layout="auto") as dataset:
     dataset.print_tree()  # prints the hierarchy of the zarr store
-    first_fov = dataset["B/03/0"]  # lazy Zarr group
-    data = first_fov["0"].numpy()  # loads a CZYX 4D array into RAM
-    print(data.mean())  # does some analysis
-    new_fov = dataset.create_position("A", "1", "0")  # creates a new fov
-    new_fov["0"] = np.ones(data.shape)  # writes some ones to a new Zarr array
+    channel_names = dataset.channel_names
+    print(channel_names)
+    img_array = dataset[
+        "B/03/0/0"
+    ]  # lazy Zarr array for the raw image in the first position
+    raw_data = img_array.numpy()  # loads a CZYX 4D array into RAM
+    print(raw_data.mean())  # does some analysis
+
+with open_ome_zarr(
+    "max_intensity_projection.zarr",
+    mode="w-",
+    layout="hcs",
+    channel_names=channel_names,
+) as dataset:
+    dataset.axes = dataset._DEFAULT_AXES[-2:]  # reduce TCZYX axes to only XY
+    new_fov = dataset.create_position("B", "03", "0")  # creates fov with the same path
+    new_fov["0"] = raw_data.max(axis=1)[0]  # max projection along Z axis
     dataset.print_tree()  # checks that new data has been written
 ```
 
