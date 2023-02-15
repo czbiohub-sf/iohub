@@ -114,7 +114,7 @@ class ImageReader:
         src: str,
         data_type: str = None,
         extract_data: bool = False,
-        log_level: int = logging.ERROR,
+        log_level: int = logging.WARNING,
     ):
         """
         reads data output from micro-manager and returns a zarr array
