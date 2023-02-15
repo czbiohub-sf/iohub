@@ -36,7 +36,7 @@ from iohub.ngff import open_ome_zarr
 
 with open_ome_zarr("20200812-CardiomyocyteDifferentiation14-Cycle1.zarr") as dataset:
     dataset.print_tree()  # prints the hierarchy of the zarr store
-    first_fov = dataset["B/03/0"]  # lazy Zarr array
+    first_fov = dataset["B/03/0"]  # lazy Zarr group
     data = first_fov["0"].numpy()  # loads a CZYX 4D array into RAM
     print(data.mean())  # does some analysis
     new_fov = dataset.create_position("A", "1", "0")  # creates a new fov
