@@ -108,7 +108,7 @@ def _get_sub_dirs(f: str):
     return natsort.natsorted(sub_dir_name)
 
 
-class WaveorderReader:
+class ImageReader:
     def __init__(
         self,
         src: str,

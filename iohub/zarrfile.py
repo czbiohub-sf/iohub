@@ -152,7 +152,7 @@ class ZarrReader(ReaderBase):
     def _generate_hcs_meta(self):
         """
         Pulls the HCS metadata and organizes it into a dictionary structure
-        that can be easily read by the WaveorderWriter.
+        that can be easily read by the deprecated Zarr Writer.
 
         Returns
         -------
