@@ -1,18 +1,19 @@
 import warnings
+
 import numpy as np
 import zarr
+from ndtiff import Dataset
+
 from iohub.reader_base import ReaderBase
-from pycromanager import Dataset
 
 
 class PycromanagerReader(ReaderBase):
     def __init__(self, data_path: str):
+        """
+        Reader for data acquired with pycromanager,
+        effectively a wrapper of the pycromanager.Dataset class
+        """
         super().__init__()
-
-        """
-        Reader for data acquired with pycromanager, effectively a wrapper of the pycromanager.Dataset class
-
-        """
 
         self.dataset = Dataset(data_path)
         self._axes = self.dataset.axes
@@ -89,20 +90,23 @@ class PycromanagerReader(ReaderBase):
         )
 
     def get_image(self, p, t, c, z) -> np.ndarray:
-        """
-        return the image at the provided PTCZ coordinates
+        """return the image at the provided PTCZ coordinates
 
         Parameters
         ----------
-        p:              (int) position index
-        t:              (int) time index
-        c:              (int) channel index
-        z:              (int) slice/z index
+        p : int
+            position index
+        t : int
+            time index
+        c : int
+            channel index
+        z : int
+            slice/z index
 
         Returns
         -------
-        image:          (np-array) numpy array of shape (Y, X) at given coordinate
-
+        np.ndarray
+            numpy array of shape (Y, X) at given coordinate
         """
 
         image = None
@@ -118,10 +122,11 @@ class PycromanagerReader(ReaderBase):
         return a lazy-loaded dask array with shape TCZYX at the given position.
         Data is not loaded into memory.
 
-        Note: The behavior of this function is different from other WaveorderReaders
-         as it return a Dask array rather than a zarr array.
+        Note: The behavior of this function is different from other
+        ImageReader members as it return a Dask array rather than a zarr array.
 
-        # TODO: try casting the dask array into a zarr array using dask.array.to_zarr().
+        # TODO: try casting the dask array into a zarr array
+        # using `dask.array.to_zarr()`.
         # Currently this call brings the data into memory
 
         Parameters

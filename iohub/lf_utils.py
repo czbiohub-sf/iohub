@@ -1,9 +1,10 @@
 # Utility functions for label-free microscopy data
 
-import numpy as np
 from typing import Tuple
 
-from iohub.ngff_meta import WindowDict, ChannelMeta
+import numpy as np
+
+from iohub.ngff_meta import ChannelMeta, WindowDict
 
 
 def channel_display_settings(
@@ -11,7 +12,8 @@ def channel_display_settings(
     clim: Tuple[float, float, float, float] = None,
     first_chan: bool = False,
 ):
-    """This will create a dictionary used for OME-zarr metadata.  Allows custom contrast limits and channel
+    """This will create a dictionary used for OME-zarr metadata.
+    Allows custom contrast limits and channel.
     names for display. Defaults everything to grayscale.
 
     Parameters
@@ -21,7 +23,9 @@ def channel_display_settings(
     clim : Tuple[float, float, float, float], optional
         Contrast limits (start, end, min, max)
     first_chan : bool, optional
-        Whether or not this is the first channel of the dataset (display will be set to active), by default False
+        Whether or not this is the first channel of the dataset
+        (display will be set to active),
+        by default False
 
     Returns
     -------

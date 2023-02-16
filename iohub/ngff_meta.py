@@ -1,26 +1,27 @@
 """
-Dataclasses with validation for OME-NGFF metadata.
+Data model classes with validation for OME-NGFF metadata.
 Developed against OME-NGFF v0.4 and ome-zarr v0.6
 
 Attributes are 'snake_case' with aliases to match NGFF names in JSON output.
-See https://ngff.openmicroscopy.org/0.4/index.html#naming-style about 'camelCase' inconsistency.
+See https://ngff.openmicroscopy.org/0.4/index.html#naming-style
+about 'camelCase' inconsistency.
 """
 
-import re, json
-from pydantic import BaseModel, validator, root_validator, Field
-from pydantic.color import Color, ColorTuple, ColorType
-import pandas as pd
-
+import re
 from typing import (
-    Optional,
-    Union,
-    Literal,
     Any,
-    List,
-    Dict,
-    TypedDict,
     ClassVar,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    TypedDict,
+    Union,
 )
+
+import pandas as pd
+from pydantic import BaseModel, Field, root_validator, validator
+from pydantic.color import Color, ColorTuple, ColorType
 
 
 def unique_validator(
@@ -64,7 +65,7 @@ def alpha_numeric_validator(data: str):
     """
     if not (data.isalnum() or data.isnumeric()):
         raise ValueError(
-            f"The path name must be alphanumerical! Got invalid value: '{data}'."
+            f"The path name must be alphanumerical! Got: '{data}'."
         )
 
 
@@ -173,7 +174,7 @@ class TransformationMeta(MetaBase):
         count = sum([bool(v) for _, v in values.items()])
         if values["type"] == "identity" and count > 1:
             raise ValueError(
-                f"Method should not be specified for identity transformation!"
+                "Method should not be specified for identity transformation!"
             )
         elif count > 2:
             raise ValueError(
@@ -238,7 +239,8 @@ class WindowDict(TypedDict):
 
 class ChannelMeta(MetaBase):
     """Channel display settings without clear documentation from the NGFF spec.
-    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
+    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata
+    """
 
     active: bool = False
     coefficient: float = 1.0
@@ -254,7 +256,8 @@ class ChannelMeta(MetaBase):
 
 class RDefsMeta(MetaBase):
     """Rendering settings without clear documentation from the NGFF spec.
-    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata"""
+    https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata
+    """
 
     default_t: int = Field(alias="defaultT")
     default_z: int = Field(alias="defaultZ")
@@ -346,11 +349,10 @@ class AcquisitionMeta(MetaBase):
     @validator("end_time")
     def end_after_start(cls, v: int, values: dict):
         # CUSTOM
-        st = values.get("start_time")
-        if st:
+        if st := values.get("start_time"):
             if st > v:
                 raise ValueError(
-                    f"The start timestamp {st} should not be larger than the end timestamp {v}"
+                    f"Start timestamp {st} is larger than end timestamp {v}."
                 )
         return v
 
@@ -380,7 +382,7 @@ class WellIndexMeta(MetaBase):
     @validator("path")
     def row_slash_column(cls, v: str):
         # MUST
-        # regex: one line that is exactly two words separated by one forward slash
+        # regex: one line that is exactly two words separated by one '/'
         if len(re.findall(r"^\w+\/\w+$", v)) != 1:
             raise ValueError(
                 f"The well path '{v}' is not in the form of 'row/column'!"
