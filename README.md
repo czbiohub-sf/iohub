@@ -34,7 +34,11 @@ Load and modify an [official example OME-Zarr](https://zenodo.org/record/7274533
 import numpy as np
 from iohub.ngff import open_ome_zarr
 
-with open_ome_zarr("20200812-CardiomyocyteDifferentiation14-Cycle1.zarr", mode="r", layout="auto") as dataset:
+with open_ome_zarr(
+    "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr",
+    mode="r",
+    layout="auto",
+) as dataset:
     dataset.print_tree()  # prints the hierarchy of the zarr store
     channel_names = dataset.channel_names
     print(channel_names)
@@ -44,15 +48,19 @@ with open_ome_zarr("20200812-CardiomyocyteDifferentiation14-Cycle1.zarr", mode="
     raw_data = img_array.numpy()  # loads a CZYX 4D array into RAM
     print(raw_data.mean())  # does some analysis
 
+# %%
 with open_ome_zarr(
     "max_intensity_projection.zarr",
     mode="w-",
     layout="hcs",
     channel_names=channel_names,
 ) as dataset:
-    dataset.axes = dataset._DEFAULT_AXES[-2:]  # reduce TCZYX axes to only XY
-    new_fov = dataset.create_position("B", "03", "0")  # creates fov with the same path
-    new_fov["0"] = raw_data.max(axis=1)[0]  # max projection along Z axis
+    new_fov = dataset.create_position(
+        "B", "03", "0"
+    )  # creates fov with the same path
+    new_fov["0"] = raw_data.max(axis=1).reshape(
+        (1, 1, 1, *raw_data.shape[2:])
+    )  # max projection along Z axis and prepend dims to 5D
     dataset.print_tree()  # checks that new data has been written
 ```
 
