@@ -1,7 +1,7 @@
 iohub
 ~~~~~~~~~~~~~
 
-N-dimensional bioimaging data I/O with OME metadata in Python.
+N-dimensional bioimaging data I/O.
 
 
 
