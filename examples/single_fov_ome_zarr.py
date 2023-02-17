@@ -55,15 +55,36 @@ with open_ome_zarr(store_path, layout="fov", mode="r+") as dataset:
     print(img.shape)
 
 # %%
-# Add a new channel and write a Z-stack
+# Modify channels
 
+# Open the dataset used above
+dataset = open_ome_zarr(store_path, mode="r+")
+dataset.print_tree()
+
+# Append a new channel and write a Z-stack
 new_zyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(3, 32, 32), dtype=np.uint16
 )
-
-dataset = open_ome_zarr(store_path, mode="r+")
 dataset.append_channel("New", resize_arrays=True)
 dataset["img"][0, 2] = new_zyx
+print(dataset.channel_names)
+dataset.print_tree()
+
+# Rename the new channel
+dataset.rename_channel("New", "Renamed")
+print(dataset.channel_names)
+
+# Write new data to the channel
+new_tzyx = np.random.randint(
+    0, np.iinfo(np.uint16).max, size=(5, 3, 32, 32), dtype=np.uint16
+)
+dataset["img"][:, 2] = new_tzyx
+
+# Which is equivalent to:
+if False:  # remove this line
+    dataset.update_channel("Renamed", target="img", data=new_tzyx)
+
+# Close the dataset
 dataset.close()
 
 # %%
