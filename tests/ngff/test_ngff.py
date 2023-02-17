@@ -221,7 +221,7 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
     assume(new_channel not in channel_names)
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
         dataset.rename_channel(old=channel_names[-1], new=new_channel)
-        assert dataset.channel_names == channel_names.append(new_channel)
+        assert dataset.channel_names == channel_names + [new_channel]
         assert len(dataset.metadata.omero.channels) == len(channel_names) + 1
         assert dataset.metadata.omero.channels[-1].label == new_channel
 
