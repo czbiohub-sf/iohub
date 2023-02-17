@@ -583,8 +583,8 @@ class Position(NGFFNode):
             ch_ax = self._find_axis("channel")
             if ch_ax is None:
                 raise KeyError(
-                    "Axis 'channel' does not exist."
-                    + "Please update `self.axes` first."
+                    "Axis 'channel' does not exist. "
+                    "Please update `self.axes` first."
                 )
             for _, img in self.images():
                 shape = list(img.shape)
@@ -603,6 +603,27 @@ class Position(NGFFNode):
                 channel_display_settings(chan_name)
             )
             self.dump_meta()
+
+    def rename_channel(self, old: str, new: str):
+        """Rename a channel in the channel list.
+
+        Parameters
+        ----------
+        old : str
+            Current name of the channel
+        new : str
+            New name of the channel
+        """
+        if old not in self._channel_names:
+            raise ValueError(
+                f"Channel {old} is not in "
+                f"the existing channels: {self._channel_names}"
+            )
+        ch_idx = self._channel_names.index(old)
+        self._channel_names[ch_idx] = new
+        if hasattr(self.metadata, "omero"):
+            self.metadata.omero.channels[ch_idx].label = new
+        self.dump_meta()
 
 
 class Well(NGFFNode):
