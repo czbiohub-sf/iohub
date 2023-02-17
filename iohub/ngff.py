@@ -645,7 +645,7 @@ class Position(NGFFNode):
         chan_name : str
             Channel name
         target: str
-            Name of the image array to updata
+            Name of the image array to update
         data : ArrayLike
             New data array to write
 
