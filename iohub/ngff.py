@@ -566,7 +566,7 @@ class Position(NGFFNode):
         return None
 
     def _get_channel_axis(self):
-        if ch_ax := self._find_axis("channel") is None:
+        if (ch_ax := self._find_axis("channel")) is None:
             raise KeyError(
                 "Axis 'channel' does not exist. "
                 "Please update `self.axes` first."
