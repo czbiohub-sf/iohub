@@ -586,7 +586,7 @@ class Position(NGFFNode):
             by default True
         """
         if chan_name in self._channel_names:
-            raise ValueError(f"Channel name {chan_name} already exists.")
+            raise ValueError(f"Channel name '{chan_name}' already exists.")
         self._channel_names.append(chan_name)
         if resize_arrays:
             for _, img in self.images():
