@@ -636,7 +636,9 @@ class Position(NGFFNode):
         """Update a channel slice of the target image array with new data.
 
         The incoming data shape needs to be the same as the target array
-        except for the channel dimension, where it should have size of 1.
+        except for the non-existent channel dimension.
+        For example a TCZYX array of shape (2, 3, 4, 1024, 2048) can be updated
+        with data of shape (2, 4, 1024, 2048)
 
         Parameters
         ----------
@@ -656,9 +658,9 @@ class Position(NGFFNode):
         img = self[target]
         ch_idx = self._get_channel_idx(chan_name)
         ch_ax = self._get_channel_axis()
-        ortho_sel = [None] * len(img.shape)
+        ortho_sel = [slice(None)] * len(img.shape)
         ortho_sel[ch_ax] = ch_idx
-        img.set_orthogonal_selection(ortho_sel, data)
+        img.set_orthogonal_selection(tuple(ortho_sel), data)
 
 
 class Well(NGFFNode):
