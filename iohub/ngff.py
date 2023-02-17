@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Generator, List, Literal, Tuple, Union
 import numpy as np
 import zarr
 from numcodecs import Blosc
-from numpy.typing import NDArray, ArrayLike
+from numpy.typing import ArrayLike, NDArray
 from pydantic import ValidationError
 from zarr.util import normalize_storage_path
 
