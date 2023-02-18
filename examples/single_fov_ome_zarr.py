@@ -76,7 +76,7 @@ print(dataset.channel_names)
 
 # Write new data to the channel
 new_tzyx = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(5, 3, 32, 32), dtype=np.uint16
+    0, np.iinfo(np.uint16).max, size=(6, 3, 32, 32), dtype=np.uint16
 )
 dataset["img"][:, 2] = new_tzyx
 
