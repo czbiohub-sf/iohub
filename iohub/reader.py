@@ -36,7 +36,10 @@ from iohub.zarrfile import ZarrReader
 
 def _check_zarr_data_type(src: str):
     try:
-        zarr.open(src, "r")
+        root = zarr.open(src, "r")
+        if "plate" in root.attrs:
+            if version := root.attrs["plate"]["version"]:
+                return version
     except Exception:
         return False
     return True
@@ -141,7 +144,7 @@ class ImageReader:
 
         # try to guess data type
         if data_type is None:
-            if _check_zarr_data_type(src):
+            if ngff_version := _check_zarr_data_type(src):
                 data_type = "zarr"
             elif _check_pycromanager(src):
                 data_type = "pycromanager"
@@ -162,7 +165,7 @@ class ImageReader:
         elif data_type == "singlepagetiff":
             self.reader = MicromanagerSequenceReader(src, extract_data)
         elif data_type == "zarr":
-            self.reader = ZarrReader(src)
+            self.reader = ZarrReader(src, version=ngff_version)
         elif data_type == "pycromanager":
             self.reader = PycromanagerReader(src)
         elif data_type == "upti":

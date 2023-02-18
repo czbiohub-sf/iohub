@@ -26,7 +26,7 @@ class ZarrReader(ReaderBase):
     """
 
     def __init__(
-        self, store_path: str, version: Literal["0.1", "0.4"] = "0.4"
+        self, store_path: str, version: Literal["0.1", "0.4"] = "0.1"
     ):
         super().__init__()
 
@@ -42,9 +42,13 @@ class ZarrReader(ReaderBase):
         # zarr files (.zarr) are directories
         if not os.path.isdir(store_path):
             raise ValueError("file does not exist")
+        if version == "0.4":
+            dimension_separator = "/"
+        elif version == "0.1":
+            dimension_separator = "."
+        else:
+            raise ValueError(f"Invalid NGFF version: {version}")
         try:
-            if version == "0.4":
-                dimension_separator = "/"
             self.store = zarr.DirectoryStore(
                 store_path, dimension_separator=dimension_separator
             )
