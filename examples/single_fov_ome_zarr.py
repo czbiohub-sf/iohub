@@ -15,7 +15,7 @@ from iohub.ngff import open_ome_zarr
 # %%
 # Set storage path
 
-store_path = f'{os.path.expanduser("~/")}hcs.zarr'
+store_path = f'{os.path.expanduser("~/")}ome.zarr'
 
 # %%
 # Write 5D data to a new Zarr store
