@@ -397,9 +397,14 @@ class Position(NGFFNode):
         return self.array_keys()
 
     @property
-    def rawdata(self):
-        """Alias for an array named '0' in the position,
-        which is usually the raw data.
+    def data(self):
+        """.. Warning:
+            This property does *NOT* aim to retrieve all the arrays.
+            And it may also fail to retrive any data if arrays exist but
+            are not named conventionally.
+
+        Alias for an array named '0' in the position,
+        which is usually the raw data (or the finest resolution in a pyramid).
 
         Returns
         -------
