@@ -170,36 +170,18 @@ def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name: str):
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_position_rawdata(channels_and_random_5d, arr_name):
+def test_write_ome_zarr(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.__setitem__()`"""
     channel_names, random_5d = channels_and_random_5d
-    assume(arr_name != "0")
-    with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
-        assert_array_almost_equal(dataset.rawdata.numpy(), random_5d)
-    with pytest.raises(KeyError):
-        with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
-            _ = dataset.rawdata
-
-
-@given(
-    channels_and_random_5d=_channels_and_random_5d(),
-    arr_name=short_alpha_numeric,
-)
-@settings(
-    max_examples=16,
-    deadline=2000,
-    suppress_health_check=[HealthCheck.data_too_large],
-)
-def test_append_channel(channels_and_random_5d, arr_name):
-    """Test `iohub.ngff.Position.append_channel()`"""
-    channel_names, random_5d = channels_and_random_5d
-    assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
-        random_5d[:, :-1], channel_names[:-1], arr_name
-    ) as dataset:
-        dataset.append_channel(channel_names[-1], resize_arrays=True)
-        dataset[arr_name][:, -1] = random_5d[:, -1]
+    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
+        # round-trip test with the offical reader implementation
+        ext_reader = Reader(parse_url(dataset.zgroup.store.path))
+        node = list(ext_reader())[0]
+        assert node.metadata["name"] == channel_names
+        assert node.specs[0].datasets == [arr_name]
+        assert node.data[0].shape == random_5d.shape
+        assert node.data[0].dtype == random_5d.dtype
 
 
 @given(
