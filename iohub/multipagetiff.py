@@ -54,8 +54,6 @@ class MicromanagerOmeTiffReader(ReaderBase):
         self._set_dtype()
 
         # Initialize MM attributes
-        self.mm_meta = None
-        self.stage_positions = 0
         self.z_step_size = None
         self.channel_names = []
 

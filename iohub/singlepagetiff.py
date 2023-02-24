@@ -43,8 +43,6 @@ class MicromanagerSequenceReader(ReaderBase):
         self.log = logging.getLogger(__name__)
         self.positions = {}
         self.num_positions = None
-        self.mm_meta = None
-        self.stage_positions = 0
         self.z_step_size = None
         self.height = 0
         self.width = 0

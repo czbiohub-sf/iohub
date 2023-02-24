@@ -10,8 +10,8 @@ class ReaderBase:
         self.height: int = None
         self.width: int = None
         self.dtype: DTypeLike = None
-        self.mm_meta: dict = None
-        self.stage_positions: list[dict] = None
+        self._mm_meta: dict = None
+        self._stage_positions: list[dict] = []
         self.z_step_size: float = None
         self.channel_names: list[str] = None
 
@@ -26,6 +26,30 @@ class ReaderBase:
 
         """
         return self.frames, self.channels, self.slices, self.height, self.width
+
+    @property
+    def mm_meta(self):
+        return self._mm_meta
+
+    @mm_meta.setter
+    def mm_meta(self, value):
+        if not isinstance(value, dict):
+            raise TypeError(
+                f"Type of `mm_meta` should be `dict`, got `{type(value)}`."
+            )
+        self._mm_meta = value
+
+    @property
+    def stage_positions(self):
+        return self._stage_positions
+
+    @stage_positions.setter
+    def stage_positions(self, value):
+        if not isinstance(value, list):
+            raise TypeError(
+                f"Type of `mm_meta` should be `dict`, got `{type(value)}`."
+            )
+        self._stage_positions = value
 
     def get_zarr(self, position: int) -> zarr.Array:
         """Get a zarr array for a given position.

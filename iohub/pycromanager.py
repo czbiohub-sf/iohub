@@ -123,7 +123,7 @@ class PycromanagerReader(ReaderBase):
         Data is not loaded into memory.
 
         Note: The behavior of this function is different from other
-        ImageReader members as it return a Dask array rather than a zarr array.
+        ReaderBase children as it return a Dask array rather than a zarr array.
 
         # TODO: try casting the dask array into a zarr array
         # using `dask.array.to_zarr()`.

@@ -88,16 +88,13 @@ class ZarrReader(ReaderBase):
         )
         self.positions = len(self.position_map)
         self.channel_names = []
-        self.stage_positions = 0
         self.z_step_size = None
 
         # initialize metadata
-        self.mm_meta = None
-
         try:
             self._set_mm_meta()
         except TypeError:
-            self.mm_meta = None
+            self.mm_meta = dict()
 
         self._generate_hcs_meta()
 
