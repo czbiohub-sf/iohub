@@ -111,197 +111,69 @@ def _get_sub_dirs(f: str):
     return natsort.natsorted(sub_dir_name)
 
 
-class ImageReader:
-    def __init__(
-        self,
-        src: str,
-        data_type: str = None,
-        extract_data: bool = False,
-        log_level: int = logging.WARNING,
-    ):
-        """
-        reads data output from micro-manager and returns a zarr array
-        or numpy array supports singlepage tiff sequences or ome-tiffs
+def imread(
+    src: str,
+    data_type: str = None,
+    extract_data: bool = False,
+    log_level: int = logging.WARNING,
+):
+    """Reads data output from micro-manager and returns a zarr array
+    or numpy array supports singlepage tiff sequences or ome-tiffs
 
-        Parameters
-        ----------
-        src:            (str)
-            folder or file containing all ome-tiff files or zarr root
-        data_type:      (str)
-            whether data is 'ometiff', 'singlepagetiff', or 'zarr'
-        extract_data:   (bool)
-            True if ome_series should be extracted immediately
-        log_level:      (int)
-            One of 0, 10, 20, 30, 40, 50 for
-            NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively
-        """
+    Parameters
+    ----------
+    src : str
+        Folder or file containing all ome-tiff files or zarr root
+    data_type : str, optional
+        Whether data is 'ometiff', 'singlepagetiff', or 'zarr',
+        by default None
+    extract_data : bool, optional
+        True if ome_series should be extracted immediately,
+        by default False
+    log_level : int, optional
+        One of 0, 10, 20, 30, 40, 50 for
+        NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively,
+        by default logging.WARNING
 
-        logging.basicConfig(
-            level=log_level,
-            format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",  # noqa
-        )
-        self.log = logging.getLogger(__name__)
+    Returns
+    -------
+    Reader
+        A child instance of ReaderBase
+    """
 
-        # try to guess data type
-        if data_type is None:
-            if ngff_version := _check_zarr_data_type(src):
-                data_type = "zarr"
-            elif _check_pycromanager(src):
-                data_type = "pycromanager"
-            elif _check_multipage_tiff(src):
-                data_type = "ometiff"
-            elif _check_single_page_tiff(src):
-                data_type = "singlepagetiff"
-            else:
-                raise FileNotFoundError(
-                    f"No compatible data found under {src}, "
-                    "please specify the top level micromanager directory."
-                )
-        self.data_type = data_type
+    logging.basicConfig(
+        level=log_level,
+        format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",  # noqa
+    )
+    logging.getLogger(__name__)
 
-        # identify data structure type
-        if data_type == "ometiff":
-            self.reader = MicromanagerOmeTiffReader(src, extract_data)
-        elif data_type == "singlepagetiff":
-            self.reader = MicromanagerSequenceReader(src, extract_data)
-        elif data_type == "zarr":
-            self.reader = ZarrReader(src, version=ngff_version)
-        elif data_type == "pycromanager":
-            self.reader = PycromanagerReader(src)
-        elif data_type == "upti":
-            self.reader = UPTIReader(src, extract_data)
+    # try to guess data type
+    if data_type is None:
+        if ngff_version := _check_zarr_data_type(src):
+            data_type = "zarr"
+        elif _check_pycromanager(src):
+            data_type = "pycromanager"
+        elif _check_multipage_tiff(src):
+            data_type = "ometiff"
+        elif _check_single_page_tiff(src):
+            data_type = "singlepagetiff"
         else:
-            raise NotImplementedError(
-                f"Reader of type {data_type} is not implemented"
+            raise FileNotFoundError(
+                f"No compatible data found under {src}, "
+                "please specify the top level micromanager directory."
             )
-
-    def get_zarr(self, position=0):
-        """
-        return a zarr array for a given position
-
-        Parameters
-        ----------
-        position:   (int) position (aka ome-tiff scene)
-
-        Returns
-        -------
-        zarr.array for the provided position
-        """
-        return self.reader.get_zarr(position)
-
-    def get_array(self, position=0):
-        """
-        return a numpy array for a given position
-
-        Parameters
-        ----------
-        position:   (int) position (aka ome-tiff scene)
-
-        Returns
-        -------
-        np.array for the provided position
-        """
-        return self.reader.get_array(position)
-
-    def get_image(self, p, t, c, z):
-        return self.reader.get_image(p, t, c, z)
-
-    def get_num_positions(self):
-        """
-        get total number of scenes referenced in ome-tiff metadata
-
-        Returns:
-        -------
-        int of number of positions
-        """
-        return self.reader.get_num_positions()
-
-    @property
-    def shape(self):
-        """
-        return the underlying data shape as a tuple
-
-        Returns
-        -------
-        tuple of (frames, slices, channels, height, width)
-
-        """
-        return self.frames, self.channels, self.slices, self.height, self.width
-
-    @property
-    def dtype(self):
-        return self.reader.dtype
-
-    @property
-    def mm_meta(self):
-        return self.reader.mm_meta
-
-    @mm_meta.setter
-    def mm_meta(self, value):
-        assert type(value) is dict
-        self.reader.mm_meta = value
-
-    @property
-    def stage_positions(self):
-        return self.reader.stage_positions
-
-    @stage_positions.setter
-    def stage_positions(self, value):
-        assert type(value) is list
-        self.reader.stage_positions = value
-
-    @property
-    def z_step_size(self):
-        return self.reader.z_step_size
-
-    @z_step_size.setter
-    def z_step_size(self, value):
-        self.reader.z_step_size = value
-
-    @property
-    def height(self):
-        return self.reader.height
-
-    @height.setter
-    def height(self, value):
-        self.reader.height = value
-
-    @property
-    def width(self):
-        return self.reader.width
-
-    @width.setter
-    def width(self, value):
-        self.reader.width = value
-
-    @property
-    def frames(self):
-        return self.reader.frames
-
-    @frames.setter
-    def frames(self, value):
-        self.reader.frames = value
-
-    @property
-    def slices(self):
-        return self.reader.slices
-
-    @slices.setter
-    def slices(self, value):
-        self.reader.slices = value
-
-    @property
-    def channels(self):
-        return self.reader.channels
-
-    @channels.setter
-    def channels(self, value):
-        self.reader.channels = value
-
-    @property
-    def channel_names(self):
-        return self.reader.channel_names
-
-    @channel_names.setter
-    def channel_names(self, value):
-        self.reader.channel_names = value
+    # identify data structure type
+    if data_type == "ometiff":
+        return MicromanagerOmeTiffReader(src, extract_data)
+    elif data_type == "singlepagetiff":
+        return MicromanagerSequenceReader(src, extract_data)
+    elif data_type == "zarr":
+        return ZarrReader(src, version=ngff_version)
+    elif data_type == "pycromanager":
+        return PycromanagerReader(src)
+    elif data_type == "upti":
+        return UPTIReader(src, extract_data)
+    else:
+        raise ValueError(
+            f"Reader of type {data_type} is not implemented"
+        )
