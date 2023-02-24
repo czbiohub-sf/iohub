@@ -174,6 +174,4 @@ def imread(
     elif data_type == "upti":
         return UPTIReader(src, extract_data)
     else:
-        raise ValueError(
-            f"Reader of type {data_type} is not implemented"
-        )
+        raise ValueError(f"Reader of type {data_type} is not implemented")
