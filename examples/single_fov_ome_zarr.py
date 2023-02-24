@@ -78,7 +78,8 @@ print(dataset.channel_names)
 new_tzyx = np.random.randint(
     0, np.iinfo(np.uint16).max, size=(6, 3, 32, 32), dtype=np.uint16
 )
-dataset["img"][:, 2] = new_tzyx
+c_idx = dataset.get_channel_index("Renamed")
+dataset["img"][:, c_idx] = new_tzyx
 
 # Which is equivalent to:
 if False:  # remove this line
