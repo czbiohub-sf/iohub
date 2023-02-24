@@ -117,8 +117,10 @@ def imread(
     extract_data: bool = False,
     log_level: int = logging.WARNING,
 ):
-    """Reads data output from micro-manager and returns a zarr array
-    or numpy array supports singlepage tiff sequences or ome-tiffs
+    """Read image arrays and metadata from a bioimaging dataset.
+    Supported formats are Micro-Manager TIFF formats
+    (single-page TIFF, multi-page OME-TIFF, NDTIFF),
+    and OME-Zarr (OME-NGFF v0.1 HCS and v0.4 FOV/HCS layouts).
 
     Parameters
     ----------
