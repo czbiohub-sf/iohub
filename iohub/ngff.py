@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Generator, List, Literal, Tuple, Union
 import numpy as np
 import zarr
 from numcodecs import Blosc
-from numpy.typing import NDArray
+from numpy.typing import ArrayLike, NDArray
 from pydantic import ValidationError
 from zarr.util import normalize_storage_path
 
@@ -598,6 +598,15 @@ class Position(NGFFNode):
                 return i
         return None
 
+    def _get_channel_axis(self):
+        if (ch_ax := self._find_axis("channel")) is None:
+            raise KeyError(
+                "Axis 'channel' does not exist. "
+                "Please update `self.axes` first."
+            )
+        else:
+            return ch_ax
+
     def append_channel(self, chan_name: str, resize_arrays: bool = True):
         """Append a channel to the end of the channel list.
 
@@ -610,16 +619,11 @@ class Position(NGFFNode):
             by default True
         """
         if chan_name in self._channel_names:
-            raise ValueError(f"Channel name {chan_name} already exists.")
+            raise ValueError(f"Channel name '{chan_name}' already exists.")
         self._channel_names.append(chan_name)
         if resize_arrays:
-            ch_ax = self._find_axis("channel")
-            if ch_ax is None:
-                raise KeyError(
-                    "Axis 'channel' does not exist."
-                    + "Please update `self.axes` first."
-                )
             for _, img in self.images():
+                ch_ax = self._get_channel_axis()
                 shape = list(img.shape)
                 if ch_ax < len(shape):
                     shape[ch_ax] += 1
@@ -636,6 +640,60 @@ class Position(NGFFNode):
                 channel_display_settings(chan_name)
             )
             self.dump_meta()
+
+    def _get_channel_idx(self, name: str):
+        if name not in self._channel_names:
+            raise ValueError(
+                f"Channel {name} is not in "
+                f"the existing channels: {self._channel_names}"
+            )
+        return self._channel_names.index(name)
+
+    def rename_channel(self, old: str, new: str):
+        """Rename a channel in the channel list.
+
+        Parameters
+        ----------
+        old : str
+            Current name of the channel
+        new : str
+            New name of the channel
+        """
+        ch_idx = self._get_channel_idx(old)
+        self._channel_names[ch_idx] = new
+        if hasattr(self.metadata, "omero"):
+            self.metadata.omero.channels[ch_idx].label = new
+        self.dump_meta()
+
+    def update_channel(self, chan_name: str, target: str, data: ArrayLike):
+        """Update a channel slice of the target image array with new data.
+
+        The incoming data shape needs to be the same as the target array
+        except for the non-existent channel dimension.
+        For example a TCZYX array of shape (2, 3, 4, 1024, 2048) can be updated
+        with data of shape (2, 4, 1024, 2048)
+
+        Parameters
+        ----------
+        chan_name : str
+            Channel name
+        target: str
+            Name of the image array to update
+        data : ArrayLike
+            New data array to write
+
+        Notes
+        -----
+        This method is a syntactical variation
+        of assigning values to the slice with the `=` operator,
+        and users are encouraged to use array indexing directly.
+        """
+        img = self[target]
+        ch_idx = self._get_channel_idx(chan_name)
+        ch_ax = self._get_channel_axis()
+        ortho_sel = [slice(None)] * len(img.shape)
+        ortho_sel[ch_ax] = ch_idx
+        img.set_orthogonal_selection(tuple(ortho_sel), data)
 
 
 class Well(NGFFNode):

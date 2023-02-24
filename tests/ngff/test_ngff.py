@@ -224,6 +224,51 @@ def test_append_channel(channels_and_random_5d, arr_name):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    new_channel=short_text_st,
+)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
+    """Test `iohub.ngff.Position.rename_channel()`"""
+    channel_names, random_5d = channels_and_random_5d
+    assume(new_channel not in channel_names)
+    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+        dataset.rename_channel(old=channel_names[0], new=new_channel)
+        assert new_channel in dataset.channel_names
+        assert dataset.metadata.omero.channels[0].label == new_channel
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_update_channel(channels_and_random_5d, arr_name):
+    """Test `iohub.ngff.Position.update_channel()`"""
+    channel_names, random_5d = channels_and_random_5d
+    assume(len(channel_names) > 1)
+    with _temp_ome_zarr(
+        random_5d[:, :-1], channel_names[:-1], arr_name
+    ) as dataset:
+        for i, ch in enumerate(dataset.channel_names):
+            dataset.update_channel(
+                chan_name=ch, target=arr_name, data=random_5d[:, -1]
+            )
+            assert_array_almost_equal(
+                dataset[arr_name][:, i], random_5d[:, -1]
+            )
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
 )
 @settings(
     max_examples=16,
