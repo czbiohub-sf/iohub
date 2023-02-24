@@ -396,6 +396,39 @@ class Position(NGFFNode):
     def _member_names(self):
         return self.array_keys()
 
+    @property
+    def data(self):
+        """.. Warning:
+            This property does *NOT* aim to retrieve all the arrays.
+            And it may also fail to retrive any data if arrays exist but
+            are not named conventionally.
+
+        Alias for an array named '0' in the position,
+        which is usually the raw data (or the finest resolution in a pyramid).
+
+        Returns
+        -------
+        ImageArray
+
+        Raises
+        ------
+        KeyError
+            If no array is named '0'.
+
+        Notes
+        -----
+        Do not depend on this in non-interactive code!
+        The name is hard-coded and is not guaranteed
+        by the OME-NGFF specification.
+        """
+        try:
+            return self["0"]
+        except KeyError:
+            raise KeyError(
+                "There is no array named '0' "
+                f"in the group of: {self.array_keys()}"
+            )
+
     def __getitem__(self, key: Union[int, str]):
         """Get an image array member of the position.
         E.g. Raw-coordinates image, a multi-scale level, or labels
