@@ -328,8 +328,18 @@ def _temp_copy(src: StrPath):
         temp_dir.cleanup()
 
 
+@given(wrong_channel_name=channel_names_st)
+def test_get_channel_index(setup_test_data, setup_hcs_ref, wrong_channel_name):
+    """Test `iohub.ngff.NGFFNode.get_channel_axis()`"""
+    assume(wrong_channel_name != "DAPI")
+    with open_ome_zarr(setup_hcs_ref, layout="hcs", mode="r+") as dataset:
+        assert dataset.get_channel_index("DAPI") == 0
+        with pytest.raises(ValueError):
+            _ = dataset.get_channel_index(wrong_channel_name)
+
+
 def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
-    """Test `iohub.writer.open_ome_zarr()`"""
+    """Test `iohub.ngff.open_ome_zarr()`"""
     with _temp_copy(setup_hcs_ref) as store_path:
         with open_ome_zarr(store_path, layout="hcs", mode="r+") as dataset:
             assert dataset.axes[0].name == "c"
@@ -344,7 +354,7 @@ def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
 @given(row_names=plate_axis_names_st, col_names=plate_axis_names_st)
 @settings(max_examples=16, deadline=2000)
 def test_create_well(row_names: list[str], col_names: list[str]):
-    """Test `iohub.writer.HCSZarr.create_well()`"""
+    """Test `iohub.ngff.Plate.create_well()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
         dataset = open_ome_zarr(
@@ -365,7 +375,7 @@ def test_create_well(row_names: list[str], col_names: list[str]):
     row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
 )
 def test_create_position(row, col, pos):
-    """Test `iohub.writer.HCSZarr.create_position()`"""
+    """Test `iohub.ngff.Plate.create_position()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
         dataset = open_ome_zarr(
