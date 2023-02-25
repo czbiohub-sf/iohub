@@ -1,6 +1,7 @@
 import glob
 import logging
 import os
+from typing import Literal
 
 import natsort
 import tifffile as tiff
@@ -80,7 +81,7 @@ def _check_multipage_tiff(src: str):
     return False
 
 
-def _check_pycromanager(src: str):
+def _check_ndtiff(src: str):
     # go two levels up in case a .tif file is selected
     if src.endswith(".tif"):
         src = os.path.abspath(os.path.join(src, "../.."))
@@ -112,8 +113,10 @@ def _get_sub_dirs(f: str):
 
 
 def imread(
-    src: str,
-    data_type: str = None,
+    path: str,
+    data_type: Literal[
+        "singlepagetiff", "ometiff", "ndtiff", "omezarr"
+    ] = None,
     extract_data: bool = False,
     log_level: int = logging.WARNING,
 ):
@@ -124,14 +127,13 @@ def imread(
 
     Parameters
     ----------
-    src : str
-        Folder or file containing all ome-tiff files or zarr root
-    data_type : str, optional
-        Whether data is 'ometiff', 'singlepagetiff', or 'zarr',
-        by default None
+    path : str
+        File path, directory path to ome-tiff series, or Zarr root path
+    data_type :
+    Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"], optional
+        Dataset format, by default None
     extract_data : bool, optional
-        True if ome_series should be extracted immediately,
-        by default False
+        True if ome_series should be extracted immediately, by default False
     log_level : int, optional
         One of 0, 10, 20, 30, 40, 50 for
         NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively,
@@ -151,29 +153,29 @@ def imread(
 
     # try to guess data type
     if data_type is None:
-        if ngff_version := _check_zarr_data_type(src):
-            data_type = "zarr"
-        elif _check_pycromanager(src):
-            data_type = "pycromanager"
-        elif _check_multipage_tiff(src):
+        if ngff_version := _check_zarr_data_type(path):
+            data_type = "omezarr"
+        elif _check_ndtiff(path):
+            data_type = "ndtiff"
+        elif _check_multipage_tiff(path):
             data_type = "ometiff"
-        elif _check_single_page_tiff(src):
+        elif _check_single_page_tiff(path):
             data_type = "singlepagetiff"
         else:
             raise FileNotFoundError(
-                f"No compatible data found under {src}, "
+                f"No compatible data found under {path}, "
                 "please specify the top level micromanager directory."
             )
     # identify data structure type
     if data_type == "ometiff":
-        return MicromanagerOmeTiffReader(src, extract_data)
+        return MicromanagerOmeTiffReader(path, extract_data)
     elif data_type == "singlepagetiff":
-        return MicromanagerSequenceReader(src, extract_data)
-    elif data_type == "zarr":
-        return ZarrReader(src, version=ngff_version)
-    elif data_type == "pycromanager":
-        return PycromanagerReader(src)
+        return MicromanagerSequenceReader(path, extract_data)
+    elif data_type == "omezarr":
+        return ZarrReader(path, version=ngff_version)
+    elif data_type == "ndtiff":
+        return PycromanagerReader(path)
     elif data_type == "upti":
-        return UPTIReader(src, extract_data)
+        return UPTIReader(path, extract_data)
     else:
         raise ValueError(f"Reader of type {data_type} is not implemented")
