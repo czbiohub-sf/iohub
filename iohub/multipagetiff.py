@@ -88,15 +88,13 @@ class MicromanagerOmeTiffReader(ReaderBase):
             tf = TiffFile(file)
             meta = tf.micromanager_metadata["IndexMap"]
             tf.close()
-            offsets = list(meta["Offset"])
-
-            for page in range(len(meta["Channel"])):
+            offsets = self._get_byte_offsets(meta)
+            for page, offset in enumerate(offsets):
                 coord = [0, 0, 0, 0]
                 coord[0] = meta["Position"][page]
                 coord[1] = meta["Frame"][page]
                 coord[2] = meta["Channel"][page]
                 coord[3] = meta["Slice"][page]
-                offset = self._get_byte_offset(offsets, page)
                 self.coord_map[tuple(coord)] = (file, page, offset)
 
                 # update dimensions as we go along,
@@ -119,27 +117,24 @@ class MicromanagerOmeTiffReader(ReaderBase):
         self.channels = channels
         self.slices = slices
 
-    def _get_byte_offset(self, offsets, page):
-        """
-        Gets the byte offset from the tiff tag metadata
+    @staticmethod
+    def _get_byte_offsets(meta: dict):
+        """Get byte offsets from Micro-Manager metadata.
 
         Parameters
         ----------
-        tiff_file:          (Tiff-File object) Opened tiff file
-        page:               (int) Page to look at for the tag
+        meta : dict
+            Micro-Manager metadata in the OME-TIFF header
 
         Returns
         -------
-        byte offset:        (int) byte offset for the image array
-
+        list
+            List of byte offsets for image arrays in the multi-page TIFF file
         """
-
-        if page == 0:
-            array_offset = offsets[page] + 210
-        else:
-            array_offset = offsets[page] + 162
-
-        return array_offset
+        offsets = meta["Offset"][meta["Offset"] > 0]
+        offsets[0] += 210  # first page array offset
+        offsets[1:] += 162  # image array offset
+        return list(offsets)
 
     def _set_mm_meta(self):
         """
