@@ -8,7 +8,7 @@ import tifffile as tiff
 import zarr
 
 from iohub.multipagetiff import MicromanagerOmeTiffReader
-from iohub.pycromanager import PycromanagerReader
+from iohub.ndtiff import NDTiffReader
 from iohub.singlepagetiff import MicromanagerSequenceReader
 from iohub.upti import UPTIReader
 from iohub.zarrfile import ZarrReader
@@ -174,7 +174,7 @@ def imread(
     elif data_type == "omezarr":
         return ZarrReader(path, version=ngff_version)
     elif data_type == "ndtiff":
-        return PycromanagerReader(path)
+        return NDTiffReader(path)
     elif data_type == "upti":
         return UPTIReader(path, extract_data)
     else:

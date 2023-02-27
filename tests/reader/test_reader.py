@@ -4,7 +4,7 @@ import pytest
 import zarr
 
 from iohub.multipagetiff import MicromanagerOmeTiffReader
-from iohub.pycromanager import PycromanagerReader
+from iohub.ndtiff import NDTiffReader
 from iohub.reader import imread
 from iohub.singlepagetiff import MicromanagerSequenceReader
 
@@ -136,7 +136,7 @@ def test_pycromanager_constructor(
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
     mmr = imread(rand_dir, extract_data=False)
 
-    assert isinstance(mmr, PycromanagerReader)
+    assert isinstance(mmr, NDTiffReader)
 
     assert mmr.mm_meta is not None
     assert mmr.width > 0
@@ -155,7 +155,7 @@ def test_pycromanager_get_zarr(setup_test_data, setup_pycromanager_test_data):
     _ = setup_test_data
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
     mmr = imread(rand_dir)
-    assert isinstance(mmr, PycromanagerReader)
+    assert isinstance(mmr, NDTiffReader)
 
     for i in range(mmr.get_num_positions()):
         z = mmr.get_zarr(i)
@@ -167,7 +167,7 @@ def test_pycromanager_get_array(setup_test_data, setup_pycromanager_test_data):
     _ = setup_test_data
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
     mmr = imread(rand_dir)
-    assert isinstance(mmr, PycromanagerReader)
+    assert isinstance(mmr, NDTiffReader)
 
     for i in range(mmr.get_num_positions()):
         z = mmr.get_array(i)

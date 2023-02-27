@@ -7,11 +7,10 @@ from ndtiff import Dataset
 from iohub.reader_base import ReaderBase
 
 
-class PycromanagerReader(ReaderBase):
+class NDTiffReader(ReaderBase):
     def __init__(self, data_path: str):
-        """
-        Reader for data acquired with pycromanager,
-        effectively a wrapper of the pycromanager.Dataset class
+        """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
+        effectively a wrapper of the `ndtiff.Dataset` class.
         """
         super().__init__()
 
