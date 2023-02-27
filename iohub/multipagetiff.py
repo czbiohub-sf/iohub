@@ -1,10 +1,8 @@
 import glob
 import os
-import warnings
 from copy import copy
 
 import numpy as np
-import tifffile as tiff
 import zarr
 from tifffile import TiffFile
 
@@ -31,10 +29,6 @@ class MicromanagerOmeTiffReader(ReaderBase):
                 "Specific input contains no ome.tif files, "
                 + "please specify a valid input directory"
             )
-
-        # ignore tiffile warnings, doesn't work
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", tiff)
 
         # Grab all image files
         self.data_directory = folder
@@ -298,7 +292,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         """
 
-        tf = tiff.TiffFile(self._files[0])
+        tf = TiffFile(self._files[0])
 
         self.dtype = tf.pages[0].dtype
         tf.close()
