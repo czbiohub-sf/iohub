@@ -163,8 +163,8 @@ def imread(
             data_type = "singlepagetiff"
         else:
             raise FileNotFoundError(
-                f"No compatible data found under {path}, "
-                "please specify the top level micromanager directory."
+                "Failed to infer data type: "
+                f"No compatible data found under {path}."
             )
     # identify data structure type
     if data_type == "ometiff":

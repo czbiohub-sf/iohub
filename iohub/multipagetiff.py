@@ -26,8 +26,10 @@ class MicromanagerOmeTiffReader(ReaderBase):
         # Add Initial Checks
         if len(glob.glob(os.path.join(folder, "*.ome.tif"))) == 0:
             raise ValueError(
-                "Specific input contains no ome.tif files, "
-                + "please specify a valid input directory"
+                (
+                    f"Path {folder} contains no `.ome.tif` files, "
+                    "please specify a valid input directory."
+                )
             )
 
         # Grab all image files
