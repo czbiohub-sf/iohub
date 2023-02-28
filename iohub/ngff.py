@@ -873,7 +873,7 @@ class TiledPosition(Position):
             Should be specified for a non-native resolution level.
         chunk_dims : int, optional
             Non-singleton dimensions of the chunksize,
-            by default 2 (chunk by XY tile size).
+            by default 2 (chunk by 2D (y, x) tile size).
 
         Returns
         -------
@@ -884,7 +884,7 @@ class TiledPosition(Position):
                 name=name,
                 shape=tuple(np.array(grid_shape) * np.array(tile_shape)),
                 chunks=self._default_chunks(
-                    shape=tile_shape, last_data_dims=2
+                    shape=tile_shape, last_data_dims=chunk_dims
                 ),
                 **self._storage_options,
             )
