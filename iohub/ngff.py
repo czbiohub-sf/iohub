@@ -457,7 +457,7 @@ class TiledImageArray(ImageArray):
             for i, sel in enumerate(pre_dims):
                 if sel:
                     pad[i] = sel
-        return list(pad) + (r_slice, c_slice)
+        return tuple(pad) + (r_slice, c_slice)
 
     @staticmethod
     def _check_rc(row: int, column: int):
