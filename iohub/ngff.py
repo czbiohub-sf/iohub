@@ -446,7 +446,7 @@ class TiledImageArray(ImageArray):
             try:
                 if len(pre_dims) != len(pad):
                     raise IndexError(
-                        "Length of `pre_dims` should be len(pad), "
+                        f"Length of `pre_dims` should be {len(pad)}, "
                         f"got {len(pre_dims)}."
                     )
             except TypeError:
