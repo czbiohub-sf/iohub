@@ -336,6 +336,123 @@ class ImageArray(zarr.Array):
         raise NotImplementedError
 
 
+class TiledImageArray(ImageArray):
+    """Container object for tiled image stored as a zarr array (up to 5D)."""
+    def __init__(self, zarray: zarr.Array):
+        super().__init__(zarray)
+
+    @property
+    def rows(self):
+        """Number of rows in the tiles."""
+        return self.shape[-2] / self.chunks[-2]
+
+    @property
+    def columns(self):
+        """Number of columns in the tiles."""
+        return self.shape[-1] / self.chunks[-1]
+
+    @property
+    def tiles(self):
+        """A tuple of the tiled grid size (rows, columns)."""
+        return (self.rows, self.columns)
+
+    @property
+    def tile_shape(self):
+        """shape of a tile, the same as chunk size of the underlying array."""
+        return self.chunks
+
+    def get_tile(
+        self,
+        row: int,
+        column: int,
+        pre_dims: tuple[Union[int, slice, None]] = None,
+    ):
+        """Get a tile as an up-to-5D in-RAM NumPy array.
+
+        Parameters
+        ----------
+        row : int
+            Row index.
+        column : int
+            Column index.
+        pre_dims : tuple[Union[int, slice, None]], optional
+            Indices or slices for previous dimensions than rows and columns
+            with matching shape, e.g. (t, c, z) for 5D arrays,
+            by default None (select all).
+
+        Returns
+        -------
+        NDArray
+        """
+        self._check_rc(row, column)
+        return self[self.get_tile_slice(row, column, pre_dims=pre_dims)]
+
+    def write_tile(
+        self,
+        data: ArrayLike,
+        row: int,
+        column: int,
+        pre_dims: tuple[Union[int, slice, None]] = None,
+    ):
+        """Write a tile in the Zarr store.
+
+        Parameters
+        ----------
+        data : ArrayLike
+            Value to store.
+        row : int
+            Row index.
+        column : int
+            Column index.
+        pre_dims : tuple[Union[int, slice, None]], optional
+            Indices or slices for previous dimensions than rows and columns
+            with matching shape, e.g. (t, c, z) for 5D arrays,
+            by default None (select all).
+        """
+        self._check_rc(row, column)
+        self[self.get_tile_slice(row, column, pre_dims=pre_dims)] = data
+
+    def get_tile_slice(
+        self,
+        row: int,
+        column: int,
+        pre_dims: tuple[Union[int, slice, None]] = None,
+    ):
+        """Get the slices for a tile in the underlying array.
+
+        Parameters
+        ----------
+        row : int
+            Row index.
+        column : int
+            Column index.
+        pre_dims : tuple[Union[int, slice, None]], optional
+            Indices or slices for previous dimensions than rows and columns
+            with matching shape, e.g. (t, c, z) for 5D arrays,
+            by default None (select all).
+
+        Returns
+        -------
+        tuple[slice]
+            Tuple of slices for all the dimensions of the array.
+        """
+        self._check_rc(row, column)
+        y, x = self.chunks[-2:]
+        r_slice = slice(row * y, (row + 1) * y)
+        c_slice = slice(column * x, (column + 1) * x)
+        pad = [slice(None)] * len(self.shape - 2)
+        if pre_dims:
+            for i, sel in enumerate(pre_dims):
+                if sel:
+                    pad[i] = sel
+        return list(pad) + (r_slice, c_slice)
+
+    @staticmethod
+    def _check_rc(row: int, column: int):
+        if not (isinstance(row, int) and isinstance(column, int)):
+            raise ValueError("Row and column indices must be integers.")
+
+
 class Position(NGFFNode):
     """The Zarr group level directly containing multiscale image arrays.
 
