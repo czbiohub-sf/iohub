@@ -345,12 +345,12 @@ class TiledImageArray(ImageArray):
     @property
     def rows(self):
         """Number of rows in the tiles."""
-        return self.shape[-2] / self.chunks[-2]
+        return int(self.shape[-2] / self.chunks[-2])
 
     @property
     def columns(self):
         """Number of columns in the tiles."""
-        return self.shape[-1] / self.chunks[-1]
+        return int(self.shape[-1] / self.chunks[-1])
 
     @property
     def tiles(self):
