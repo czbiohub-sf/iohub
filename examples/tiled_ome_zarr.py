@@ -36,11 +36,17 @@ with open_ome_zarr(
 
 
 # %%
-# Load dataset and read a tile
+# Load the dataset
 
 with open_ome_zarr(store_path, layout="tiled", mode="r") as dataset:
+    # data store structure
     dataset.print_tree()
-    tile_1_2 = dataset["tiled_raw"].get_tile(1, 2)
+    # get tiled image array
+    tiled = dataset["tiled_raw"]
+    # check grid and tile shapes
+    print(tiled.tiles, tiled.tile_shape)
+    # read a tile
+    tile_1_2 = tiled.get_tile(1, 2)
 
 # %%
 # Try viewing the images with napari-ome-zarr
