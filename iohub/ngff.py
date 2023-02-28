@@ -879,10 +879,11 @@ class TiledPosition(Position):
         -------
         TiledImageArray
         """
+        xy_shape = tuple(np.array(grid_shape) * np.array(tile_shape[-2:]))
         tiles = TiledImageArray(
             self._group.zeros(
                 name=name,
-                shape=tuple(np.array(grid_shape) * np.array(tile_shape)),
+                shape=tile_shape[:-2] + xy_shape,
                 chunks=self._default_chunks(
                     shape=tile_shape, last_data_dims=chunk_dims
                 ),
