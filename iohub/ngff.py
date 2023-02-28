@@ -842,6 +842,10 @@ class Position(NGFFNode):
         img.set_orthogonal_selection(tuple(ortho_sel), data)
 
 
+class TiledPosition(Position):
+    _MEMBER_TYPE = TiledImageArray
+
+
 class Well(NGFFNode):
     """The Zarr group level containing position groups.
 
@@ -1266,7 +1270,7 @@ class Plate(NGFFNode):
 
 def open_ome_zarr(
     store_path: StrOrBytesPath,
-    layout: Literal["auto", "fov", "hcs"] = "auto",
+    layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: List[str] = None,
     axes: list[AxisMeta] = None,
@@ -1282,12 +1286,14 @@ def open_ome_zarr(
     ----------
     store_path : StrOrBytesPath
         File path to the Zarr store to open
-    layout: Literal["auto", "fov", "hcs"], optional
+    layout: Literal["auto", "fov", "hcs", "tiled"], optional
         NGFF store layout:
         "auto" will infer layout from existing metadata
         (cannot be used for creation);
         "fov" opens a single position/FOV node;
         "hcs" opens the high-content-screening multi-fov hierarchy;
+        "tiled" opens a "fov" layout with tiled image array
+        (cannot be automatically inferred since this not NGFF-specified);
         by default "auto"
     mode : Literal["r+", "a", "w-"], optional
         mode : Literal["r", "r+", "a", "w", "w-"], optional
@@ -1357,10 +1363,10 @@ def open_ome_zarr(
                 "Store layout must be specified when creating a new dataset."
             )
     msg = f"Specified layout '{layout}' does not match existing metadata."
-    if layout == "fov":
+    if layout in ("fov", "tiled"):
         if parse_meta and "multiscales" not in meta_keys:
             raise ValueError(msg)
-        node = Position
+        node = TiledPosition if layout == "tiled" else Position
     elif layout == "hcs":
         if parse_meta and "plate" not in meta_keys:
             raise ValueError(msg)
