@@ -652,7 +652,7 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         if not chunks:
-            self._default_chunks(data.shape)
+            self._default_chunks(data.shape, 3)
         if check_shape:
             self._check_shape(data.shape)
         img_arr = ImageArray(
@@ -664,8 +664,8 @@ class Position(NGFFNode):
         return img_arr
 
     @staticmethod
-    def _default_chunks(shape):
-        chunks = shape[-min(3, len(shape)) :]
+    def _default_chunks(shape, last_data_dims: int):
+        chunks = shape[-min(last_data_dims, len(shape)) :]
         return _pad_shape(chunks, target=len(shape))
 
     def _check_shape(self, data_shape: tuple[int]):
@@ -849,8 +849,48 @@ class Position(NGFFNode):
 class TiledPosition(Position):
     _MEMBER_TYPE = TiledImageArray
 
-    def make_tiles(self, rows: int, columns: int, tile_shape: tuple[int]):
-        pass
+    def make_tiles(
+        self,
+        name: str,
+        grid_shape: tuple[int, int],
+        tile_shape: tuple[int],
+        transform: List[TransformationMeta] = None,
+        chunk_dims: int = 2,
+    ):
+        """Make a tiled image array filled with zeros.
+        Chunk size is inferred from tile shape.
+
+        Parameters
+        ----------
+        name : str
+            Name of the array.
+        grid_shape : tuple[int, int]
+            2-tuple of the tiling grid shape (rows, columns).
+        tile_shape : tuple[int]
+            Shape of each tile (up to 5D).
+        transform : List[TransformationMeta], optional
+            List of coordinate transformations, by default None.
+            Should be specified for a non-native resolution level.
+        chunk_dims : int, optional
+            Non-singleton dimensions of the chunksize,
+            by default 2 (chunk by XY tile size).
+
+        Returns
+        -------
+        TiledImageArray
+        """
+        tiles = TiledImageArray(
+            self._group.zeros(
+                name=name,
+                shape=tuple(np.array(grid_shape) * np.array(tile_shape)),
+                chunks=self._default_chunks(
+                    shape=tile_shape, last_data_dims=2
+                ),
+                **self._storage_options,
+            )
+        )
+        self._create_image_meta(tiles.basename, transform=transform)
+        return tiles
 
 
 class Well(NGFFNode):
