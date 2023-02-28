@@ -462,7 +462,7 @@ class TiledImageArray(ImageArray):
     @staticmethod
     def _check_rc(row: int, column: int):
         if not (isinstance(row, int) and isinstance(column, int)):
-            raise ValueError("Row and column indices must be integers.")
+            raise TypeError("Row and column indices must be integers.")
 
 
 class Position(NGFFNode):
