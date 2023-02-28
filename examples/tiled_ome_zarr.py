@@ -30,12 +30,17 @@ with open_ome_zarr(
     )
     for row in range(grid_shape[0]):
         for column in range(grid_shape[1]):
-            tiles.write_tile(np.ones(shape=tile_shape), row, column)
+            # each tile will be filled with different constant values
+            data = np.zeros(shape=tile_shape) + row + column
+            tiles.write_tile(data, row, column)
 
 
 # %%
 # Load dataset and read a tile
 
-with open_ome_zarr(store_path, layout="auto", mode="r") as dataset:
+with open_ome_zarr(store_path, layout="tiled", mode="r") as dataset:
     dataset.print_tree()
     tile_1_2 = dataset["tiled_raw"].get_tile(1, 2)
+
+# %%
+# Try viewing the images with napari-ome-zarr
