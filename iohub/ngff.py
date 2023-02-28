@@ -652,8 +652,7 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         if not chunks:
-            chunks = data.shape[-min(3, len(data.shape)) :]
-            chunks = _pad_shape(chunks, target=len(data.shape))
+            self._default_chunks(data.shape)
         if check_shape:
             self._check_shape(data.shape)
         img_arr = ImageArray(
@@ -663,6 +662,11 @@ class Position(NGFFNode):
         )
         self._create_image_meta(img_arr.basename, transform=transform)
         return img_arr
+
+    @staticmethod
+    def _default_chunks(shape):
+        chunks = shape[-min(3, len(shape)) :]
+        return _pad_shape(chunks, target=len(shape))
 
     def _check_shape(self, data_shape: tuple[int]):
         if len(data_shape) != len(self.axes):
@@ -844,6 +848,9 @@ class Position(NGFFNode):
 
 class TiledPosition(Position):
     _MEMBER_TYPE = TiledImageArray
+
+    def make_tiles(self, rows: int, columns: int, tile_shape: tuple[int]):
+        pass
 
 
 class Well(NGFFNode):
