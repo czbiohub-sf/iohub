@@ -338,6 +338,7 @@ class ImageArray(zarr.Array):
 
 class TiledImageArray(ImageArray):
     """Container object for tiled image stored as a zarr array (up to 5D)."""
+
     def __init__(self, zarray: zarr.Array):
         super().__init__(zarray)
 
@@ -442,6 +443,17 @@ class TiledImageArray(ImageArray):
         c_slice = slice(column * x, (column + 1) * x)
         pad = [slice(None)] * len(self.shape - 2)
         if pre_dims:
+            try:
+                if len(pre_dims) != len(pad):
+                    raise IndexError(
+                        "Length of `pre_dims` should be len(pad), "
+                        f"got {len(pre_dims)}."
+                    )
+            except TypeError:
+                raise TypeError(
+                    "Argument `pre_dims` should be a sequence, "
+                    f"got type {type(pre_dims)}."
+                )
             for i, sel in enumerate(pre_dims):
                 if sel:
                     pad[i] = sel
