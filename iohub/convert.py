@@ -4,7 +4,7 @@ import numpy as np
 import tifffile as tiff
 from waveorder.io.writer import WaveorderWriter
 from waveorder.io.reader import WaveorderReader
-from recOrder.io.utils import create_grid_from_coordinates
+from iohub.utils import create_grid_from_coordinates
 import copy
 import json
 

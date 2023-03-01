@@ -4,7 +4,7 @@ import zarr
 from tifffile import TiffFile
 from waveorder.io import WaveorderReader, WaveorderWriter
 import numpy as np
-from recOrder.io.zarr_converter import ZarrConverter
+from iohub.zarr_converter import ZarrConverter
 
 
 def test_ometiff_converter_initialize(
