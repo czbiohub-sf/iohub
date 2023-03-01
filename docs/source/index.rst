@@ -44,7 +44,9 @@ Write
 
    NGFF <api/ngff>
    MicromanagerSequenceReader <api/mm_sequence_reader>
+   MicromanagerOmeTiffReader <api/mm_ometiff_reader>
    UPTIReader <api/upti>
+   PycromanagerReader <api/pycromanager>
 
 .. toctree::
    :maxdepth: 1
