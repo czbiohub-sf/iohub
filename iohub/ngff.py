@@ -1073,7 +1073,7 @@ def open_ome_zarr(
         AxisMeta(name='Z', type='space', unit='micrometer'),
         AxisMeta(name='Y', type='space', unit='micrometer'),
         AxisMeta(name='X', type='space', unit='micrometer')]
-        ````
+        ```
     version : Literal["0.1", "0.4"], optional
         OME-NGFF version, by default "0.4"
     synchronizer : object, optional
@@ -1086,7 +1086,7 @@ def open_ome_zarr(
     Returns
     -------
     Dataset
-        NGFF node object (`Position` or `Plate')
+        NGFF node object (`Position`, `Plate`, or `TiledPosition`)
     """
     if mode == "a":
         mode = ("w-", "r+")[int(os.path.exists(store_path))]
