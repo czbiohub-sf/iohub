@@ -42,9 +42,9 @@ Write
    :hidden:
    :caption: API Reference
 
-   Introduction <api/introduction>
    NGFF <api/ngff>
    MicromanagerSequenceReader <api/mm_sequence_reader>
+   UPTIReader <api/upti>
 
 .. toctree::
    :maxdepth: 1
