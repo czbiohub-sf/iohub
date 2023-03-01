@@ -42,6 +42,7 @@ short_alpha_numeric = st.text(
     min_size=1,
     max_size=16,
 )
+tiles_rc_st = st.tuples(t_dim_st, t_dim_st)
 plate_axis_names_st = st.lists(
     short_alpha_numeric,
     min_size=1,
@@ -282,6 +283,98 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
     with pytest.raises(ValueError):
         with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name) as _:
             pass
+
+
+@given(channel_names=channel_names_st)
+@settings(max_examples=16)
+def test_create_tiled(channel_names):
+    """Test `iohub.ngff.open_ome_zarr()`"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "tiled.zarr")
+        dataset = open_ome_zarr(
+            store_path, layout="tiled", mode="a", channel_names=channel_names
+        )
+        assert os.path.isdir(store_path)
+        assert dataset.channel_names == channel_names
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    grid_shape=tiles_rc_st,
+    arr_name=short_alpha_numeric,
+)
+def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
+    """Test `iohub.ngff.TiledPosition.make_tiles()` and  `...get_tile()`"""
+    with TemporaryDirectory() as temp_dir:
+        channel_names, random_5d = channels_and_random_5d
+        store_path = os.path.join(temp_dir, "tiled.zarr")
+        with open_ome_zarr(
+            store_path, layout="tiled", mode="a", channel_names=channel_names
+        ) as dataset:
+            tiles = dataset.make_tiles(
+                name=arr_name,
+                grid_shape=grid_shape,
+                tile_shape=random_5d.shape,
+                chunk_dims=2,
+            )
+            assert tiles.rows == grid_shape[0]
+            assert tiles.columns == grid_shape[1]
+            assert tiles.tiles == grid_shape
+            assert tiles.shape[-2:] == (
+                grid_shape[-2] * random_5d.shape[-2],
+                grid_shape[-1] * random_5d.shape[-1],
+            )
+            assert tiles.tile_shape == _pad_shape(
+                random_5d.shape[-2:], target=5
+            )
+            for args in ((1.01, 1), (0, 0, 0)):
+                with pytest.raises(TypeError):
+                    tiles.get_tile(*args)
+            for args in ((0, 0, (0,) * 2), (0, 0, (0,) * 4)):
+                with pytest.raises(IndexError):
+                    tiles.get_tile(*args)
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    grid_shape=tiles_rc_st,
+    arr_name=short_alpha_numeric,
+)
+@settings(max_examples=16, deadline=2000)
+def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name):
+    """Test `iohub.ngff.TiledPosition.write_tile()` and `...get_tile()`"""
+    channel_names, random_5d = channels_and_random_5d
+
+    def _tile_data(tiles):
+        for row in range(tiles.rows):
+            for column in range(tiles.columns):
+                yield (
+                    random_5d
+                    / (tiles.rows * tiles.columns + 1)
+                    * (row * column + 1),
+                    row,
+                    column,
+                )
+
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "tiled.zarr")
+        with open_ome_zarr(
+            store_path, layout="tiled", mode="w-", channel_names=channel_names
+        ) as dataset:
+            tiles = dataset.make_tiles(
+                name=arr_name,
+                grid_shape=grid_shape,
+                tile_shape=random_5d.shape,
+                chunk_dims=2,
+            )
+            for data, row, column in _tile_data(tiles):
+                tiles.write_tile(data, row, column)
+        with open_ome_zarr(
+            store_path, layout="tiled", mode="r", channel_names=channel_names
+        ) as dataset:
+            for data, row, column in _tile_data(tiles):
+                read = tiles.get_tile(row, column)
+                assert_array_almost_equal(data, read)
 
 
 @given(channel_names=channel_names_st)
