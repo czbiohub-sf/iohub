@@ -8,7 +8,7 @@ import copy
 import json
 
 
-def create_grid_from_coordinates(xy_coords, rows, columns):
+def _create_grid_from_coordinates(xy_coords, rows, columns):
     """
     Function to create a grid from XY-position coordinates.  Useful for generating HCS Zarr metadata.
 
@@ -241,7 +241,7 @@ class ZarrConverter:
     def _generate_hcs_metadata(self):
         position_list, rows, cols = self._get_position_coords()
 
-        position_grid = create_grid_from_coordinates(position_list, rows, cols)
+        position_grid = _create_grid_from_coordinates(position_list, rows, cols)
 
         # Build metadata based off of position grid
         hcs_meta = {
