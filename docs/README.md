@@ -1,8 +1,7 @@
 Inside docs folder
 
 ```shell
-pip install /PATH/TO/iohub
-pip install -r requirements-docs.txt
+pip install "/PATH/TO/iohub[doc]"
 make clean && make build
 ```
 
