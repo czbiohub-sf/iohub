@@ -442,7 +442,7 @@ class TiledImageArray(ImageArray):
         r_slice = slice(row * y, (row + 1) * y)
         c_slice = slice(column * x, (column + 1) * x)
         pad = [slice(None)] * (len(self.shape) - 2)
-        if pre_dims:
+        if pre_dims is not None:
             try:
                 if len(pre_dims) != len(pad):
                     raise IndexError(
