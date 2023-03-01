@@ -25,7 +25,8 @@ N-dimensional bioimaging data I/O.
    :caption: API Reference
 
    Introduction <api/introduction>
-
+   NGFF <api/ngff>
+   MicromanagerSequenceReader <api/mm_sequence_reader>
 
 .. toctree::
    :maxdepth: 1
