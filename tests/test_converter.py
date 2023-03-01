@@ -2,9 +2,9 @@ import os
 import shutil
 import zarr
 from tifffile import TiffFile
-from waveorder.io import WaveorderReader, WaveorderWriter
 import numpy as np
-from iohub.zarr_converter import ZarrConverter
+from iohub.convert import ZarrConverter
+from iohub.reader import MicromanagerOmeTiffReader, NDTiffReader
 
 
 def test_ometiff_converter_initialize(
@@ -32,7 +32,7 @@ def test_ometiff_converter_initialize(
         )
 
     assert converter.dtype == "uint16"
-    assert isinstance(converter.reader, WaveorderReader)
+    assert isinstance(converter.reader, MicromanagerOmeTiffReader)
     assert isinstance(converter.writer, WaveorderWriter)
 
     assert converter.dim_order == ["time", "position", "z", "channel"]

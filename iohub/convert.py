@@ -1,27 +1,38 @@
-import os
-from tqdm import tqdm
-import numpy as np
-import tifffile as tiff
-from waveorder.io.writer import WaveorderWriter
-from waveorder.io.reader import WaveorderReader
 import copy
 import json
+import os
+from typing import Literal
+
+import numpy as np
+import tifffile as tiff
+
+# from numpy.typing import NDArray
+from tqdm import tqdm
+
+from iohub.ngff import open_ome_zarr
+from iohub.reader import imread
 
 
-def _create_grid_from_coordinates(xy_coords, rows, columns):
-    """
-    Function to create a grid from XY-position coordinates.  Useful for generating HCS Zarr metadata.
+def _create_grid_from_coordinates(
+    xy_coords: list[tuple[float, float]], rows: int, columns: int
+):
+    """Function to create a grid from XY-position coordinates.
+    Useful for generating HCS Zarr metadata.
 
     Parameters
     ----------
-    xy_coords:          (list) XY Stage position list in the order in which it was acquired: (X, Y) tuple.
-    rows:               (int) number of rows in the grid-like acquisition
-    columns:            (int) number of columns in the grid-like acquisition
+    xy_coords : list[tuple[float, float]]
+        (X, Y) stage position list in the order in which it was acquired.
+    rows : int
+        number of rows in the grid-like acquisition
+    columns : int
+        number of columns in the grid-like acquisition
 
     Returns
     -------
-    pos_index_grid      (array) A grid-like array mimicking the shape of the acquisition where the value in the array
-                                corresponds to the position index at that location.
+    NDArray
+        A grid-like array mimicking the shape of the acquisition where the
+        value in the array corresponds to the position index at that location.
     """
 
     coords = dict()
@@ -42,42 +53,38 @@ def _create_grid_from_coordinates(xy_coords, rows, columns):
 
     for row in range(rows):
         for col in range(columns):
-            # append position index (key) into a final grid by indexed into the coordinate map (values)
+            # append position index (key) into a final grid
+            # by indexed into the coordinate map (values)
             pos_index_grid[row, col] = keys[vals.index(list(grid[row, col]))]
 
     return pos_index_grid
 
 
-class ZarrConverter:
-    """
-    This converter works to convert micromanager ome tiff or single-page tiff stacks into
-    OME-HCS format zarr.  User can specify to fully-format in HCS, in which case it will
-    lay out the positions in a grid-like format based on how the data was acquired (useful
-    for tiled acquisitions)
+class TIFFConverter:
+    """Convert micromanager TIFF formats
+    (single-page TIFF, OME-TIFF, ND-TIFF) into HCS OME-Zarr.
+
+    Parameters
+    ----------
+    input_dir : str
+        Input directory
+    output_dir : str
+        Output directory
+    data_type : Literal['singlepagetiff', 'ometiff', 'ndtiff'], optional
+        input data type, by default None
+    grid_layout : bool, optional
+        Whether to lay out the positions in a grid-like format
+        based on how the data was acquired
+        (useful for tiled acquisitions), by default False
     """
 
     def __init__(
         self,
-        input_dir,
-        output_dir,
-        data_type=None,
-        replace_position_names=False,
-        format_hcs=False,
+        input_dir: str,
+        output_dir: str,
+        data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
+        format_hcs: bool = False,
     ):
-        """
-
-        Parameters
-        ----------
-        input_dir: str
-            Input directory
-        output_dir: str
-            Output directory
-        data_type: str
-            input data type, optional
-        replace_position_names: bool
-        format_hcs: bool
-        """
-
         if not output_dir.endswith(".zarr"):
             raise ValueError("Please specify .zarr at the end of your output")
 
@@ -89,7 +96,7 @@ class ZarrConverter:
         self.meta_file = None
 
         print("Initializing Data...")
-        self.reader = WaveorderReader(
+        self.reader = imread(
             self.data_directory, data_type, extract_data=False
         )
         self.data_type = self.reader.data_type
@@ -241,7 +248,9 @@ class ZarrConverter:
     def _generate_hcs_metadata(self):
         position_list, rows, cols = self._get_position_coords()
 
-        position_grid = _create_grid_from_coordinates(position_list, rows, cols)
+        position_grid = _create_grid_from_coordinates(
+            position_list, rows, cols
+        )
 
         # Build metadata based off of position grid
         hcs_meta = {
