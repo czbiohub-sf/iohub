@@ -1,7 +1,23 @@
 iohub
 ~~~~~~~~~~~~~
 
-N-dimensional bioimaging data I/O.
+N-dimensional bioimaging produces data and metadata in various formats,
+and iohub aims to become a unified Python interface to the most common formats
+used at the Biohub and in the broader imaging community.
+
+
+Read
+====
+
+- OME-Zarr
+- Single-page TIFF, OME-TIFF, and NDTiff images written by Micro-Manager/pycro-manager
+- Custom data formats used by Biohub microscopes (e.g., PTI, Mantis (WIP), DaXi (TBD))
+
+Write
+======
+
+- OME-Zarr
+- Multi-page TIFF stacks organized in a directory hierarchy that mimics OME-NGFF (WIP)
 
 
 
@@ -11,6 +27,8 @@ N-dimensional bioimaging data I/O.
    :caption: Getting Started
 
    Install <getting_started/install.rst>
+   Why iohub? <getting_started/why.rst>
+
 
 .. toctree::
    :maxdepth: 1
