@@ -340,7 +340,11 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
     grid_shape=tiles_rc_st,
     arr_name=short_alpha_numeric,
 )
-@settings(max_examples=16, deadline=2000)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
 def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name):
     """Test `iohub.ngff.TiledPosition.write_tile()` and `...get_tile()`"""
     channel_names, random_5d = channels_and_random_5d
