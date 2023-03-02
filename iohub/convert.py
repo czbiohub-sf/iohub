@@ -126,7 +126,9 @@ class TIFFConverter:
                 *self._get_position_coords()
             )
         else:
-            self.position_grid = np.arange(self.p, dtype=int)
+            self.position_grid = np.expand_dims(
+                np.arange(self.p, dtype=int), axis=0
+            )
         self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
 
     def _gen_coordset(self):
@@ -260,8 +262,8 @@ class TIFFConverter:
             channel_names=self.reader.channel_names,
             version="0.4",
         )
-        for row in self.position_grid:
-            for column in row:
+        for row, columns in enumerate(self.position_grid):
+            for column in columns:
                 pos = self.writer.create_position(row, column, pos_name="0")
                 _ = pos.zgroup.zeros(
                     "0",
