@@ -28,6 +28,3 @@ publish:
 	sphinx-multiversion source build/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
-	python generate_index_html.py
-	@echo
-	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
