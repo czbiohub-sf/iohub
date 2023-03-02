@@ -1,18 +1,14 @@
 import copy
-import json
 import logging
 import os
 from typing import Literal
 
 import numpy as np
-import tifffile as tiff
-
-# from numpy.typing import NDArray
 from tqdm import tqdm
 
 from iohub._version import version as iohub_version
-from iohub.ngff import open_ome_zarr
-from iohub.reader import UPTIReader, imread
+from iohub.ngff import ImageArray, open_ome_zarr
+from iohub.reader import imread
 
 
 def _create_grid_from_coordinates(
@@ -73,11 +69,14 @@ class TIFFConverter:
     output_dir : str
         Output directory
     data_type : Literal['singlepagetiff', 'ometiff', 'ndtiff'], optional
-        input data type, by default None
+        Input data type, by default None
     grid_layout : bool, optional
         Whether to lay out the positions in a grid-like format
         based on how the data was acquired
         (useful for tiled acquisitions), by default False
+    chunks : tuple[int], optional
+        Chunk size of the output Zarr arrays, by default None
+        (chunk by XY planes, this is the fastest at converting time)
     """
 
     def __init__(
@@ -86,12 +85,12 @@ class TIFFConverter:
         output_dir: str,
         data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
         grid_layout: int = False,
+        chunks: tuple[int] = None,
     ):
         logging.debug("Checking output.")
         if not output_dir.strip("/").endswith(".zarr"):
             raise ValueError("Please specify .zarr at the end of your output")
-        save_directory = os.path.dirname(output_dir)
-        self.meta_file = None
+        self.output_dir = output_dir
         logging.info("Initializing data.")
         self.reader = imread(input_dir, data_type, extract_data=False)
         logging.debug("Finished initializing data.")
@@ -99,17 +98,6 @@ class TIFFConverter:
             self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
         )
         self.save_name = os.path.basename(output_dir)
-        if not isinstance(self.reader, UPTIReader):
-            self.meta_file = open(
-                os.path.join(
-                    save_directory,
-                    f'{self.save_name.strip(".zarr")}_ImagePlaneMetadata.txt',
-                ),
-                "a",
-            )
-        if not os.path.exists(save_directory):
-            os.mkdir(save_directory)
-
         logging.debug("Getting dataset summary information.")
         self.coord_map = dict()
         self.pos_names = []
@@ -138,14 +126,8 @@ class TIFFConverter:
                 *self._get_position_coords()
             )
         else:
-            self.position_grid = None
-        self.writer = open_ome_zarr(
-            save_directory,
-            layout="hcs",
-            mode="w-",
-            channel_names=self.reader.channel_names,
-            version="0.4",
-        )
+            self.position_grid = np.arange(self.p, dtype=int)
+        self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
 
     def _gen_coordset(self):
         """Generates a coordinate set in the dimensional order
@@ -207,7 +189,8 @@ class TIFFConverter:
             self.c_dim = self.dim_order.index("channel")
             self.z_dim = self.dim_order.index("z")
 
-        # create array of coordinate tuples with innermost dimension being the first dim acquired
+        # create array of coordinate tuples with innermost dimension
+        # being the first dim acquired
         self.coords = [
             (dim3, dim2, dim1, dim0)
             for dim3 in range(dims[3])
@@ -232,63 +215,22 @@ class TIFFConverter:
 
         return coords_list, row_max + 1, col_max + 1
 
-    def _generate_plane_metadata(self, tiff_file, page):
-        """
-        generates the img plane metadata by saving the MicroManagerMetadata written in the tiff tags.
-
-        This image-plane data houses information of the config when the image was acquired.
-
-        Parameters
-        ----------
-        tiff_file:          (TiffFile Object) Opened TiffFile Object
-        page:               (int) Page corresponding to the desired image plane
-
-        Returns
-        -------
-        image_metadata:     (dict) Dictionary of the image-plane metadata
-
-        """
-
-        for tag in tiff_file.pages[page].tags.values():
-            if tag.name == "MicroManagerMetadata":
-                return tag.value
-            else:
-                continue
-
-    def _perform_image_check(self, tiff_image, coord):
-        """
-        checks to make sure the memory mapped image matches the saved zarr image to ensure
-        a successful conversion.
-
-        Parameters
-        ----------
-        tiff_image:     (nd-array) memory mapped array
-        coord:          (tuple) coordinate of the image location
-
-        Returns
-        -------
-        True/False:     (bool) True if arrays are equal, false otherwise
-
-        """
-
-        zarr_array = self.writer.sub_writer.current_pos_group["arr_0"]
+    def _perform_image_check(self, zarr_array: ImageArray, tiff_image, coord):
         zarr_img = zarr_array[
             coord[self.dim_order.index("time")],
             coord[self.dim_order.index("channel")],
             coord[self.dim_order.index("z")],
         ]
-
-        return np.array_equal(zarr_img, tiff_image)
+        if not np.array_equal(zarr_img, tiff_image):
+            raise ValueError(
+                "Converted Zarr image does not match the raw data. "
+                "Conversion Failed."
+            )
 
     def _get_position_names(self):
+        """Append a list of pos_names in ascending order
+        (order in which they were acquired).
         """
-        Append a list of pos_names in ascending order (order in which they were acquired)
-
-        Returns
-        -------
-
-        """
-
         for p in range(self.p):
             if self.p > 1:
                 try:
@@ -299,84 +241,8 @@ class TIFFConverter:
                 name = ""
             self.pos_names.append(name)
 
-    def check_file_changed(self, last_file, current_file):
-        """
-        function to check whether or not the tiff file has changed.
-
-        Parameters
-        ----------
-        last_file:          (str) filename of the last file looked at
-        current_file:       (str) filename of the current file
-
-        Returns
-        -------
-        True/False:       (bool) updated page number
-
-        """
-
-        if last_file != current_file or not last_file:
-            return True
-        else:
-            return False
-
-    def get_image_array(self, p, t, c, z):
-        """
-        Grabs the image array through memory mapping.  We must first find the byte offset which is located in the
-        tiff page tag.  We then use that to quickly grab the bytes corresponding to the desired image.
-
-        Parameters
-        ----------
-        p:                  (int) position coordinate
-        t:                  (int) time coordinate
-        c:                  (int) channel coordinate
-        z:                  (int) z coordinate
-
-        Returns
-        -------
-        array:              (nd-array) image array of shape (Y, X)
-
-        """
-
-        # get image at given coordinate
+    def _get_image_array(self, p: int, t: int, c: int, z: int):
         return np.asarray(self.reader.get_image(p, t, c, z))
-
-    def get_channel_clims(self, pos):
-        """
-        generate contrast limits for each channel.  Grabs the middle image of the stack to compute contrast limits
-        Default clim is to ignore 1% of pixels on either end
-
-        Returns
-        -------
-        clims:      [list]: list of tuples corresponding to the (min, max) contrast limits
-
-        """
-
-        clims = []
-
-        for chan in range(self.c):
-            img = self.get_image_array(pos, t=0, c=chan, z=self.focus_z)
-            clip = 0.01
-            low = np.percentile(img, clip * 100)
-            high = np.percentile(img, (1 - clip) * 100)
-            clims.append((low, high))
-
-        return clims
-
-    def init_zarr_structure(self):
-        """
-        Initiates the zarr store.  Will create a zarr store with user-specified name or original name of data
-        if not provided.  Store will contain a group called 'arr_0' with contains an array of original
-        data dtype of dimensions (T, C, Z, Y, X).  Appends OME-zarr metadata with clims,chan_names
-
-        Current compressor is Blosc zstd w/ bitshuffle (~1.5x compression, faster compared to best 1.6x compressor)
-
-        Returns
-        -------
-
-        """
-        self._get_position_names()
-        for pos in range(self.p):
-            self.writer.create_position()
 
     def _get_coord_reorder(self, coord):
         return (
@@ -386,72 +252,52 @@ class TIFFConverter:
             coord[self.z_dim],
         )
 
-    def run_conversion(self):
-        """
-        Runs the data conversion through memory mapping and performs an image check to make sure conversion did not
-        alter any data values.
-        """
-        # Run setup
-        print("Running Conversion...")
-        print("Setting up zarr")
-        # self._gather_index_maps()
-        self.init_zarr_structure()
-        last_file = None
+    def _init_hcs_arrays(self):
+        self.writer = open_ome_zarr(
+            self.output_dir,
+            layout="hcs",
+            mode="w-",
+            channel_names=self.reader.channel_names,
+            version="0.4",
+        )
+        for row in self.position_grid:
+            for column in row:
+                pos = self.writer.create_position(row, column, pos_name="0")
+                _ = pos.zgroup.zeros(
+                    "0",
+                    shape=(
+                        self.t if self.t != 0 else 1,
+                        self.c if self.c != 0 else 1,
+                        self.z if self.z != 0 else 1,
+                        self.y,
+                        self.x,
+                    ),
+                    chunks=self.chunks,
+                )
+                pos._create_image_meta("0")
 
-        # Format bar for CLI display
+    def run(self, check_image: bool = True):
+        """Runs the conversion.
+
+        Parameters
+        ----------
+        check_image : bool, optional
+            Whether to check that the written Zarr array has the same
+            pixel values as in TIFF files, by default True
+        """
+        logging.debug("Setting up Zarr store.")
+        self._init_hcs_arrays()
         bar_format = (
             "Status: |{bar}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
-
-        # Run through every coordinate and convert image + grab image metadata, statistics
-        # loop is done in order in which the images were acquired
-        print("Converting Images...")
-
+        # Run through every coordinate and convert in acquisition order
+        logging.info("Converting Images...")
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
-            if self.data_type == "ometiff":
-                # Only load tiff file if it has changed from previous run
-                current_file = self.reader.coord_map[coord_reorder][0]
-                if self.check_file_changed(last_file, current_file):
-                    tf = tiff.TiffFile(current_file)
-                    last_file = current_file
-
-                # Get the metadata
-                page = self.reader.coord_map[coord_reorder][1]
-
-                meta = dict()
-                plane_meta = self._generate_plane_metadata(tf, page)
-                meta[f"{coord_reorder}"] = plane_meta
-
-                json.dump(meta, self.meta_file, indent=1)
-            elif self.data_type == "pycromanager":
-                # write page metadata
-                plane_metadata = self.reader.get_image_metadata(coord_reorder)
-
-                json.dump(
-                    {
-                        f"FrameKey-{coord[self.p_dim]}-{coord[self.t_dim]}-"
-                        f"{coord[self.c_dim]}-{coord[self.z_dim]}": plane_metadata
-                    },
-                    self.meta_file,
-                    indent=1,
-                )
-
-            # get the memory mapped image
-            img_raw = self.get_image_array(coord_reorder)
-
-            # Write the data
-            self.writer.write(img_raw, coord_reorder)
-
-            # Perform image check
-            if not self._perform_image_check(img_raw, coord):
-                raise ValueError(
-                    "Converted Zarr image does not match the raw data. "
-                    "Conversion Failed."
-                )
-
-        # Put summary metadata into zarr store and cleanup
+            img_raw = self._get_image_array(*coord_reorder)
+            for _, pos in self.writer.positions():
+                pos["0"][coord_reorder[1:]] = img_raw
+            if check_image:
+                self._perform_image_check(img_raw, coord)
         self.writer.zgroup.attrs.update(self.metadata)
-        if self.meta_file:
-            self.meta_file.close()
