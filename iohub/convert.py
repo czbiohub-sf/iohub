@@ -79,7 +79,7 @@ class TIFFConverter:
         Chunk size of the output Zarr arrays, by default None
         (chunk by XY planes, this is the fastest at converting time)
     label_positions : bool, optional
-        Dump postion labels in MM metadata to Multiscales metadata,
+        Dump postion labels in MM metadata to Omero metadata,
         by default False
     """
 
