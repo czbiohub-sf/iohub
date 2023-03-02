@@ -4,10 +4,11 @@ import os
 from typing import Literal
 
 import numpy as np
+from numpy.typing import NDArray
 from tqdm import tqdm
 
 from iohub._version import version as iohub_version
-from iohub.ngff import ImageArray, open_ome_zarr
+from iohub.ngff import open_ome_zarr
 from iohub.reader import imread
 
 
@@ -217,13 +218,8 @@ class TIFFConverter:
 
         return coords_list, row_max + 1, col_max + 1
 
-    def _perform_image_check(self, zarr_array: ImageArray, tiff_image, coord):
-        zarr_img = zarr_array[
-            coord[self.dim_order.index("time")],
-            coord[self.dim_order.index("channel")],
-            coord[self.dim_order.index("z")],
-        ]
-        if not np.array_equal(zarr_img, tiff_image):
+    def _perform_image_check(self, zarr_img: NDArray, tiff_img: NDArray):
+        if not np.array_equal(zarr_img, tiff_img):
             raise ValueError(
                 "Converted Zarr image does not match the raw data. "
                 "Conversion Failed."
@@ -299,7 +295,8 @@ class TIFFConverter:
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
             for _, pos in self.writer.positions():
-                pos["0"][coord_reorder[1:]] = img_raw
+                zarr_img = pos["0"]
+                zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
-                self._perform_image_check(img_raw, coord)
+                self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
         self.writer.zgroup.attrs.update(self.metadata)
