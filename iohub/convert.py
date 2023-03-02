@@ -78,6 +78,9 @@ class TIFFConverter:
     chunks : tuple[int], optional
         Chunk size of the output Zarr arrays, by default None
         (chunk by XY planes, this is the fastest at converting time)
+    label_positions : bool, optional
+        Dump postion labels in MM metadata to Multiscales metadata,
+        by default False
     """
 
     def __init__(
@@ -87,6 +90,7 @@ class TIFFConverter:
         data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
         grid_layout: int = False,
         chunks: tuple[int] = None,
+        label_positions: bool = False,
     ):
         logging.debug("Checking output.")
         if not output_dir.strip("/").endswith(".zarr"):
@@ -131,6 +135,7 @@ class TIFFConverter:
         else:
             self._make_default_grid()
         self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
+        self.label_positions = label_positions
 
     def _make_default_grid(self):
         self.position_grid = np.expand_dims(
@@ -217,6 +222,11 @@ class TIFFConverter:
         if not self.reader.stage_positions:
             raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
+            stage_pos = pos.get("XYStage")
+            if stage_pos is None:
+                raise ValueError(
+                    f"Stage position is not available for position {idx}"
+                )
             coords_list.append(pos["XYStage"])
             row = pos["GridRow"]
             col = pos["GridCol"]
@@ -232,19 +242,24 @@ class TIFFConverter:
                 "Conversion Failed."
             )
 
-    def _get_position_names(self):
-        """Append a list of pos_names in ascending order
+    def _get_pos_names(self):
+        """Append a list of pos names in ascending order
         (order in which they were acquired).
         """
-        for p in range(self.p):
-            if self.p > 1:
-                try:
-                    name = self.summary_metadata["StagePositions"][p]["Label"]
-                except KeyError:
-                    name = ""
-            else:
-                name = ""
-            self.pos_names.append(name)
+        if not self.label_positions:
+            self.pos_names = ["0"] * self.p
+        else:
+            for p in range(self.p):
+                if self.p > 1:
+                    try:
+                        name = self.summary_metadata["StagePositions"][p][
+                            "Label"
+                        ]
+                    except KeyError:
+                        name = None
+                else:
+                    name = None
+                self.pos_names.append(name)
 
     def _get_image_array(self, p: int, t: int, c: int, z: int):
         return np.asarray(self.reader.get_image(p, t, c, z))
@@ -265,9 +280,11 @@ class TIFFConverter:
             channel_names=self.reader.channel_names,
             version="0.4",
         )
+        self.well_list = []
         for row, columns in enumerate(self.position_grid):
             for column in columns:
                 pos = self.writer.create_position(row, column, pos_name="0")
+                self.well_list.append(os.path.join(row, column))
                 _ = pos.zgroup.zeros(
                     "0",
                     shape=(
@@ -280,6 +297,10 @@ class TIFFConverter:
                     chunks=self.chunks,
                 )
                 pos._create_image_meta("0")
+                pos.metadata.omero.name = self.pos_names[
+                    len(self.well_list) - 1
+                ]
+                pos.dump_meta()
 
     def run(self, check_image: bool = True):
         """Runs the conversion.
@@ -301,9 +322,8 @@ class TIFFConverter:
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
-            for _, pos in self.writer.positions():
-                zarr_img = pos["0"]
-                zarr_img[coord_reorder[1:]] = img_raw
+            zarr_img = self.writer[self.well_list[coord_reorder[0]]]["0"]
+            zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
         self.writer.zgroup.attrs.update(self.metadata)
