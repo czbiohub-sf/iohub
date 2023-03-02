@@ -300,3 +300,4 @@ class TIFFConverter:
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
         self.writer.zgroup.attrs.update(self.metadata)
+        self.writer.close()
