@@ -284,7 +284,7 @@ class TIFFConverter:
         for row, columns in enumerate(self.position_grid):
             for column in columns:
                 pos = self.writer.create_position(row, column, pos_name="0")
-                self.well_list.append(os.path.join(row, column))
+                self.well_list.append(os.path.join(str(row), str(column)))
                 _ = pos.zgroup.zeros(
                     "0",
                     shape=(
