@@ -100,6 +100,22 @@ pip install -e ".[dev]"
 
 Then make the changes and [track them with Git](https://docs.github.com/en/get-started/using-git/about-git#example-contribute-to-an-existing-repository).
 
+
+### Building documentation locally
+
+Inside `/docs` folder
+
+```shell
+pip install "/PATH/TO/iohub[doc]"
+make clean && make build
+```
+
+Generated HTML documentation can be found in
+the ``build/html`` directory. Open ``build/html/index.html`` to view the home
+page for the documentation.
+
+
+
 ### Testing
 
 If you made code changes, make sure that there are also tests for them!
