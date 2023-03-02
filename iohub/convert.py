@@ -116,21 +116,26 @@ class TIFFConverter:
             f"Found Dataset {self.save_name} with "
             f"dimensions (P, T, C, Z, Y, X): {self.dim}"
         )
-
         self._gen_coordset()
         self.metadata = dict()
         self.metadata["iohub_version"] = iohub_version
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
             logging.info("Generating HCS plate level grid.")
-            self.position_grid = _create_grid_from_coordinates(
-                *self._get_position_coords()
-            )
+            try:
+                self.position_grid = _create_grid_from_coordinates(
+                    *self._get_position_coords()
+                )
+            except ValueError:
+                self._make_default_grid()
         else:
-            self.position_grid = np.expand_dims(
-                np.arange(self.p, dtype=int), axis=0
-            )
+            self._make_default_grid()
         self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
+
+    def _make_default_grid(self):
+        self.position_grid = np.expand_dims(
+            np.arange(self.p, dtype=int), axis=0
+        )
 
     def _gen_coordset(self):
         """Generates a coordinate set in the dimensional order
@@ -209,6 +214,8 @@ class TIFFConverter:
 
         # TODO: read rows, cols directly from XY corods
         # TODO: account for non MM2gamma meta?
+        if not self.reader.stage_positions:
+            raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
             coords_list.append(pos["XYStage"])
             row = pos["GridRow"]
