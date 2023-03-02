@@ -1,5 +1,6 @@
 import copy
 import json
+import logging
 import os
 from typing import Literal
 
@@ -9,8 +10,9 @@ import tifffile as tiff
 # from numpy.typing import NDArray
 from tqdm import tqdm
 
+from iohub._version import version as iohub_version
 from iohub.ngff import open_ome_zarr
-from iohub.reader import imread
+from iohub.reader import UPTIReader, imread
 
 
 def _create_grid_from_coordinates(
@@ -83,51 +85,34 @@ class TIFFConverter:
         input_dir: str,
         output_dir: str,
         data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
-        format_hcs: bool = False,
+        grid_layout: int = False,
     ):
-        if not output_dir.endswith(".zarr"):
+        logging.debug("Checking output.")
+        if not output_dir.strip("/").endswith(".zarr"):
             raise ValueError("Please specify .zarr at the end of your output")
-
-        # Init File IO Properties
-        self.version = "recOrder converter version=0.5"
-        self.data_directory = input_dir
-        self.save_directory = os.path.dirname(output_dir)
-        # self.files = glob.glob(os.path.join(self.data_directory, '*.tif'))
+        save_directory = os.path.dirname(output_dir)
         self.meta_file = None
-
-        print("Initializing Data...")
-        self.reader = imread(
-            self.data_directory, data_type, extract_data=False
-        )
-        self.data_type = self.reader.data_type
-        print("Finished initializing data")
-
+        logging.info("Initializing data.")
+        self.reader = imread(input_dir, data_type, extract_data=False)
+        logging.debug("Finished initializing data.")
         self.summary_metadata = (
             self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
         )
         self.save_name = os.path.basename(output_dir)
-        if self.data_type != "upti":
-            self.mfile_name = os.path.join(
-                self.save_directory,
-                f'{self.save_name.strip(".zarr")}_ImagePlaneMetadata.txt',
+        if not isinstance(self.reader, UPTIReader):
+            self.meta_file = open(
+                os.path.join(
+                    save_directory,
+                    f'{self.save_name.strip(".zarr")}_ImagePlaneMetadata.txt',
+                ),
+                "a",
             )
-            self.meta_file = open(self.mfile_name, "a")
+        if not os.path.exists(save_directory):
+            os.mkdir(save_directory)
 
-        self.replace_position_names = replace_position_names
-        self.format_hcs = format_hcs
-
-        if not os.path.exists(self.save_directory):
-            os.mkdir(self.save_directory)
-
-        # Generate Data Specific Properties
-        self.coords = None
+        logging.debug("Getting dataset summary information.")
         self.coord_map = dict()
         self.pos_names = []
-        self.dim_order = None
-        self.p_dim = None
-        self.t_dim = None
-        self.c_dim = None
-        self.z_dim = None
         self.dtype = self.reader.dtype
         self.p = self.reader.get_num_positions()
         self.t = self.reader.frames
@@ -138,34 +123,35 @@ class TIFFConverter:
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.focus_z = self.z // 2
         self.prefix_list = []
-        print(
-            f"Found Dataset {self.save_name} w/ dimensions (P, T, C, Z, Y, X): {self.dim}"
+        logging.info(
+            f"Found Dataset {self.save_name} with "
+            f"dimensions (P, T, C, Z, Y, X): {self.dim}"
         )
 
-        # Generate coordinate set
         self._gen_coordset()
-
-        # Initialize Metadata Dictionary
         self.metadata = dict()
-        self.metadata["recOrder_Converter_Version"] = self.version
+        self.metadata["iohub_version"] = iohub_version
         self.metadata["Summary"] = self.summary_metadata
-
-        # initialize metadata if HCS desired, init writer
-        self.hcs_meta = (
-            self._generate_hcs_metadata() if self.format_hcs else None
+        if grid_layout:
+            logging.info("Generating HCS plate level grid.")
+            self.position_grid = _create_grid_from_coordinates(
+                *self._get_position_coords()
+            )
+        else:
+            self.position_grid = None
+        self.writer = open_ome_zarr(
+            save_directory,
+            layout="hcs",
+            mode="w-",
+            channel_names=self.reader.channel_names,
+            version="0.4",
         )
-        self.writer = WaveorderWriter(
-            self.save_directory,
-            hcs=self.format_hcs,
-            hcs_meta=self.hcs_meta,
-            verbose=False,
-        )
-        self.writer.create_zarr_root(self.save_name)
 
     def _gen_coordset(self):
-        """
-        generates a coordinate set in the dimensional order to which the data was acquired.
-        This is important for keeping track of where we are in the tiff file during conversion
+        """Generates a coordinate set in the dimensional order
+        to which the data was acquired.
+        This is important for keeping track of where
+        we are in the tiff file during conversion
 
         Returns
         -------
@@ -173,7 +159,8 @@ class TIFFConverter:
 
         """
 
-        # if acquisition information is not present, make an arbitrary dimension order
+        # if acquisition information is not present
+        # make an arbitrary dimension order
         if (
             not self.summary_metadata
             or "AxisOrder" not in self.summary_metadata.keys()
@@ -245,43 +232,6 @@ class TIFFConverter:
 
         return coords_list, row_max + 1, col_max + 1
 
-    def _generate_hcs_metadata(self):
-        position_list, rows, cols = self._get_position_coords()
-
-        position_grid = _create_grid_from_coordinates(
-            position_list, rows, cols
-        )
-
-        # Build metadata based off of position grid
-        hcs_meta = {
-            "plate": {
-                "acquisitions": [
-                    {
-                        "id": 1,
-                        "maximumfieldcount": 1,
-                        "name": "Dataset",
-                        "starttime": 0,
-                    }
-                ],
-                "columns": [{"name": f"Col_{i}"} for i in range(cols)],
-                "field_count": 1,
-                "name": "name",
-                "rows": [{"name": f"Row_{i}"} for i in range(rows)],
-                "version": "0.1",
-                "wells": [
-                    {"path": f"Row_{i}/Col_{j}"}
-                    for i in range(rows)
-                    for j in range(cols)
-                ],
-            },
-            "well": [
-                {"images": [{"path": f"Pos_{pos:03d}"}]}
-                for pos in position_grid.flatten()
-            ],
-        }
-
-        return hcs_meta
-
     def _generate_plane_metadata(self, tiff_file, page):
         """
         generates the img plane metadata by saving the MicroManagerMetadata written in the tiff tags.
@@ -329,19 +279,6 @@ class TIFFConverter:
         ]
 
         return np.array_equal(zarr_img, tiff_image)
-
-    def _get_channel_names(self):
-        """
-        gets the chan names from the summary metadata (in order in which they were acquired)
-
-        Returns
-        -------
-
-        """
-
-        chan_names = self.reader.channel_names
-
-        return chan_names
 
     def _get_position_names(self):
         """
@@ -437,38 +374,23 @@ class TIFFConverter:
         -------
 
         """
-
-        chan_names = self._get_channel_names()
         self._get_position_names()
         for pos in range(self.p):
-            clims = self.get_channel_clims(pos)
-            name = self.pos_names[pos] if self.replace_position_names else None
-            self.writer.init_array(
-                pos,
-                data_shape=(
-                    self.t if self.t != 0 else 1,
-                    self.c if self.c != 0 else 1,
-                    self.z if self.z != 0 else 1,
-                    self.y,
-                    self.x,
-                ),
-                chunk_size=(1, 1, 1, self.y, self.x),
-                chan_names=chan_names,
-                clims=clims,
-                dtype=self.dtype,
-                position_name=name,
-            )
+            self.writer.create_position()
+
+    def _get_coord_reorder(self, coord):
+        return (
+            coord[self.p_dim],
+            coord[self.t_dim],
+            coord[self.c_dim],
+            coord[self.z_dim],
+        )
 
     def run_conversion(self):
         """
         Runs the data conversion through memory mapping and performs an image check to make sure conversion did not
         alter any data values.
-
-        Returns
-        -------
-
         """
-
         # Run setup
         print("Running Conversion...")
         print("Setting up zarr")
@@ -477,29 +399,26 @@ class TIFFConverter:
         last_file = None
 
         # Format bar for CLI display
-        bar_format = "Status: |{bar}|{n_fmt}/{total_fmt} (Time Remaining: {remaining}), {rate_fmt}{postfix}]"
+        bar_format = (
+            "Status: |{bar}|{n_fmt}/{total_fmt} "
+            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
+        )
 
         # Run through every coordinate and convert image + grab image metadata, statistics
         # loop is done in order in which the images were acquired
         print("Converting Images...")
-        for coord in tqdm(self.coords, bar_format=bar_format):
-            if self.data_type == "ometiff":
-                # re-order coordinates into zarr format
-                coord_reorder = (
-                    coord[self.p_dim],
-                    coord[self.t_dim],
-                    coord[self.c_dim],
-                    coord[self.z_dim],
-                )
 
+        for coord in tqdm(self.coords, bar_format=bar_format):
+            coord_reorder = self._get_coord_reorder(coord)
+            if self.data_type == "ometiff":
                 # Only load tiff file if it has changed from previous run
-                current_file = self.reader.reader.coord_map[coord_reorder][0]
+                current_file = self.reader.coord_map[coord_reorder][0]
                 if self.check_file_changed(last_file, current_file):
                     tf = tiff.TiffFile(current_file)
                     last_file = current_file
 
                 # Get the metadata
-                page = self.reader.reader.coord_map[coord_reorder][1]
+                page = self.reader.coord_map[coord_reorder][1]
 
                 meta = dict()
                 plane_meta = self._generate_plane_metadata(tf, page)
@@ -508,12 +427,7 @@ class TIFFConverter:
                 json.dump(meta, self.meta_file, indent=1)
             elif self.data_type == "pycromanager":
                 # write page metadata
-                plane_metadata = self.reader.reader.get_image_metadata(
-                    coord[self.p_dim],
-                    coord[self.t_dim],
-                    coord[self.c_dim],
-                    coord[self.z_dim],
-                )
+                plane_metadata = self.reader.get_image_metadata(coord_reorder)
 
                 json.dump(
                     {
@@ -525,29 +439,19 @@ class TIFFConverter:
                 )
 
             # get the memory mapped image
-            img_raw = self.get_image_array(
-                coord[self.p_dim],
-                coord[self.t_dim],
-                coord[self.c_dim],
-                coord[self.z_dim],
-            )
+            img_raw = self.get_image_array(coord_reorder)
 
             # Write the data
-            self.writer.write(
-                img_raw,
-                coord[self.p_dim],
-                coord[self.t_dim],
-                coord[self.c_dim],
-                coord[self.z_dim],
-            )
+            self.writer.write(img_raw, coord_reorder)
 
             # Perform image check
             if not self._perform_image_check(img_raw, coord):
                 raise ValueError(
-                    "Converted zarr image does not match the raw data. Conversion Failed"
+                    "Converted Zarr image does not match the raw data. "
+                    "Conversion Failed."
                 )
 
         # Put summary metadata into zarr store and cleanup
-        self.writer.store.attrs.update(self.metadata)
+        self.writer.zgroup.attrs.update(self.metadata)
         if self.meta_file:
             self.meta_file.close()
