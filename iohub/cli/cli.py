@@ -40,7 +40,7 @@ def print_reader_info(reader):
     "--input",
     "-i",
     required=True,
-    type=click.Path(exists=True),
+    type=click.Path(exists=True, file_okay=False, resolve_path=True),
     help="Input Micro-Manager TIFF dataset directory",
 )
 @click.option(
@@ -71,12 +71,12 @@ def print_reader_info(reader):
     is_flag=True,
     help="Dump postion labels in MM metadata to Omero metadata",
 )
-def convert(input, output, data_type, grid_layout, label_positions):
+def convert(input, output, format, grid_layout, label_positions):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
         output_dir=output,
-        data_type=data_type,
+        data_type=format,
         grid_layout=grid_layout,
         label_positions=label_positions,
     )
