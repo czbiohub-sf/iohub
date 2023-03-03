@@ -454,9 +454,7 @@ class TiledImageArray(ImageArray):
                     "Argument `pre_dims` should be a sequence, "
                     f"got type {type(pre_dims)}."
                 )
-            for i, sel in enumerate(pre_dims):
-                if sel is not None:
-                    pad[i] = sel
+            pad = pre_dims
         return tuple(pad) + (r_slice, c_slice)
 
     @staticmethod
