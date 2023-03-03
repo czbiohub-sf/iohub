@@ -327,7 +327,7 @@ class TIFFConverter:
         logging.debug("Setting up Zarr store.")
         self._init_hcs_arrays()
         bar_format = (
-            "Status: |{bar}|{n_fmt}/{total_fmt} "
+            "Status: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
         # Run through every coordinate and convert in acquisition order
