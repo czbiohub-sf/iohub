@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from iohub._version import version as iohub_version
 from iohub.ngff import open_ome_zarr
-from iohub.reader import imread
+from iohub.reader import MicromanagerSequenceReader, imread
 
 
 def _create_grid_from_coordinates(
@@ -105,17 +105,22 @@ class TIFFConverter:
         self.save_name = os.path.basename(output_dir)
         logging.debug("Getting dataset summary information.")
         self.coord_map = dict()
-        self.pos_names = []
-        self.dtype = self.reader.dtype
         self.p = self.reader.get_num_positions()
+        if self.p is None and isinstance(
+            self.reader, MicromanagerSequenceReader
+        ):
+            # single page tiff reader may not return total positions
+            # for `get_num_positions()`
+            self.p = self.reader.num_positions
         self.t = self.reader.frames
         self.c = self.reader.channels
         self.z = self.reader.slices
         self.y = self.reader.height
         self.x = self.reader.width
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
-        self.focus_z = self.z // 2
         self.prefix_list = []
+        self.label_positions = label_positions
+        self._get_pos_names()
         logging.info(
             f"Found Dataset {self.save_name} with "
             f"dimensions (P, T, C, Z, Y, X): {self.dim}"
@@ -135,7 +140,6 @@ class TIFFConverter:
         else:
             self._make_default_grid()
         self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
-        self.label_positions = label_positions
 
     def _make_default_grid(self):
         self.position_grid = np.expand_dims(
@@ -249,6 +253,7 @@ class TIFFConverter:
         if not self.label_positions:
             self.pos_names = ["0"] * self.p
         else:
+            self.pos_names = []
             for p in range(self.p):
                 if self.p > 1:
                     try:
@@ -272,17 +277,27 @@ class TIFFConverter:
             coord[self.z_dim],
         )
 
+    def _get_channel_names(self):
+        cns = self.reader.channel_names
+        if not cns and isinstance(self.reader, MicromanagerSequenceReader):
+            logging.warning(
+                "Using an empty channel name for the single channel."
+            )
+            cns = [str(i) for i in range(self.c)]
+        return cns
+
     def _init_hcs_arrays(self):
         self.writer = open_ome_zarr(
             self.output_dir,
             layout="hcs",
             mode="w-",
-            channel_names=self.reader.channel_names,
+            channel_names=self._get_channel_names(),
             version="0.4",
         )
         self.well_list = []
         for row, columns in enumerate(self.position_grid):
             for column in columns:
+                pos_name = self.pos_names[len(self.well_list)]
                 pos = self.writer.create_position(row, column, pos_name="0")
                 self.well_list.append(os.path.join(str(row), str(column)))
                 _ = pos.zgroup.zeros(
@@ -297,9 +312,7 @@ class TIFFConverter:
                     chunks=self.chunks,
                 )
                 pos._create_image_meta("0")
-                pos.metadata.omero.name = self.pos_names[
-                    len(self.well_list) - 1
-                ]
+                pos.metadata.omero.name = pos_name
                 pos.dump_meta()
 
     def run(self, check_image: bool = True):
@@ -322,7 +335,8 @@ class TIFFConverter:
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
-            zarr_img = self.writer[self.well_list[coord_reorder[0]]]["0"]
+            well = self.well_list[coord_reorder[0]]
+            zarr_img = self.writer[well]["0"]['0']
             zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
