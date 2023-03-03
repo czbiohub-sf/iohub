@@ -1,8 +1,8 @@
 import click
 
 from iohub._version import __version__
-from iohub.reader import imread
 from iohub.convert import TIFFConverter
+from iohub.reader import imread
 
 VERSION = __version__
 
