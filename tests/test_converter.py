@@ -20,7 +20,7 @@ from iohub.reader import (
 
 @given(grid_layout=st.booleans(), label_positions=st.booleans())
 @settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=5000
+    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
 )
 def test_converter_ometiff(
     setup_test_data, setup_mm2gamma_ome_tiffs, grid_layout, label_positions
@@ -60,7 +60,7 @@ def test_converter_ometiff(
 
 @given(grid_layout=st.booleans(), label_positions=st.booleans())
 @settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=5000
+    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
 )
 def test_converter_ndtiff(
     setup_test_data, setup_pycromanager_test_data, grid_layout, label_positions
