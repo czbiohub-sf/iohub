@@ -89,6 +89,8 @@ def _check_ndtiff(src: str):
     # shortcut, may not be foolproof
     if os.path.exists(os.path.join(src, "Full resolution", "NDTiff.index")):
         return True
+    elif os.path.exists(os.path.join(src, "NDTiff.index")):
+        return True
     return False
 
 
