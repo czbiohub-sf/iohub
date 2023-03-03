@@ -455,7 +455,7 @@ class TiledImageArray(ImageArray):
                     f"got type {type(pre_dims)}."
                 )
             for i, sel in enumerate(pre_dims):
-                if sel:
+                if sel is not None:
                     pad[i] = sel
         return tuple(pad) + (r_slice, c_slice)
 
