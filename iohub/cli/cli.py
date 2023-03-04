@@ -8,6 +8,7 @@ VERSION = __version__
 
 
 @click.group()
+@click.help_option("-h", "--help")
 @click.version_option(version=VERSION)
 def cli():
     print("\033[92miohub: N-dimensional bioimaging I/O \033[0m\n")
