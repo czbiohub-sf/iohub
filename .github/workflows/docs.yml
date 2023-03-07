@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r ".[doc]"
+          pip install ".[doc]"
       - name: Build the docs
         working-directory: ./docs
         run: make build
