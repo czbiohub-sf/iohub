@@ -288,7 +288,8 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_create_tiled(channel_names):
-    """Test `iohub.ngff.open_ome_zarr()`"""
+    """Test that `iohub.ngff.open_ome_zarr()` can create
+    an empty OME-Zarr store with 'tiled' layout."""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "tiled.zarr")
         dataset = open_ome_zarr(
