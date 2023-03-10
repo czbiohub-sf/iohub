@@ -4,7 +4,7 @@
 # and adds an extra well-position to an existing dataset.
 # It can be run as a plain Python script, or as interactive cells in some IDEs.
 
-import os
+import tempfile
 
 import numpy as np
 
@@ -13,7 +13,7 @@ from iohub.ngff import open_ome_zarr
 # %%
 # Set storage path
 
-store_path = f'{os.path.expanduser("~/")}hcs.zarr'
+store_path = f"{tempfile.gettempdir()}/hcs.zarr"
 
 # %%
 # Write 5D data to multiple wells.
