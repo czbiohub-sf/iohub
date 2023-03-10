@@ -1,10 +1,8 @@
 import glob
 import os
-import warnings
 from copy import copy
 
 import numpy as np
-import tifffile as tiff
 import zarr
 from tifffile import TiffFile
 
@@ -28,13 +26,11 @@ class MicromanagerOmeTiffReader(ReaderBase):
         # Add Initial Checks
         if len(glob.glob(os.path.join(folder, "*.ome.tif"))) == 0:
             raise ValueError(
-                "Specific input contains no ome.tif files, "
-                + "please specify a valid input directory"
+                (
+                    f"Path {folder} contains no `.ome.tif` files, "
+                    "please specify a valid input directory."
+                )
             )
-
-        # ignore tiffile warnings, doesn't work
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", tiff)
 
         # Grab all image files
         self.data_directory = folder
@@ -54,8 +50,6 @@ class MicromanagerOmeTiffReader(ReaderBase):
         self._set_dtype()
 
         # Initialize MM attributes
-        self.mm_meta = None
-        self.stage_positions = 0
         self.z_step_size = None
         self.channel_names = []
 
@@ -295,7 +289,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         """
 
-        tf = tiff.TiffFile(self._files[0])
+        tf = TiffFile(self._files[0])
 
         self.dtype = tf.pages[0].dtype
         tf.close()

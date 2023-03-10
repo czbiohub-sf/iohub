@@ -1,7 +1,7 @@
 import numpy as np
 import zarr
 
-from iohub.reader import ImageReader
+from iohub.reader import imread
 from iohub.zarrfile import ZarrReader
 
 
@@ -14,8 +14,8 @@ def test_constructor_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
     _ = setup_test_data
     src = setup_mm2gamma_zarr
 
-    reader = ImageReader(src)
-    assert isinstance(reader.reader, ZarrReader)
+    reader = imread(src)
+    assert isinstance(reader, ZarrReader)
 
     mmr = ZarrReader(src)
 
