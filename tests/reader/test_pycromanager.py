@@ -1,7 +1,7 @@
 import dask.array
 import numpy as np
 
-from iohub.pycromanager import PycromanagerReader
+from iohub.ndtiff import NDTiffReader
 
 
 def test_constructor(setup_test_data, setup_pycromanager_test_data):
@@ -12,7 +12,7 @@ def test_constructor(setup_test_data, setup_pycromanager_test_data):
     _ = setup_test_data
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
-    mmr = PycromanagerReader(rand_dir)
+    mmr = NDTiffReader(rand_dir)
 
     assert mmr.mm_meta is not None
     assert mmr.width > 0
@@ -31,7 +31,7 @@ def test_output_dims(setup_test_data, setup_pycromanager_test_data):
     # run test on 3 random folders
     for i in range(3):
         _, rand_dir, _ = setup_pycromanager_test_data
-        mmr = PycromanagerReader(rand_dir)
+        mmr = NDTiffReader(rand_dir)
         za = mmr.get_zarr(0)
 
         assert za.shape[0] == mmr.frames
@@ -51,7 +51,7 @@ def test_get_zarr(setup_test_data, setup_pycromanager_test_data):
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
 
-    mmr = PycromanagerReader(rand_dir)
+    mmr = NDTiffReader(rand_dir)
     arr = mmr.get_zarr(position=0)
     assert arr.shape == mmr.shape
     assert isinstance(arr, dask.array.Array)
@@ -62,7 +62,7 @@ def test_get_array(setup_test_data, setup_pycromanager_test_data):
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
 
-    mmr = PycromanagerReader(rand_dir)
+    mmr = NDTiffReader(rand_dir)
     arr = mmr.get_array(position=0)
     assert arr.shape == mmr.shape
     assert isinstance(arr, np.ndarray)
@@ -73,5 +73,5 @@ def test_get_num_positions(setup_test_data, setup_pycromanager_test_data):
     # choose a random folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
 
-    mmr = PycromanagerReader(rand_dir)
+    mmr = NDTiffReader(rand_dir)
     assert mmr.get_num_positions() >= 1

@@ -1,7 +1,7 @@
 import click
 
 from iohub._version import __version__
-from iohub.reader import ImageReader
+from iohub.reader import imread
 
 VERSION = __version__
 
@@ -19,7 +19,7 @@ def info(files):
     """View basic metadata from a list of FILES"""
     for file in files:
         print(f"Reading file:\t {file}")
-        reader = ImageReader(file)
+        reader = imread(file)
         print_reader_info(reader)
 
 

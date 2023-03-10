@@ -7,11 +7,10 @@ from ndtiff import Dataset
 from iohub.reader_base import ReaderBase
 
 
-class PycromanagerReader(ReaderBase):
+class NDTiffReader(ReaderBase):
     def __init__(self, data_path: str):
-        """
-        Reader for data acquired with pycromanager,
-        effectively a wrapper of the pycromanager.Dataset class
+        """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
+        effectively a wrapper of the `ndtiff.Dataset` class.
         """
         super().__init__()
 
@@ -123,7 +122,7 @@ class PycromanagerReader(ReaderBase):
         Data is not loaded into memory.
 
         Note: The behavior of this function is different from other
-        ImageReader members as it return a Dask array rather than a zarr array.
+        ReaderBase children as it return a Dask array rather than a zarr array.
 
         # TODO: try casting the dask array into a zarr array
         # using `dask.array.to_zarr()`.

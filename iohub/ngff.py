@@ -1358,13 +1358,15 @@ def open_ome_zarr(
         by default None
     axes : list[AxisMeta], optional
         OME axes metadata, by default None:
-        ```
-        [AxisMeta(name='T', type='time', unit='second'),
-        AxisMeta(name='C', type='channel', unit=None),
-        AxisMeta(name='Z', type='space', unit='micrometer'),
-        AxisMeta(name='Y', type='space', unit='micrometer'),
-        AxisMeta(name='X', type='space', unit='micrometer')]
-        ````
+
+        .. code-block:: text
+
+            [AxisMeta(name='T', type='time', unit='second'),
+            AxisMeta(name='C', type='channel', unit=None),
+            AxisMeta(name='Z', type='space', unit='micrometer'),
+            AxisMeta(name='Y', type='space', unit='micrometer'),
+            AxisMeta(name='X', type='space', unit='micrometer')]
+
     version : Literal["0.1", "0.4"], optional
         OME-NGFF version, by default "0.4"
     synchronizer : object, optional
@@ -1377,7 +1379,7 @@ def open_ome_zarr(
     Returns
     -------
     Dataset
-        NGFF node object (`Position` or `Plate')
+        NGFF node object (`Position`, `Plate`, or `TiledPosition`)
     """
     if mode == "a":
         mode = ("w-", "r+")[int(os.path.exists(store_path))]

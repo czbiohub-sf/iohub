@@ -43,7 +43,6 @@ class UPTIReader(ReaderBase):
         self.z_step_size = None
 
         # initialize metadata
-        self.mm_meta = None
         self.position_arrays = dict()
 
         if extract_data:
