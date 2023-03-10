@@ -252,6 +252,31 @@ class NGFFNode:
                     )
                 )
 
+    def get_channel_index(self, name: str):
+        """Get the index of a given channel in the channel list.
+
+        Parameters
+        ----------
+        name : str
+            Name of the channel.
+
+        Returns
+        -------
+        int
+            Index of the channel.
+        """
+        if not hasattr(self, "_channel_names"):
+            raise AttributeError(
+                "Channel names are not set for this NGFF node. "
+                f"Cannot get the index for channel name '{name}'"
+            )
+        if name not in self._channel_names:
+            raise ValueError(
+                f"Channel {name} is not in "
+                f"the existing channels: {self._channel_names}"
+            )
+        return self._channel_names.index(name)
+
     def _warn_invalid_meta(self):
         msg = "Zarr group at {} does not have valid metadata for {}".format(
             self._group.path, type(self)
@@ -641,14 +666,6 @@ class Position(NGFFNode):
             )
             self.dump_meta()
 
-    def _get_channel_idx(self, name: str):
-        if name not in self._channel_names:
-            raise ValueError(
-                f"Channel {name} is not in "
-                f"the existing channels: {self._channel_names}"
-            )
-        return self._channel_names.index(name)
-
     def rename_channel(self, old: str, new: str):
         """Rename a channel in the channel list.
 
@@ -659,7 +676,7 @@ class Position(NGFFNode):
         new : str
             New name of the channel
         """
-        ch_idx = self._get_channel_idx(old)
+        ch_idx = self.get_channel_index(old)
         self._channel_names[ch_idx] = new
         if hasattr(self.metadata, "omero"):
             self.metadata.omero.channels[ch_idx].label = new
@@ -689,7 +706,7 @@ class Position(NGFFNode):
         and users are encouraged to use array indexing directly.
         """
         img = self[target]
-        ch_idx = self._get_channel_idx(chan_name)
+        ch_idx = self.get_channel_index(chan_name)
         ch_ax = self._get_channel_axis()
         ortho_sel = [slice(None)] * len(img.shape)
         ortho_sel[ch_ax] = ch_idx
@@ -1158,13 +1175,15 @@ def open_ome_zarr(
         by default None
     axes : list[AxisMeta], optional
         OME axes metadata, by default None:
-        ```
-        [AxisMeta(name='T', type='time', unit='second'),
-        AxisMeta(name='C', type='channel', unit=None),
-        AxisMeta(name='Z', type='space', unit='micrometer'),
-        AxisMeta(name='Y', type='space', unit='micrometer'),
-        AxisMeta(name='X', type='space', unit='micrometer')]
-        ````
+
+        .. code-block:: text
+
+            [AxisMeta(name='T', type='time', unit='second'),
+            AxisMeta(name='C', type='channel', unit=None),
+            AxisMeta(name='Z', type='space', unit='micrometer'),
+            AxisMeta(name='Y', type='space', unit='micrometer'),
+            AxisMeta(name='X', type='space', unit='micrometer')]
+
     version : Literal["0.1", "0.4"], optional
         OME-NGFF version, by default "0.4"
     synchronizer : object, optional
@@ -1177,7 +1196,7 @@ def open_ome_zarr(
     Returns
     -------
     Dataset
-        NGFF node object (`Position` or `Plate')
+        NGFF node object (`Position`, `Plate`, or `TiledPosition`)
     """
     if mode == "a":
         mode = ("w-", "r+")[int(os.path.exists(store_path))]
