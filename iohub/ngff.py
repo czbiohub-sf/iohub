@@ -336,6 +336,135 @@ class ImageArray(zarr.Array):
         raise NotImplementedError
 
 
+class TiledImageArray(ImageArray):
+    """Container object for tiled image stored as a zarr array (up to 5D)."""
+
+    def __init__(self, zarray: zarr.Array):
+        super().__init__(zarray)
+
+    @property
+    def rows(self):
+        """Number of rows in the tiles."""
+        return int(self.shape[-2] / self.chunks[-2])
+
+    @property
+    def columns(self):
+        """Number of columns in the tiles."""
+        return int(self.shape[-1] / self.chunks[-1])
+
+    @property
+    def tiles(self):
+        """A tuple of the tiled grid size (rows, columns)."""
+        return (self.rows, self.columns)
+
+    @property
+    def tile_shape(self):
+        """shape of a tile, the same as chunk size of the underlying array."""
+        return self.chunks
+
+    def get_tile(
+        self,
+        row: int,
+        column: int,
+        pre_dims: tuple[Union[int, slice, None]] = None,
+    ):
+        """Get a tile as an up-to-5D in-RAM NumPy array.
+
+        Parameters
+        ----------
+        row : int
+            Row index.
+        column : int
+            Column index.
+        pre_dims : tuple[Union[int, slice, None]], optional
+            Indices or slices for previous dimensions than rows and columns
+            with matching shape, e.g. (t, c, z) for 5D arrays,
+            by default None (select all).
+
+        Returns
+        -------
+        NDArray
+        """
+        self._check_rc(row, column)
+        return self[self.get_tile_slice(row, column, pre_dims=pre_dims)]
+
+    def write_tile(
+        self,
+        data: ArrayLike,
+        row: int,
+        column: int,
+        pre_dims: tuple[Union[int, slice, None]] = None,
+    ):
+        """Write a tile in the Zarr store.
+
+        Parameters
+        ----------
+        data : ArrayLike
+            Value to store.
+        row : int
+            Row index.
+        column : int
+            Column index.
+        pre_dims : tuple[Union[int, slice, None]], optional
+            Indices or slices for previous dimensions than rows and columns
+            with matching shape, e.g. (t, c, z) for 5D arrays,
+            by default None (select all).
+        """
+        self._check_rc(row, column)
+        self[self.get_tile_slice(row, column, pre_dims=pre_dims)] = data
+
+    def get_tile_slice(
+        self,
+        row: int,
+        column: int,
+        pre_dims: tuple[Union[int, slice, None]] = None,
+    ):
+        """Get the slices for a tile in the underlying array.
+
+        Parameters
+        ----------
+        row : int
+            Row index.
+        column : int
+            Column index.
+        pre_dims : tuple[Union[int, slice, None]], optional
+            Indices or slices for previous dimensions than rows and columns
+            with matching shape, e.g. (t, c, z) for 5D arrays,
+            by default None (select all).
+
+        Returns
+        -------
+        tuple[slice]
+            Tuple of slices for all the dimensions of the array.
+        """
+        self._check_rc(row, column)
+        y, x = self.chunks[-2:]
+        r_slice = slice(row * y, (row + 1) * y)
+        c_slice = slice(column * x, (column + 1) * x)
+        pad = [slice(None)] * (len(self.shape) - 2)
+        if pre_dims is not None:
+            try:
+                if len(pre_dims) != len(pad):
+                    raise IndexError(
+                        f"Length of `pre_dims` should be {len(pad)}, "
+                        f"got {len(pre_dims)}."
+                    )
+            except TypeError:
+                raise TypeError(
+                    "Argument `pre_dims` should be a sequence, "
+                    f"got type {type(pre_dims)}."
+                )
+            for i, sel in enumerate(pre_dims):
+                if sel is not None:
+                    pad[i] = sel
+        return tuple(pad) + (r_slice, c_slice)
+
+    @staticmethod
+    def _check_rc(row: int, column: int):
+        if not (isinstance(row, int) and isinstance(column, int)):
+            raise TypeError("Row and column indices must be integers.")
+
+
 class Position(NGFFNode):
     """The Zarr group level directly containing multiscale image arrays.
 
@@ -523,8 +652,7 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         if not chunks:
-            chunks = data.shape[-min(3, len(data.shape)) :]
-            chunks = _pad_shape(chunks, target=len(data.shape))
+            self._default_chunks(data.shape, 3)
         if check_shape:
             self._check_shape(data.shape)
         img_arr = ImageArray(
@@ -534,6 +662,11 @@ class Position(NGFFNode):
         )
         self._create_image_meta(img_arr.basename, transform=transform)
         return img_arr
+
+    @staticmethod
+    def _default_chunks(shape, last_data_dims: int):
+        chunks = shape[-min(last_data_dims, len(shape)) :]
+        return _pad_shape(chunks, target=len(shape))
 
     def _check_shape(self, data_shape: tuple[int]):
         if len(data_shape) != len(self.axes):
@@ -711,6 +844,54 @@ class Position(NGFFNode):
         ortho_sel = [slice(None)] * len(img.shape)
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
+
+
+class TiledPosition(Position):
+    _MEMBER_TYPE = TiledImageArray
+
+    def make_tiles(
+        self,
+        name: str,
+        grid_shape: tuple[int, int],
+        tile_shape: tuple[int],
+        transform: List[TransformationMeta] = None,
+        chunk_dims: int = 2,
+    ):
+        """Make a tiled image array filled with zeros.
+        Chunk size is inferred from tile shape.
+
+        Parameters
+        ----------
+        name : str
+            Name of the array.
+        grid_shape : tuple[int, int]
+            2-tuple of the tiling grid shape (rows, columns).
+        tile_shape : tuple[int]
+            Shape of each tile (up to 5D).
+        transform : List[TransformationMeta], optional
+            List of coordinate transformations, by default None.
+            Should be specified for a non-native resolution level.
+        chunk_dims : int, optional
+            Non-singleton dimensions of the chunksize,
+            by default 2 (chunk by 2D (y, x) tile size).
+
+        Returns
+        -------
+        TiledImageArray
+        """
+        xy_shape = tuple(np.array(grid_shape) * np.array(tile_shape[-2:]))
+        tiles = TiledImageArray(
+            self._group.zeros(
+                name=name,
+                shape=tile_shape[:-2] + xy_shape,
+                chunks=self._default_chunks(
+                    shape=tile_shape, last_data_dims=chunk_dims
+                ),
+                **self._storage_options,
+            )
+        )
+        self._create_image_meta(tiles.basename, transform=transform)
+        return tiles
 
 
 class Well(NGFFNode):
@@ -1137,7 +1318,7 @@ class Plate(NGFFNode):
 
 def open_ome_zarr(
     store_path: StrOrBytesPath,
-    layout: Literal["auto", "fov", "hcs"] = "auto",
+    layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: List[str] = None,
     axes: list[AxisMeta] = None,
@@ -1153,12 +1334,14 @@ def open_ome_zarr(
     ----------
     store_path : StrOrBytesPath
         File path to the Zarr store to open
-    layout: Literal["auto", "fov", "hcs"], optional
+    layout: Literal["auto", "fov", "hcs", "tiled"], optional
         NGFF store layout:
         "auto" will infer layout from existing metadata
         (cannot be used for creation);
         "fov" opens a single position/FOV node;
         "hcs" opens the high-content-screening multi-fov hierarchy;
+        "tiled" opens a "fov" layout with tiled image array
+        (cannot be automatically inferred since this not NGFF-specified);
         by default "auto"
     mode : Literal["r+", "a", "w-"], optional
         mode : Literal["r", "r+", "a", "w", "w-"], optional
@@ -1230,10 +1413,10 @@ def open_ome_zarr(
                 "Store layout must be specified when creating a new dataset."
             )
     msg = f"Specified layout '{layout}' does not match existing metadata."
-    if layout == "fov":
+    if layout in ("fov", "tiled"):
         if parse_meta and "multiscales" not in meta_keys:
             raise ValueError(msg)
-        node = Position
+        node = TiledPosition if layout == "tiled" else Position
     elif layout == "hcs":
         if parse_meta and "plate" not in meta_keys:
             raise ValueError(msg)
