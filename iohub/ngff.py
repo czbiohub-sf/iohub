@@ -652,7 +652,7 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         if not chunks:
-            self._default_chunks(data.shape, 3)
+            chunks = self._default_chunks(data.shape, 3)
         if check_shape:
             self._check_shape(data.shape)
         img_arr = ImageArray(
