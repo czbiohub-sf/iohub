@@ -103,7 +103,7 @@ def test_converter_singlepagetiff(
     label_positions,
 ):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
-    _, data, _ = setup_mm2gamma_singlepage_tiffs
+    _, _, data = setup_mm2gamma_singlepage_tiffs
     with TemporaryDirectory() as tmp_dir:
         output = os.path.join(tmp_dir, "converted.zarr")
         converter = TIFFConverter(
