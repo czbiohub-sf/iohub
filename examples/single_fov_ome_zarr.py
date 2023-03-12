@@ -102,7 +102,7 @@ store_path = ""
 
 # this array is about 10 GB, each time point is about 100 MB
 # it may not be actually larger than RAM but enough for demo
-# monitor the memory usage of pythonwhen the following runs
+# monitor the memory usage of python when the following runs
 # and it should take significantly less than 10 GB
 large_tczyx = da.ones((100, 2, 25, 1024, 1024), dtype=np.uint16)
 
