@@ -52,8 +52,8 @@ plate_axis_names_st = st.lists(
 
 
 @st.composite
-def _random_5d_with_channels(draw, c_dim: int):
-    arr_shape = (
+def _random_array_shape_and_dtype_with_channels(draw, c_dim: int):
+    shape = (
         draw(t_dim_st),
         c_dim,
         draw(z_dim_st),
@@ -68,13 +68,24 @@ def _random_5d_with_channels(draw, c_dim: int):
             npst.boolean_dtypes(),
         )
     )
-    return draw(npst.arrays(dtype, shape=arr_shape))
+    return shape, dtype
+
+
+@st.composite
+def _channels_and_random_5d_shape_and_dtype(draw):
+    channel_names = draw(channel_names_st)
+    shape, dtype = draw(
+        _random_array_shape_and_dtype_with_channels(c_dim=len(channel_names))
+    )
+    return channel_names, shape, dtype
 
 
 @st.composite
 def _channels_and_random_5d(draw):
-    channel_names = draw(channel_names_st)
-    random_5d = draw(_random_5d_with_channels(c_dim=len(channel_names)))
+    channel_names, shape, dtype = draw(
+        _channels_and_random_5d_shape_and_dtype()
+    )
+    random_5d = draw(npst.arrays(dtype, shape=shape))
     return channel_names, random_5d
 
 
@@ -183,6 +194,24 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
         assert node.specs[0].datasets == [arr_name]
         assert node.data[0].shape == random_5d.shape
         assert node.data[0].dtype == random_5d.dtype
+
+
+@given(
+    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
+    arr_name=short_alpha_numeric,
+)
+@settings(max_examples=16, deadline=2000)
+def test_create_zeros(ch_shape_dtype, arr_name):
+    """Test `iohub.ngff.Position.create_zeros()`"""
+    channel_names, shape, dtype = ch_shape_dtype
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        dataset = open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
+        )
+        dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
+        assert os.listdir(os.path.join(store_path, arr_name)) == [".zarray"]
+        assert not dataset[arr_name][:].any()
 
 
 @given(
