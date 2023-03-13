@@ -14,6 +14,7 @@ from iohub.ngff import open_ome_zarr
 # Set storage path
 
 store_path = f"{tempfile.gettempdir()}/hcs.zarr"
+print("Zarr store path", store_path)
 
 # %%
 # Write 5D data to multiple wells.
@@ -59,3 +60,4 @@ with open_ome_zarr(store_path, mode="r+") as dataset:
 
 # %%
 # Try viewing the images with napari-ome-zarr
+print("Zarr store path", store_path)
