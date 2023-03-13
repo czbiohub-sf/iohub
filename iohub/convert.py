@@ -60,8 +60,9 @@ def _create_grid_from_coordinates(
 
 
 class TIFFConverter:
-    """Convert micromanager TIFF formats
+    """Convert Micro-Manager TIFF formats
     (single-page TIFF, OME-TIFF, ND-TIFF) into HCS OME-Zarr.
+    Each FOV will be written to a separate well in the plate layout.
 
     Parameters
     ----------
