@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Generator, List, Literal, Tuple, Union
 import numpy as np
 import zarr
 from numcodecs import Blosc
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 from zarr.util import normalize_storage_path
 
@@ -652,12 +652,67 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         if not chunks:
-            self._default_chunks(data.shape, 3)
+            chunks = self._default_chunks(data.shape, 3)
         if check_shape:
             self._check_shape(data.shape)
         img_arr = ImageArray(
             self._group.array(
                 name, data, chunks=chunks, **self._storage_options
+            )
+        )
+        self._create_image_meta(img_arr.basename, transform=transform)
+        return img_arr
+
+    def create_zeros(
+        self,
+        name: str,
+        shape: tuple[int],
+        dtype: DTypeLike,
+        chunks: tuple[int] = None,
+        transform: List[TransformationMeta] = None,
+        check_shape: bool = True,
+    ):
+        """Create a new zero-filled image array in the position.
+        Under default zarr-python settings of lazy writing,
+        this will not write the array values,
+        but only create a ``.zarray`` file.
+        This is useful for writing larger-than-RAM images
+        and/or writing from multiprocesses in chunks.
+
+        Parameters
+        ----------
+        name : str
+            Name key of the new image.
+        shape : tuple
+            Image shape.
+        dtype : DTypeLike
+            Data type.
+        chunks : tuple[int], optional
+            Chunk size, by default None.
+            ZYX stack size will be used if not specified.
+        transform : List[TransformationMeta], optional
+            List of coordinate transformations, by default None.
+            Should be specified for a non-native resolution level.
+        check_shape : bool, optional
+            Whether to check if image shape matches dataset axes,
+            by default True
+
+        Returns
+        -------
+        ImageArray
+            Container object for a zero-filled image as a lazy zarr array
+        """
+        if not chunks:
+            chunks = self._default_chunks(shape, 3)
+        if check_shape:
+            self._check_shape(shape)
+        img_arr = ImageArray(
+            self._group.zeros(
+                name,
+                shape=shape,
+                dtype=dtype,
+                chunks=chunks,
+                **self._storage_options,
             )
         )
         self._create_image_meta(img_arr.basename, transform=transform)
