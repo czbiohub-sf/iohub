@@ -6,7 +6,7 @@
 # It can be run as a plain Python script,
 # or as interactive cells in some IDEs.
 
-import os
+import tempfile
 
 import numpy as np
 
@@ -15,7 +15,8 @@ from iohub.ngff import open_ome_zarr
 # %%
 # Set storage path
 
-store_path = f'{os.path.expanduser("~/")}ome.zarr'
+store_path = f"{tempfile.gettempdir()}/ome.zarr"
+print("Zarr store path", store_path)
 
 # %%
 # Write 5D data to a new Zarr store
@@ -90,3 +91,4 @@ dataset.close()
 
 # %%
 # Try viewing the images with napari-ome-zarr
+print("Zarr store path", store_path)
