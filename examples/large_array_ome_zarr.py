@@ -13,7 +13,7 @@ from iohub.ngff import open_ome_zarr
 
 # %%
 # FIXME: set Zarr store path here
-store_path = "../../test-iohub/large.ome.zarr"
+store_path = ""
 
 # %%
 # shape and data type of the large array
