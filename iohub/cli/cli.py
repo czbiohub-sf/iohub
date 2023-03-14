@@ -11,7 +11,7 @@ VERSION = __version__
 @click.help_option("-h", "--help")
 @click.version_option(version=VERSION)
 def cli():
-    print("\033[92miohub: N-dimensional bioimaging I/O \033[0m\n")
+    """\u001b[34;1m iohub: N-dimensional bioimaging I/O \u001b[0m"""
 
 
 @cli.command()
