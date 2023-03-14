@@ -909,7 +909,7 @@ class TiledPosition(Position):
         name: str,
         grid_shape: tuple[int, int],
         tile_shape: tuple[int],
-        dtype : DTypeLike,
+        dtype: DTypeLike,
         transform: List[TransformationMeta] = None,
         chunk_dims: int = 2,
     ):
