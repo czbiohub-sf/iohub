@@ -123,6 +123,18 @@ class MicromanagerSequenceReader(ReaderBase):
             self._create_stores(position)
         return self.positions[position]
 
+    def get_image(self, p: int, t: int, c: int, z: int):
+        zarray = self.get_zarr(p)
+        dim_slices = [slice(None)] * 3
+        for i, (dim, idx) in enumerate(
+            zip((self.frames, self.channels, self.slices), (t, c, z))
+        ):
+            if dim > 0:
+                dim_slices[i] = slice(idx, idx + 1)
+
+        image = zarray[tuple(dim_slices)]
+        return np.squeeze(image)
+
     def get_array(self, position):
         """
         return a numpy array for a given position
