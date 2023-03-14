@@ -909,6 +909,7 @@ class TiledPosition(Position):
         name: str,
         grid_shape: tuple[int, int],
         tile_shape: tuple[int],
+        dtype : DTypeLike,
         transform: List[TransformationMeta] = None,
         chunk_dims: int = 2,
     ):
@@ -923,6 +924,8 @@ class TiledPosition(Position):
             2-tuple of the tiling grid shape (rows, columns).
         tile_shape : tuple[int]
             Shape of each tile (up to 5D).
+        dtype : DTypeLike
+            Data type in NumPy convention
         transform : List[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
@@ -939,6 +942,7 @@ class TiledPosition(Position):
             self._group.zeros(
                 name=name,
                 shape=tile_shape[:-2] + xy_shape,
+                dtype=dtype,
                 chunks=self._default_chunks(
                     shape=tile_shape, last_data_dims=chunk_dims
                 ),
