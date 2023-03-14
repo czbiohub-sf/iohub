@@ -337,7 +337,7 @@ class TIFFConverter:
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
             well = self.well_list[coord_reorder[0]]
-            zarr_img = self.writer[well]["0"]['0']
+            zarr_img = self.writer[well]["0"]["0"]
             zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
