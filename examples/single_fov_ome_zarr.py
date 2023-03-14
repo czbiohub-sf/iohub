@@ -8,9 +8,7 @@
 
 import os
 
-import dask.array as da
 import numpy as np
-from tqdm import tqdm
 
 from iohub.ngff import open_ome_zarr
 
@@ -92,30 +90,3 @@ dataset.close()
 
 # %%
 # Try viewing the images with napari-ome-zarr
-
-# %%
-# RUNNING THE FOLLOWING CODE WILL WRITE A LARGE FILE
-# Writing a larger-than-RAM array
-
-# FIXME: set Zarr store path here
-store_path = ""
-
-# this array is about 10 GB, each time point is about 100 MB
-# it may not be actually larger than RAM but enough for demo
-# monitor the memory usage of python when the following runs
-# and it should take significantly less than 10 GB
-large_tczyx = da.ones((100, 2, 25, 1024, 1024), dtype=np.uint16)
-
-if store_path:
-    with open_ome_zarr(
-        store_path, layout="fov", mode="w-", channel_names=["DAPI", "GFP"]
-    ) as dataset:
-        img = dataset.create_zeros(
-            name="0",
-            shape=large_tczyx.shape,
-            dtype=large_tczyx.dtype,
-            chunks=(1, 1, 1, 1024, 1024),  # chunk by XY planes
-        )
-        for t, not_so_large_czyx in tqdm(enumerate(large_tczyx)):
-            img[t] = not_so_large_czyx.compute()
-        dataset.print_tree()
