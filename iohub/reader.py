@@ -229,7 +229,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 [
                     code_msg,
                     ">>> from iohub import imread",
-                    f">>> reader = imread('{path}')\n",
+                    f">>> reader = imread('{path}')",
                 ]
             )
         msgs.extend(
@@ -243,6 +243,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 f"Z step (um):\t {reader.z_step_size}",
             ]
         )
+        print(str.join("\n", msgs))
     elif isinstance(reader, NGFFNode):
         if verbose:
             msgs.extend(
