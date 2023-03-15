@@ -250,14 +250,6 @@ def print_info(path: StrOrBytesPath, verbose=False):
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
     msgs = []
     if isinstance(reader, ReaderBase):
-        if verbose:
-            msgs.extend(
-                [
-                    code_msg,
-                    ">>> from iohub import imread",
-                    f">>> reader = imread('{path}')",
-                ]
-            )
         msgs.extend(
             [
                 "\nSummary:",
@@ -270,16 +262,16 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 f"Z step (um):\t {reader.z_step_size}",
             ]
         )
-        print(str.join("\n", msgs))
-    elif isinstance(reader, NGFFNode):
         if verbose:
             msgs.extend(
                 [
                     code_msg,
-                    ">>> from iohub import open_ome_zarr",
-                    f">>> dataset = open_ome_zarr('{path}', mode='r')",
+                    ">>> from iohub import imread",
+                    f">>> reader = imread('{path}')",
                 ]
             )
+        print(str.join("\n", msgs))
+    elif isinstance(reader, NGFFNode):
         msgs.extend(
             [
                 "\nSummary:",
@@ -297,6 +289,15 @@ def print_info(path: StrOrBytesPath, verbose=False):
                     f"Wells:\t\t {len(meta.wells)}",
                 ]
             )
-        print(str.join("\n", msgs))
+        if verbose:
+            msgs.extend(
+                [
+                    code_msg,
+                    ">>> from iohub import open_ome_zarr",
+                    f">>> dataset = open_ome_zarr('{path}', mode='r')",
+                ]
+            )
         if isinstance(reader, Position) or verbose:
+            print("Zarr hierarchy:")
             reader.print_tree()
+        print(str.join("\n", msgs))
