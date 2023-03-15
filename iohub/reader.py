@@ -3,6 +3,7 @@ from __future__ import annotations
 import glob
 import logging
 import os
+import sys
 import warnings
 from typing import TYPE_CHECKING, Literal
 
@@ -219,11 +220,28 @@ def imread(
 
 
 def print_info(path: StrOrBytesPath, verbose=False):
+    """Print summary information for a dataset.
+
+    Parameters
+    ----------
+    path : StrOrBytesPath
+        Path to the dataset
+    verbose : bool, optional
+        Show usage guide to open dataset in Python
+        and full tree for HCS Plates in OME-Zarr,
+        by default False
+    """
     path = os.path.realpath(path)
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=UserWarning, module="iohub")
-        fmt, extra_info = _infer_format(path)
-        reader = imread(path, data_type=fmt)
+    try:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", category=UserWarning, module="iohub"
+            )
+            fmt, extra_info = _infer_format(path)
+            reader = imread(path, data_type=fmt)
+    except FileNotFoundError:
+        print("Error: No compatible dataset is found.", file=sys.stderr)
+        return
     fmt_msg = f"Format:\t\t {fmt}"
     if extra_info:
         if extra_info.startswith("0."):
