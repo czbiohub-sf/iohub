@@ -182,14 +182,17 @@ def imread(
     logging.getLogger(__name__)
 
     # try to guess data type
+    extra_info = None
     if data_type is None:
-        data_type, extra_info = _infer_format(path)
+        fmt, extra_info = _infer_format(path)
     # identify data structure type
     if data_type == "ometiff":
         return MicromanagerOmeTiffReader(path, extract_data)
     elif data_type == "singlepagetiff":
         return MicromanagerSequenceReader(path, extract_data)
     elif data_type == "omezarr":
+        if extra_info is None:
+            _, extra_info = _infer_format(path)
         if extra_info == "0.1":
             return ZarrReader(path, version=extra_info)
         elif extra_info == "0.4":
@@ -219,7 +222,12 @@ def print_info(path: StrOrBytesPath, verbose=False):
     path = os.path.realpath(path)
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", category=UserWarning, module="iohub")
-        reader = imread(path)
+        fmt, extra_info = _infer_format(path)
+        reader = imread(path, data_type=fmt)
+    fmt_msg = f"Format:\t\t {fmt}"
+    if extra_info:
+        if extra_info.startswith("0."):
+            fmt_msg += " v" + extra_info
     ch_msg = f"Channel names:\t {reader.channel_names}"
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
     msgs = []
@@ -235,6 +243,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
         msgs.extend(
             [
                 "\nSummary:",
+                fmt_msg,
                 f"Positions:\t {reader.get_num_positions()}",
                 f"Time points:\t {reader.shape[0]}",
                 f"Channels:\t {reader.shape[1]}",
@@ -256,7 +265,8 @@ def print_info(path: StrOrBytesPath, verbose=False):
         msgs.extend(
             [
                 "\nSummary:",
-                f"Axes:\t {[a.type for a in reader.axes]}",
+                fmt_msg,
+                f"Axes:\t\t {[a.type for a in reader.axes]}",
                 ch_msg,
             ]
         )
@@ -266,7 +276,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 [
                     f"Row names:\t {[r.name for r in meta.rows]}",
                     f"Column names:\t {[c.name for c in meta.columns]}",
-                    f"Wells:\t {len(meta.wells)}",
+                    f"Wells:\t\t {len(meta.wells)}",
                 ]
             )
         print(str.join("\n", msgs))
