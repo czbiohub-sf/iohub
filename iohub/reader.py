@@ -261,13 +261,14 @@ def print_info(path: StrOrBytesPath, verbose=False):
     if extra_info:
         if extra_info.startswith("0."):
             fmt_msg += " v" + extra_info
+    sum_msg = "\n=== Summary ==="
     ch_msg = f"Channel names:\t {reader.channel_names}"
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
     msgs = []
     if isinstance(reader, ReaderBase):
         msgs.extend(
             [
-                "\nSummary:",
+                sum_msg,
                 fmt_msg,
                 f"Positions:\t {reader.get_num_positions()}",
                 f"Time points:\t {reader.shape[0]}",
@@ -289,7 +290,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
     elif isinstance(reader, NGFFNode):
         msgs.extend(
             [
-                "\nSummary:",
+                sum_msg,
                 fmt_msg,
                 f"Axes:\t\t {[a.type for a in reader.axes]}",
                 ch_msg,
