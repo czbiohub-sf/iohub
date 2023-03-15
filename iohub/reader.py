@@ -44,12 +44,22 @@ if TYPE_CHECKING:
 # todo: add dim_order to all reader objects
 
 
+def _find_ngff_version_in_zarr_group(group: zarr.Group):
+    for key in ["omero", "plate", "well"]:
+        if key in group.attrs:
+            return group.attrs[key].get("version")
+
+
 def _check_zarr_data_type(src: str):
     try:
         root = zarr.open(src, "r")
-        for key in ["omero", "plate"]:
-            if key in root.attrs:
-                return root.attrs[key].get("version")
+        if version := _find_ngff_version_in_zarr_group(root):
+            return version
+        else:
+            for _, row in root.groups():
+                for _, well in row.groups():
+                    if version := _find_ngff_version_in_zarr_group(well):
+                        return version
     except Exception:
         return False
     return "unknown"
@@ -184,8 +194,8 @@ def imread(
 
     # try to guess data type
     extra_info = None
-    if data_type is None:
-        fmt, extra_info = _infer_format(path)
+    if not data_type:
+        data_type, extra_info = _infer_format(path)
     # identify data structure type
     if data_type == "ometiff":
         return MicromanagerOmeTiffReader(path, extract_data)
@@ -210,7 +220,12 @@ def imread(
                 path, layout="auto", mode="r", version=extra_info
             )
         else:
-            raise ValueError(f"NGFF version {extra_info} is not supported.")
+            try:
+                return open_ome_zarr(path, layout="auto", mode="r")
+            except Exception:
+                raise ValueError(
+                    f"NGFF version {extra_info} is not supported."
+                )
     elif data_type == "ndtiff":
         return NDTiffReader(path)
     elif data_type == "upti":
