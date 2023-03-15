@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import glob
 import logging
 import os
-from typing import Literal
+import warnings
+from typing import TYPE_CHECKING, Literal
 
 import natsort
 import tifffile as tiff
@@ -9,9 +12,14 @@ import zarr
 
 from iohub.multipagetiff import MicromanagerOmeTiffReader
 from iohub.ndtiff import NDTiffReader
+from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
+from iohub.reader_base import ReaderBase
 from iohub.singlepagetiff import MicromanagerSequenceReader
 from iohub.upti import UPTIReader
 from iohub.zarrfile import ZarrReader
+
+if TYPE_CHECKING:
+    from _typeshed import StrOrBytesPath
 
 # replicate from aicsimageio logging mechanism
 ###############################################################################
@@ -38,12 +46,12 @@ from iohub.zarrfile import ZarrReader
 def _check_zarr_data_type(src: str):
     try:
         root = zarr.open(src, "r")
-        if "plate" in root.attrs:
-            if version := root.attrs["plate"]["version"]:
-                return version
+        for key in ["omero", "plate"]:
+            if key in root.attrs:
+                return root.attrs[key].get("version")
     except Exception:
         return False
-    return True
+    return "unknown"
 
 
 def _check_single_page_tiff(src: str):
@@ -114,6 +122,25 @@ def _get_sub_dirs(f: str):
     return natsort.natsorted(sub_dir_name)
 
 
+def _infer_format(path: str):
+    extra_info = None
+    if ngff_version := _check_zarr_data_type(path):
+        data_type = "omezarr"
+        extra_info = ngff_version
+    elif _check_ndtiff(path):
+        data_type = "ndtiff"
+    elif _check_multipage_tiff(path):
+        data_type = "ometiff"
+    elif _check_single_page_tiff(path):
+        data_type = "singlepagetiff"
+    else:
+        raise FileNotFoundError(
+            "Failed to infer data type: "
+            f"No compatible data found under {path}."
+        )
+    return (data_type, extra_info)
+
+
 def imread(
     path: str,
     data_type: Literal[
@@ -135,10 +162,11 @@ def imread(
     Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"], optional
         Dataset format, by default None
     extract_data : bool, optional
-        True if ome_series should be extracted immediately, by default False
+        True if ome_series should be extracted immediately for TIFF datasets,
+        by default False
     log_level : int, optional
         One of 0, 10, 20, 30, 40, 50 for
-        NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL respectively,
+        NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL, respectively,
         by default logging.WARNING
 
     Returns
@@ -155,29 +183,91 @@ def imread(
 
     # try to guess data type
     if data_type is None:
-        if ngff_version := _check_zarr_data_type(path):
-            data_type = "omezarr"
-        elif _check_ndtiff(path):
-            data_type = "ndtiff"
-        elif _check_multipage_tiff(path):
-            data_type = "ometiff"
-        elif _check_single_page_tiff(path):
-            data_type = "singlepagetiff"
-        else:
-            raise FileNotFoundError(
-                "Failed to infer data type: "
-                f"No compatible data found under {path}."
-            )
+        data_type, extra_info = _infer_format(path)
     # identify data structure type
     if data_type == "ometiff":
         return MicromanagerOmeTiffReader(path, extract_data)
     elif data_type == "singlepagetiff":
         return MicromanagerSequenceReader(path, extract_data)
     elif data_type == "omezarr":
-        return ZarrReader(path, version=ngff_version)
+        if extra_info == "0.1":
+            return ZarrReader(path, version=extra_info)
+        elif extra_info == "0.4":
+            # `warnings` instead of `logging` since this can be avoided
+            warnings.warn(
+                UserWarning(
+                    "For NGFF v0.4 datasets, `iohub.open_ome_zarr()` "
+                    "is preferred over `iohub.imread()`. "
+                    "These functions will return the same NGFF objects "
+                    "that are different from other readers from `imread`."
+                )
+            )
+            return open_ome_zarr(
+                path, layout="auto", mode="r", version=extra_info
+            )
+        else:
+            raise ValueError(f"NGFF version {extra_info} is not supported.")
     elif data_type == "ndtiff":
         return NDTiffReader(path)
     elif data_type == "upti":
         return UPTIReader(path, extract_data)
     else:
         raise ValueError(f"Reader of type {data_type} is not implemented")
+
+
+def print_info(path: StrOrBytesPath, verbose=False):
+    path = os.path.realpath(path)
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=UserWarning, module="iohub")
+        reader = imread(path)
+    ch_msg = f"Channel names:\t {reader.channel_names}"
+    code_msg = "\nThis datset can be opened with iohub in Python code:\n"
+    msgs = []
+    if isinstance(reader, ReaderBase):
+        if verbose:
+            msgs.extend(
+                [
+                    code_msg,
+                    ">>> from iohub import imread",
+                    f">>> reader = imread('{path}')\n",
+                ]
+            )
+        msgs.extend(
+            [
+                "\nSummary:",
+                f"Positions:\t {reader.get_num_positions()}",
+                f"Time points:\t {reader.shape[0]}",
+                f"Channels:\t {reader.shape[1]}",
+                ch_msg,
+                f"(Z, Y, X):\t {reader.shape[2:]}",
+                f"Z step (um):\t {reader.z_step_size}",
+            ]
+        )
+    elif isinstance(reader, NGFFNode):
+        if verbose:
+            msgs.extend(
+                [
+                    code_msg,
+                    ">>> from iohub import open_ome_zarr",
+                    f">>> dataset = open_ome_zarr('{path}', mode='r')",
+                ]
+            )
+        msgs.extend(
+            [
+                "\nSummary:",
+                f"Axes:\t {[a.type for a in reader.axes]}",
+                ch_msg,
+            ]
+        )
+        if isinstance(reader, Plate):
+            meta = reader.metadata
+            msgs.extend(
+                [
+                    f"Row names:\t {[r.name for r in meta.rows]}",
+                    f"Column names:\t {[c.name for c in meta.columns]}",
+                    f"Wells:\t {len(meta.wells)}",
+                ]
+            )
+        print(str.join("\n", msgs))
+        if isinstance(reader, Position) or verbose:
+            reader.print_tree()
