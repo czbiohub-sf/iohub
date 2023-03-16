@@ -145,7 +145,7 @@ def _infer_format(path: str):
     elif _check_single_page_tiff(path):
         data_type = "singlepagetiff"
     else:
-        raise FileNotFoundError(
+        raise RuntimeError(
             "Failed to infer data type: "
             f"No compatible data found under {path}."
         )
@@ -256,7 +256,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
             )
             fmt, extra_info = _infer_format(path)
             reader = imread(path, data_type=fmt)
-    except FileNotFoundError:
+    except RuntimeError:
         print("Error: No compatible dataset is found.", file=sys.stderr)
         return
     fmt_msg = f"Format:\t\t {fmt}"
