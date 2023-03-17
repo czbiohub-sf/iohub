@@ -336,7 +336,7 @@ class TIFFConverter:
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
-            if img_raw is None:
+            if img_raw is None or not getattr(img_raw, "shape", ()):
                 # Leave incomplete datasets zero-filled
                 logging.warning(
                     f"Cannot load image at PTCZ={coord_reorder}, "
