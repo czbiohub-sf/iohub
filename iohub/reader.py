@@ -294,7 +294,10 @@ def print_info(path: StrOrBytesPath, verbose=False):
             [
                 sum_msg,
                 fmt_msg,
-                f"Axes:\t\t {[a.type for a in reader.axes]}",
+                "".join(
+                    ["Axes:\t\t "]
+                    + [f"{a.name} ({a.type}); " for a in reader.axes]
+                ),
                 ch_msg,
             ]
         )
@@ -318,4 +321,4 @@ def print_info(path: StrOrBytesPath, verbose=False):
         if isinstance(reader, Position) or verbose:
             print("Zarr hierarchy:")
             reader.print_tree()
-        print(str.join("\n", msgs))
+        print("\n".join(msgs))
