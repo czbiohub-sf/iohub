@@ -336,6 +336,13 @@ class TIFFConverter:
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
+            if img_raw is None:
+                # Leave incomplete datasets zero-filled
+                logging.warning(
+                    f"Cannot load image at PTCZ={coord_reorder}, "
+                    "filling with zeros. Check if the raw data is incomplete."
+                )
+                continue
             well = self.well_list[coord_reorder[0]]
             zarr_img = self.writer[well]["0"]["0"]
             zarr_img[coord_reorder[1:]] = img_raw
