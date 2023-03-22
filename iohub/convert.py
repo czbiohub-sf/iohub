@@ -268,7 +268,12 @@ class TIFFConverter:
                 self.pos_names.append(name)
 
     def _get_image_array(self, p: int, t: int, c: int, z: int):
-        return np.asarray(self.reader.get_image(p, t, c, z))
+        try:
+            return np.asarray(self.reader.get_image(p, t, c, z))
+        except KeyError:
+            # Converter will log a warning and
+            # fill zeros if the image does not exist
+            return None
 
     def _get_coord_reorder(self, coord):
         return (
