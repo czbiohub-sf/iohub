@@ -209,11 +209,9 @@ def read_micromanager(
             warnings.warn(
                 UserWarning(
                     "For NGFF v0.4 datasets, `iohub.open_ome_zarr()` "
-                    "is preferred over `iohub.imread()`. "
-                    "`iohub.imread()` will return an NGFFNode object "
-                    "for OME-NGFF (OME-Zarr) v0.4 datasets, "
-                    "and a different object for other data formats "
-                    "such as NGFF v0.1 and OME-TIFF."
+                    "is preferred over `iohub.read_micromanager()`. "
+                    "Note that `open_ome_zarr()` will return "
+                    "an NGFFNode object instead of a ReaderBase instance."
                 )
             )
         elif extra_info != "0.1":
