@@ -152,7 +152,7 @@ def _infer_format(path: str):
     return (data_type, extra_info)
 
 
-def imread(
+def read_micromanager(
     path: str,
     data_type: Literal[
         "singlepagetiff", "ometiff", "ndtiff", "omezarr"
@@ -160,10 +160,10 @@ def imread(
     extract_data: bool = False,
     log_level: int = logging.WARNING,
 ):
-    """Read image arrays and metadata from a bioimaging dataset.
-    Supported formats are Micro-Manager TIFF formats
+    """Read image arrays and metadata from a Micro-Manager dataset.
+    Supported formats are Micro-Manager-acquired TIFF datasets
     (single-page TIFF, multi-page OME-TIFF, NDTIFF),
-    and OME-Zarr (OME-NGFF v0.1 HCS and v0.4 FOV/HCS layouts).
+    and converted OME-Zarr (v0.1/v0.4 HCS layout assuming a linear structure).
 
     Parameters
     ----------
@@ -204,9 +204,7 @@ def imread(
     elif data_type == "omezarr":
         if extra_info is None:
             _, extra_info = _infer_format(path)
-        if extra_info == "0.1":
-            return ZarrReader(path, version=extra_info)
-        elif extra_info == "0.4":
+        if extra_info == "0.4":
             # `warnings` instead of `logging` since this can be avoided
             warnings.warn(
                 UserWarning(
@@ -218,16 +216,9 @@ def imread(
                     "such as NGFF v0.1 and OME-TIFF."
                 )
             )
-            return open_ome_zarr(
-                path, layout="auto", mode="r", version=extra_info
-            )
-        else:
-            try:
-                return open_ome_zarr(path, layout="auto", mode="r")
-            except Exception:
-                raise ValueError(
-                    f"NGFF version {extra_info} is not supported."
-                )
+        elif extra_info != "0.1":
+            raise ValueError(f"NGFF version {extra_info} is not supported.")
+        return ZarrReader(path, version=extra_info)
     elif data_type == "ndtiff":
         return NDTiffReader(path)
     elif data_type == "upti":
@@ -255,7 +246,10 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 "ignore", category=UserWarning, module="iohub"
             )
             fmt, extra_info = _infer_format(path)
-            reader = imread(path, data_type=fmt)
+            if fmt == "omezarr" and extra_info == "0.4":
+                reader = open_ome_zarr(path, mode="r")
+            else:
+                reader = read_micromanager(path, data_type=fmt)
     except RuntimeError:
         print("Error: No compatible dataset is found.", file=sys.stderr)
         return
@@ -322,3 +316,4 @@ def print_info(path: StrOrBytesPath, verbose=False):
             print("Zarr hierarchy:")
             reader.print_tree()
         print("\n".join(msgs))
+        reader.close()

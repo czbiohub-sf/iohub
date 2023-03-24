@@ -88,9 +88,9 @@ and the [example scripts](https://github.com/czbiohub/iohub/tree/main/examples).
 Read a directory containing a TIFF dataset:
 
 ```py
-from iohub import imread
+from iohub import read_micromanager
 
-reader = imread("/path/to/data/")
+reader = read_micromanager("/path/to/data/")
 print(reader.shape)
 ```
 
