@@ -248,7 +248,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 reader = open_ome_zarr(path, mode="r")
             else:
                 reader = read_micromanager(path, data_type=fmt)
-    except RuntimeError:
+    except (ValueError, RuntimeError):
         print("Error: No compatible dataset is found.", file=sys.stderr)
         return
     fmt_msg = f"Format:\t\t {fmt}"
