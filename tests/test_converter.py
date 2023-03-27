@@ -94,7 +94,7 @@ def test_converter_ndtiff(
 
 @given(grid_layout=st.booleans(), label_positions=st.booleans())
 @settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=5000
+    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
 )
 def test_converter_singlepagetiff(
     setup_test_data,

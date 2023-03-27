@@ -19,7 +19,9 @@ used at the Biohub and in the broader imaging community.
 
 ## Quick start
 
-Install iohub locally:
+### Installation
+
+Install iohub with pip:
 
 ```sh
 git clone https://github.com/czbiohub/iohub.git
@@ -28,11 +30,26 @@ pip install /path/to/iohub
 
 > For more details about installation, see the [related section in the contribution guide](CONTRIBUTING.md#setting-up-developing-environment).
 
-Load and modify an [official example OME-Zarr](https://zenodo.org/record/7274533#.Y-q9uOzMJqv) dataset:
+### Command-line interface
+
+To check if iohub works for a dataset:
+
+```sh
+iohub info /path/to/data/
+```
+
+The CLI can show a summary of the dataset,
+point to relevant Python calls,
+and convert other data formats to the latest OME-Zarr.
+See the full CLI help message by typing `iohub` or `iohub [command] --help` in the terminal.
+
+### Working with OME-Zarr
+
+Load and modify an [example OME-Zarr](https://zenodo.org/record/7274533#.Y-q9uOzMJqv) dataset:
 
 ```py
 import numpy as np
-from iohub.ngff import open_ome_zarr
+from iohub import open_ome_zarr
 
 with open_ome_zarr(
     "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr",
@@ -48,7 +65,6 @@ with open_ome_zarr(
     raw_data = img_array.numpy()  # loads a CZYX 4D array into RAM
     print(raw_data.mean())  # does some analysis
 
-# %%
 with open_ome_zarr(
     "max_intensity_projection.zarr",
     mode="w-",
@@ -64,7 +80,19 @@ with open_ome_zarr(
     dataset.print_tree()  # checks that new data has been written
 ```
 
-For more API usage examples, refer to these [example scripts](https://github.com/czbiohub/iohub/tree/main/examples).
+For more about API usage, refer to the [documentation](https://czbiohub.github.io/iohub/)
+and the [example scripts](https://github.com/czbiohub/iohub/tree/main/examples).
+
+### Reading Micro-Manager TIFF data
+
+Read a directory containing a TIFF dataset:
+
+```py
+from iohub import read_micromanager
+
+reader = read_micromanager("/path/to/data/")
+print(reader.shape)
+```
 
 ## Why iohub?
 

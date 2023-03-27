@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from iohub._version import version as iohub_version
 from iohub.ngff import open_ome_zarr
-from iohub.reader import MicromanagerSequenceReader, imread
+from iohub.reader import MicromanagerSequenceReader, read_micromanager
 
 
 def _create_grid_from_coordinates(
@@ -98,7 +98,9 @@ class TIFFConverter:
             raise ValueError("Please specify .zarr at the end of your output")
         self.output_dir = output_dir
         logging.info("Initializing data.")
-        self.reader = imread(input_dir, data_type, extract_data=False)
+        self.reader = read_micromanager(
+            input_dir, data_type, extract_data=False
+        )
         logging.debug("Finished initializing data.")
         self.summary_metadata = (
             self.reader.mm_meta["Summary"] if self.reader.mm_meta else None

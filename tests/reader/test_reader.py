@@ -5,7 +5,7 @@ import zarr
 
 from iohub.multipagetiff import MicromanagerOmeTiffReader
 from iohub.ndtiff import NDTiffReader
-from iohub.reader import imread
+from iohub.reader import read_micromanager
 from iohub.singlepagetiff import MicromanagerSequenceReader
 
 # todo: consider tests for handling ometiff
@@ -20,7 +20,7 @@ def test_datatype(setup_test_data, setup_mm2gamma_ome_tiffs):
     # choose a specific folder
     _, one_folder, _ = setup_mm2gamma_ome_tiffs
     with pytest.raises(ValueError):
-        _ = imread(
+        _ = read_micromanager(
             one_folder, data_type="unsupportedformat", extract_data=False
         )
 
@@ -35,7 +35,7 @@ def test_ometiff_constructor_mm2gamma(
     _ = setup_test_data
     # choose a specific folder
     _, one_folder, _ = setup_mm2gamma_ome_tiffs
-    mmr = imread(one_folder, extract_data=False)
+    mmr = read_micromanager(one_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -55,7 +55,7 @@ def test_ometiff_constructor_mm2gamma(
 def test_ometiff_zarr_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
     for i in range(mmr.get_num_positions()):
@@ -67,7 +67,7 @@ def test_ometiff_zarr_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_ometiff_array_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -83,7 +83,7 @@ def test_sequence_constructor_mm2gamma(
 ):
     _ = setup_test_data
     _, one_folder, _ = setup_mm2gamma_singlepage_tiffs
-    mmr = imread(one_folder, extract_data=False)
+    mmr = read_micromanager(one_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerSequenceReader)
 
@@ -104,7 +104,7 @@ def test_sequence_zarr_mm2gamma(
 ):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
 
     assert isinstance(mmr, MicromanagerSequenceReader)
     for i in range(mmr.get_num_positions()):
@@ -118,7 +118,7 @@ def test_sequence_array_zarr_mm2gamma(
 ):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_singlepage_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
 
     assert isinstance(mmr, MicromanagerSequenceReader)
     for i in range(mmr.get_num_positions()):
@@ -134,7 +134,7 @@ def test_pycromanager_constructor(
     _ = setup_test_data
     # choose a specific folder
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
-    mmr = imread(rand_dir, extract_data=False)
+    mmr = read_micromanager(rand_dir, extract_data=False)
 
     assert isinstance(mmr, NDTiffReader)
 
@@ -154,7 +154,7 @@ def test_pycromanager_constructor(
 def test_pycromanager_get_zarr(setup_test_data, setup_pycromanager_test_data):
     _ = setup_test_data
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
-    mmr = imread(rand_dir)
+    mmr = read_micromanager(rand_dir)
     assert isinstance(mmr, NDTiffReader)
 
     for i in range(mmr.get_num_positions()):
@@ -166,7 +166,7 @@ def test_pycromanager_get_zarr(setup_test_data, setup_pycromanager_test_data):
 def test_pycromanager_get_array(setup_test_data, setup_pycromanager_test_data):
     _ = setup_test_data
     first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
-    mmr = imread(rand_dir)
+    mmr = read_micromanager(rand_dir)
     assert isinstance(mmr, NDTiffReader)
 
     for i in range(mmr.get_num_positions()):
@@ -180,7 +180,7 @@ def test_ometiff_constructor_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
     _ = setup_test_data
     # choose a specific folder
     _, one_folder, _ = setup_mm1422_ome_tiffs
-    mmr = imread(one_folder, extract_data=False)
+    mmr = read_micromanager(one_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -200,7 +200,7 @@ def test_ometiff_constructor_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 def test_ometiff_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm1422_ome_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -213,7 +213,7 @@ def test_ometiff_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 def test_ometiff_array_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm1422_ome_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -229,7 +229,7 @@ def test_sequence_constructor_mm1422(
 ):
     _ = setup_test_data
     _, one_folder, _ = setup_mm1422_singlepage_tiffs
-    mmr = imread(one_folder, extract_data=False)
+    mmr = read_micromanager(one_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerSequenceReader)
 
@@ -248,7 +248,7 @@ def test_sequence_constructor_mm1422(
 def test_sequence_zarr_mm1422(setup_test_data, setup_mm1422_singlepage_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
 
     assert isinstance(mmr, MicromanagerSequenceReader)
 
@@ -263,7 +263,7 @@ def test_sequence_array_zarr_mm1422(
 ):
     _ = setup_test_data
     _, _, rand_folder = setup_mm1422_singlepage_tiffs
-    mmr = imread(rand_folder, extract_data=True)
+    mmr = read_micromanager(rand_folder, extract_data=True)
 
     assert isinstance(mmr, MicromanagerSequenceReader)
 
@@ -277,7 +277,7 @@ def test_sequence_array_zarr_mm1422(
 def test_height(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -288,7 +288,7 @@ def test_height(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_width(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -299,7 +299,7 @@ def test_width(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_frames(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -310,7 +310,7 @@ def test_frames(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_slices(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -321,7 +321,7 @@ def test_slices(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_channels(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -332,7 +332,7 @@ def test_channels(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_channel_names(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -343,7 +343,7 @@ def test_channel_names(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_mm_meta(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -357,7 +357,7 @@ def test_mm_meta(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_stage_positions(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
@@ -371,7 +371,7 @@ def test_stage_positions(setup_test_data, setup_mm2gamma_ome_tiffs):
 def test_z_step_size(setup_test_data, setup_mm2gamma_ome_tiffs):
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
-    mmr = imread(rand_folder, extract_data=False)
+    mmr = read_micromanager(rand_folder, extract_data=False)
 
     assert isinstance(mmr, MicromanagerOmeTiffReader)
 
