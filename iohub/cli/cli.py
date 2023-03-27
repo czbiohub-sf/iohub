@@ -25,7 +25,12 @@ def cli():
     "and full tree for HCS Plates in OME-Zarr",
 )
 def info(files, verbose):
-    """View basic metadata of a list of FILES"""
+    """View basic metadata of a list of FILES.
+
+    Supported formats are Micro-Manager-acquired TIFF datasets
+    (single-page TIFF, multi-page OME-TIFF, NDTIFF)
+    and OME-Zarr (v0.1 linear HCS layout and all v0.4 layouts).
+    """
     for file in files:
         click.echo(f"Reading file:\t {file}")
         print_info(file, verbose=verbose)
