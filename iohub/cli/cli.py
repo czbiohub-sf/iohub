@@ -16,7 +16,7 @@ def cli():
 
 @cli.command()
 @click.help_option("-h", "--help")
-@click.argument("files", nargs=-1)
+@click.argument("files", nargs=-1, required=True)
 @click.option(
     "--verbose",
     "-v",
