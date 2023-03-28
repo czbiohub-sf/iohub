@@ -212,6 +212,8 @@ def test_create_zeros(ch_shape_dtype, arr_name):
         dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
         assert os.listdir(os.path.join(store_path, arr_name)) == [".zarray"]
         assert not dataset[arr_name][:].any()
+        assert dataset[arr_name].shape == shape
+        assert dataset[arr_name].dtype == dtype
 
 
 @given(
@@ -345,6 +347,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
                 name=arr_name,
                 grid_shape=grid_shape,
                 tile_shape=random_5d.shape,
+                dtype=random_5d.dtype,
                 chunk_dims=2,
             )
             assert tiles.rows == grid_shape[0]
@@ -357,6 +360,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
             assert tiles.tile_shape == _pad_shape(
                 random_5d.shape[-2:], target=5
             )
+            assert tiles.dtype == random_5d.dtype
             for args in ((1.01, 1), (0, 0, 0)):
                 with pytest.raises(TypeError):
                     tiles.get_tile(*args)
@@ -383,9 +387,11 @@ def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name):
         for row in range(tiles.rows):
             for column in range(tiles.columns):
                 yield (
-                    random_5d
-                    / (tiles.rows * tiles.columns + 1)
-                    * (row * column + 1),
+                    (
+                        random_5d
+                        / (tiles.rows * tiles.columns + 1)
+                        * (row * column + 1)
+                    ).astype(random_5d.dtype),
                     row,
                     column,
                 )
@@ -399,6 +405,7 @@ def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name):
                 name=arr_name,
                 grid_shape=grid_shape,
                 tile_shape=random_5d.shape,
+                dtype=random_5d.dtype,
                 chunk_dims=2,
             )
             for data, row, column in _tile_data(tiles):
