@@ -12,7 +12,7 @@ from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 from zarr.util import normalize_storage_path
 
-from iohub.display_utils import channel_display_settings
+from iohub.lf_utils import channel_display_settings
 from iohub.ngff_meta import (
     TO_DICT_SETTINGS,
     AcquisitionMeta,
