@@ -27,7 +27,7 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
 
 # Dictionary with key works and most popular fluorescent probes
 channel_colors = {
-    "lime": ["GFP", "Green", "Alexa488", "GCaMP","FITC", "mNeon"],
+    "green": ["GFP", "Green", "Alexa488", "GCaMP","FITC", "mNeon"],
     "magenta": ["TXR", "RFP", "mScarlet", "mCherry", "dTomato", "Cy5","Alexa561"],
     "blue": ["DAPI", "Blue", "BFP"],
     "red": ["Red"],
@@ -49,7 +49,7 @@ channel_colors = {
 
 popular_colors = {
     "red": rgb_to_hex(255, 0, 0),
-    "green": rgb_to_hex(0, 128, 0),
+    "green": rgb_to_hex(0, 255, 0),
     "blue": rgb_to_hex(0, 0, 255),
     "yellow": rgb_to_hex(255, 255, 0),
     "orange": rgb_to_hex(255, 165, 0),
