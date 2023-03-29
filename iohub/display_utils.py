@@ -6,6 +6,7 @@ import numpy as np
 
 from iohub.ngff_meta import ChannelMeta, WindowDict
 
+
 def rgb_to_hex(r: int, g: int, b: int) -> str:
     """
     Convert rgb values to hex
@@ -25,14 +26,23 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
     hex_color = "{:02X}{:02X}{:02X}".format(r, g, b)
     return hex_color
 
+
 # Dictionary with key works and most popular fluorescent probes
 channel_colors = {
-    "lime": ["GFP", "Green", "Alexa488", "GCaMP","FITC", "mNeon"],
-    "magenta": ["TXR", "RFP", "mScarlet", "mCherry", "dTomato", "Cy5","Alexa561"],
+    "green": ["GFP", "Green", "Alexa488", "GCaMP", "FITC", "mNeon"],
+    "magenta": [
+        "TXR",
+        "RFP",
+        "mScarlet",
+        "mCherry",
+        "dTomato",
+        "Cy5",
+        "Alexa561",
+    ],
     "blue": ["DAPI", "Blue", "BFP"],
     "red": ["Red"],
     "orange": ["Orange", "Cy3"],
-    "yellow":["Alexa561"],
+    "yellow": ["Alexa561"],
     "white": [
         "S0",
         "S1",
@@ -49,7 +59,7 @@ channel_colors = {
 
 popular_colors = {
     "red": rgb_to_hex(255, 0, 0),
-    "green": rgb_to_hex(0, 128, 0),
+    "green": rgb_to_hex(0, 255, 0),
     "blue": rgb_to_hex(0, 0, 255),
     "yellow": rgb_to_hex(255, 255, 0),
     "orange": rgb_to_hex(255, 165, 0),
@@ -65,8 +75,9 @@ popular_colors = {
     "darkorange": rgb_to_hex(255, 140, 0),
     "tomato": rgb_to_hex(255, 99, 71),
     "turquoise": rgb_to_hex(64, 224, 208),
-    "lime":rgb_to_hex(50,205,50),
+    "lime": rgb_to_hex(50, 205, 50),
 }
+
 
 def channel_display_settings(
     chan_name: str,
@@ -112,8 +123,8 @@ def channel_display_settings(
         else:
             clim = channel_settings["Other"]
             display_color = "FFFFFF"
-            
-    #Mapping channel name to color
+
+    # Mapping channel name to color
     for key in channel_colors:
         if chan_name in channel_colors[key]:
             display_color = popular_colors[key]
@@ -131,9 +142,3 @@ def channel_display_settings(
         label=chan_name,
         window=window,
     )
-
-
-
-
-
-
