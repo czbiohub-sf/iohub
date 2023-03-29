@@ -22,16 +22,17 @@ def rgb_to_hex(r: int, g: int, b: int) -> str:
     -------
     str: Hex string corresponding to the RGB value
     """
-    hex_color = "{:02x}{:02x}{:02x}".format(r, g, b)
+    hex_color = "{:02X}{:02X}{:02X}".format(r, g, b)
     return hex_color
 
 # Dictionary with key works and most popular fluorescent probes
 channel_colors = {
-    "green": ["GFP", "Green", "Alexa488", "GCaMP"],
-    "magenta": ["TXR", "mCherry", "dTomato", "Cy5"],
-    "blue": ["DAPI", "Blue"],
+    "lime": ["GFP", "Green", "Alexa488", "GCaMP","FITC", "mNeon"],
+    "magenta": ["TXR", "RFP", "mScarlet", "mCherry", "dTomato", "Cy5","Alexa561"],
+    "blue": ["DAPI", "Blue", "BFP"],
     "red": ["Red"],
     "orange": ["Orange", "Cy3"],
+    "yellow":["Alexa561"],
     "white": [
         "S0",
         "S1",
@@ -64,6 +65,7 @@ popular_colors = {
     "darkorange": rgb_to_hex(255, 140, 0),
     "tomato": rgb_to_hex(255, 99, 71),
     "turquoise": rgb_to_hex(64, 224, 208),
+    "lime":rgb_to_hex(50,205,50),
 }
 
 def channel_display_settings(
@@ -111,21 +113,19 @@ def channel_display_settings(
             clim = channel_settings["Other"]
             display_color = "FFFFFF"
             
-        #Mapping channel name to color
-        for key in channel_colors:
-            if chan_name in channel_colors[key]:
-                print(f'"{chan_name}" is in {key}')
-                display_color = key
-                break
-            else:
-                display_color = display_color = "FFFFFF"
+    #Mapping channel name to color
+    for key in channel_colors:
+        if chan_name in channel_colors[key]:
+            display_color = popular_colors[key]
+            break
+        else:
+            display_color = display_color = "FFFFFF"
 
     window = WindowDict(start=clim[0], end=clim[1], min=clim[2], max=clim[3])
     return ChannelMeta(
         active=first_chan,
         coefficient=1.0,
         color=display_color,
-        # color="00FF00",
         family="linear",
         inverted=False,
         label=chan_name,
