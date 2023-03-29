@@ -243,6 +243,9 @@ def print_info(path: StrOrBytesPath, verbose=False):
             warnings.filterwarnings(
                 "ignore", category=UserWarning, module="iohub"
             )
+            warnings.filterwarnings(
+                "ignore", category=DeprecationWarning, module="iohub"
+            )
             fmt, extra_info = _infer_format(path)
             if fmt == "omezarr" and extra_info == "0.4":
                 reader = open_ome_zarr(path, mode="r")
