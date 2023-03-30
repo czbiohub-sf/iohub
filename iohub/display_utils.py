@@ -111,7 +111,7 @@ def channel_display_settings(
             display_color = color_to_hex(key)
             break
         else:
-            display_color = color_to_hex(key)
+            display_color = color_to_hex("white")
 
     window = WindowDict(start=clim[0], end=clim[1], min=clim[2], max=clim[3])
     return ChannelMeta(
