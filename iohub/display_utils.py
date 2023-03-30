@@ -103,8 +103,6 @@ def channel_display_settings(
             clim = channel_settings[chan_name]
         else:
             clim = channel_settings["Other"]
-            display_color = color_to_hex("white")
-
     # Mapping channel name to color
     for key in CHANNEL_COLORS:
         if chan_name in CHANNEL_COLORS[key]:
