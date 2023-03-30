@@ -11,23 +11,22 @@ import tempfile
 import numpy as np
 
 from iohub.ngff import open_ome_zarr
-from datetime import datetime
 
 # %%
 # Set storage path
-timestamp = datetime.now().strftime('%d%H%M%S')
-store_path = '/home/eduardo.hirata/Documents/tmp/' +timestamp+ "ome.zarr"
+
+store_path = f"{tempfile.gettempdir()}/ome.zarr"
 print("Zarr store path", store_path)
 
 # %%
 # Write 5D data to a new Zarr store
 
 tczyx = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(5, 4, 3, 32, 32), dtype=np.uint16
+    0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16
 )
 
 with open_ome_zarr(
-    store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP","Cy3","TXR"]
+    store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP"]
 ) as dataset:
     dataset["img"] = tczyx
 
