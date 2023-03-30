@@ -43,6 +43,23 @@ CHANNEL_COLORS = {
 }
 
 
+def color_to_hex(color: str) -> str:
+    """
+    Convert the color string to HEX (i.e 'red' -> 'FF0000')
+    (https://pillow.readthedocs.io/en/stable/_modules/PIL/ImageColor.html#getrgb)
+    (https://www.w3.org/TR/css-color-3/#svg-color)
+
+    Parameters
+    ----------
+    color : str The name of the color from the CSS3 Specifications
+
+    Returns
+    -------
+    str the HEX value in uppercase and without the '#'
+    """
+    return colormap[color][1:].upper()
+
+
 def channel_display_settings(
     chan_name: str,
     clim: Tuple[float, float, float, float] = None,
@@ -86,15 +103,15 @@ def channel_display_settings(
             clim = channel_settings[chan_name]
         else:
             clim = channel_settings["Other"]
-            display_color = colormap["white"][1:].upper()
+            display_color = color_to_hex("white")
 
     # Mapping channel name to color
     for key in CHANNEL_COLORS:
         if chan_name in CHANNEL_COLORS[key]:
-            display_color = colormap[key][1:].upper()
+            display_color = color_to_hex(key)
             break
         else:
-            display_color = colormap["white"][1:].upper()
+            display_color = color_to_hex(key)
 
     window = WindowDict(start=clim[0], end=clim[1], min=clim[2], max=clim[3])
     return ChannelMeta(

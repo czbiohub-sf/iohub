@@ -1,5 +1,4 @@
 import numpy as np
-from PIL.ImageColor import colormap
 
 from iohub.display_utils import channel_display_settings
 
