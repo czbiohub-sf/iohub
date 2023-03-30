@@ -54,6 +54,11 @@ channel_colors = {
         "Phase3D",
         "Retardance",
         "Orientation",
+        "State0",
+        "State1",
+        "State2",
+        "State3",
+        "State4"
     ],
 }
 
