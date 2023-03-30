@@ -250,6 +250,7 @@ class ChannelMeta(MetaBase):
     label: str = None
     window: WindowDict = None
 
+
 class RDefsMeta(MetaBase):
     """Rendering settings without clear documentation from the NGFF spec.
     https://docs.openmicroscopy.org/omero/5.6.1/developers/Web/WebGateway.html#imgdata
