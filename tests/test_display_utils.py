@@ -12,7 +12,7 @@ def test_rbg_to_hex():
     lime_hex = rgb_to_hex(*lime)
     blue_hex = rgb_to_hex(*blue)
     assert red_hex == "FF0000"
-    assert lime_hex == "32CD32"
+    assert lime_hex == "00FF00"
     assert blue_hex == "0000FF"
 
 
