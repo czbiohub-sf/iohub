@@ -58,7 +58,7 @@ channel_colors = {
         "State1",
         "State2",
         "State3",
-        "State4"
+        "State4",
     ],
 }
 
