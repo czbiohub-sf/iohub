@@ -21,7 +21,7 @@ from typing import (
 
 import pandas as pd
 from pydantic import BaseModel, Field, root_validator, validator
-from pydantic.color import Color, ColorTuple, ColorType
+from pydantic.color import Color, ColorType
 
 
 def unique_validator(
