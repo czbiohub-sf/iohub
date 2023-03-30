@@ -7,7 +7,6 @@ from PIL.ImageColor import colormap
 
 from iohub.ngff_meta import ChannelMeta, WindowDict
 
-
 """ Dictionary with key works and most popular fluorescent probes """
 CHANNEL_COLORS = {
     "lime": ["GFP", "Green", "Alexa488", "GCaMP", "FITC", "mNeon"],

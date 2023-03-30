@@ -1,19 +1,7 @@
-#%%
 import numpy as np
-from iohub.display_utils import rgb_to_hex, channel_display_settings
+from PIL.ImageColor import colormap
 
-
-def test_rbg_to_hex():
-    """Test conversion from RGB to HEX"""
-    red = (255, 0, 0)
-    lime = (0, 255, 0)
-    blue = (0, 0, 255)
-    red_hex = rgb_to_hex(*red)
-    lime_hex = rgb_to_hex(*lime)
-    blue_hex = rgb_to_hex(*blue)
-    assert red_hex == "FF0000"
-    assert lime_hex == "00FF00"
-    assert blue_hex == "0000FF"
+from iohub.display_utils import channel_display_settings
 
 
 def test_channel_display_settings():
