@@ -244,15 +244,11 @@ class ChannelMeta(MetaBase):
 
     active: bool = False
     coefficient: float = 1.0
-    color: ColorType = Color("FFFFFF").as_hex()
+    color: ColorType = "FFFFFF"
     family: str = "linear"
     inverted: bool = False
     label: str = None
     window: WindowDict = None
-
-    class Config:
-        json_encoders = {ColorType: lambda c: Color(c).as_hex()}
-
 
 class RDefsMeta(MetaBase):
     """Rendering settings without clear documentation from the NGFF spec.

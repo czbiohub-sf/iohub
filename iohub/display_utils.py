@@ -1,35 +1,16 @@
-# Utility functions for displaying data
+""" Utility functions for displaying data """
 
 from typing import Tuple
 
 import numpy as np
+from PIL.ImageColor import colormap
 
 from iohub.ngff_meta import ChannelMeta, WindowDict
 
 
-def rgb_to_hex(r: int, g: int, b: int) -> str:
-    """
-    Convert rgb values to hex
-    Example: Red (255,0,0) -> 'FF0000'
-    Parameters
-    ----------
-    r : int
-        red
-    g : int
-        green
-    b : int
-        blue
-    Returns
-    -------
-    str: Hex string corresponding to the RGB value
-    """
-    hex_color = "{:02X}{:02X}{:02X}".format(r, g, b)
-    return hex_color
-
-
-# Dictionary with key works and most popular fluorescent probes
-channel_colors = {
-    "green": ["GFP", "Green", "Alexa488", "GCaMP", "FITC", "mNeon"],
+""" Dictionary with key works and most popular fluorescent probes """
+CHANNEL_COLORS = {
+    "lime": ["GFP", "Green", "Alexa488", "GCaMP", "FITC", "mNeon"],
     "magenta": [
         "TXR",
         "RFP",
@@ -60,27 +41,6 @@ channel_colors = {
         "State3",
         "State4",
     ],
-}
-
-popular_colors = {
-    "red": rgb_to_hex(255, 0, 0),
-    "green": rgb_to_hex(0, 255, 0),
-    "blue": rgb_to_hex(0, 0, 255),
-    "yellow": rgb_to_hex(255, 255, 0),
-    "orange": rgb_to_hex(255, 165, 0),
-    "purple": rgb_to_hex(128, 0, 128),
-    "pink": rgb_to_hex(255, 192, 203),
-    "gray": rgb_to_hex(128, 128, 128),
-    "brown": rgb_to_hex(165, 42, 42),
-    "white": rgb_to_hex(255, 255, 255),
-    "black": rgb_to_hex(0, 0, 0),
-    "cyan": rgb_to_hex(0, 255, 255),
-    "magenta": rgb_to_hex(255, 0, 255),
-    "crimson": rgb_to_hex(220, 20, 60),
-    "darkorange": rgb_to_hex(255, 140, 0),
-    "tomato": rgb_to_hex(255, 99, 71),
-    "turquoise": rgb_to_hex(64, 224, 208),
-    "lime": rgb_to_hex(50, 205, 50),
 }
 
 
@@ -127,15 +87,15 @@ def channel_display_settings(
             clim = channel_settings[chan_name]
         else:
             clim = channel_settings["Other"]
-            display_color = "FFFFFF"
+            display_color = colormap["white"][1:].upper()
 
     # Mapping channel name to color
-    for key in channel_colors:
-        if chan_name in channel_colors[key]:
-            display_color = popular_colors[key]
+    for key in CHANNEL_COLORS:
+        if chan_name in CHANNEL_COLORS[key]:
+            display_color = colormap[key][1:].upper()
             break
         else:
-            display_color = display_color = "FFFFFF"
+            display_color = colormap["white"][1:].upper()
 
     window = WindowDict(start=clim[0], end=clim[1], min=clim[2], max=clim[3])
     return ChannelMeta(
