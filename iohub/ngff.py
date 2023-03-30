@@ -1263,7 +1263,7 @@ class Plate(NGFFNode):
         col_index = self._auto_idx(col_index, self._cols)
         # build well metadata
         well_index_meta = WellIndexMeta(
-            path=os.path.join(row_name, col_name),
+            path='/'.join([row_name, col_name]),
             row_index=row_index,
             column_index=col_index,
         )
