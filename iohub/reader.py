@@ -250,7 +250,9 @@ def print_info(path: StrOrBytesPath, verbose=False):
             if fmt == "omezarr" and extra_info == "0.4":
                 reader = open_ome_zarr(path, mode="r")
             else:
-                reader = read_micromanager(path, data_type=fmt)
+                reader = read_micromanager(
+                    path, data_type=fmt, log_level=logging.ERROR
+                )
     except (ValueError, RuntimeError):
         print("Error: No compatible dataset is found.", file=sys.stderr)
         return
