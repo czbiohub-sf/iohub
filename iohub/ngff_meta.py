@@ -21,7 +21,7 @@ from typing import (
 
 import pandas as pd
 from pydantic import BaseModel, Field, root_validator, validator
-from pydantic.color import Color, ColorTuple, ColorType
+from pydantic.color import Color, ColorType
 
 
 def unique_validator(
@@ -244,14 +244,11 @@ class ChannelMeta(MetaBase):
 
     active: bool = False
     coefficient: float = 1.0
-    color: ColorType = Color("FFFFFF").as_hex()
+    color: ColorType = "FFFFFF"
     family: str = "linear"
     inverted: bool = False
     label: str = None
     window: WindowDict = None
-
-    class Config:
-        json_encoders = {ColorType: lambda c: Color(c).as_hex()}
 
 
 class RDefsMeta(MetaBase):
@@ -296,12 +293,12 @@ class LabelColorMeta(MetaBase):
     # MUST
     label_value: int = Field(alias="label-value")
     # MAY
-    rgba: Optional[ColorTuple] = None
+    rgba: Optional[ColorType] = None
 
-    class Config:
-        json_encoders = {
-            ColorTuple: lambda c: Color(c).as_rgb_tuple(alpha=True)
-        }
+    @validator("rgba")
+    def rgba_color(cls, v):
+        v = Color(v).as_rgb_tuple(alpha=True)
+        return v
 
 
 class ImageLabelMeta(VersionMeta):

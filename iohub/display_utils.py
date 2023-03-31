@@ -1,10 +1,63 @@
-# Utility functions for label-free microscopy data
+""" Utility functions for displaying data """
 
 from typing import Tuple
 
 import numpy as np
+from PIL.ImageColor import colormap
 
 from iohub.ngff_meta import ChannelMeta, WindowDict
+
+""" Dictionary with key works and most popular fluorescent probes """
+CHANNEL_COLORS = {
+    "lime": ["GFP", "Green", "Alexa488", "GCaMP", "FITC", "mNeon"],
+    "magenta": [
+        "TXR",
+        "RFP",
+        "mScarlet",
+        "mCherry",
+        "dTomato",
+        "Cy5",
+        "Alexa561",
+    ],
+    "blue": ["DAPI", "Blue", "BFP"],
+    "red": ["Red"],
+    "orange": ["Orange", "Cy3"],
+    "yellow": ["Alexa561"],
+    "white": [
+        "S0",
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "BF",
+        "Phase2D",
+        "Phase3D",
+        "Retardance",
+        "Orientation",
+        "State0",
+        "State1",
+        "State2",
+        "State3",
+        "State4",
+    ],
+}
+
+
+def color_to_hex(color: str) -> str:
+    """
+    Convert the color string to HEX (i.e 'red' -> 'FF0000')
+    (https://pillow.readthedocs.io/en/stable/_modules/PIL/ImageColor.html#getrgb)
+    (https://www.w3.org/TR/css-color-3/#svg-color)
+
+    Parameters
+    ----------
+    color : str The name of the color from the CSS3 Specifications
+
+    Returns
+    -------
+    str the HEX value in uppercase and without the '#'
+    """
+    return colormap[color][1:].upper()
 
 
 def channel_display_settings(
@@ -50,11 +103,19 @@ def channel_display_settings(
             clim = channel_settings[chan_name]
         else:
             clim = channel_settings["Other"]
+    # Mapping channel name to color
+    for key in CHANNEL_COLORS:
+        if chan_name in CHANNEL_COLORS[key]:
+            display_color = color_to_hex(key)
+            break
+        else:
+            display_color = color_to_hex("white")
+
     window = WindowDict(start=clim[0], end=clim[1], min=clim[2], max=clim[3])
     return ChannelMeta(
         active=first_chan,
         coefficient=1.0,
-        color="FFFFFF",
+        color=display_color,
         family="linear",
         inverted=False,
         label=chan_name,
