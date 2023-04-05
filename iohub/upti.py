@@ -117,7 +117,7 @@ class UPTIReader(ReaderBase):
 
         """
 
-        self.position_arrays[pos] = zarr.empty(
+        self.position_arrays[pos] = zarr.zeros(
             shape=(
                 self.frames,
                 self.channels,

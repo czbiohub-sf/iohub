@@ -266,7 +266,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         # intialize virtual zarr store and save it under positions
         timepoints, channels, slices = self._get_dimensions(pos)
-        self.position_arrays[pos] = zarr.empty(
+        self.position_arrays[pos] = zarr.zeros(
             shape=(timepoints, channels, slices, self.height, self.width),
             chunks=(1, 1, 1, self.height, self.width),
             dtype=self.dtype,
