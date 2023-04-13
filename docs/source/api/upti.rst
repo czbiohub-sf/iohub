@@ -1,5 +1,5 @@
-Read UPTI TIFF
-~~~~~~~~~~~~~~
+Read PTI TIFF
+~~~~~~~~~~~~~
 
     .. currentmodule:: iohub.upti
 

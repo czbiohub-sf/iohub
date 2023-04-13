@@ -46,8 +46,8 @@ Write
    Read Micro-Manager datasets <api/mm_reader>
    Read MM TIFF sequence <api/mm_sequence_reader>
    Read MMStack OME-TIFF <api/mm_ometiff_reader>
-   Read ND-TIFF <api/ndtiff>
-   Read UPTI TIFF <api/upti>
+   Read NDTiff <api/ndtiff>
+   Read PTI TIFF <api/upti>
    Convert TIFF to OME-Zarr <api/mm_converter>
 
 .. toctree::

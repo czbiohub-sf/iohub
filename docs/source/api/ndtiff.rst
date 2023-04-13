@@ -1,5 +1,5 @@
-Read ND-TIFF
-~~~~~~~~~~~~
+Read NDTiff
+~~~~~~~~~~~
 
 
     .. currentmodule:: iohub.ndtiff
