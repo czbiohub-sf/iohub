@@ -7,13 +7,14 @@ OME-NGFF (OME-Zarr)
     
     .. currentmodule:: iohub.ngff
 
+    .. autoclass:: NGFFNode
+        :members:
+
     .. autoclass:: Position
-       :members:
-       :inherited-members:
+        :members:
 
     .. autoclass:: TiledPosition
-       :members:
+        :members:
 
     .. autoclass:: Plate
-       :members:
-       :inherited-members:
+        :members:
