@@ -69,6 +69,7 @@ class ClearControlFOV:
     def __init__(self, data_path: "StrOrBytesPath"):
         super().__init__()
         self._data_path = Path(data_path)
+        self._dtype = np.uint16
     
     @property
     def shape(self) -> Tuple[int, ...]:
@@ -109,7 +110,6 @@ class ClearControlFOV:
         volume_shape: Tuple[int, int, int],
         channels: Sequence[str] | str,
         time_point: int,
-        dtype: np.dtype = np.uint16,
     ) -> np.ndarray:
         """Reads a single or multiple channels of blosc compressed Clear Control volume.
 
@@ -138,18 +138,25 @@ class ClearControlFOV:
             volume_path = self._data_path / "stacks" / channels / volume_name
             if not volume_path.exists():
                 raise ValueError(f"{volume_path} not found.")
-            return blosc_buffer_to_array(volume_path, volume_shape, dtype=dtype)
+            return blosc_buffer_to_array(volume_path, volume_shape, dtype=self._dtype)
         
         return np.stack(
             [self._read_volume(volume_shape, ch, time_point) for ch in channels]
         )
-        
     
+    @staticmethod
+    def _fix_indexing(indexing: int | slice | List | np.ndarray) -> int | slice | List | np.ndarray:
+        """Converts numpy array to simple python type or list."""
+        if isinstance(indexing, np.ScalarType):
+            return indexing.item()
+        return indexing
+
     def __getitem__(
         self, key: (
             int |
             slice |
             List |
+            np.ndarray |
             Tuple[int, ...] |
             Tuple[slice, ...]
         ),
@@ -181,18 +188,9 @@ class ClearControlFOV:
         err_msg = NotImplementedError(f"ClearControlFOV indexing not implemented for {key}."
                                        "Only Integer, List and slice indexing are available.")
 
-        # querying a single time point
-        if isinstance(key, int):
-            self._read_volume(self._data_path, volume_shape, channels, key)
-
-        # querying multiple time points
-        elif isinstance(key, (List, slice)):
-            return np.stack([
-                self.__getitem__(t) for t in time_pts[key]
-            ])
-
         # querying time points and channels at once
-        elif isinstance(key, Tuple):
+        if isinstance(key, Tuple):
+            key = tuple(self._fix_indexing(k) for k in key)
 
             if len(key) == 1:
                 return self.__getitem__(key[0])
@@ -210,7 +208,7 @@ class ClearControlFOV:
                 out_arr = self._read_volume(volume_shape, channels[C], T) 
             
             # multiple time points
-            elif isinstance(T, (List, slice)):
+            elif isinstance(T, (List, slice, np.ndarray)):
                 out_arr = np.stack([
                     self._read_volume(volume_shape, channels[C], t)
                     for t in time_pts[T]
@@ -220,12 +218,31 @@ class ClearControlFOV:
                 raise err_msg
             
             return out_arr[arr_keys]
+
+        # querying a single time point
+        elif isinstance(key, int):
+            key = self._fix_indexing(key)
+            self._read_volume(self._data_path, volume_shape, channels, key)
+
+        # querying multiple time points
+        elif isinstance(key, (List, slice, np.ndarray)):
+            return np.stack([
+                self.__getitem__(t) for t in time_pts[key]
+            ])
        
         else:
             raise err_msg
 
-    def __setitem__(self, key: Any, value: Any) -> None:
+    def __setitem__(self, _: Any, _: Any) -> None:
         raise PermissionError("ClearControlFOV is read-only.")
+    
+    @property
+    def ndim(self) -> int:
+        return 5
+    
+    @property
+    def dtype(self) -> np.dtype:
+        return self._dtype
 
     def metadata(self) -> Dict[str, Any]:
         """Summarizes Clear Control metadata into a dictionary."""
