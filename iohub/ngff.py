@@ -902,6 +902,12 @@ class Position(NGFFNode):
 
 
 class TiledPosition(Position):
+    """Variant of the NGFF position node
+    with convenience methods to create and access tiled arrays.
+    Other parameters and attributes are the same as
+    :py:class:`iohub.ngff.Position`.
+    """
+
     _MEMBER_TYPE = TiledImageArray
 
     def make_tiles(
@@ -1402,8 +1408,7 @@ def open_ome_zarr(
         "tiled" opens a "fov" layout with tiled image array
         (cannot be automatically inferred since this not NGFF-specified);
         by default "auto"
-    mode : Literal["r+", "a", "w-"], optional
-        mode : Literal["r", "r+", "a", "w", "w-"], optional
+    mode : Literal["r", "r+", "a", "w", "w-"], optional
         Persistence mode:
         'r' means read only (must exist);
         'r+' means read/write (must exist);
@@ -1438,7 +1443,10 @@ def open_ome_zarr(
     Returns
     -------
     Dataset
-        NGFF node object (`Position`, `Plate`, or `TiledPosition`)
+        NGFF node object
+        (:py:class:`iohub.ngff.Position`,
+        :py:class:`iohub.ngff.Plate`,
+        or :py:class:`iohub.ngff.TiledPosition`)
     """
     if mode == "a":
         mode = ("w-", "r+")[int(os.path.exists(store_path))]

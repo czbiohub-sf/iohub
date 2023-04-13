@@ -43,10 +43,12 @@ Write
    :caption: API Reference
 
    NGFF <api/ngff>
-   MicromanagerSequenceReader <api/mm_sequence_reader>
-   MicromanagerOmeTiffReader <api/mm_ometiff_reader>
-   UPTIReader <api/upti>
-   PycromanagerReader <api/pycromanager>
+   Read Micro-Manager datasets <api/mm_reader>
+   Convert TIFF to OME-Zarr <api/mm_converter>
+   Read MM TIFF sequence <api/mm_sequence_reader>
+   Read MMStack OME-TIFF <api/mm_ometiff_reader>
+   Read ND-TIFF <api/ndtiff>
+   Read UPTI TIFF <api/upti>
 
 .. toctree::
    :maxdepth: 1
