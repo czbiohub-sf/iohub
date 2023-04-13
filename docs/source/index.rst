@@ -42,13 +42,13 @@ Write
    :hidden:
    :caption: API Reference
 
-   NGFF <api/ngff>
+   OME-NGFF (OME-Zarr) <api/ngff>
    Read Micro-Manager datasets <api/mm_reader>
-   Convert TIFF to OME-Zarr <api/mm_converter>
    Read MM TIFF sequence <api/mm_sequence_reader>
    Read MMStack OME-TIFF <api/mm_ometiff_reader>
    Read ND-TIFF <api/ndtiff>
    Read UPTI TIFF <api/upti>
+   Convert TIFF to OME-Zarr <api/mm_converter>
 
 .. toctree::
    :maxdepth: 1
