@@ -1,5 +1,5 @@
 Convert TIFF to OME-Zarr
-~~~~~~~~~~~~~~~~~~~~~~~~
+========================
 
 There is also a CLI command for conversion.
 Consult ``iohub convert --help`` for documentation.

@@ -1,5 +1,5 @@
 Read Micro-Manager datasets
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+===========================
 
 .. currentmodule:: iohub
 

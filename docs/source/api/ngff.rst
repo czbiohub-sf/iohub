@@ -1,5 +1,5 @@
 OME-NGFF (OME-Zarr)
-~~~~~~~~~~~~~~~~~~~
+===================
 
 .. currentmodule:: iohub
 
