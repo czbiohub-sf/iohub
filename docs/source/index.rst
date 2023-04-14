@@ -9,7 +9,7 @@ used at the Biohub and in the broader imaging community.
 Read
 ====
 
-- OME-Zarr
+- OME-Zarr (`OME-NGFF v0.4 <https://ngff.openmicroscopy.org/0.4/>`_)
 - Single-page TIFF, OME-TIFF, and NDTiff images written by Micro-Manager/pycro-manager
 - Custom data formats used by Biohub microscopes (e.g., PTI, Mantis (WIP), DaXi (TBD))
 
@@ -42,11 +42,13 @@ Write
    :hidden:
    :caption: API Reference
 
-   NGFF <api/ngff>
-   MicromanagerSequenceReader <api/mm_sequence_reader>
-   MicromanagerOmeTiffReader <api/mm_ometiff_reader>
-   UPTIReader <api/upti>
-   PycromanagerReader <api/pycromanager>
+   OME-NGFF (OME-Zarr) <api/ngff>
+   Read Micro-Manager datasets <api/mm_reader>
+   Read MM TIFF sequence <api/mm_sequence_reader>
+   Read MMStack OME-TIFF <api/mm_ometiff_reader>
+   Read NDTiff <api/ndtiff>
+   Read PTI TIFF <api/upti>
+   Convert TIFF to OME-Zarr <api/mm_converter>
 
 .. toctree::
    :maxdepth: 1

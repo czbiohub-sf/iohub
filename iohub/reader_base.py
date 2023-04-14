@@ -103,7 +103,7 @@ class ReaderBase:
     def get_num_positions(self) -> int:
         """Get total number of scenes referenced in ome-tiff metadata.
 
-        Returns:
+        Returns
         -------
         int
             number of positions

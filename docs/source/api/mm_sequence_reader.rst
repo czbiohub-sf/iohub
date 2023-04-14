@@ -1,5 +1,5 @@
-MicromanagerSequenceReader
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Read MM TIFF sequence
+~~~~~~~~~~~~~~~~~~~~~
 
     .. currentmodule:: iohub.singlepagetiff
 
