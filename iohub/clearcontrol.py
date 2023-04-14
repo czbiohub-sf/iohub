@@ -172,6 +172,7 @@ class ClearControlFOV:
                 shape = [min(s, v) for s, v in zip(shape, values)]
 
         shape.insert(1, len(self.channels))
+        shape[0] += 1  # time points starts counts on zero
 
         return tuple(shape)
 
@@ -230,8 +231,15 @@ class ClearControlFOV:
     @staticmethod
     def _fix_indexing(indexing: ArrayIndex) -> ArrayIndex:
         """Converts numpy array to simple python type or list."""
-        if isinstance(indexing, np.ScalarType):
-            return indexing.item()
+        if np.isscalar(indexing):
+            try:
+                return indexing.item()
+            except AttributeError:
+                return indexing
+
+        elif isinstance(indexing, np.ndarray):
+            return indexing.tolist()
+
         return indexing
 
     def __getitem__(
@@ -255,7 +263,7 @@ class ClearControlFOV:
             Not all numpy array of indexing are implemented.
         """
         # standardizing indexing
-        volume_slicing = ...
+        volume_slicing = None
         if isinstance(key, Tuple):
             key = tuple(self._fix_indexing(k) for k in key)
             if len(key) == 1:
@@ -264,6 +272,9 @@ class ClearControlFOV:
                 key, volume_slicing = key[:2], key[2:]
         else:
             key = self._fix_indexing(key)
+
+        if volume_slicing is None:
+            return self._load_array(key)
 
         return self._load_array(key)[volume_slicing]
 
@@ -274,7 +285,7 @@ class ClearControlFOV:
     ) -> np.ndarray:
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
-        channels = self.channels
+        channels = np.asarray(self.channels)
         time_pts = list(range(shape[0]))
         volume_shape = shape[-3:]
 
@@ -286,7 +297,7 @@ class ClearControlFOV:
             T, C = key
             # single time point
             if isinstance(T, int):
-                return self._read_volume(volume_shape, channels[C], T)
+                return self._read_volume(volume_shape, channels[C], time_pts[T])
 
             # multiple time points
             elif isinstance(T, (List, slice, np.ndarray)):
@@ -300,7 +311,7 @@ class ClearControlFOV:
 
         # querying a single time point
         elif isinstance(key, int):
-            return self._read_volume(self._data_path, volume_shape, channels, key)
+            return self._read_volume(volume_shape, channels, key)
 
         # querying multiple time points
         elif isinstance(key, (List, slice, np.ndarray)):
@@ -339,7 +350,7 @@ class ClearControlFOV:
         cc_metadata = []
         for path in self._data_path.glob("*.metadata.txt"):
             with open(path, mode="r") as f:
-                channel_metadata = pd.concat([
+                channel_metadata = pd.DataFrame([
                     json.loads(s) for s in f.readlines()
                 ])
             cc_metadata.append(channel_metadata)
@@ -347,7 +358,7 @@ class ClearControlFOV:
         cc_metadata = pd.concat(cc_metadata)
 
         time_delta = cc_metadata.groupby("Channel")["TimeStampInNanoSeconds"].diff()
-        acquisition_type = cc_metadata["AcquisitionType"].first()
+        acquisition_type = cc_metadata["AcquisitionType"].iat[0]
 
         metadata = {
             "voxel_size_z": cc_metadata["VoxelDimZ"].mean(),     # micrometers
@@ -358,3 +369,43 @@ class ClearControlFOV:
         }
 
         return metadata
+
+
+def create_mock_clear_control_dataset(
+    path: "StrOrBytesPath",
+) -> None:
+    """
+    Creates a (2, 4, 64, 64, 64) Clear Control dataset of random integers.
+
+    Parameters
+    ----------
+    path : StrOrBytesPath
+        Dataset output path.
+    """
+    path = Path(path)
+
+    rng = np.random.default_rng(0)
+    array = rng.integers(0, 1_500, size=(2, 4, 64, 64, 64), dtype=np.uint16)
+    channels = ["C0L0", "C0L1", "C1L0", "C1L1"]
+    shape_str = f"{array.shape[2]}, {array.shape[3]}, {array.shape[4]}"
+
+    metadata = {"VoxelDimY": 0.25, "VoxelDimX": 0.25, "VoxelDimZ": 1.0, "AcquisitionType": "NA"}
+
+    assert len(channels) == array.shape[1]
+
+    for c, ch in enumerate(channels):
+        channel_dir = path / "stacks" / ch
+        channel_dir.mkdir(parents=True, exist_ok=True)
+
+        index_path = path / f"{ch}.index.txt"
+        metadata_path = path / f"{ch}.metadata.txt"
+
+        with open(index_path, "w") as idx_f, open(metadata_path, "w") as mt_f:
+
+            for t in range(array.shape[0]):
+                out_path = channel_dir / f"{str(t).zfill(6)}.blc"
+                time_stamp = 45_000_000 * t
+                array_to_blosc_buffer(array[t, c], out_path, overwrite=True)
+                volume_metadata = dict(Channel=ch, TimeStampInNanoSeconds=time_stamp, **metadata)
+                mt_f.write(f"{json.dumps(volume_metadata)}\n")
+                idx_f.write(f"{t} {time_stamp / 1_000_000:.4f} {shape_str}\n")
