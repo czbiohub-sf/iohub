@@ -10,6 +10,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Union,
     Sequence,
     Tuple,
 )
@@ -22,7 +23,7 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-ArrayIndex = int | slice | List[int] | np.ndarray
+ArrayIndex = Union[int, slice, List[int], np.ndarray]
 
 
 def array_to_blosc_buffer(
@@ -123,7 +124,7 @@ def _cached(f: Callable) -> Callable:
     @wraps(f)
     def _key_cache_wrapper(
         self: "ClearControlFOV",
-        key: ArrayIndex | Tuple[ArrayIndex, ArrayIndex],
+        key: Union[ArrayIndex, Tuple[ArrayIndex, ArrayIndex]],
     ) -> np.ndarray:
         if not self._cache:
             return f(self, key)
@@ -225,7 +226,7 @@ class ClearControlFOV:
     def _read_volume(
         self,
         volume_shape: Tuple[int, int, int],
-        channels: Sequence[str] | str,
+        channels: Union[Sequence[str], str],
         time_point: int,
     ) -> np.ndarray:
         """
@@ -292,7 +293,7 @@ class ClearControlFOV:
         return indexing
 
     def __getitem__(
-        self, key: ArrayIndex | Tuple[ArrayIndex, ...]
+        self, key: Union[ArrayIndex, Tuple[ArrayIndex, ...]]
     ) -> np.ndarray:
         """Lazily load array as indexed.
 
@@ -330,7 +331,7 @@ class ClearControlFOV:
     @_cached
     def _load_array(
         self,
-        key: ArrayIndex | Tuple[ArrayIndex, ArrayIndex],
+        key: Union[ArrayIndex, Tuple[ArrayIndex, ArrayIndex]],
     ) -> np.ndarray:
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
