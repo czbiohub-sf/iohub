@@ -77,7 +77,6 @@ class ReaderBase:
         -------
         NDArray
         """
-        pass
 
     def get_image(self, p: int, t: int, c: int, z: int) -> NDArray:
         """Get the image slice at dimension P, T, C, Z.
