@@ -1,6 +1,7 @@
 import re
 import json
-from typing import Any, Tuple, TYPE_CHECKING, List, Sequence, Dict
+import warnings
+from typing import Any, Tuple, TYPE_CHECKING, List, Sequence, Dict, Optional
 from pathlib import Path
 
 import blosc2
@@ -35,7 +36,6 @@ def blosc_buffer_to_array(
     np.ndarray
         Output numpy array.
     """
-
     header_size = 32
     out_arr = np.empty(np.prod(shape), dtype=dtype)
     array_buffer = out_arr
@@ -65,11 +65,22 @@ class ClearControlFOV:
     It provides a array-like API for the Clear Control dataset while loading the volumes lazily.
 
     It assumes the channels and volumes have the same shape, the minimum from each channel is used.
+
+    Parameters
+    ----------
+    data_path : StrOrBytesPath
+        Clear Control dataset path.
+    missing_value : Optional[int], optional
+        If provided this class won't raise an error when missing a volume and
+        it will return an array with the provided value.
     """
-    def __init__(self, data_path: "StrOrBytesPath"):
+    def __init__(self, data_path: "StrOrBytesPath", missing_value: Optional[int] = None):
         super().__init__()
         self._data_path = Path(data_path)
+        self._missing_value = missing_value
         self._dtype = np.uint16
+        self._prev_key = None
+        self._prev_array = None
     
     @property
     def shape(self) -> Tuple[int, ...]:
@@ -137,7 +148,11 @@ class ClearControlFOV:
             volume_name = f"{str(time_point).zfill(6)}.blc"
             volume_path = self._data_path / "stacks" / channels / volume_name
             if not volume_path.exists():
-                raise ValueError(f"{volume_path} not found.")
+                if self._missing_value is None:
+                    raise ValueError(f"{volume_path} not found.")
+                else:
+                    warnings.warn(f"{volume_path} not found. Filled with {self._missing_value}")
+                    return np.full(volume_name, self._missing_value, dtype=self._dtype)
             return blosc_buffer_to_array(volume_path, volume_shape, dtype=self._dtype)
         
         return np.stack(
@@ -178,6 +193,8 @@ class ClearControlFOV:
         NotImplementedError
             Not all numpy array of indexing are implemented.
         """
+        if key == self._prev_key:
+            return self._prev_array
 
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
@@ -203,37 +220,45 @@ class ClearControlFOV:
                 T, C = key[:2]
                 arr_keys = key[2:]
             
-            # single time point
-            if isinstance(T, int):
-                out_arr = self._read_volume(volume_shape, channels[C], T) 
+            # new query, checking only first two positions
+            if self._prev_key != key[:2]:
+                # single time point
+                if isinstance(T, int):
+                    self._prev_array = self._read_volume(volume_shape, channels[C], T) 
+                
+                # multiple time points
+                elif isinstance(T, (List, slice, np.ndarray)):
+                    self._prev_array = np.stack([
+                        self._read_volume(volume_shape, channels[C], t)
+                        for t in time_pts[T]
+                    ])
+                
+                else:
+                    raise err_msg
+
+                # only saved the two first keys because the others belong to a single chunk (volume)
+                self._prev_key = key[:2]
             
-            # multiple time points
-            elif isinstance(T, (List, slice, np.ndarray)):
-                out_arr = np.stack([
-                    self._read_volume(volume_shape, channels[C], t)
-                    for t in time_pts[T]
-                ])
-            
-            else:
-                raise err_msg
-            
-            return out_arr[arr_keys]
+            return self._prev_array[arr_keys]
 
         # querying a single time point
         elif isinstance(key, int):
             key = self._fix_indexing(key)
-            self._read_volume(self._data_path, volume_shape, channels, key)
+            self._prev_array = self._read_volume(self._data_path, volume_shape, channels, key)
 
         # querying multiple time points
         elif isinstance(key, (List, slice, np.ndarray)):
-            return np.stack([
+            self._prev_array = np.stack([
                 self.__getitem__(t) for t in time_pts[key]
             ])
-       
+
         else:
             raise err_msg
 
-    def __setitem__(self, _: Any, _: Any) -> None:
+        self._prev_key = key
+        return self._prev_array
+
+    def __setitem__(self, key: Any, value: Any) -> None:
         raise PermissionError("ClearControlFOV is read-only.")
     
     @property
