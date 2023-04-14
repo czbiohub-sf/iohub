@@ -1,5 +1,5 @@
-MicromanagerOmeTiffReader
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Read MMStack OME-TIFF
+~~~~~~~~~~~~~~~~~~~~~
 
     .. currentmodule:: iohub.multipagetiff
 
