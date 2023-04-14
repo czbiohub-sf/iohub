@@ -16,6 +16,47 @@ if TYPE_CHECKING:
 ArrayIndex = int | slice | List[int] | np.ndarray
 
 
+def array_to_blosc_buffer(
+    in_array: np.ndarray,
+    out_path: "StrOrBytesPath",
+    overwrite: bool = False,
+) -> None:
+    """
+    Compresses array and save into output path.
+    This function does not use new functionality from `blosc2` to compress large
+    arrays on purpose, to emulate Clear Control behavior.
+
+    NOTE: function is not optimized and copies the data into bytes,
+          this is used mainly for testing so this is not critical.
+
+    Parameters
+    ----------
+    in_array : np.ndarray
+        Input array.
+    out_path : StrOrBytesPath
+        Output blosc compressed buffer path.
+    overwrite : bool
+        When true it allows overwriting existing path.
+    """
+    out_path = Path(out_path)
+    if out_path.exists() and not overwrite:
+        raise ValueError(f"{out_path} already exists use `ovewrite=True`.")
+
+    kwargs = {"clevel": 3, "compressor": "lz4"}
+
+    arr_bytes = in_array.tobytes()
+
+    # make chunk size uniform
+    num_chunks = len(arr_bytes) // blosc2.MAX_BUFFERSIZE + 1
+    chunk_size = len(arr_bytes) // num_chunks 
+
+    with open(out_path, "wb") as f:
+        while len(arr_bytes) > 0:
+            compressed_chunk = blosc2.compress2(arr_bytes[:chunk_size], **kwargs)
+            f.write(compressed_chunk)
+            arr_bytes = arr_bytes[chunk_size:]
+
+
 def blosc_buffer_to_array(
     buffer_path: "StrOrBytesPath",
     shape: Tuple[int, ...],
