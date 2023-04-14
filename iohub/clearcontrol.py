@@ -1,7 +1,8 @@
 import re
 import json
 import warnings
-from typing import Any, Tuple, TYPE_CHECKING, List, Sequence, Dict, Optional
+from functools import wraps
+from typing import Any, Tuple, TYPE_CHECKING, List, Sequence, Dict, Optional, Callable
 from pathlib import Path
 
 import blosc2
@@ -10,6 +11,9 @@ import numpy as np
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
+
+
+ArrayIndex = int | slice | List[int] | np.ndarray
 
 
 def blosc_buffer_to_array(
@@ -59,6 +63,26 @@ def blosc_buffer_to_array(
     return out_arr.reshape(shape)
 
 
+def _cached(f: Callable) -> Callable:
+    """Decorator that caches the array data using its key."""
+    @wraps(f)
+    def _key_cache_wrapper(
+        self: "ClearControlFOV",
+        key: ArrayIndex | Tuple[ArrayIndex, ArrayIndex],
+    ) -> np.ndarray:
+
+        if not self._cache:
+            return f(self, key)
+
+        elif key != self._cache_key:
+            self._cache_array = f(self, key)
+            self._cache_key = key
+
+        return self._cache_array
+
+    return _key_cache_wrapper
+
+
 class ClearControlFOV:
     """
     Reader class for Clear Control dataset (https://github.com/royerlab/opensimview).
@@ -73,15 +97,18 @@ class ClearControlFOV:
     missing_value : Optional[int], optional
         If provided this class won't raise an error when missing a volume and
         it will return an array with the provided value.
+    cache : bool
+        When true caches the last array using the first two indices as key.
     """
-    def __init__(self, data_path: "StrOrBytesPath", missing_value: Optional[int] = None):
+    def __init__(self, data_path: "StrOrBytesPath", missing_value: Optional[int] = None, cache: bool = False):
         super().__init__()
         self._data_path = Path(data_path)
         self._missing_value = missing_value
         self._dtype = np.uint16
-        self._prev_key = None
-        self._prev_array = None
-    
+        self._cache = cache
+        self._cache_key = None
+        self._cache_array = None
+
     @property
     def shape(self) -> Tuple[int, ...]:
         """Reads Clear Control index data of every data and returns the element-wise minimum shape."""
@@ -102,11 +129,11 @@ class ClearControlFOV:
                 values = [int(values[0]), int(values[4]), int(values[3]), int(values[2])]
 
                 shape = [min(s, v) for s, v in zip(shape, values)]
-        
+
         shape.insert(1, len(self.channels))
 
         return tuple(shape)
-    
+
     @property
     def channels(self) -> List[str]:
         """Return sorted channels name."""
@@ -115,7 +142,7 @@ class ClearControlFOV:
             p.name.removesuffix(suffix)
             for p in self._data_path.glob(f"*{suffix}")
         ])
-    
+
     def _read_volume(
         self,
         volume_shape: Tuple[int, int, int],
@@ -154,33 +181,26 @@ class ClearControlFOV:
                     warnings.warn(f"{volume_path} not found. Filled with {self._missing_value}")
                     return np.full(volume_name, self._missing_value, dtype=self._dtype)
             return blosc_buffer_to_array(volume_path, volume_shape, dtype=self._dtype)
-        
+
         return np.stack(
             [self._read_volume(volume_shape, ch, time_point) for ch in channels]
         )
-    
+
     @staticmethod
-    def _fix_indexing(indexing: int | slice | List | np.ndarray) -> int | slice | List | np.ndarray:
+    def _fix_indexing(indexing: ArrayIndex) -> ArrayIndex:
         """Converts numpy array to simple python type or list."""
         if isinstance(indexing, np.ScalarType):
             return indexing.item()
         return indexing
 
     def __getitem__(
-        self, key: (
-            int |
-            slice |
-            List |
-            np.ndarray |
-            Tuple[int, ...] |
-            Tuple[slice, ...]
-        ),
+        self, key: ArrayIndex | Tuple[ArrayIndex, ...]
     ) -> np.ndarray:
         """Lazily load array as indexed.
 
         Parameters
         ----------
-        key : int  |  slice  |  List  |  Tuple[int, ...]  |  Tuple[slice, ...]
+        key : ArrayIndex | Tuple[ArrayIndex, ...]
             An indexing key as in numpy, but a bit more limited.
 
         Returns
@@ -193,81 +213,85 @@ class ClearControlFOV:
         NotImplementedError
             Not all numpy array of indexing are implemented.
         """
-        if key == self._prev_key:
-            return self._prev_array
+        # standardizing indexing
+        volume_slicing = ...
+        if isinstance(key, Tuple):
+            key = tuple(self._fix_indexing(k) for k in key)
+            if len(key) == 1:
+                key = key[0]
+            elif len(key) > 2:
+                key, volume_slicing = key[:2], key[2:]
+        else:
+            key = self._fix_indexing(key)
 
+        return self._load_array(key)[volume_slicing]
+
+    @_cached
+    def _load_array(
+        self,
+        key: ArrayIndex | Tuple[ArrayIndex, ArrayIndex],
+    ) -> np.ndarray:
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
         channels = self.channels
         time_pts = list(range(shape[0]))
         volume_shape = shape[-3:]
 
-        err_msg = NotImplementedError(f"ClearControlFOV indexing not implemented for {key}."
-                                       "Only Integer, List and slice indexing are available.")
+        err_msg = NotImplementedError(f"ClearControlFOV indexing not implemented for first two indices {key}."
+                                       "Only int, List[int], slice, and np.ndarray indexing are available.")
 
         # querying time points and channels at once
         if isinstance(key, Tuple):
-            key = tuple(self._fix_indexing(k) for k in key)
+            T, C = key
+            # single time point
+            if isinstance(T, int):
+                return self._read_volume(volume_shape, channels[C], T)
 
-            if len(key) == 1:
-                return self.__getitem__(key[0])
-
-            if len(key) == 2:
-                T, C = key
-                arr_keys = ...
+            # multiple time points
+            elif isinstance(T, (List, slice, np.ndarray)):
+                return np.stack([
+                    self._read_volume(volume_shape, channels[C], t)
+                    for t in time_pts[T]
+                ])
 
             else:
-                T, C = key[:2]
-                arr_keys = key[2:]
-            
-            # new query, checking only first two positions
-            if self._prev_key != key[:2]:
-                # single time point
-                if isinstance(T, int):
-                    self._prev_array = self._read_volume(volume_shape, channels[C], T) 
-                
-                # multiple time points
-                elif isinstance(T, (List, slice, np.ndarray)):
-                    self._prev_array = np.stack([
-                        self._read_volume(volume_shape, channels[C], t)
-                        for t in time_pts[T]
-                    ])
-                
-                else:
-                    raise err_msg
-
-                # only saved the two first keys because the others belong to a single chunk (volume)
-                self._prev_key = key[:2]
-            
-            return self._prev_array[arr_keys]
+                raise err_msg
 
         # querying a single time point
         elif isinstance(key, int):
-            key = self._fix_indexing(key)
-            self._prev_array = self._read_volume(self._data_path, volume_shape, channels, key)
+            return self._read_volume(self._data_path, volume_shape, channels, key)
 
         # querying multiple time points
         elif isinstance(key, (List, slice, np.ndarray)):
-            self._prev_array = np.stack([
+            return np.stack([
                 self.__getitem__(t) for t in time_pts[key]
             ])
 
         else:
             raise err_msg
 
-        self._prev_key = key
-        return self._prev_array
-
     def __setitem__(self, key: Any, value: Any) -> None:
         raise PermissionError("ClearControlFOV is read-only.")
-    
+
     @property
     def ndim(self) -> int:
         return 5
-    
+
     @property
     def dtype(self) -> np.dtype:
         return self._dtype
+
+    @property
+    def cache(self) -> bool:
+        return self._cache
+
+    @cache.setter
+    def cache(self, value: bool) -> None:
+        """Free current key/array cache."""
+        self._cache = value
+        if not value:
+            self._cache_array = None
+            self._cache_key = None
 
     def metadata(self) -> Dict[str, Any]:
         """Summarizes Clear Control metadata into a dictionary."""
@@ -278,7 +302,7 @@ class ClearControlFOV:
                     json.loads(s) for s in f.readlines()
                 ])
             cc_metadata.append(channel_metadata)
-        
+
         cc_metadata = pd.concat(cc_metadata)
 
         time_delta = cc_metadata.groupby("Channel")["TimeStampInNanoSeconds"].diff()
