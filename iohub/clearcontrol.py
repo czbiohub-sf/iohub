@@ -182,9 +182,7 @@ class ClearControlFOV:
         """
 
         # dummy maximum shape size
-        shape = [
-            65535,
-        ] * 4
+        shape = [65535] * 4
         # guess of minimum line length, it might be wrong
         minimum_size = 64
         numbers = re.compile(r"\d+\.\d+|\d+")
