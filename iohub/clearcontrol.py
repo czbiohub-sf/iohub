@@ -10,9 +10,9 @@ from typing import (
     Dict,
     List,
     Optional,
-    Union,
     Sequence,
     Tuple,
+    Union,
 )
 
 import blosc2
