@@ -12,7 +12,7 @@ from iohub.ngff import TransformationMeta, open_ome_zarr
 # %%
 # Set storage path
 
-store_path = f"{tempfile.gettempdir()}/hcs.zarr"
+store_path = f"{tempfile.gettempdir()}/transformed.zarr"
 print("Zarr store path", store_path)
 
 # Create two random sample images
