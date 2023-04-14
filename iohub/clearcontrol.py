@@ -2,7 +2,16 @@ import re
 import json
 import warnings
 from functools import wraps
-from typing import Any, Tuple, TYPE_CHECKING, List, Sequence, Dict, Optional, Callable
+from typing import (
+    Any,
+    Tuple,
+    TYPE_CHECKING,
+    List,
+    Sequence,
+    Dict,
+    Optional,
+    Callable,
+)
 from pathlib import Path
 
 import blosc2
@@ -48,11 +57,13 @@ def array_to_blosc_buffer(
 
     # make chunk size uniform
     num_chunks = len(arr_bytes) // blosc2.MAX_BUFFERSIZE + 1
-    chunk_size = len(arr_bytes) // num_chunks 
+    chunk_size = len(arr_bytes) // num_chunks
 
     with open(out_path, "wb") as f:
         while len(arr_bytes) > 0:
-            compressed_chunk = blosc2.compress2(arr_bytes[:chunk_size], **kwargs)
+            compressed_chunk = blosc2.compress2(
+                arr_bytes[:chunk_size], **kwargs
+            )
             f.write(compressed_chunk)
             arr_bytes = arr_bytes[chunk_size:]
 
@@ -92,26 +103,28 @@ def blosc_buffer_to_array(
             if not blosc_header:
                 break
 
-            chunk_size, compress_chunk_size, _ = blosc2.get_cbuffer_sizes(blosc_header)
+            chunk_size, compress_chunk_size, _ = blosc2.get_cbuffer_sizes(
+                blosc_header
+            )
 
             # move to before the header and read chunk
             f.seek(f.tell() - header_size)
             chunk_buffer = f.read(compress_chunk_size)
 
             blosc2.decompress2(chunk_buffer, array_buffer, nthreads=nthreads)
-            array_buffer = array_buffer[chunk_size // out_arr.itemsize:]
+            array_buffer = array_buffer[chunk_size // out_arr.itemsize :]
 
     return out_arr.reshape(shape)
 
 
 def _cached(f: Callable) -> Callable:
     """Decorator that caches the array data using its key."""
+
     @wraps(f)
     def _key_cache_wrapper(
         self: "ClearControlFOV",
         key: ArrayIndex | Tuple[ArrayIndex, ArrayIndex],
     ) -> np.ndarray:
-
         if not self._cache:
             return f(self, key)
 
@@ -141,7 +154,13 @@ class ClearControlFOV:
     cache : bool
         When true caches the last array using the first two indices as key.
     """
-    def __init__(self, data_path: "StrOrBytesPath", missing_value: Optional[int] = None, cache: bool = False):
+
+    def __init__(
+        self,
+        data_path: "StrOrBytesPath",
+        missing_value: Optional[int] = None,
+        cache: bool = False,
+    ):
         super().__init__()
         self._data_path = Path(data_path)
         self._missing_value = missing_value
@@ -155,7 +174,9 @@ class ClearControlFOV:
         """Reads Clear Control index data of every data and returns the element-wise minimum shape."""
 
         # dummy maximum shape size
-        shape = [65535,] * 4
+        shape = [
+            65535,
+        ] * 4
         # guess of minimum line length, it might be wrong
         minimum_size = 64
         numbers = re.compile(r"\d+\.\d+|\d+")
@@ -163,11 +184,18 @@ class ClearControlFOV:
         for index_filepath in self._data_path.glob("*.index.txt"):
             with open(index_filepath, "rb") as f:
                 if index_filepath.stat().st_size > minimum_size:
-                    f.seek(-minimum_size, 2)  # goes to a little bit before the last line
+                    f.seek(
+                        -minimum_size, 2
+                    )  # goes to a little bit before the last line
                 last_line = f.readlines()[-1].decode("utf-8")
 
                 values = list(numbers.findall(last_line))
-                values = [int(values[0]), int(values[4]), int(values[3]), int(values[2])]
+                values = [
+                    int(values[0]),
+                    int(values[4]),
+                    int(values[3]),
+                    int(values[2]),
+                ]
 
                 shape = [min(s, v) for s, v in zip(shape, values)]
 
@@ -180,10 +208,12 @@ class ClearControlFOV:
     def channels(self) -> List[str]:
         """Return sorted channels name."""
         suffix = ".index.txt"
-        return sorted([
-            p.name.removesuffix(suffix)
-            for p in self._data_path.glob(f"*{suffix}")
-        ])
+        return sorted(
+            [
+                p.name.removesuffix(suffix)
+                for p in self._data_path.glob(f"*{suffix}")
+            ]
+        )
 
     def _read_volume(
         self,
@@ -220,12 +250,21 @@ class ClearControlFOV:
                 if self._missing_value is None:
                     raise ValueError(f"{volume_path} not found.")
                 else:
-                    warnings.warn(f"{volume_path} not found. Filled with {self._missing_value}")
-                    return np.full(volume_name, self._missing_value, dtype=self._dtype)
-            return blosc_buffer_to_array(volume_path, volume_shape, dtype=self._dtype)
+                    warnings.warn(
+                        f"{volume_path} not found. Filled with {self._missing_value}"
+                    )
+                    return np.full(
+                        volume_name, self._missing_value, dtype=self._dtype
+                    )
+            return blosc_buffer_to_array(
+                volume_path, volume_shape, dtype=self._dtype
+            )
 
         return np.stack(
-            [self._read_volume(volume_shape, ch, time_point) for ch in channels]
+            [
+                self._read_volume(volume_shape, ch, time_point)
+                for ch in channels
+            ]
         )
 
     @staticmethod
@@ -289,22 +328,28 @@ class ClearControlFOV:
         time_pts = list(range(shape[0]))
         volume_shape = shape[-3:]
 
-        err_msg = NotImplementedError(f"ClearControlFOV indexing not implemented for first two indices {key}."
-                                       "Only int, List[int], slice, and np.ndarray indexing are available.")
+        err_msg = NotImplementedError(
+            f"ClearControlFOV indexing not implemented for first two indices {key}."
+            "Only int, List[int], slice, and np.ndarray indexing are available."
+        )
 
         # querying time points and channels at once
         if isinstance(key, Tuple):
             T, C = key
             # single time point
             if isinstance(T, int):
-                return self._read_volume(volume_shape, channels[C], time_pts[T])
+                return self._read_volume(
+                    volume_shape, channels[C], time_pts[T]
+                )
 
             # multiple time points
             elif isinstance(T, (List, slice, np.ndarray)):
-                return np.stack([
-                    self._read_volume(volume_shape, channels[C], t)
-                    for t in time_pts[T]
-                ])
+                return np.stack(
+                    [
+                        self._read_volume(volume_shape, channels[C], t)
+                        for t in time_pts[T]
+                    ]
+                )
 
             else:
                 raise err_msg
@@ -315,9 +360,7 @@ class ClearControlFOV:
 
         # querying multiple time points
         elif isinstance(key, (List, slice, np.ndarray)):
-            return np.stack([
-                self.__getitem__(t) for t in time_pts[key]
-            ])
+            return np.stack([self.__getitem__(t) for t in time_pts[key]])
 
         else:
             raise err_msg
@@ -350,20 +393,22 @@ class ClearControlFOV:
         cc_metadata = []
         for path in self._data_path.glob("*.metadata.txt"):
             with open(path, mode="r") as f:
-                channel_metadata = pd.DataFrame([
-                    json.loads(s) for s in f.readlines()
-                ])
+                channel_metadata = pd.DataFrame(
+                    [json.loads(s) for s in f.readlines()]
+                )
             cc_metadata.append(channel_metadata)
 
         cc_metadata = pd.concat(cc_metadata)
 
-        time_delta = cc_metadata.groupby("Channel")["TimeStampInNanoSeconds"].diff()
+        time_delta = cc_metadata.groupby("Channel")[
+            "TimeStampInNanoSeconds"
+        ].diff()
         acquisition_type = cc_metadata["AcquisitionType"].iat[0]
 
         metadata = {
-            "voxel_size_z": cc_metadata["VoxelDimZ"].mean(),     # micrometers
-            "voxel_size_y": cc_metadata["VoxelDimY"].mean(),     # micrometers
-            "voxel_size_x": cc_metadata["VoxelDimX"].mean(),     # micrometers
+            "voxel_size_z": cc_metadata["VoxelDimZ"].mean(),  # micrometers
+            "voxel_size_y": cc_metadata["VoxelDimY"].mean(),  # micrometers
+            "voxel_size_x": cc_metadata["VoxelDimX"].mean(),  # micrometers
             "time_delta": time_delta.mean().mean() / 1_000_000,  # seconds
             "acquisition_type": acquisition_type,
         }
@@ -389,7 +434,12 @@ def create_mock_clear_control_dataset(
     channels = ["C0L0", "C0L1", "C1L0", "C1L1"]
     shape_str = f"{array.shape[2]}, {array.shape[3]}, {array.shape[4]}"
 
-    metadata = {"VoxelDimY": 0.25, "VoxelDimX": 0.25, "VoxelDimZ": 1.0, "AcquisitionType": "NA"}
+    metadata = {
+        "VoxelDimY": 0.25,
+        "VoxelDimX": 0.25,
+        "VoxelDimZ": 1.0,
+        "AcquisitionType": "NA",
+    }
 
     assert len(channels) == array.shape[1]
 
@@ -401,11 +451,12 @@ def create_mock_clear_control_dataset(
         metadata_path = path / f"{ch}.metadata.txt"
 
         with open(index_path, "w") as idx_f, open(metadata_path, "w") as mt_f:
-
             for t in range(array.shape[0]):
                 out_path = channel_dir / f"{str(t).zfill(6)}.blc"
                 time_stamp = 45_000_000 * t
                 array_to_blosc_buffer(array[t, c], out_path, overwrite=True)
-                volume_metadata = dict(Channel=ch, TimeStampInNanoSeconds=time_stamp, **metadata)
+                volume_metadata = dict(
+                    Channel=ch, TimeStampInNanoSeconds=time_stamp, **metadata
+                )
                 mt_f.write(f"{json.dumps(volume_metadata)}\n")
                 idx_f.write(f"{t} {time_stamp / 1_000_000:.4f} {shape_str}\n")
