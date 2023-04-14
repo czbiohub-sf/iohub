@@ -9,7 +9,7 @@ used at the Biohub and in the broader imaging community.
 Read
 ====
 
-- OME-Zarr
+- OME-Zarr (`OME-NGFF v0.4 <https://ngff.openmicroscopy.org/0.4/>`_)
 - Single-page TIFF, OME-TIFF, and NDTiff images written by Micro-Manager/pycro-manager
 - Custom data formats used by Biohub microscopes (e.g., PTI, Mantis (WIP), DaXi (TBD))
 
