@@ -1,7 +1,11 @@
 import sys
-import time
 import tempfile
-from iohub.clearcontrol import ClearControlFOV, create_mock_clear_control_dataset
+import time
+
+from iohub.clearcontrol import (
+    ClearControlFOV,
+    create_mock_clear_control_dataset,
+)
 
 
 def main():

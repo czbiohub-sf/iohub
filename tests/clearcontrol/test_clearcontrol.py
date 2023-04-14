@@ -1,13 +1,14 @@
-import numpy as np
-import pytest
 from pathlib import Path
 
+import numpy as np
+import pytest
+
 from iohub.clearcontrol import (
+    ArrayIndex,
+    ClearControlFOV,
     array_to_blosc_buffer,
     blosc_buffer_to_array,
-    ClearControlFOV,
     create_mock_clear_control_dataset,
-    ArrayIndex,
 )
 
 

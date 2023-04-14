@@ -1,22 +1,22 @@
-import re
 import json
+import re
 import warnings
 from functools import wraps
-from typing import (
-    Any,
-    Tuple,
-    TYPE_CHECKING,
-    List,
-    Sequence,
-    Dict,
-    Optional,
-    Callable,
-)
 from pathlib import Path
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 import blosc2
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
