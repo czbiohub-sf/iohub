@@ -552,7 +552,7 @@ class Position(NGFFNode):
 
     @property
     def data(self):
-        """.. Warning:
+        """.. warning::
             This property does *NOT* aim to retrieve all the arrays.
             And it may also fail to retrive any data if arrays exist but
             are not named conventionally.
