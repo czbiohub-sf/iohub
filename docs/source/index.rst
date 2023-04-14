@@ -9,7 +9,7 @@ used at the Biohub and in the broader imaging community.
 Read
 ----
 
-- OME-Zarr
+- OME-Zarr (`OME-NGFF v0.4 <https://ngff.openmicroscopy.org/0.4/>`_)
 
 - Micro-Manager TIFF sequence, OME-TIFF (MMStack), and NDTiff datasets
 
