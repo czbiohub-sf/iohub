@@ -11,6 +11,7 @@ class NDTiffReader(ReaderBase):
     """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
     effectively a wrapper of the `ndtiff.Dataset` class.
     """
+
     def __init__(self, data_path: str):
         super().__init__()
 
@@ -121,7 +122,7 @@ class NDTiffReader(ReaderBase):
             The behavior of this function is different from other
             ReaderBase children as it return a Dask array
             rather than a zarr array.
-        
+
         Return a lazy-loaded dask array with shape TCZYX at the given position.
         Data is not loaded into memory.
 
