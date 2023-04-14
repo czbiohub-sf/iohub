@@ -119,7 +119,8 @@ class NDTiffReader(ReaderBase):
     def get_zarr(self, position: int) -> zarr.array:
         """.. danger::
             The behavior of this function is different from other
-            ReaderBase children as it return a Dask array rather than a zarr array.
+            ReaderBase children as it return a Dask array
+            rather than a zarr array.
         
         Return a lazy-loaded dask array with shape TCZYX at the given position.
         Data is not loaded into memory.
