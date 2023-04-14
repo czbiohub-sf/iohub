@@ -1,9 +1,8 @@
 Read NDTiff
 ~~~~~~~~~~~
 
+.. currentmodule:: iohub.ndtiff
 
-    .. currentmodule:: iohub.ndtiff
-
-    .. autoclass:: NDTiffReader
-       :members:
-       :inherited-members:
+.. autoclass:: NDTiffReader
+    :members:
+    :inherited-members:

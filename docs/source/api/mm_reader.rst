@@ -1,6 +1,6 @@
 Read Micro-Manager datasets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    .. currentmodule:: iohub
+.. currentmodule:: iohub
 
-    .. autofunction:: read_micromanager
+.. autofunction:: read_micromanager
