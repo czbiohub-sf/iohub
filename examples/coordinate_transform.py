@@ -56,4 +56,4 @@ with open_ome_zarr(
     dataset.print_tree()
 
 # NOTE: To see the coordinate transforms, open the positions individually
-# using napari-ome-zarr. This will duplicate the layer's.
+# using napari-ome-zarr. This will duplicate the layers.
