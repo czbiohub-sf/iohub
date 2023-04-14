@@ -32,8 +32,8 @@ def array_to_blosc_buffer(
 ) -> None:
     """
     Compresses array and save into output path.
-    This function does not use new functionality from `blosc2` to compress large
-    arrays on purpose, to emulate Clear Control behavior.
+    This function does not use new functionality from `blosc2` to
+    compress large arrays on purpose, to emulate Clear Control behavior.
 
     NOTE: function is not optimized and copies the data into bytes,
           this is used mainly for testing so this is not critical.
@@ -139,10 +139,14 @@ def _cached(f: Callable) -> Callable:
 
 class ClearControlFOV:
     """
-    Reader class for Clear Control dataset (https://github.com/royerlab/opensimview).
-    It provides a array-like API for the Clear Control dataset while loading the volumes lazily.
+    Reader class for Clear Control dataset
+    https://github.com/royerlab/opensimview.
 
-    It assumes the channels and volumes have the same shape, the minimum from each channel is used.
+    It provides a array-like API for the Clear Control
+    dataset while loading the volumes lazily.
+
+    It assumes the channels and volumes have the same shape,
+    the minimum from each channel is used.
 
     Parameters
     ----------
@@ -171,7 +175,10 @@ class ClearControlFOV:
 
     @property
     def shape(self) -> Tuple[int, ...]:
-        """Reads Clear Control index data of every data and returns the element-wise minimum shape."""
+        """
+        Reads Clear Control index data of every data and returns
+        the element-wise minimum shape.
+        """
 
         # dummy maximum shape size
         shape = [
@@ -221,7 +228,9 @@ class ClearControlFOV:
         channels: Sequence[str] | str,
         time_point: int,
     ) -> np.ndarray:
-        """Reads a single or multiple channels of blosc compressed Clear Control volume.
+        """
+        Reads a single or multiple channels of blosc compressed
+        Clear Control volume.
 
         Parameters
         ----------
@@ -251,7 +260,8 @@ class ClearControlFOV:
                     raise ValueError(f"{volume_path} not found.")
                 else:
                     warnings.warn(
-                        f"{volume_path} not found. Filled with {self._missing_value}"
+                        f"{volume_path} not found. "
+                        f"Filled with {self._missing_value}"
                     )
                     return np.full(
                         volume_name, self._missing_value, dtype=self._dtype
@@ -329,8 +339,9 @@ class ClearControlFOV:
         volume_shape = shape[-3:]
 
         err_msg = NotImplementedError(
-            f"ClearControlFOV indexing not implemented for first two indices {key}."
-            "Only int, List[int], slice, and np.ndarray indexing are available."
+            "ClearControlFOV indexing not implemented for first "
+            f"two indices {key}. Only int, List[int], slice, "
+            "and np.ndarray indexing are available."
         )
 
         # querying time points and channels at once
