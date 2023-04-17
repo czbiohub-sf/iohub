@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 ArrayIndex = Union[int, slice, List[int], np.ndarray]
 
 
-def array_to_blosc_buffer(
+def _array_to_blosc_buffer(
     in_array: np.ndarray,
     out_path: "StrOrBytesPath",
     overwrite: bool = False,
@@ -464,7 +464,7 @@ def create_mock_clear_control_dataset(
             for t in range(array.shape[0]):
                 out_path = channel_dir / f"{str(t).zfill(6)}.blc"
                 time_stamp = 45_000_000 * t
-                array_to_blosc_buffer(array[t, c], out_path, overwrite=True)
+                _array_to_blosc_buffer(array[t, c], out_path, overwrite=True)
                 volume_metadata = dict(
                     Channel=ch, TimeStampInNanoSeconds=time_stamp, **metadata
                 )

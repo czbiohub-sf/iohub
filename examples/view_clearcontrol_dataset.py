@@ -10,6 +10,16 @@ from iohub.clearcontrol import (
 
 def main():
     """Example of opening a Clear Control dataset and viewing with napari.
+
+    Usage
+    -----
+
+    ```
+    $ python view_clearcontrol_dataset <OPTIONAL Clear Control dataset>
+    ```
+
+    If the dataset path is not provided it creates a mock dataset of random integers.
+
     """
     import napari
 
