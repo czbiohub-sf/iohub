@@ -42,6 +42,7 @@ Write
    :hidden:
    :caption: API Reference
 
+   ClearControl <api/clearcontrol>
    NGFF <api/ngff>
    MicromanagerSequenceReader <api/mm_sequence_reader>
    MicromanagerOmeTiffReader <api/mm_ometiff_reader>

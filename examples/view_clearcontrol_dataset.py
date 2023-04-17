@@ -14,9 +14,7 @@ def main():
     Usage
     -----
 
-    ```
     $ python view_clearcontrol_dataset <OPTIONAL Clear Control dataset>
-    ```
 
     If the dataset path is not provided it creates a mock dataset of random integers.
 

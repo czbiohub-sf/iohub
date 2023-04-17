@@ -143,11 +143,11 @@ class ClearControlFOV:
     Reader class for Clear Control dataset
     https://github.com/royerlab/opensimview.
 
-    It provides a array-like API for the Clear Control
-    dataset while loading the volumes lazily.
+    It provides an array-like API for the Clear Control
+    dataset thats loads the volumes lazily.
 
     It assumes the channels and volumes have the same shape,
-    the minimum from each channel is used.
+    when that is not the case the minimum value from each dimension is used.
 
     Parameters
     ----------
