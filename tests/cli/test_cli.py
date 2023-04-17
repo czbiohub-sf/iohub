@@ -1,4 +1,5 @@
 import os
+import re
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
@@ -64,7 +65,7 @@ def test_cli_info_ndtiff(
         cmd += " -v"
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
-    assert "Positions:\t 2" in result.output
+    assert re.search(r"Positions:\s+2", result.output)
 
 
 @given(verbose=st.booleans())
@@ -75,7 +76,7 @@ def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
         cmd += " -v"
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
-    assert "Wells:\t\t 1" in result.output
+    assert re.search(r"Wells:\s+1", result.output)
 
 
 @given(f=st.booleans(), g=st.booleans(), p=st.booleans())
