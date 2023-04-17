@@ -42,6 +42,7 @@ Write
    :hidden:
    :caption: API Reference
 
+   ClearControl <api/clearcontrol>
    OME-NGFF (OME-Zarr) <api/ngff>
    Read Micro-Manager datasets <api/mm_reader>
    Read MM TIFF sequence <api/mm_sequence_reader>
