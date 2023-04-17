@@ -139,6 +139,6 @@ We use [pre-commit](https://pre-commit.com/) to sort imports with [isort](https:
 pre-commit install
 ```
 
-These packages when executed within `biohub` directory should automatically use the [settings](./pyproject.toml) in the repository.
+When these packages are executed within the project root directory, they should automatically use the [project settings](./pyproject.toml).
 
 [NumPy style docstrings](https://numpydoc.readthedocs.io/en/latest/format.html) are used for API documentation.
