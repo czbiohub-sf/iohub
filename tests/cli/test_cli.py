@@ -47,6 +47,8 @@ def test_cli_info_mock(setup_test_data, setup_mm2gamma_ome_tiffs, verbose):
         if verbose:
             cmd += ["-v"]
         result = runner.invoke(cli, cmd)
+        # resolve path with pathlib to be consistent with `click.Path`
+        # this will not normalize partition symbol to lower case on Windows
         mock.assert_called_with(
             str(pathlib.Path(f2).resolve()), verbose=verbose
         )
