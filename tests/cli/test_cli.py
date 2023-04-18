@@ -1,4 +1,5 @@
 import os
+import pathlib
 import re
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -42,11 +43,13 @@ def test_cli_info_mock(setup_test_data, setup_mm2gamma_ome_tiffs, verbose):
     _, f1, f2 = setup_mm2gamma_ome_tiffs
     runner = CliRunner()
     with patch("iohub.cli.cli.print_info") as mock:
-        cmd = f"info {f1} {f2}"
+        cmd = ["info", f1, f2]
         if verbose:
-            cmd += " -v"
+            cmd += ["-v"]
         result = runner.invoke(cli, cmd)
-        mock.assert_called_with(f2, verbose=verbose)
+        mock.assert_called_with(
+            str(pathlib.Path(f2).resolve()), verbose=verbose
+        )
         assert result.exit_code == 0
         assert "Reading" in result.output
 
@@ -60,9 +63,9 @@ def test_cli_info_ndtiff(
 ):
     _, _, data = setup_pycromanager_test_data
     runner = CliRunner()
-    cmd = f"info {data}"
+    cmd = ["info", data]
     if verbose:
-        cmd += " -v"
+        cmd += ["-v"]
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Positions:\s+2", result.output)
@@ -71,9 +74,9 @@ def test_cli_info_ndtiff(
 @given(verbose=st.booleans())
 def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
     runner = CliRunner()
-    cmd = f"info {setup_hcs_ref}"
+    cmd = ["info", setup_hcs_ref]
     if verbose:
-        cmd += " -v"
+        cmd += ["-v"]
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Wells:\s+1", result.output)
@@ -88,13 +91,15 @@ def test_cli_convert_ome_tiff(
 ):
     _, _, input_dir = setup_mm2gamma_ome_tiffs
     runner = CliRunner()
-    f = "-f ometiff" if f else ""
-    g = "-g" if g else ""
-    p = "-p" if p else ""
     with TemporaryDirectory() as tmp_dir:
         output_dir = os.path.join(tmp_dir, "converted.zarr")
-        result = runner.invoke(
-            cli, f"convert -i {input_dir} -o {output_dir} {f} {g} {p}"
-        )
+        cmd = ["convert", "-i", input_dir, "-o", output_dir]
+        if f:
+            cmd += ["-f", "ometiff"]
+        if g:
+            cmd += ["-g"]
+        if p:
+            cmd += ["-p"]
+        result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert "Status" in result.output
