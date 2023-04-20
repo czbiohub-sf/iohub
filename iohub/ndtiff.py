@@ -32,6 +32,7 @@ class NDTiffReader(ReaderBase):
         self.channel_names = list(self.dataset.get_channel_names())
         self.stage_positions = self.mm_meta["Summary"]["StagePositions"]
         self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
+        self.xy_pixel_size = self.mm_meta["Summary"]["PixelSize_um"]
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata

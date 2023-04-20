@@ -10,12 +10,18 @@ from ndtiff import Dataset
 from tifffile import TiffFile, TiffSequence
 
 from iohub.convert import TIFFConverter
-from iohub.ngff import open_ome_zarr
+from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import (
     MicromanagerOmeTiffReader,
     MicromanagerSequenceReader,
     NDTiffReader,
 )
+
+
+def _check_scale_transform(position: Position):
+    tf = position.metadata.multiscales[0].coordinate_transformations[0]
+    assert tf.type == "scale"
+    assert tf.scale[:2] == [1.0, 1.0]
 
 
 @given(grid_layout=st.booleans(), label_positions=st.booleans())
@@ -54,6 +60,7 @@ def test_converter_ometiff(
         with open_ome_zarr(output, mode="r") as result:
             intensity = 0
             for _, pos in result.positions():
+                _check_scale_transform(pos)
                 intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
 
@@ -88,6 +95,7 @@ def test_converter_ndtiff(
         with open_ome_zarr(output, mode="r") as result:
             intensity = 0
             for _, pos in result.positions():
+                _check_scale_transform(pos)
                 intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
 
@@ -101,6 +109,7 @@ def test_converter_singlepagetiff(
     setup_mm2gamma_singlepage_tiffs,
     grid_layout,
     label_positions,
+    caplog,
 ):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     _, _, data = setup_mm2gamma_singlepage_tiffs
@@ -113,6 +122,7 @@ def test_converter_singlepagetiff(
             label_positions=label_positions,
         )
         assert isinstance(converter.reader, MicromanagerSequenceReader)
+        assert "Pixel size detection is not supported" in caplog.text
         with TiffSequence(glob(os.path.join(data, "**/*.tif*"))) as ts:
             raw_array = ts.asarray()
         assert np.prod([d for d in converter.dim if d > 0]) == np.prod(

@@ -1,5 +1,6 @@
 import glob
 import os
+import re
 from copy import copy
 
 import numpy as np
@@ -34,7 +35,9 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         # Grab all image files
         self.data_directory = folder
-        self._files = glob.glob(os.path.join(self.data_directory, "*.ome.tif"))
+        self._files = sorted(
+            glob.glob(os.path.join(self.data_directory, "*.ome.tif"))
+        )
 
         # Generate Data Specific Properties
         self.coords = None
@@ -47,10 +50,9 @@ class MicromanagerOmeTiffReader(ReaderBase):
         self.slices = 0
         self.height = 0
         self.width = 0
-        self._set_dtype()
+        self._infer_image_meta()
 
         # Initialize MM attributes
-        self.z_step_size = None
         self.channel_names = []
 
         # Read MM data
@@ -280,7 +282,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
                     pos, t, c, z
                 )
 
-    def _set_dtype(self):
+    def _infer_image_meta(self):
         """
         gets the datatype from any image plane metadata
 
@@ -292,6 +294,10 @@ class MicromanagerOmeTiffReader(ReaderBase):
         tf = TiffFile(self._files[0])
 
         self.dtype = tf.pages[0].dtype
+        xml = tf.ome_metadata
+        # assuming X and Y pixel sizes are the same
+        xy_size = re.search(r"(?<=PhysicalSizeX=\")[\d\.\d]+", xml)
+        self.xy_pixel_size = float(xy_size.group())
         tf.close()
 
     def _get_dimensions(self, position):
