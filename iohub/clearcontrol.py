@@ -27,9 +27,7 @@ ArrayIndex = Union[int, slice, List[int], np.ndarray]
 
 
 def _array_to_blosc_buffer(
-    in_array: np.ndarray,
-    out_path: "StrOrBytesPath",
-    overwrite: bool = False,
+    in_array: np.ndarray, out_path: "StrOrBytesPath", overwrite: bool = False,
 ) -> None:
     """
     Compresses array and save into output path.
@@ -328,8 +326,7 @@ class ClearControlFOV:
 
     @_cached
     def _load_array(
-        self,
-        key: Union[ArrayIndex, Tuple[ArrayIndex, ArrayIndex]],
+        self, key: Union[ArrayIndex, Tuple[ArrayIndex, ArrayIndex]],
     ) -> np.ndarray:
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
@@ -438,9 +435,7 @@ class ClearControlFOV:
         )
 
 
-def create_mock_clear_control_dataset(
-    path: "StrOrBytesPath",
-) -> None:
+def create_mock_clear_control_dataset(path: "StrOrBytesPath",) -> None:
     """
     Creates a (2, 4, 64, 64, 64) Clear Control dataset of random integers.
 
