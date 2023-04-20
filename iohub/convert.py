@@ -315,9 +315,11 @@ class TIFFConverter:
             xy_um = 1.0
         else:
             xy_um = self.reader.xy_pixel_size
-        return TransformationMeta(
-            type="scale", scale=[1.0, 1.0, z_um, xy_um, xy_um]
-        )
+        return [
+            TransformationMeta(
+                type="scale", scale=[1.0, 1.0, z_um, xy_um, xy_um]
+            )
+        ]
 
     def _init_hcs_arrays(self):
         self.writer = open_ome_zarr(
@@ -339,7 +341,7 @@ class TIFFConverter:
             ),
             "dtype": self.reader.dtype,
             "chunks": self.chunks,
-            "transform": [self.transform],
+            "transform": self.transform,
         }
         for row, columns in enumerate(self.position_grid):
             for column in columns:

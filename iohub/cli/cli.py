@@ -73,7 +73,15 @@ def info(files, verbose):
     is_flag=True,
     help="Dump postion labels in MM metadata to Omero metadata",
 )
-def convert(input, output, format, grid_layout, label_positions):
+@click.option(
+    "--scale-voxels",
+    "-s",
+    required=False,
+    is_flag=True,
+    help="Write voxel size (XY pixel size and Z-step, in micrometers) "
+    "as scale coordinate transformation in NGFF",
+)
+def convert(input, output, format, grid_layout, label_positions, scale_voxels):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
@@ -81,5 +89,6 @@ def convert(input, output, format, grid_layout, label_positions):
         data_type=format,
         grid_layout=grid_layout,
         label_positions=label_positions,
+        scale_voxels=scale_voxels,
     )
     converter.run()

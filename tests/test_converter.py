@@ -18,18 +18,35 @@ from iohub.reader import (
 )
 
 
-def _check_scale_transform(position: Position):
-    tf = position.metadata.multiscales[0].coordinate_transformations[0]
-    assert tf.type == "scale"
-    assert tf.scale[:2] == [1.0, 1.0]
-
-
-@given(grid_layout=st.booleans(), label_positions=st.booleans())
-@settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
+CONVERTER_TEST_SETTINGS = settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    deadline=20000,
 )
+
+CONVERTER_TEST_GIVEN = dict(
+    grid_layout=st.booleans(),
+    label_positions=st.booleans(),
+    scale_voxels=st.booleans(),
+)
+
+
+def _check_scale_transform(position: Position, scale_voxels: bool):
+    tf = position.metadata.multiscales[0].coordinate_transformations[0]
+    if scale_voxels:
+        assert tf.type == "scale"
+        assert tf.scale[:2] == [1.0, 1.0]
+    else:
+        assert tf.type == "identity"
+
+
+@given(**CONVERTER_TEST_GIVEN)
+@settings(CONVERTER_TEST_SETTINGS)
 def test_converter_ometiff(
-    setup_test_data, setup_mm2gamma_ome_tiffs, grid_layout, label_positions
+    setup_test_data,
+    setup_mm2gamma_ome_tiffs,
+    grid_layout,
+    label_positions,
+    scale_voxels,
 ):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     _, _, data = setup_mm2gamma_ome_tiffs
@@ -40,6 +57,7 @@ def test_converter_ometiff(
             output,
             grid_layout=grid_layout,
             label_positions=label_positions,
+            scale_voxels=scale_voxels,
         )
         assert isinstance(converter.reader, MicromanagerOmeTiffReader)
         with TiffSequence(glob(os.path.join(data, "*.tif*"))) as ts:
@@ -60,17 +78,19 @@ def test_converter_ometiff(
         with open_ome_zarr(output, mode="r") as result:
             intensity = 0
             for _, pos in result.positions():
-                _check_scale_transform(pos)
+                _check_scale_transform(pos, scale_voxels)
                 intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
 
 
-@given(grid_layout=st.booleans(), label_positions=st.booleans())
-@settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
-)
+@given(**CONVERTER_TEST_GIVEN)
+@settings(CONVERTER_TEST_SETTINGS)
 def test_converter_ndtiff(
-    setup_test_data, setup_pycromanager_test_data, grid_layout, label_positions
+    setup_test_data,
+    setup_pycromanager_test_data,
+    grid_layout,
+    label_positions,
+    scale_voxels,
 ):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     _, _, data = setup_pycromanager_test_data
@@ -81,6 +101,7 @@ def test_converter_ndtiff(
             output,
             grid_layout=grid_layout,
             label_positions=label_positions,
+            scale_voxels=scale_voxels,
         )
         assert isinstance(converter.reader, NDTiffReader)
         raw_array = np.asarray(Dataset(data).as_array())
@@ -95,20 +116,19 @@ def test_converter_ndtiff(
         with open_ome_zarr(output, mode="r") as result:
             intensity = 0
             for _, pos in result.positions():
-                _check_scale_transform(pos)
+                _check_scale_transform(pos, scale_voxels)
                 intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
 
 
-@given(grid_layout=st.booleans(), label_positions=st.booleans())
-@settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
-)
+@given(**CONVERTER_TEST_GIVEN)
+@settings(CONVERTER_TEST_SETTINGS)
 def test_converter_singlepagetiff(
     setup_test_data,
     setup_mm2gamma_singlepage_tiffs,
     grid_layout,
     label_positions,
+    scale_voxels,
     caplog,
 ):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
@@ -120,9 +140,11 @@ def test_converter_singlepagetiff(
             output,
             grid_layout=grid_layout,
             label_positions=label_positions,
+            scale_voxels=scale_voxels,
         )
         assert isinstance(converter.reader, MicromanagerSequenceReader)
-        assert "Pixel size detection is not supported" in caplog.text
+        if scale_voxels:
+            assert "Pixel size detection is not supported" in caplog.text
         with TiffSequence(glob(os.path.join(data, "**/*.tif*"))) as ts:
             raw_array = ts.asarray()
         assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
