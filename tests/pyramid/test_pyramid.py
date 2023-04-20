@@ -48,17 +48,19 @@ def test_pyramid(tmp_path: Path) -> None:
 
     assert len(fov.array_keys()) == levels
 
-    for l in range(levels):
-        assert str(l) in fov.array_keys()
+    for level in range(levels):
+        assert str(level) in fov.array_keys()
 
-        level_shape = np.asarray(fov[str(l)].shape)
+        level_shape = np.asarray(fov[str(level)].shape)
         ratio = np.ceil(shape / level_shape).astype(int) 
 
         assert np.all(ratio[:2] == 1)  # time and channel aren't scaled
-        assert np.all(ratio[2:] == 2 ** l)
+        assert np.all(ratio[2:] == 2 ** level)
 
         level_scale = np.asarray(
-            fov.metadata.multiscales[0].datasets[l].coordinate_transformations[0].scale
+            fov.metadata.multiscales[0].datasets[level].coordinate_transformations[0].scale
         )
         assert np.all(level_scale[:2] == 1)
-        assert np.allclose(scale / level_scale[2:], 2 ** l)
+        assert np.allclose(scale / level_scale[2:], 2 ** level)
+
+        assert fov.metadata.multiscales[0].datasets[level].path == str(level)
