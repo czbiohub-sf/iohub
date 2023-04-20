@@ -3,6 +3,9 @@ from pathlib import Path
 
 import numpy as np
 
+from ome_zarr.io import parse_url
+from ome_zarr.reader import Reader, Multiscales
+
 from iohub.ngff import open_ome_zarr, Position
 from iohub.ngff_meta import TransformationMeta
 from iohub.pyramid import initialize_pyramid
@@ -64,3 +67,7 @@ def test_pyramid(tmp_path: Path) -> None:
         assert np.allclose(scale / level_scale[2:], 2 ** level)
 
         assert fov.metadata.multiscales[0].datasets[level].path == str(level)
+
+    reader = Reader(parse_url(tmp_path / "ds.zarr"))
+    for node in reader():
+        assert any(isinstance(spec, Multiscales) for spec in node.specs)
