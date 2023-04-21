@@ -8,7 +8,6 @@ from ome_zarr.reader import Reader, Multiscales
 
 from iohub.ngff import open_ome_zarr, Position
 from iohub.ngff_meta import TransformationMeta
-from iohub.pyramid import initialize_pyramid
 
 
 def _mock_fov(
@@ -47,7 +46,7 @@ def test_pyramid(tmp_path: Path) -> None:
 
     fov = _mock_fov(tmp_path, shape, scale)
 
-    initialize_pyramid(fov, levels=levels)
+    fov.initialize_pyramid(levels=levels)
 
     assert len(fov.array_keys()) == levels
 
