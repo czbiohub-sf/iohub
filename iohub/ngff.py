@@ -1,12 +1,19 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import math
-from copy import deepcopy
-
 import logging
+import math
 import os
-from typing import TYPE_CHECKING, Generator, List, Literal, Tuple, Union, Sequence
+from copy import deepcopy
+from typing import (
+    TYPE_CHECKING,
+    Generator,
+    List,
+    Literal,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import zarr
@@ -926,7 +933,9 @@ class Position(NGFFNode):
             chunks = (1, 1) + _scale_integers(array.shape[2:], factor)
 
             transforms = deepcopy(
-                self.metadata.multiscales[0].datasets[0].coordinate_transformations
+                self.metadata.multiscales[0]
+                .datasets[0]
+                .coordinate_transformations
             )
             for tr in transforms:
                 if tr.type == "scale":
