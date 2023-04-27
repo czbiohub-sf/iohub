@@ -900,6 +900,27 @@ class Position(NGFFNode):
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
 
+    @property
+    def scale(self) -> list[float]:
+        """
+        Helper function for scale transform metadata of
+        highest resolution scale.
+        """
+        transforms = (
+            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        )
+        scale_transforms = list(
+            filter(lambda x: x.type == "scale", transforms)
+        )
+
+        if len(scale_transforms) != 1:
+            raise ValueError(
+                "Ambiguous dataset scale."
+                f"Expected 1 found, {len(scale_transforms)} scales."
+            )
+
+        return scale_transforms[0].scale
+
 
 class TiledPosition(Position):
     """Variant of the NGFF position node

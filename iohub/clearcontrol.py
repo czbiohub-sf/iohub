@@ -425,16 +425,16 @@ class ClearControlFOV:
         return metadata
 
     @property
-    def scale(self) -> tuple[float, int, float, float, float]:
+    def scale(self) -> list[float]:
         """Dataset temporal, channel and spacial scales."""
         metadata = self.metadata()
-        return (
+        return [
             metadata["time_delta"],
-            1,
+            1.0,
             metadata["voxel_size_z"],
             metadata["voxel_size_y"],
             metadata["voxel_size_x"],
-        )
+        ]
 
 
 def create_mock_clear_control_dataset(path: "StrOrBytesPath") -> None:
