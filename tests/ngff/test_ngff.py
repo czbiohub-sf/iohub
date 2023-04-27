@@ -8,10 +8,10 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import hypothesis.extra.numpy as npst
+import hypothesis.strategies as st
 import pytest
 import zarr
 from hypothesis import HealthCheck, assume, given, settings
-from hypothesis import strategies as st
 from numpy.testing import assert_array_almost_equal
 from numpy.typing import NDArray
 from ome_zarr.io import parse_url
