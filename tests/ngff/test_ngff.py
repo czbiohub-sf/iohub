@@ -225,11 +225,11 @@ def test_create_zeros(ch_shape_dtype, arr_name):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
-    suppress_health_check=[HealthCheck.data_too_large],
 )
 @settings(
     max_examples=16,
     deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_position_data(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data`"""
