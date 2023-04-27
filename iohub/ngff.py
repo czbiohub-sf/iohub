@@ -900,6 +900,37 @@ class Position(NGFFNode):
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
 
+    def set_transform(
+        self,
+        image: Union[str, Literal["*"]],
+        transform: list[TransformationMeta],
+    ):
+        """Set the coordinate transformations metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : Union[str, Literal["*"]]
+            Name of one image array (e.g. "0") to transform,
+            or "*" for the whole FOV
+        transform : list[TransformationMeta]
+            List of transformations to apply
+            (:py:class:`iohub.ngff_meta.TransformationMeta`)
+        """
+        if image == "*":
+            self.metadata.multiscales[0].coordinate_transformations = transform
+        elif image in self:
+            for i, dataset_meta in enumerate(
+                self.metadata.multiscales[0].datasets
+            ):
+                if dataset_meta.path == image:
+                    self.metadata.multiscales[0].datasets[i] = DatasetMeta(
+                        path=image, coordinate_transformations=transform
+                    )
+        else:
+            raise ValueError(f"Key {image} not recognized.")
+        self.dump_meta()
+
 
 class TiledPosition(Position):
     """Variant of the NGFF position node
