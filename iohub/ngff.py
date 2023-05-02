@@ -929,8 +929,14 @@ class Position(NGFFNode):
         array = self.data
         for level in range(1, levels):
             factor = 2**level
-            shape = array.shape[:-3] + _scale_integers(array.shape[-3:], factor)
-            chunks = _pad_shape(_scale_integers(array.shape[-3:], factor), len(shape))
+
+            shape = array.shape[:-3] + _scale_integers(
+                array.shape[-3:], factor
+            )
+
+            chunks = _pad_shape(
+                _scale_integers(array.shape[-3:], factor), len(shape)
+            )
 
             transforms = deepcopy(
                 self.metadata.multiscales[0]

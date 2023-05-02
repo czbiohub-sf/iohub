@@ -1,20 +1,18 @@
-import pytest
-from typing import Tuple
 from pathlib import Path
 
 import numpy as np
-
+import pytest
 from ome_zarr.io import parse_url
-from ome_zarr.reader import Reader, Multiscales
+from ome_zarr.reader import Multiscales, Reader
 
-from iohub.ngff import open_ome_zarr, Position, _pad_shape
+from iohub.ngff import Position, _pad_shape, open_ome_zarr
 from iohub.ngff_meta import TransformationMeta
 
 
 def _mock_fov(
     tmp_path: Path,
-    shape: Tuple[int, ...],
-    scale: Tuple[float, float, float],
+    shape: tuple[int, ...],
+    scale: tuple[float, float, float],
 ) -> Position:
 
     ds_path = tmp_path / "ds.zarr"
