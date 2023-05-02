@@ -1,5 +1,31 @@
+Getting Started
+===============
+
+Install
+-------
+
+Install iohub from PyPI:
+
+.. code-block:: shell
+
+    pip install iohub
+
+Command-line interface
+----------------------
+
+To check if iohub works for a dataset:
+
+.. code-block:: shell
+
+    iohub info /path/to/data/
+
+The CLI can show a summary of the dataset,
+point to relevant Python calls,
+and convert other data formats to the latest OME-Zarr.
+See the full CLI help message by typing ``iohub`` or ``iohub [command] --help`` in the terminal.
+
 Why iohub?
-~~~~~~~~~~
+----------
 
 This project is inspired by the existing Python libraries for bioimaging data I/O,
 including `ome-zarr-py <https://github.com/ome/ome-zarr-py>`_, `tifffile <https://github.com/cgohlke/tifffile>`_ and

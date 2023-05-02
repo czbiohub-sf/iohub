@@ -2,7 +2,6 @@
 *.tif[f]
 *.jp[e]g
 *.zar[r]
-*.json
 
 # pycharm IDE
 .idea

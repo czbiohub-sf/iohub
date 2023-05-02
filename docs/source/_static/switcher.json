@@ -1,0 +1,10 @@
+[
+    {
+        "version": "latest",
+        "url": "https://czbiohub/main/index.html"
+    },
+    {
+        "version": "0.1.0dev2",
+        "url": "https://mysite.org/en/v0.1.0dev2/index.html"
+    }
+]
