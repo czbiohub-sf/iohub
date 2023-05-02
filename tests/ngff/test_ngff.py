@@ -525,7 +525,7 @@ def test_create_position(row, col, pos):
 
 @given(channels_and_random_5d=_channels_and_random_5d())
 def test_position_scale(channels_and_random_5d):
-    """Test `iohub.ngff.Position.__setitem__()`"""
+    """Test `iohub.ngff.Position.scale`"""
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
     transform = [
