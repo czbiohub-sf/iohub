@@ -307,14 +307,22 @@ class TIFFConverter:
                 "Setting the Z axis scaling factor to 1."
             )
             z_um = 1.0
+        xy_warning = (
+            " Setting X and Y scaling factors to 1."
+            " Suppress this warning by setting `scale-voxels` to false."
+        )
         if isinstance(self.reader, MicromanagerSequenceReader):
             logging.warning(
-                "Pixel size detection is not supported for single-page TIFFs. "
-                "Setting X and Y scaling factors to 1."
+                "Pixel size detection is not supported for single-page TIFFs."
+                + xy_warning
             )
             xy_um = 1.0
         else:
-            xy_um = self.reader.xy_pixel_size
+            try:
+                xy_um = self.reader.xy_pixel_size
+            except AttributeError as e:
+                logging.warning(str(e) + xy_warning)
+                xy_um = 1.0
         return [
             TransformationMeta(
                 type="scale", scale=[1.0, 1.0, z_um, xy_um, xy_um]

@@ -297,8 +297,15 @@ class MicromanagerOmeTiffReader(ReaderBase):
         xml = tf.ome_metadata
         # assuming X and Y pixel sizes are the same
         xy_size = re.search(r"(?<=PhysicalSizeX=\")[\d\.\d]+", xml)
-        self.xy_pixel_size = float(xy_size.group())
+        self._xy_pixel_size = float(xy_size.group()) if xy_size else None
         tf.close()
+
+    @property
+    def xy_pixel_size(self):
+        """XY pixel size of the camera in micrometers."""
+        if self._xy_pixel_size is None:
+            raise AttributeError("XY pixel size cannot be determined.")
+        return self._xy_pixel_size
 
     def _get_dimensions(self, position):
         """
