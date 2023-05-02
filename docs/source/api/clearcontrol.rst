@@ -1,5 +1,5 @@
-ClearControlFOV
-~~~~~~~~~~~~~~~
+Read ClearControl
+~~~~~~~~~~~~~~~~~
 
     .. currentmodule:: iohub.clearcontrol
 
