@@ -4,6 +4,7 @@ API Reference
 .. toctree::
     :maxdepth: 3
 
+    api/clearcontrol
     api/ngff
     api/mm_reader
     api/mm_sequence_reader
