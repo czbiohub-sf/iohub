@@ -14,7 +14,6 @@ repos:
     rev: 5.10.1
     hooks:
       - id: isort
-        args: ["--profile", "black"]
 # syntax linting and formatting
   - repo: https://github.com/myint/autoflake
     rev: v1.4
@@ -26,8 +25,7 @@ repos:
     rev: 4.0.1
     hooks:
       - id: flake8
-        args: [--ignore, "E203,W503",
-               --min-python-version, '3.9']
+        args: [--ignore, "E203,W503", --min-python-version, '3.9']
         additional_dependencies: [flake8-typing-imports==1.12.0]
   - repo: https://github.com/psf/black
     rev: 22.3.0
