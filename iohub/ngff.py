@@ -929,8 +929,8 @@ class Position(NGFFNode):
         array = self.data
         for level in range(1, levels):
             factor = 2**level
-            shape = array.shape[:2] + _scale_integers(array.shape[2:], factor)
-            chunks = (1, 1) + _scale_integers(array.shape[2:], factor)
+            shape = array.shape[:-3] + _scale_integers(array.shape[-3:], factor)
+            chunks = _pad_shape(_scale_integers(array.shape[-3:], factor), len(shape))
 
             transforms = deepcopy(
                 self.metadata.multiscales[0]
@@ -939,7 +939,7 @@ class Position(NGFFNode):
             )
             for tr in transforms:
                 if tr.type == "scale":
-                    for i in range(2, len(tr.scale)):
+                    for i in range(len(tr.scale))[-3:]:
                         tr.scale[i] /= factor
 
             self.create_zeros(
