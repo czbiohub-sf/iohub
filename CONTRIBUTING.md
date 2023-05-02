@@ -133,7 +133,12 @@ for how this can reveal more bugs.
 
 ### Code style
 
-We use [black](https://black.readthedocs.io/en/stable/) to format our code.
-Black installed with `iohub` should automatically use the [settings](./pyproject.toml) in the repository.
+We use [pre-commit](https://pre-commit.com/) to sort imports with [isort](https://github.com/PyCQA/isort), format code with [black](https://black.readthedocs.io/en/stable/), and lint with [flake8](https://github.com/PyCQA/flake8) automatically prior to each commit. To minimize test errors when submitting pull requests, please install pre-commit in your environment as follows:
+
+```bash
+pre-commit install
+```
+
+When these packages are executed within the project root directory, they should automatically use the [project settings](./pyproject.toml).
 
 [NumPy style docstrings](https://numpydoc.readthedocs.io/en/latest/format.html) are used for API documentation.

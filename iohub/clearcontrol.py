@@ -11,7 +11,6 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Tuple,
     Union,
 )
 
@@ -71,7 +70,7 @@ def _array_to_blosc_buffer(
 
 def blosc_buffer_to_array(
     buffer_path: "StrOrBytesPath",
-    shape: Tuple[int, ...],
+    shape: tuple[int, ...],
     dtype: np.dtype,
     nthreads: int = 4,
 ) -> np.ndarray:
@@ -81,7 +80,7 @@ def blosc_buffer_to_array(
     ----------
     buffer_path : StrOrBytesPath
         Compressed blosc buffer path.
-    shape : Tuple[int, ...]
+    shape : tuple[int, ...]
         Output array shape.
     dtype : np.dtype
         Output array data type.
@@ -124,7 +123,7 @@ def _cached(f: Callable) -> Callable:
     @wraps(f)
     def _key_cache_wrapper(
         self: "ClearControlFOV",
-        key: Union[ArrayIndex, Tuple[ArrayIndex, ArrayIndex]],
+        key: Union[ArrayIndex, tuple[ArrayIndex, ArrayIndex]],
     ) -> np.ndarray:
         if not self._cache:
             return f(self, key)
@@ -175,7 +174,7 @@ class ClearControlFOV:
         self._cache_array = None
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         """
         Reads Clear Control index data of every data and returns
         the element-wise minimum shape.
@@ -223,7 +222,7 @@ class ClearControlFOV:
 
     def _read_volume(
         self,
-        volume_shape: Tuple[int, int, int],
+        volume_shape: tuple[int, int, int],
         channels: Union[Sequence[str], str],
         time_point: int,
     ) -> np.ndarray:
@@ -233,7 +232,7 @@ class ClearControlFOV:
 
         Parameters
         ----------
-        volume_shape : Tuple[int, int, int]
+        volume_shape : tuple[int, int, int]
             3-dimensional volume shape (z, y, x).
         channels : Sequence[str] | str]
             Channels names.
@@ -291,13 +290,13 @@ class ClearControlFOV:
         return indexing
 
     def __getitem__(
-        self, key: Union[ArrayIndex, Tuple[ArrayIndex, ...]]
+        self, key: Union[ArrayIndex, tuple[ArrayIndex, ...]]
     ) -> np.ndarray:
         """Lazily load array as indexed.
 
         Parameters
         ----------
-        key : ArrayIndex | Tuple[ArrayIndex, ...]
+        key : ArrayIndex | tuple[ArrayIndex, ...]
             An indexing key as in numpy, but a bit more limited.
 
         Returns
@@ -312,7 +311,7 @@ class ClearControlFOV:
         """
         # standardizing indexing
         volume_slicing = None
-        if isinstance(key, Tuple):
+        if isinstance(key, tuple):
             key = tuple(self._fix_indexing(k) for k in key)
             if len(key) == 1:
                 key = key[0]
@@ -329,7 +328,7 @@ class ClearControlFOV:
     @_cached
     def _load_array(
         self,
-        key: Union[ArrayIndex, Tuple[ArrayIndex, ArrayIndex]],
+        key: Union[ArrayIndex, tuple[ArrayIndex, ArrayIndex]],
     ) -> np.ndarray:
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
@@ -344,7 +343,7 @@ class ClearControlFOV:
         )
 
         # querying time points and channels at once
-        if isinstance(key, Tuple):
+        if isinstance(key, tuple):
             T, C = key
             # single time point
             if isinstance(T, int):
@@ -425,10 +424,20 @@ class ClearControlFOV:
 
         return metadata
 
+    @property
+    def scale(self) -> list[float]:
+        """Dataset temporal, channel and spacial scales."""
+        metadata = self.metadata()
+        return [
+            metadata["time_delta"],
+            1.0,
+            metadata["voxel_size_z"],
+            metadata["voxel_size_y"],
+            metadata["voxel_size_x"],
+        ]
 
-def create_mock_clear_control_dataset(
-    path: "StrOrBytesPath",
-) -> None:
+
+def create_mock_clear_control_dataset(path: "StrOrBytesPath") -> None:
     """
     Creates a (2, 4, 64, 64, 64) Clear Control dataset of random integers.
 
