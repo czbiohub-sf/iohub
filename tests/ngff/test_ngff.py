@@ -166,9 +166,8 @@ def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name: str, *
             layout="fov",
             mode="a",
             channel_names=channel_names,
-            **kwargs,
         )
-        dataset[arr_name] = image_5d
+        dataset.create_image(arr_name, image_5d, **kwargs)
         yield dataset
     finally:
         dataset.close()
