@@ -118,7 +118,7 @@ html_theme_options = {
         "json_url": json_url,
         "version_match": version_match,
     },
-    "navbar_end": ["version-switcher", "navbar-icon-links"]
+    "navbar_end": ["theme-switcher", "version-switcher", "navbar-icon-links"]
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
