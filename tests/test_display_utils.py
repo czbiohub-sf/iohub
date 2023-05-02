@@ -1,5 +1,3 @@
-import numpy as np
-
 from iohub.display_utils import channel_display_settings
 
 

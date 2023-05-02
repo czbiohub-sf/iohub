@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Generator, List, Literal, Tuple, Union
+from typing import TYPE_CHECKING, Generator, Literal, Tuple, Union
 
 import numpy as np
 import zarr
@@ -490,9 +490,9 @@ class Position(NGFFNode):
         Root Zarr group holding arrays
     zattr : Attributes
         Zarr attributes of the group
-    channel_names : List[str]
+    channel_names : list[str]
         Name of the channels
-    axes : List[AxisMeta]
+    axes : list[AxisMeta]
         Axes metadata
     """
 
@@ -625,7 +625,7 @@ class Position(NGFFNode):
         name: str,
         data: NDArray,
         chunks: tuple[int] = None,
-        transform: List[TransformationMeta] = None,
+        transform: list[TransformationMeta] = None,
         check_shape: bool = True,
     ):
         """Create a new image array in the position.
@@ -669,7 +669,7 @@ class Position(NGFFNode):
         shape: tuple[int],
         dtype: DTypeLike,
         chunks: tuple[int] = None,
-        transform: List[TransformationMeta] = None,
+        transform: list[TransformationMeta] = None,
         check_shape: bool = True,
     ):
         """Create a new zero-filled image array in the position.
@@ -748,7 +748,7 @@ class Position(NGFFNode):
     def _create_image_meta(
         self,
         name: str,
-        transform: List[TransformationMeta] = None,
+        transform: list[TransformationMeta] = None,
         extra_meta: dict = None,
     ):
         if not transform:
@@ -781,7 +781,7 @@ class Position(NGFFNode):
         self,
         id: int,
         name: str,
-        clims: List[Tuple[float, float, float, float]] = None,
+        clims: list[Tuple[float, float, float, float]] = None,
     ):
         if not clims:
             clims = [None] * len(self.channel_names)
@@ -920,6 +920,37 @@ class Position(NGFFNode):
                 scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
         return scale
 
+    def set_transform(
+        self,
+        image: Union[str, Literal["*"]],
+        transform: list[TransformationMeta],
+    ):
+        """Set the coordinate transformations metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : Union[str, Literal["*"]]
+            Name of one image array (e.g. "0") to transform,
+            or "*" for the whole FOV
+        transform : list[TransformationMeta]
+            List of transformations to apply
+            (:py:class:`iohub.ngff_meta.TransformationMeta`)
+        """
+        if image == "*":
+            self.metadata.multiscales[0].coordinate_transformations = transform
+        elif image in self:
+            for i, dataset_meta in enumerate(
+                self.metadata.multiscales[0].datasets
+            ):
+                if dataset_meta.path == image:
+                    self.metadata.multiscales[0].datasets[i] = DatasetMeta(
+                        path=image, coordinate_transformations=transform
+                    )
+        else:
+            raise ValueError(f"Key {image} not recognized.")
+        self.dump_meta()
+
 
 class TiledPosition(Position):
     """Variant of the NGFF position node
@@ -936,7 +967,7 @@ class TiledPosition(Position):
         grid_shape: tuple[int, int],
         tile_shape: tuple[int],
         dtype: DTypeLike,
-        transform: List[TransformationMeta] = None,
+        transform: list[TransformationMeta] = None,
         chunk_dims: int = 2,
     ):
         """Make a tiled image array filled with zeros.
@@ -1164,10 +1195,10 @@ class Plate(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
-        channel_names: List[str] = None,
+        channel_names: list[str] = None,
         axes: list[AxisMeta] = None,
         name: str = None,
-        acquisitions: List[AcquisitionMeta] = None,
+        acquisitions: list[AcquisitionMeta] = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
@@ -1405,7 +1436,7 @@ def open_ome_zarr(
     store_path: StrOrBytesPath,
     layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
-    channel_names: List[str] = None,
+    channel_names: list[str] = None,
     axes: list[AxisMeta] = None,
     version: Literal["0.1", "0.4"] = "0.4",
     synchronizer: Union[
