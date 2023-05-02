@@ -906,20 +906,15 @@ class Position(NGFFNode):
         Helper function for scale transform metadata of
         highest resolution scale.
         """
+        scale = [1] * self.data.ndim
         transforms = (
             self.metadata.multiscales[0].datasets[0].coordinate_transformations
         )
-        scale_transforms = list(
-            filter(lambda x: x.type == "scale", transforms)
-        )
-
-        if len(scale_transforms) != 1:
-            raise ValueError(
-                "Ambiguous dataset scale."
-                f"Expected 1 found, {len(scale_transforms)} scales."
-            )
-
-        return scale_transforms[0].scale
+        for trans in transforms:
+            if trans.type == "scale":
+                assert len(trans.scale) == len(scale)
+                scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
+        return scale
 
 
 class TiledPosition(Position):
