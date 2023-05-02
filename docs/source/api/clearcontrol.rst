@@ -1,9 +1,9 @@
-Read ClearControl
-~~~~~~~~~~~~~~~~~
+Read Clear Control
+~~~~~~~~~~~~~~~~~~
 
-    .. currentmodule:: iohub.clearcontrol
+.. currentmodule:: iohub.clearcontrol
 
-    .. autoclass:: ClearControlFOV
-       :members:
-       :special-members: __getitem__
-       :inherited-members:
+.. autoclass:: ClearControlFOV
+    :members:
+    :special-members: __getitem__
+    :inherited-members:
