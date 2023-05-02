@@ -8,10 +8,10 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import hypothesis.extra.numpy as npst
+import hypothesis.strategies as st
 import pytest
 import zarr
 from hypothesis import HealthCheck, assume, given, settings
-from hypothesis import strategies as st
 from numpy.testing import assert_array_almost_equal
 from numpy.typing import NDArray
 from ome_zarr.io import parse_url
@@ -20,7 +20,13 @@ from ome_zarr.reader import Reader
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import _open_store, _pad_shape, open_ome_zarr
+from iohub.ngff import (
+    TO_DICT_SETTINGS,
+    TransformationMeta,
+    _open_store,
+    _pad_shape,
+    open_ome_zarr,
+)
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
@@ -220,7 +226,11 @@ def test_create_zeros(ch_shape_dtype, arr_name):
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
 )
-@settings(max_examples=16, deadline=2000)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
 def test_position_data(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data`"""
     channel_names, random_5d = channels_and_random_5d
@@ -314,6 +324,75 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
     with pytest.raises(ValueError):
         with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name) as _:
             pass
+
+
+@given(
+    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
+    arr_name=short_alpha_numeric,
+)
+def test_set_transform_image(ch_shape_dtype, arr_name):
+    """Test `iohub.ngff.Position.set_transform()`"""
+    channel_names, shape, dtype = ch_shape_dtype
+    transform = [
+        TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))
+    ] * len(channel_names)
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        with open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
+        ) as dataset:
+            dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
+            assert dataset.metadata.multiscales[0].datasets[
+                0
+            ].coordinate_transformations == [
+                TransformationMeta(type="identity")
+            ]
+            dataset.set_transform(image=arr_name, transform=transform)
+            assert (
+                dataset.metadata.multiscales[0]
+                .datasets[0]
+                .coordinate_transformations
+                == transform
+            )
+        # read data with an external reader
+        ext_reader = Reader(parse_url(dataset.zgroup.store.path))
+        node = list(ext_reader())[0]
+        assert node.metadata["coordinateTransformations"][0] == [
+            translate.dict(**TO_DICT_SETTINGS) for translate in transform
+        ]
+
+
+@given(
+    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
+    arr_name=short_alpha_numeric,
+)
+def test_set_transform_fov(ch_shape_dtype, arr_name):
+    """Test `iohub.ngff.Position.set_transform()`"""
+    channel_names, shape, dtype = ch_shape_dtype
+    transform = [
+        TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))
+    ] * len(channel_names)
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        with open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
+        ) as dataset:
+            dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
+            assert dataset.metadata.multiscales[
+                0
+            ].coordinate_transformations == [
+                TransformationMeta(type="identity")
+            ]
+            dataset.set_transform(image="*", transform=transform)
+            assert (
+                dataset.metadata.multiscales[0].coordinate_transformations
+                == transform
+            )
+        # read data with plain zarr
+        group = zarr.open(store_path)
+        assert group.attrs["multiscales"][0]["coordinateTransformations"] == [
+            translate.dict(**TO_DICT_SETTINGS) for translate in transform
+        ]
 
 
 @given(channel_names=channel_names_st)
