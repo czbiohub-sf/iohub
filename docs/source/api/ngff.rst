@@ -4,7 +4,7 @@ OME-NGFF (OME-Zarr)
     .. currentmodule:: iohub
 
     .. autofunction:: open_ome_zarr
-    
+
     .. currentmodule:: iohub.ngff
 
     .. autoclass:: NGFFNode

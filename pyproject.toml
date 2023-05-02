@@ -1,8 +1,9 @@
 [build-system]
-requires = ["setuptools", "wheel", "setuptools_scm"]
+requires = ["setuptools", "wheel", "setuptools_scm[toml]"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+version_scheme = "release-branch-semver"
 write_to = "iohub/_version.py"
 
 [tool.black]

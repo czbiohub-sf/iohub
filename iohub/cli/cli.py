@@ -6,6 +6,8 @@ from iohub.reader import print_info
 
 VERSION = __version__
 
+_DATASET_PATH = click.Path(exists=True, file_okay=False, resolve_path=True)
+
 
 @click.group()
 @click.help_option("-h", "--help")
@@ -16,7 +18,12 @@ def cli():
 
 @cli.command()
 @click.help_option("-h", "--help")
-@click.argument("files", nargs=-1, required=True)
+@click.argument(
+    "files",
+    nargs=-1,
+    required=True,
+    type=_DATASET_PATH,
+)
 @click.option(
     "--verbose",
     "-v",
@@ -42,7 +49,7 @@ def info(files, verbose):
     "--input",
     "-i",
     required=True,
-    type=click.Path(exists=True, file_okay=False, resolve_path=True),
+    type=_DATASET_PATH,
     help="Input Micro-Manager TIFF dataset directory",
 )
 @click.option(
