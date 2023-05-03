@@ -1,4 +1,5 @@
 import glob
+import logging
 import os
 from copy import copy
 
@@ -34,7 +35,9 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         # Grab all image files
         self.data_directory = folder
-        self._files = glob.glob(os.path.join(self.data_directory, "*.ome.tif"))
+        self._files = sorted(
+            glob.glob(os.path.join(self.data_directory, "*.ome.tif"))
+        )
 
         # Generate Data Specific Properties
         self.coords = None
@@ -47,10 +50,9 @@ class MicromanagerOmeTiffReader(ReaderBase):
         self.slices = 0
         self.height = 0
         self.width = 0
-        self._set_dtype()
+        self._infer_image_meta()
 
         # Initialize MM attributes
-        self.z_step_size = None
         self.channel_names = []
 
         # Read MM data
@@ -280,19 +282,32 @@ class MicromanagerOmeTiffReader(ReaderBase):
                     pos, t, c, z
                 )
 
-    def _set_dtype(self):
+    def _infer_image_meta(self):
         """
-        gets the datatype from any image plane metadata
-
-        Returns
-        -------
-
+        Infer data type and pixel size from the first image plane metadata.
         """
+        with TiffFile(self._files[0]) as tf:
+            page = tf.pages[0]
+            self.dtype = page.dtype
+            for tag in page.tags.values():
+                if tag.name == "MicroManagerMetadata":
+                    # assuming X and Y pixel sizes are the same
+                    xy_size = tag.value.get("PixelSizeUm")
+                    self._xy_pixel_size = xy_size if xy_size else None
+                    return
+                else:
+                    continue
+            logging.warning(
+                "Micro-Manager image plane metadata cannot be loaded."
+            )
+            self._xy_pixel_size = None
 
-        tf = TiffFile(self._files[0])
-
-        self.dtype = tf.pages[0].dtype
-        tf.close()
+    @property
+    def xy_pixel_size(self):
+        """XY pixel size of the camera in micrometers."""
+        if self._xy_pixel_size is None:
+            raise AttributeError("XY pixel size cannot be determined.")
+        return self._xy_pixel_size
 
     def _get_dimensions(self, position):
         """
