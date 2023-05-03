@@ -1,7 +1,6 @@
 import glob
 import logging
 import os
-import re
 from copy import copy
 
 import numpy as np
