@@ -1,4 +1,5 @@
 import glob
+import logging
 import os
 import re
 from copy import copy
@@ -284,21 +285,23 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
     def _infer_image_meta(self):
         """
-        gets the datatype from any image plane metadata
-
-        Returns
-        -------
-
+        Infer data type and pixel size from the first image plane metadata.
         """
-
-        tf = TiffFile(self._files[0])
-
-        self.dtype = tf.pages[0].dtype
-        xml = tf.ome_metadata
-        # assuming X and Y pixel sizes are the same
-        xy_size = re.search(r"(?<=PhysicalSizeX=\")[\d\.\d]+", xml)
-        self._xy_pixel_size = float(xy_size.group()) if xy_size else None
-        tf.close()
+        with TiffFile(self._files[0]) as tf:
+            page = tf.pages[0]
+            self.dtype = page.dtype
+            for tag in page.tags.values():
+                if tag.name == "MicroManagerMetadata":
+                    # assuming X and Y pixel sizes are the same
+                    xy_size = tag.value.get("PixelSizeUm")
+                    self._xy_pixel_size = xy_size if xy_size else None
+                    return
+                else:
+                    continue
+            logging.warning(
+                "Micro-Manager image plane metadata cannot be loaded."
+            )
+            self._xy_pixel_size = None
 
     @property
     def xy_pixel_size(self):
