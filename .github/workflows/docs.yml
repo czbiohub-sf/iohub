@@ -34,7 +34,7 @@ jobs:
         run: |
           make publish
           touch build/html/.nojekyll
-          cp gh-pages-redirect.html html/index.html
+          cp gh-pages-redirect.html build/html/index.html
       - name: Upload build artifacts
         uses: actions/upload-pages-artifact@v1
         with:
