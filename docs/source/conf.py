@@ -37,8 +37,13 @@ extensions = [
     "sphinx_copybutton",
     "numpydoc",
     "sphinx_multiversion",
+    "sphinx_sitemap",
 ]
 
+# default url is a dummy for local build
+html_baseurl = os.environ.get("SITEMAP_URL_BASE", "htrp://127.0.0.1:8000/")
+sitemap_locales = ["en"]
+sitemap_url_scheme = "{link}"
 
 numpydoc_show_class_members = True
 
@@ -63,7 +68,7 @@ project = "iohub"
 copyright = "2023. Chan Zuckerberg Biohub. All rights reserved"
 release = importlib_metadata.version("iohub")
 
-json_url = "https://czbiohub.github.io/iohub/latest/_static/switcher.json"
+json_url = "https://czbiohub.github.io/iohub/main/_static/switcher.json"
 if "dev" in release or "rc" in release:
     json_url = "_static/switcher.json"
     version_match = "latest"
@@ -118,7 +123,7 @@ html_theme_options = {
         "json_url": json_url,
         "version_match": version_match,
     },
-    "navbar_end": ["theme-switcher", "version-switcher", "navbar-icon-links"]
+    "navbar_end": ["theme-switcher", "version-switcher", "navbar-icon-links"],
 }
 
 # Add any paths that contain custom themes here, relative to this directory.
@@ -193,3 +198,4 @@ htmlhelp_basename = "iohubdoc"
 numpydoc_show_class_members = False
 
 smv_branch_whitelist = r"main"
+smv_latest_version = r"main"
