@@ -84,18 +84,21 @@ def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
     assert re.search(r"Wells:\s+1", result.output)
 
 
-@given(f=st.booleans(), g=st.booleans(), p=st.booleans())
+@given(f=st.booleans(), g=st.booleans(), p=st.booleans(), s=st.booleans())
 @settings(
     suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
 )
 def test_cli_convert_ome_tiff(
-    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, p
+    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, p, s
 ):
     _, _, input_dir = setup_mm2gamma_ome_tiffs
     runner = CliRunner()
+    f = "-f ometiff" if f else ""
+    g = "-g" if g else ""
+    p = "-p" if p else ""
     with TemporaryDirectory() as tmp_dir:
         output_dir = os.path.join(tmp_dir, "converted.zarr")
-        cmd = ["convert", "-i", input_dir, "-o", output_dir]
+        cmd = ["convert", "-i", input_dir, "-o", output_dir, "-s", s]
         if f:
             cmd += ["-f", "ometiff"]
         if g:

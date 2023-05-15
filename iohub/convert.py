@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from tqdm import tqdm
 
 from iohub._version import version as iohub_version
-from iohub.ngff import open_ome_zarr
+from iohub.ngff import TransformationMeta, open_ome_zarr
 from iohub.reader import MicromanagerSequenceReader, read_micromanager
 
 
@@ -82,6 +82,9 @@ class TIFFConverter:
     label_positions : bool, optional
         Dump postion labels in MM metadata to Omero metadata,
         by default False
+    scale_voxels : bool, optional
+        Write voxel size (XY pixel size and Z-step) as scaling transform,
+        by default True
     """
 
     def __init__(
@@ -92,6 +95,7 @@ class TIFFConverter:
         grid_layout: int = False,
         chunks: tuple[int] = None,
         label_positions: bool = False,
+        scale_voxels: bool = True,
     ):
         logging.debug("Checking output.")
         if not output_dir.strip("/").endswith(".zarr"):
@@ -143,6 +147,7 @@ class TIFFConverter:
         else:
             self._make_default_grid()
         self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
+        self.transform = self._scale_voxels() if scale_voxels else None
 
     def _make_default_grid(self):
         self.position_grid = np.expand_dims(
@@ -294,6 +299,36 @@ class TIFFConverter:
             cns = [str(i) for i in range(self.c)]
         return cns
 
+    def _scale_voxels(self):
+        z_um = self.reader.z_step_size
+        if self.z_dim > 1 and not z_um:
+            logging.warning(
+                "Z step size is not available. "
+                "Setting the Z axis scaling factor to 1."
+            )
+            z_um = 1.0
+        xy_warning = (
+            " Setting X and Y scaling factors to 1."
+            " Suppress this warning by setting `scale-voxels` to false."
+        )
+        if isinstance(self.reader, MicromanagerSequenceReader):
+            logging.warning(
+                "Pixel size detection is not supported for single-page TIFFs."
+                + xy_warning
+            )
+            xy_um = 1.0
+        else:
+            try:
+                xy_um = self.reader.xy_pixel_size
+            except AttributeError as e:
+                logging.warning(str(e) + xy_warning)
+                xy_um = 1.0
+        return [
+            TransformationMeta(
+                type="scale", scale=[1.0, 1.0, z_um, xy_um, xy_um]
+            )
+        ]
+
     def _init_hcs_arrays(self):
         self.writer = open_ome_zarr(
             self.output_dir,
@@ -303,23 +338,25 @@ class TIFFConverter:
             version="0.4",
         )
         self.well_list = []
+        arr_kwargs = {
+            "name": "0",
+            "shape": (
+                self.t if self.t != 0 else 1,
+                self.c if self.c != 0 else 1,
+                self.z if self.z != 0 else 1,
+                self.y,
+                self.x,
+            ),
+            "dtype": self.reader.dtype,
+            "chunks": self.chunks,
+            "transform": self.transform,
+        }
         for row, columns in enumerate(self.position_grid):
             for column in columns:
                 pos_name = self.pos_names[len(self.well_list)]
                 pos = self.writer.create_position(row, column, pos_name="0")
                 self.well_list.append(os.path.join(str(row), str(column)))
-                _ = pos.zgroup.zeros(
-                    "0",
-                    shape=(
-                        self.t if self.t != 0 else 1,
-                        self.c if self.c != 0 else 1,
-                        self.z if self.z != 0 else 1,
-                        self.y,
-                        self.x,
-                    ),
-                    chunks=self.chunks,
-                )
-                pos._create_image_meta("0")
+                _ = pos.create_zeros(**arr_kwargs)
                 pos.metadata.omero.name = pos_name
                 pos.dump_meta()
 

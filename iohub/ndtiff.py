@@ -8,10 +8,11 @@ from iohub.reader_base import ReaderBase
 
 
 class NDTiffReader(ReaderBase):
+    """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
+    effectively a wrapper of the `ndtiff.Dataset` class.
+    """
+
     def __init__(self, data_path: str):
-        """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
-        effectively a wrapper of the `ndtiff.Dataset` class.
-        """
         super().__init__()
 
         self.dataset = Dataset(data_path)
@@ -32,6 +33,7 @@ class NDTiffReader(ReaderBase):
         self.channel_names = list(self.dataset.get_channel_names())
         self.stage_positions = self.mm_meta["Summary"]["StagePositions"]
         self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
+        self.xy_pixel_size = self.mm_meta["Summary"]["PixelSize_um"]
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
@@ -117,16 +119,14 @@ class NDTiffReader(ReaderBase):
         return image
 
     def get_zarr(self, position: int) -> zarr.array:
-        """
-        return a lazy-loaded dask array with shape TCZYX at the given position.
+        """.. danger::
+            The behavior of this function is different from other
+            ReaderBase children as it return a Dask array
+            rather than a zarr array.
+
+        Return a lazy-loaded dask array with shape TCZYX at the given position.
         Data is not loaded into memory.
 
-        Note: The behavior of this function is different from other
-        ReaderBase children as it return a Dask array rather than a zarr array.
-
-        # TODO: try casting the dask array into a zarr array
-        # using `dask.array.to_zarr()`.
-        # Currently this call brings the data into memory
 
         Parameters
         ----------
@@ -137,6 +137,9 @@ class NDTiffReader(ReaderBase):
         position:       (zarr.array)
 
         """
+        # TODO: try casting the dask array into a zarr array
+        # using `dask.array.to_zarr()`.
+        # Currently this call brings the data into memory
 
         ax = [
             ax_

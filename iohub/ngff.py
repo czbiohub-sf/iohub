@@ -566,7 +566,7 @@ class Position(NGFFNode):
 
     @property
     def data(self):
-        """.. Warning:
+        """.. warning::
             This property does *NOT* aim to retrieve all the arrays.
             And it may also fail to retrive any data if arrays exist but
             are not named conventionally.
@@ -1473,7 +1473,7 @@ class Plate(NGFFNode):
             for _, well in row.wells():
                 yield well.zgroup.path, well
 
-    def positions(self):
+    def positions(self) -> Generator[tuple[str, Position], None, None]:
         """Returns a generator that iterate over the path and value
         of all the positions (along rows, columns, and wells) in the plate.
 
