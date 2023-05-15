@@ -23,7 +23,7 @@ def _mock_fov(
         layout="fov",
         mode="a",
         channel_names=channels,
-        axes=Position._DEFAULT_AXES[-len(shape):]
+        axes=Position._DEFAULT_AXES[-len(shape) :],
     )
 
     transform = [
@@ -41,7 +41,7 @@ def _mock_fov(
             chunks=_pad_shape(shape[-2:], len(shape)),
             transform=transform,
         )
-    
+
     return fov
 
 
@@ -50,7 +50,7 @@ def test_pyramid(tmp_path: Path, ndim: int) -> None:
 
     # not all shapes not divisible by 2
     shape = (2, 2, 67, 115, 128)[-ndim:]
-    scale = (2, 0.5, 0.5)[-min(3, ndim):]
+    scale = (2, 0.5, 0.5)[-min(3, ndim) :]
     levels = 4
 
     fov = _mock_fov(tmp_path, shape, scale)
@@ -63,16 +63,19 @@ def test_pyramid(tmp_path: Path, ndim: int) -> None:
         assert str(level) in fov.array_keys()
 
         level_shape = np.asarray(fov[str(level)].shape)
-        ratio = np.ceil(shape / level_shape).astype(int) 
+        ratio = np.ceil(shape / level_shape).astype(int)
 
         assert np.all(ratio[:-3] == 1)  # time and channel aren't scaled
-        assert np.all(ratio[-3:] == 2 ** level)
+        assert np.all(ratio[-3:] == 2**level)
 
         level_scale = np.asarray(
-            fov.metadata.multiscales[0].datasets[level].coordinate_transformations[0].scale
+            fov.metadata.multiscales[0]
+            .datasets[level]
+            .coordinate_transformations[0]
+            .scale
         )
         assert np.all(level_scale[:-3] == 1)
-        assert np.allclose(scale / level_scale[-3:], 2 ** level)
+        assert np.allclose(scale / level_scale[-3:], 2**level)
 
         assert fov.metadata.multiscales[0].datasets[level].path == str(level)
 

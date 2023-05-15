@@ -5,14 +5,7 @@ import logging
 import math
 import os
 from copy import deepcopy
-from typing import (
-    TYPE_CHECKING,
-    Generator,
-    Literal,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import TYPE_CHECKING, Generator, Literal, Sequence, Tuple, Union
 
 import numpy as np
 import zarr
