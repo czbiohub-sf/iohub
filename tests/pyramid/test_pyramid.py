@@ -33,7 +33,7 @@ def _mock_fov(
         )
     ]
 
-    if "0" not in fov.array_keys():
+    if "0" not in fov:
         fov.create_zeros(
             "0",
             shape=shape,
