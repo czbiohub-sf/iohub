@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Generator, Literal, Tuple, Union
+from typing import TYPE_CHECKING, Generator, Literal, Union
 
 import numpy as np
 import zarr
@@ -639,7 +639,7 @@ class Position(NGFFNode):
         chunks : tuple[int], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
-        transform : List[TransformationMeta], optional
+        transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
         check_shape : bool, optional
@@ -690,7 +690,7 @@ class Position(NGFFNode):
         chunks : tuple[int], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
-        transform : List[TransformationMeta], optional
+        transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
         check_shape : bool, optional
@@ -781,7 +781,7 @@ class Position(NGFFNode):
         self,
         id: int,
         name: str,
-        clims: list[Tuple[float, float, float, float]] = None,
+        clims: list[tuple[float, float, float, float]] = None,
     ):
         if not clims:
             clims = [None] * len(self.channel_names)
@@ -983,7 +983,7 @@ class TiledPosition(Position):
             Shape of each tile (up to 5D).
         dtype : DTypeLike
             Data type in NumPy convention
-        transform : List[TransformationMeta], optional
+        transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
         chunk_dims : int, optional
@@ -1467,7 +1467,7 @@ def open_ome_zarr(
         'w' means create (overwrite if exists);
         'w-' means create (fail if exists),
         by default "r".
-    channel_names : List[str], optional
+    channel_names : list[str], optional
         Channel names used to create a new data store,
         ignored for existing stores,
         by default None
