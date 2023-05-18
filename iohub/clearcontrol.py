@@ -3,15 +3,7 @@ import re
 import warnings
 from functools import wraps
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 import blosc2
 import numpy as np
@@ -396,7 +388,7 @@ class ClearControlFOV:
             self._cache_array = None
             self._cache_key = None
 
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> dict[str, Any]:
         """Summarizes Clear Control metadata into a dictionary."""
         cc_metadata = []
         for path in self._data_path.glob("*.metadata.txt"):

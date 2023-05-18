@@ -8,7 +8,7 @@ about 'camelCase' inconsistency.
 """
 
 import re
-from typing import Any, ClassVar, Dict, Literal, Optional, TypedDict, Union
+from typing import Any, ClassVar, Literal, Optional, TypedDict, Union
 
 import pandas as pd
 from pydantic import BaseModel, Field, root_validator, validator
@@ -298,9 +298,9 @@ class ImageLabelMeta(VersionMeta):
     # SHOULD
     colors: list[LabelColorMeta]
     # MAY
-    properties: list[Dict[str, Any]]
+    properties: list[dict[str, Any]]
     # MAY
-    source: Dict[str, Any]
+    source: dict[str, Any]
 
     @validator("colors", "properties")
     def unique_label_value(cls, v):
