@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Generator
+from typing import Generator, Union
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -25,7 +25,10 @@ class BaseFOV(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def __getitem__(self, key: Any) -> ArrayLike:
+    def __getitem__(
+        self,
+        key: Union[int, slice, tuple[Union[int, slice], ...]],
+    ) -> ArrayLike:
         """
         Output object must support __array__ interface, np.asarray(...).
         """
@@ -49,7 +52,16 @@ class BaseFOV(ABC):
 
 class BaseFOVCollection(ABC):
     @abstractmethod
-    def __getitem__(self, key: str) -> BaseFOV:
+    def __contains__(self, position_key: str) -> bool:
+        """Check if position is presented in collection."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def __len__(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def __getitem__(self, position_key: str) -> BaseFOV:
         """FOV key position to FOV object."""
         raise NotImplementedError
 
