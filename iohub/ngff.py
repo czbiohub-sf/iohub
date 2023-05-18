@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
-from typing import TYPE_CHECKING, Generator, Literal, Union
+from copy import deepcopy
+from typing import TYPE_CHECKING, Generator, Literal, Sequence, Union
 
 import numpy as np
 import zarr
@@ -70,6 +72,11 @@ def _open_store(
             f"Cannot open Zarr root group at {store_path}"
         ) from e
     return root
+
+
+def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
+    """Computes the ceiling of the input sequence divided by the factor."""
+    return tuple(int(math.ceil(v / factor)) for v in values)
 
 
 class NGFFNode:
@@ -899,6 +906,47 @@ class Position(NGFFNode):
         ortho_sel = [slice(None)] * len(img.shape)
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
+
+    def initialize_pyramid(self, levels: int) -> None:
+        """
+        Initializes the pyramid arrays with a down scaling of 2 per level.
+        Decimals shapes are rounded up to ceiling.
+        Scales metadata are also updated.
+
+        Parameters
+        ----------
+        levels : int
+            Number of down scaling levels, if levels is 1 nothing happens.
+        """
+        array = self.data
+        for level in range(1, levels):
+            factor = 2**level
+
+            shape = array.shape[:-3] + _scale_integers(
+                array.shape[-3:], factor
+            )
+
+            chunks = _pad_shape(
+                _scale_integers(array.shape[-3:], factor), len(shape)
+            )
+
+            transforms = deepcopy(
+                self.metadata.multiscales[0]
+                .datasets[0]
+                .coordinate_transformations
+            )
+            for tr in transforms:
+                if tr.type == "scale":
+                    for i in range(len(tr.scale))[-3:]:
+                        tr.scale[i] /= factor
+
+            self.create_zeros(
+                name=str(level),
+                shape=shape,
+                dtype=array.dtype,
+                chunks=chunks,
+                transform=transforms,
+            )
 
     @property
     def scale(self) -> list[float]:
