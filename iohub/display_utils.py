@@ -1,7 +1,5 @@
 """ Utility functions for displaying data """
 
-from typing import Tuple
-
 import numpy as np
 from PIL.ImageColor import colormap
 
@@ -62,7 +60,7 @@ def color_to_hex(color: str) -> str:
 
 def channel_display_settings(
     chan_name: str,
-    clim: Tuple[float, float, float, float] = None,
+    clim: tuple[float, float, float, float] = None,
     first_chan: bool = False,
 ):
     """This will create a dictionary used for OME-zarr metadata.
@@ -73,7 +71,7 @@ def channel_display_settings(
     ----------
     chan_name : str
         Desired name of the channel for display
-    clim : Tuple[float, float, float, float], optional
+    clim : tuple[float, float, float, float], optional
         Contrast limits (start, end, min, max)
     first_chan : bool, optional
         Whether or not this is the first channel of the dataset

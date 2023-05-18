@@ -8,16 +8,7 @@ about 'camelCase' inconsistency.
 """
 
 import re
-from typing import (
-    Any,
-    ClassVar,
-    Dict,
-    List,
-    Literal,
-    Optional,
-    TypedDict,
-    Union,
-)
+from typing import Any, ClassVar, Literal, Optional, TypedDict, Union
 
 import pandas as pd
 from pydantic import BaseModel, Field, root_validator, validator
@@ -25,15 +16,15 @@ from pydantic.color import Color, ColorType
 
 
 def unique_validator(
-    data: List[Union[BaseModel, TypedDict]], field: Union[str, List[str]]
+    data: list[Union[BaseModel, TypedDict]], field: Union[str, list[str]]
 ):
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
     ----------
-    data : List[Union[BaseModel, TypedDict]]
+    data : list[Union[BaseModel, TypedDict]]
         list of pydantic models or typed dictionaries
-    field : Union[str, List[str]]
+    field : Union[str, list[str]]
         field(s) of the dataclass that must be unique
 
     Raises
@@ -165,8 +156,8 @@ class TransformationMeta(MetaBase):
     # MUST
     type: Literal["identity", "translation", "scale"]
     # MUST? (keyword not found in spec for the fields below)
-    translation: Optional[List[float]] = None
-    scale: Optional[List[float]] = None
+    translation: Optional[list[float]] = None
+    scale: Optional[list[float]] = None
     path: Optional[str] = None
 
     @root_validator
@@ -189,7 +180,7 @@ class DatasetMeta(MetaBase):
     # MUST
     path: str
     # MUST
-    coordinate_transformations: List[TransformationMeta] = Field(
+    coordinate_transformations: list[TransformationMeta] = Field(
         alias="coordinateTransformations"
     )
 
@@ -205,13 +196,13 @@ class MultiScaleMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # MUST
-    axes: List[AxisMeta]
+    axes: list[AxisMeta]
     # MUST
-    datasets: List[DatasetMeta]
+    datasets: list[DatasetMeta]
     # SHOULD
     name: Optional[str] = None
     # MAY
-    coordinate_transformations: Optional[List[TransformationMeta]] = Field(
+    coordinate_transformations: Optional[list[TransformationMeta]] = Field(
         alias="coordinateTransformations"
     )
     # SHOULD, describes the downscaling method (e.g. 'gaussian')
@@ -267,7 +258,7 @@ class OMEROMeta(VersionMeta):
 
     id: int
     name: Optional[str]
-    channels: Optional[List[ChannelMeta]]
+    channels: Optional[list[ChannelMeta]]
     rdefs: Optional[RDefsMeta]
 
 
@@ -275,7 +266,7 @@ class ImagesMeta(MetaBase):
     """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
     https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
 
-    multiscales: List[MultiScaleMeta]
+    multiscales: list[MultiScaleMeta]
     omero: OMEROMeta
 
 
@@ -305,11 +296,11 @@ class ImageLabelMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
 
     # SHOULD
-    colors: List[LabelColorMeta]
+    colors: list[LabelColorMeta]
     # MAY
-    properties: List[Dict[str, Any]]
+    properties: list[dict[str, Any]]
     # MAY
-    source: Dict[str, Any]
+    source: dict[str, Any]
 
     @validator("colors", "properties")
     def unique_label_value(cls, v):
@@ -401,13 +392,13 @@ class PlateMeta(VersionMeta):
     # SHOULD
     name: Optional[str]
     # MAY
-    acquisitions: Optional[List[AcquisitionMeta]]
+    acquisitions: Optional[list[AcquisitionMeta]]
     # MUST
-    rows: List[PlateAxisMeta]
+    rows: list[PlateAxisMeta]
     # MUST
-    columns: List[PlateAxisMeta]
+    columns: list[PlateAxisMeta]
     # MUST
-    wells: List[WellIndexMeta]
+    wells: list[WellIndexMeta]
     # SHOULD
     field_count: Optional[int]
 
@@ -458,4 +449,4 @@ class WellGroupMeta(VersionMeta):
     https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
 
     # MUST
-    images: List[ImageMeta]
+    images: list[ImageMeta]

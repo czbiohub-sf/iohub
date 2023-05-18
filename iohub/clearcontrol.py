@@ -3,16 +3,7 @@ import re
 import warnings
 from functools import wraps
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 import blosc2
 import numpy as np
@@ -22,7 +13,7 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-ArrayIndex = Union[int, slice, List[int], np.ndarray]
+ArrayIndex = Union[int, slice, list[int], np.ndarray]
 
 
 def _array_to_blosc_buffer(
@@ -210,7 +201,7 @@ class ClearControlFOV:
         return tuple(shape)
 
     @property
-    def channels(self) -> List[str]:
+    def channels(self) -> list[str]:
         """Return sorted channels name."""
         suffix = ".index.txt"
         return sorted(
@@ -338,7 +329,7 @@ class ClearControlFOV:
 
         err_msg = NotImplementedError(
             "ClearControlFOV indexing not implemented for first "
-            f"two indices {key}. Only int, List[int], slice, "
+            f"two indices {key}. Only int, list[int], slice, "
             "and np.ndarray indexing are available."
         )
 
@@ -352,7 +343,7 @@ class ClearControlFOV:
                 )
 
             # multiple time points
-            elif isinstance(T, (List, slice, np.ndarray)):
+            elif isinstance(T, (list, slice, np.ndarray)):
                 return np.stack(
                     [
                         self._read_volume(volume_shape, channels[C], t)
@@ -368,7 +359,7 @@ class ClearControlFOV:
             return self._read_volume(volume_shape, channels, key)
 
         # querying multiple time points
-        elif isinstance(key, (List, slice, np.ndarray)):
+        elif isinstance(key, (list, slice, np.ndarray)):
             return np.stack([self.__getitem__(t) for t in time_pts[key]])
 
         else:
@@ -397,7 +388,7 @@ class ClearControlFOV:
             self._cache_array = None
             self._cache_key = None
 
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> dict[str, Any]:
         """Summarizes Clear Control metadata into a dictionary."""
         cc_metadata = []
         for path in self._data_path.glob("*.metadata.txt"):
