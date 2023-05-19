@@ -53,7 +53,7 @@ class BaseFOV(ABC):
 class BaseFOVCollection(ABC):
     @abstractmethod
     def __contains__(self, position_key: str) -> bool:
-        """Check if position is presented in collection."""
+        """Check if a position is present in the collection."""
         raise NotImplementedError
 
     @abstractmethod
