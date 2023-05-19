@@ -1,4 +1,5 @@
 import click
+import os
 
 from iohub._version import __version__
 from iohub.convert import TIFFConverter
@@ -19,7 +20,7 @@ def cli():
 @cli.command()
 @click.help_option("-h", "--help")
 @click.argument(
-    "files",
+    "datasets",
     nargs=-1,
     required=True,
     type=_DATASET_PATH,
@@ -31,33 +32,34 @@ def cli():
     help="Show usage guide to open dataset in Python "
     "and full tree for HCS Plates in OME-Zarr",
 )
-def info(files, verbose):
+def info(datasets, verbose):
     """View basic metadata of a list of FILES.
 
     Supported formats are Micro-Manager-acquired TIFF datasets
     (single-page TIFF, multi-page OME-TIFF, NDTIFF)
     and OME-Zarr (v0.1 linear HCS layout and all v0.4 layouts).
     """
-    for file in files:
-        click.echo(f"Reading file:\t {file}")
-        print_info(file, verbose=verbose)
+    for dataset in datasets:
+        click.echo(f"Reading dataset:\t {dataset}")
+        print_info(dataset, verbose=verbose)
 
 
 @cli.command()
 @click.help_option("-h", "--help")
-@click.option(
-    "--input",
-    "-i",
+@click.argument(
+    "input_datasets",
+    nargs=-1,
     required=True,
     type=_DATASET_PATH,
-    help="Input Micro-Manager TIFF dataset directory",
+    # help="Input Micro-Manager TIFF dataset directory",
 )
 @click.option(
     "--output",
     "-o",
-    required=True,
+    required=False,
     type=click.Path(exists=False, resolve_path=True),
-    help="Output zarr store (/**/converted.zarr)",
+    default="./",
+    help="Path to output. Defaults to the current directory with the input dataset's name.",
 )
 @click.option(
     "--format",
@@ -89,14 +91,23 @@ def info(files, verbose):
     is_flag=True,
     help="Dump postion labels in MM metadata to Omero metadata",
 )
-def convert(input, output, format, scale_voxels, grid_layout, label_positions):
+def convert(
+    input_datasets, output, format, scale_voxels, grid_layout, label_positions
+):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
-    converter = TIFFConverter(
-        input_dir=input,
-        output_dir=output,
-        data_type=format,
-        scale_voxels=scale_voxels,
-        grid_layout=grid_layout,
-        label_positions=label_positions,
-    )
-    converter.run()
+
+    for input_dataset in input_datasets:
+        click.echo(f"Converting dataset:\t {input_dataset}")
+
+        output_dir = os.path.join(
+            output, os.path.basename(input_dataset) + ".zarr"
+        )
+        converter = TIFFConverter(
+            input_dir=input_dataset,
+            output_dir=output_dir,
+            data_type=format,
+            scale_voxels=scale_voxels,
+            grid_layout=grid_layout,
+            label_positions=label_positions,
+        )
+        converter.run()
