@@ -94,7 +94,14 @@ def info(datasets, verbose):
 def convert(
     input_datasets, output, format, scale_voxels, grid_layout, label_positions
 ):
-    """Converts Micro-Manager TIFF datasets to OME-Zarr"""
+    """Converts Micro-Manager TIFF datasets to OME-Zarr
+
+    Example:
+
+    >> iohub convert /glob/of/ome-tiff/folders/*
+
+    will convert all ome-tiff folders to .zarr datasets in the current directory.
+    """
 
     for input_dataset in input_datasets:
         click.echo(f"Converting dataset:\t {input_dataset}")
