@@ -60,7 +60,7 @@ def info(datasets, verbose):
     required=False,
     type=click.Path(exists=False, resolve_path=True),
     default="./",
-    help="""Path to output. Defaults to the current directory with the input 
+    help="""Path to output. Defaults to the current directory with the input
     dataset's name.""",
 )
 @click.option(
