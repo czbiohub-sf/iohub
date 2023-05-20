@@ -1,5 +1,6 @@
-import click
 import os
+
+import click
 
 from iohub._version import __version__
 from iohub.convert import TIFFConverter
@@ -59,7 +60,8 @@ def info(datasets, verbose):
     required=False,
     type=click.Path(exists=False, resolve_path=True),
     default="./",
-    help="Path to output. Defaults to the current directory with the input dataset's name.",
+    help="""Path to output. Defaults to the current directory with the input 
+    dataset's name.""",
 )
 @click.option(
     "--format",
@@ -100,7 +102,8 @@ def convert(
 
     >> iohub convert /glob/of/ome-tiff/folders/*
 
-    will convert all ome-tiff folders to .zarr datasets in the current directory.
+    will convert all ome-tiff folders to .zarr datasets in the current
+    directory.
     """
 
     for input_dataset in input_datasets:
