@@ -30,7 +30,8 @@ class BaseFOV(ABC):
         key: Union[int, slice, tuple[Union[int, slice], ...]],
     ) -> ArrayLike:
         """
-        Output object must support __array__ interface, np.asarray(...).
+        Returned object must support the ``__array__`` interface,
+        so that ``np.asarray(...)`` will work.
         """
         raise NotImplementedError
 
