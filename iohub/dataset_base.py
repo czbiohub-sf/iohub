@@ -53,6 +53,15 @@ class BaseFOV(ABC):
 
 class BaseFOVCollection(ABC):
     @abstractmethod
+    def __enter__(self) -> BaseFOVCollection:
+        "Open the underlying file and return self."
+        raise NotImplementedError
+
+    @abstractmethod
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        "Close the files."
+        raise NotImplementedError
+    @abstractmethod
     def __contains__(self, position_key: str) -> bool:
         """Check if a position is present in the collection."""
         raise NotImplementedError
