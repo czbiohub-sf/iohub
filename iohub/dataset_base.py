@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Generator, Union
+from types import TracebackType
+from typing import Generator, Optional, Type, Union
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -46,21 +47,27 @@ class BaseFOV(ABC):
         raise NotImplementedError
 
     @property
-    def scale(self) -> list[float]:
-        """Helper function for FOV scale."""
+    def zyx_scale(self) -> tuple[float, float, float]:
+        """Helper function for FOV spatial scale."""
         raise NotImplementedError
 
 
 class BaseFOVCollection(ABC):
     @abstractmethod
-    def __enter__(self) -> BaseFOVCollection:
-        "Open the underlying file and return self."
+    def __enter__(self) -> "BaseFOVCollection":
+        """Open the underlying file and return self."""
         raise NotImplementedError
 
     @abstractmethod
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        "Close the files."
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> bool:
+        """Close the files."""
         raise NotImplementedError
+
     @abstractmethod
     def __contains__(self, position_key: str) -> bool:
         """Check if a position is present in the collection."""
@@ -77,5 +84,5 @@ class BaseFOVCollection(ABC):
 
     @abstractmethod
     def __iter__(self) -> Generator[tuple[str, BaseFOV], None, None]:
-        # NOTE is this preferred than the current `.positions` ?
+        """Iterates over pair o keys and FOV."""
         raise NotImplementedError
