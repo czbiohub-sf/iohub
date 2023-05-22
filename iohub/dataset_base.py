@@ -84,5 +84,5 @@ class BaseFOVCollection(ABC):
 
     @abstractmethod
     def __iter__(self) -> Generator[tuple[str, BaseFOV], None, None]:
-        """Iterates over pair o keys and FOV."""
+        """Iterates over pairs of keys and FOVs."""
         raise NotImplementedError
