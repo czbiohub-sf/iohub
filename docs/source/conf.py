@@ -140,7 +140,14 @@ html_title = "iohub"
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = None
+# emoji favicon code adapted from:
+# https://twitter.com/LeaVerou/status/1241619866475474946
+html_favicon = (
+    "data:image/svg+xml,"
+    "<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22>"
+    r"<text y=%22.9em%22 font-size=%2290%22>💾</text>"
+    "</svg>"
+)
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
