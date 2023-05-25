@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with: 
+          fetch-depth: 0
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v3
@@ -34,7 +36,6 @@ jobs:
       - name: Build the docs
         working-directory: ./docs
         run: |
-          git fetch --all
           make publish
           touch build/html/.nojekyll
       - name: Upload build artifacts
