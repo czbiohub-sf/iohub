@@ -34,6 +34,7 @@ jobs:
       - name: Build the docs
         working-directory: ./docs
         run: |
+          git fetch --all
           make publish
           touch build/html/.nojekyll
       - name: Upload build artifacts
