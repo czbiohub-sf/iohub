@@ -49,9 +49,9 @@ numpydoc_show_class_members = True
 # templates_path = ["_templates"]
 
 # Disabling generation of docs on different branches to use tags only
-smv_tag_whitelist = r"^v(\d+\.\d+\.\d+$|0.1.0dev3)"
-smv_branch_whitelist = r"main"
-smv_latest_version = r"main"
+smv_tag_whitelist = r"^v\d+\.\d+\.\d+$"
+smv_branch_whitelist = r"^(main|emoji-favicon)$"
+smv_latest_version = r"^(main|emoji-favicon)$"
 
 # The suffix of source filenames.
 source_suffix = ".rst"
