@@ -37,7 +37,9 @@ extensions = [
 ]
 
 # default url is a dummy for local build
-html_baseurl = os.environ.get("SITEMAP_URL_BASE", "htrp://127.0.0.1:8000/")
+html_baseurl = os.environ.get(
+    "GITHUB_PAGES_URL", f"file://{os.path.dirname(source_dir)}/build/html/"
+)
 sitemap_locales = ["en"]
 sitemap_url_scheme = "{link}"
 
@@ -47,8 +49,9 @@ numpydoc_show_class_members = True
 # templates_path = ["_templates"]
 
 # Disabling generation of docs on different branches to use tags only
-# smv_branch_whitelist = None
-# smv_tag_whitelist = r'^v\d+\.\d+\.\d+$'
+smv_tag_whitelist = r"^v(\d+\.\d+\.\d+$|0.1.0dev3)"
+smv_branch_whitelist = r"main"
+smv_latest_version = r"main"
 
 # The suffix of source filenames.
 source_suffix = ".rst"
@@ -64,7 +67,7 @@ project = "iohub"
 copyright = "2023. Chan Zuckerberg Biohub. All rights reserved"
 release = importlib_metadata.version("iohub")
 
-json_url = "https://czbiohub.github.io/iohub/main/_static/switcher.json"
+json_url = f"{html_baseurl.strip}/main/_static/switcher.json"
 if "dev" in release or "rc" in release:
     json_url = "_static/switcher.json"
     version_match = "latest"
@@ -152,7 +155,7 @@ html_favicon = (
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-# html_static_path = ["_static"]
+html_static_path = ["_static"]
 
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
 # using the given strftime format.
@@ -199,6 +202,3 @@ html_show_sphinx = False
 htmlhelp_basename = "iohubdoc"
 
 numpydoc_show_class_members = False
-
-smv_branch_whitelist = r"main"
-smv_latest_version = r"main"

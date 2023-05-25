@@ -18,6 +18,8 @@ concurrency:
 
 jobs:
   build:
+    env:
+      GITHUB_PAGES_URL: https://czbiohub.github.io/iohub
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -34,7 +36,6 @@ jobs:
         run: |
           make publish
           touch build/html/.nojekyll
-          cp gh-pages-redirect.html build/html/index.html
       - name: Upload build artifacts
         uses: actions/upload-pages-artifact@v1
         with:
