@@ -85,9 +85,8 @@ class BaseFOV(ABC):
         raise NotImplementedError
 
     @property
-    @abstractmethod
     def ndim(self) -> int:
-        raise NotImplementedError
+        return 5
 
     @property
     @abstractmethod
