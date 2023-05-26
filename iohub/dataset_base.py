@@ -1,13 +1,20 @@
 from abc import ABC, abstractmethod
 from types import TracebackType
-from typing import Generator, Optional, Type, Union
+from typing import Any, Generator, Optional, Type, Union
 
 import numpy as np
 from numpy.typing import ArrayLike
 
+_AXES_PREFIX = ["T", "C", "Z", "Y", "X"]
+
 
 class BaseFOV(ABC):
     # NOTE: not using the `data` method from ngff Position
+
+    @property
+    @abstractmethod
+    def axes_names(self) -> list[str]:
+        raise NotImplementedError
 
     @property
     @abstractmethod
@@ -18,11 +25,52 @@ class BaseFOV(ABC):
         """Return index of given channel."""
         return self.channels.index(key)
 
+    def _missing_axes(self) -> list[int]:
+        """Return sorted indices of missing axes."""
+        if len(self.axes_names) == 5:
+            return []
+
+        elif len(self.axes_names) > 5:
+            raise ValueError(
+                f"{self.__name__} does not support more than 5 axes. "
+                f"Found {len(self.axes_names)}"
+            )
+
+        axes = set(ax[:1].upper() for ax in self.axes_names)
+
+        missing = []
+        for i, ax in enumerate(_AXES_PREFIX):
+            if ax not in axes:
+                missing.append(i)
+
+        return missing
+
+    def _pad_missing_axes(
+        self,
+        seq: Union[list[Any], tuple[Any]],
+        value: Any,
+    ) -> Union[list[Any], tuple[Any]]:
+        """Pads ``seq`` with ``value`` in the missing axes positions."""
+
+        if isinstance(seq, tuple):
+            is_tuple = True
+            seq = list(seq)
+        else:
+            is_tuple = False
+
+        for i in self._missing_axes():
+            seq.insert(i, value)
+
+        if is_tuple:
+            seq = tuple(seq)
+
+        assert len(seq) == len(_AXES_PREFIX)
+
+        return seq
+
     @property
     @abstractmethod
     def shape(self) -> tuple[int, int, int, int, int]:
-        # NOTE: suggestion, fix dimension to 5?
-        # We could me more restrictive than ome-zarr
         raise NotImplementedError
 
     @abstractmethod
