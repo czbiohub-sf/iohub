@@ -2,9 +2,5 @@
     {
         "version": "latest",
         "url": "https://czbiohub.github.io/iohub/main/index.html"
-    },
-    {
-        "version": "0.1.0dev3",
-        "url": "https://czbiohub.github.io/iohub/v0.1.0dev3/index.html"
     }
 ]
