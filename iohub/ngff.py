@@ -1565,7 +1565,6 @@ def open_ome_zarr(
             logging.warning(f"Overwriting data at {store_path}")
     else:
         raise ValueError(f"Invalid persistence mode '{mode}'.")
-    print("MODE" + mode)
     root = _open_store(store_path, mode, version, synchronizer)
     meta_keys = root.attrs.keys() if parse_meta else []
     if layout == "auto":
