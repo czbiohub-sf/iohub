@@ -1262,8 +1262,6 @@ class Plate(NGFFNode):
         self._acquisitions = (
             [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
         )
-        self._rows = {}
-        self._cols = {}
 
     def _parse_meta(self):
         if plate_meta := self.zattrs.get("plate"):
@@ -1307,12 +1305,25 @@ class Plate(NGFFNode):
             self.metadata.field_count = len(list(self.positions()))
         self.zattrs.update({"plate": self.metadata.dict(**TO_DICT_SETTINGS)})
 
-    @staticmethod
-    def _auto_idx(name: str, known: dict[str, int]):
-        if idx := known.get(name):
-            return idx
-        used = known.values()
-        return max(used) + 1 if used else 0
+    def _auto_idx(
+        self,
+        name: "str",
+        index: Union[int, None],
+        axis_name: Literal["row", "column"],
+    ):
+        if index is not None:
+            return index
+        elif not hasattr(self, "metadata"):
+            return 0
+        else:
+            part = ["row", "column"].index(axis_name)
+            all_indices = []
+            for well_index in self.metadata.wells:
+                index = getattr(well_index, f"{axis_name}_index")
+                if well_index.path.split("/")[part] == name:
+                    return index
+                all_indices.append(index)
+            return max(all_indices) + 1
 
     def _build_meta(
         self,
@@ -1364,33 +1375,31 @@ class Plate(NGFFNode):
         # normalize input
         row_name = normalize_storage_path(row_name)
         col_name = normalize_storage_path(col_name)
-        row_index = self._auto_idx(row_index, self._rows)
-        col_index = self._auto_idx(col_index, self._cols)
+        row_meta = PlateAxisMeta(name=row_name)
+        col_meta = PlateAxisMeta(name=col_name)
+        row_index = self._auto_idx(row_name, row_index, "row")
+        col_index = self._auto_idx(col_name, col_index, "column")
         # build well metadata
         well_index_meta = WellIndexMeta(
             path="/".join([row_name, col_name]),
             row_index=row_index,
             column_index=col_index,
         )
-        col_meta = PlateAxisMeta(name=col_name)
-        # create new row if needed
-        if row_name not in self._rows:
-            row_grp = self.zgroup.create_group(
-                row_name, overwrite=self._overwrite
-            )
-            row_meta = PlateAxisMeta(name=row_name)
-            self._rows[row_name] = row_index
-            if not hasattr(self, "metadata"):
-                self._build_meta(row_meta, col_meta, well_index_meta)
-            else:
-                self.metadata.rows.append(row_meta)
-                self.metadata.wells.append(well_index_meta)
+        if not hasattr(self, "metadata"):
+            self._build_meta(row_meta, col_meta, well_index_meta)
         else:
-            row_grp = self.zgroup[row_name]
             self.metadata.wells.append(well_index_meta)
+        # create new row if needed
+        if row_name not in self:
+            row_grp = self.zgroup.create_group(
+                row_meta.name, overwrite=self._overwrite
+            )
+            if row_meta not in self.metadata.rows:
+                self.metadata.rows.append(row_meta)
+        else:
+            row_grp = self[row_name].zgroup
         if col_meta not in self.metadata.columns:
             self.metadata.columns.append(col_meta)
-            self._cols[col_name] = col_index
         # create well
         well_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
         self.dump_meta()
