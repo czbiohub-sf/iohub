@@ -1375,6 +1375,7 @@ class Plate(NGFFNode):
         col_meta = PlateAxisMeta(name=col_name)
         # create new row if needed
         if row_name not in self._rows:
+            print("OVERWRITE=" + str(self._overwrite))
             row_grp = self.zgroup.create_group(
                 row_name, overwrite=self._overwrite
             )
@@ -1415,6 +1416,8 @@ class Plate(NGFFNode):
             Name key of the row
         col_name : str
             Name key of the column
+        pos_name : str
+            Name key of the position
         row_index : int, optional
             Index of the row,
             will be set by the sequence of creation if not provided,
@@ -1562,6 +1565,7 @@ def open_ome_zarr(
             logging.warning(f"Overwriting data at {store_path}")
     else:
         raise ValueError(f"Invalid persistence mode '{mode}'.")
+    print("MODE" + mode)
     root = _open_store(store_path, mode, version, synchronizer)
     meta_keys = root.attrs.keys() if parse_meta else []
     if layout == "auto":
