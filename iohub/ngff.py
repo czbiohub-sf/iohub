@@ -1434,7 +1434,9 @@ class Plate(NGFFNode):
         row_name = normalize_storage_path(row_name)
         col_name = normalize_storage_path(col_name)
         well_path = os.path.join(row_name, col_name)
-        if well_path in self.zgroup:
+
+        existing_well_paths = [well_path for well_path, _ in self.wells()]
+        if well_path in existing_well_paths:
             well = self[well_path]
         else:
             well = self.create_well(
