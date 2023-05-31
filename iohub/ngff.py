@@ -1375,7 +1375,6 @@ class Plate(NGFFNode):
         col_meta = PlateAxisMeta(name=col_name)
         # create new row if needed
         if row_name not in self._rows:
-            print("OVERWRITE=" + str(self._overwrite))
             row_grp = self.zgroup.create_group(
                 row_name, overwrite=self._overwrite
             )
