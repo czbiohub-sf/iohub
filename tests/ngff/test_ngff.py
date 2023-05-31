@@ -27,7 +27,6 @@ from iohub.ngff import (
     _pad_shape,
     open_ome_zarr,
 )
-from iohub.ngff_meta import TransformationMeta
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
@@ -152,7 +151,9 @@ def test_init_ome_zarr(channel_names):
 
 
 @contextmanager
-def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name: str, **kwargs):
+def _temp_ome_zarr(
+    image_5d: NDArray, channel_names: list[str], arr_name: str, **kwargs
+):
     """Helper function to generate a temporary OME-Zarr store.
 
     Parameters
@@ -607,9 +608,9 @@ def test_position_scale(channels_and_random_5d):
     """Test `iohub.ngff.Position.scale`"""
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
-    transform = [
-        TransformationMeta(type="scale", scale=scale)
-    ]
-    with _temp_ome_zarr(random_5d, channel_names, "0", transform=transform) as dataset:
+    transform = [TransformationMeta(type="scale", scale=scale)]
+    with _temp_ome_zarr(
+        random_5d, channel_names, "0", transform=transform
+    ) as dataset:
         # round-trip test with the offical reader implementation
         assert dataset.scale == scale
