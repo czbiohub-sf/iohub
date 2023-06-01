@@ -302,12 +302,13 @@ def print_info(path: StrOrBytesPath, verbose=False):
                     f"Row names:\t {[r.name for r in meta.rows]}",
                     f"Column names:\t {[c.name for c in meta.columns]}",
                     f"Wells:\t\t {len(meta.wells)}",
-                    f"Positions:\t {len(list(reader.positions()))}",
+                    
                 ]
             )
         if verbose:
             msgs.extend(
                 [
+                    f"Positions:\t {len(list(reader.positions()))}",                    
                     code_msg,
                     ">>> from iohub import open_ome_zarr",
                     f">>> dataset = open_ome_zarr('{path}', mode='r')",
