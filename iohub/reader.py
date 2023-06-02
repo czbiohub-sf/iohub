@@ -307,6 +307,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
         if verbose:
             msgs.extend(
                 [
+                    f"Positions:\t {len(list(reader.positions()))}",
                     code_msg,
                     ">>> from iohub import open_ome_zarr",
                     f">>> dataset = open_ome_zarr('{path}', mode='r')",
