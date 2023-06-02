@@ -27,7 +27,6 @@ from iohub.ngff import (
     _pad_shape,
     open_ome_zarr,
 )
-from iohub.ngff_meta import TransformationMeta
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
@@ -152,7 +151,9 @@ def test_init_ome_zarr(channel_names):
 
 
 @contextmanager
-def _temp_ome_zarr(image_5d: NDArray, channel_names: list[str], arr_name: str, **kwargs):
+def _temp_ome_zarr(
+    image_5d: NDArray, channel_names: list[str], arr_name: str, **kwargs
+):
     """Helper function to generate a temporary OME-Zarr store.
 
     Parameters
@@ -552,7 +553,10 @@ def test_get_channel_index(setup_test_data, setup_hcs_ref, wrong_channel_name):
             _ = dataset.get_channel_index(wrong_channel_name)
 
 
-def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
+@given(
+    row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
+)
+def test_modify_hcs_ref(setup_test_data, setup_hcs_ref, row, col, pos):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with _temp_copy(setup_hcs_ref) as store_path:
         with open_ome_zarr(store_path, layout="hcs", mode="r+") as dataset:
@@ -563,6 +567,11 @@ def test_modify_hcs_ref(setup_test_data, setup_hcs_ref):
             position.append_channel("GFP", resize_arrays=True)
             assert position.channel_names == ["DAPI", "GFP"]
             assert position[0].shape == (2, 2, 2160, 5120)
+            new_pos_path = "/".join([row, col, pos])
+            assume(new_pos_path not in dataset)
+            new_pos = dataset.create_position(row, col, pos)
+            new_pos.create_zeros("0", position[0].shape, position[0].dtype)
+            assert not dataset[f"{new_pos_path}/0"][:].any()
 
 
 @given(row_names=plate_axis_names_st, col_names=plate_axis_names_st)
@@ -607,9 +616,9 @@ def test_position_scale(channels_and_random_5d):
     """Test `iohub.ngff.Position.scale`"""
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
-    transform = [
-        TransformationMeta(type="scale", scale=scale)
-    ]
-    with _temp_ome_zarr(random_5d, channel_names, "0", transform=transform) as dataset:
+    transform = [TransformationMeta(type="scale", scale=scale)]
+    with _temp_ome_zarr(
+        random_5d, channel_names, "0", transform=transform
+    ) as dataset:
         # round-trip test with the offical reader implementation
         assert dataset.scale == scale
