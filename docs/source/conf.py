@@ -12,10 +12,6 @@ import sys
 # If your documentation needs a minimal Sphinx version, state it here.
 # needs_sphinx = '1.0'
 
-# Add any Sphinx extension module names here, as strings. They can be extensions
-# coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-import sys
-
 import importlib_metadata
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -41,7 +37,9 @@ extensions = [
 ]
 
 # default url is a dummy for local build
-html_baseurl = os.environ.get("SITEMAP_URL_BASE", "htrp://127.0.0.1:8000/")
+html_baseurl = os.environ.get(
+    "GITHUB_PAGES_URL", f"file://{os.path.dirname(source_dir)}/build/html/"
+)
 sitemap_locales = ["en"]
 sitemap_url_scheme = "{link}"
 
@@ -51,8 +49,9 @@ numpydoc_show_class_members = True
 # templates_path = ["_templates"]
 
 # Disabling generation of docs on different branches to use tags only
-# smv_branch_whitelist = None
-# smv_tag_whitelist = r'^v\d+\.\d+\.\d+$'
+smv_tag_whitelist = r"^v\d+\.\d+\.\d+$"
+smv_branch_whitelist = r"^main$"
+smv_latest_version = r"^main$"
 
 # The suffix of source filenames.
 source_suffix = ".rst"
@@ -68,9 +67,9 @@ project = "iohub"
 copyright = "2023. Chan Zuckerberg Biohub. All rights reserved"
 release = importlib_metadata.version("iohub")
 
-json_url = "https://czbiohub.github.io/iohub/main/_static/switcher.json"
+json_url = f"{html_baseurl.strip}/main/_static/switcher.json"
 if "dev" in release or "rc" in release:
-    json_url = "_static/switcher.json"
+    # json_url = "_static/switcher.json"
     version_match = "latest"
 else:
     version_match = release
@@ -144,12 +143,19 @@ html_title = "iohub"
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = None
+# emoji favicon code adapted from:
+# https://twitter.com/LeaVerou/status/1241619866475474946
+html_favicon = (
+    "data:image/svg+xml,"
+    "<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22>"
+    r"<text y=%22.9em%22 font-size=%2290%22>💾</text>"
+    "</svg>"
+)
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-# html_static_path = ["_static"]
+html_static_path = ["_static"]
 
 # If not '', a 'Last updated on:' timestamp is inserted at every page bottom,
 # using the given strftime format.
@@ -196,6 +202,3 @@ html_show_sphinx = False
 htmlhelp_basename = "iohubdoc"
 
 numpydoc_show_class_members = False
-
-smv_branch_whitelist = r"main"
-smv_latest_version = r"main"

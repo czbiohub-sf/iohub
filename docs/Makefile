@@ -26,5 +26,6 @@ build:
 
 publish:
 	sphinx-multiversion source build/html
+	cp gh-pages-redirect.html build/html/index.html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
