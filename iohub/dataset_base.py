@@ -1,6 +1,9 @@
+from __future__ import annotations
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from types import TracebackType
 from typing import Any, Generator, Optional, Type, Union
+from pathlib import Path
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -9,7 +12,7 @@ _AXES_PREFIX = ["T", "C", "Z", "Y", "X"]
 
 
 class BaseFOV(ABC):
-    # NOTE: not using the `data` method from ngff Position
+    _root: Path
 
     @property
     @abstractmethod
@@ -98,10 +101,15 @@ class BaseFOV(ABC):
         """Helper function for FOV spatial scale."""
         raise NotImplementedError
 
+    def __eq__(self, other: BaseFOV) -> bool:
+        if not isinstance(other, BaseFOV):
+            return False
+        return self._root.absolute() == other._root.absolute()
 
-class BaseFOVCollection(ABC):
+
+class BaseFOVCollection(Mapping):
     @abstractmethod
-    def __enter__(self) -> "BaseFOVCollection":
+    def __enter__(self) -> BaseFOVCollection:
         """Open the underlying file and return self."""
         raise NotImplementedError
 
