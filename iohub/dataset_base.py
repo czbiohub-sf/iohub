@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from types import TracebackType
-from typing import Any, Generator, Optional, Type, Union
 from pathlib import Path
+from types import TracebackType
+from typing import Any, Iterable, Optional, Type, Union
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -107,13 +108,64 @@ class BaseFOV(ABC):
         return self._root.absolute() == other._root.absolute()
 
 
-class BaseFOVCollection(Mapping):
-    @abstractmethod
-    def __enter__(self) -> BaseFOVCollection:
-        """Open the underlying file and return self."""
-        raise NotImplementedError
+class FOVCollection(Mapping):
+    """
+    Basic implementation of a mapping of strings to BaseFOVs.
+    """
 
-    @abstractmethod
+    def __init__(
+        self,
+        data_dict: Optional[dict[str, BaseFOV]] = None,
+        **kwargs,
+    ) -> None:
+        super().__init__()
+        self._data = {}
+
+        if data_dict is not None:
+            for key, fov in data_dict.items():
+                self._safe_insert(key, fov)
+
+        for key, fov in kwargs.items():
+            self._safe_insert(key, fov)
+
+    def _safe_insert(self, key: str, value: BaseFOV) -> None:
+        """Checks if types are correct and key is unique."""
+        if not isinstance(key, str):
+            raise TypeError(
+                "FOVCollection key must be str. "
+                f"Found {key} with type {type(key)}"
+            )
+
+        if not isinstance(value, BaseFOV):
+            raise TypeError(
+                "FOVCollection value subclass BaseFOV. "
+                f"Found {key} with value type {type(value)}"
+            )
+
+        if key in self:
+            raise KeyError(f"{key} already exists.")
+
+        self._data[key] = value
+
+    def __contains__(self, position_key: str) -> bool:
+        """Checks if position_key already exists."""
+        return position_key in self._data
+
+    def __len__(self) -> int:
+        return len(self._data)
+
+    def __getitem__(self, position_key: str) -> BaseFOV:
+        """FOV key position to FOV object."""
+        return self._data[position_key]
+
+    def __iter__(self) -> Iterable[tuple[str, BaseFOV]]:
+        """Iterates over pairs of keys and FOVs."""
+        return self._data.items()
+
+    def __enter__(self) -> FOVCollection:
+        """Open the underlying file and return self."""
+        return self
+
     def __exit__(
         self,
         exc_type: Optional[Type[BaseException]],
@@ -121,23 +173,4 @@ class BaseFOVCollection(Mapping):
         exc_tb: Optional[TracebackType],
     ) -> bool:
         """Close the files."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def __contains__(self, position_key: str) -> bool:
-        """Check if a position is present in the collection."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def __len__(self) -> int:
-        raise NotImplementedError
-
-    @abstractmethod
-    def __getitem__(self, position_key: str) -> BaseFOV:
-        """FOV key position to FOV object."""
-        raise NotImplementedError
-
-    @abstractmethod
-    def __iter__(self) -> Generator[tuple[str, BaseFOV], None, None]:
-        """Iterates over pairs of keys and FOVs."""
-        raise NotImplementedError
+        return True

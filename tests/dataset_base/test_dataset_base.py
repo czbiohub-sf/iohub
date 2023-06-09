@@ -2,7 +2,7 @@ from typing import Any
 
 import pytest
 
-from iohub.dataset_base import BaseFOV
+from iohub.dataset_base import BaseFOV, FOVCollection
 
 
 class FOV(BaseFOV):
@@ -51,3 +51,30 @@ def test_missing_axes(axes: list[str], missing: list[int]) -> None:
             assert s == 1
         else:
             assert s == 10
+
+
+def test_fov_collection() -> None:
+
+    good_collection = FOVCollection(
+        {
+            "488": FOV(["y", "x"]),
+            "561": FOV(["y", "x"]),
+        },
+        mask=FOV(["c", "x", "y"]),
+    )
+
+    assert len(good_collection) == 3
+    assert "488" in good_collection
+    assert good_collection["mask"] is not None
+
+    with pytest.raises(TypeError):
+        del good_collection["561"]
+
+    with pytest.raises(TypeError):
+        good_collection["segmentation"] = FOV(["x", "y"])
+
+    with pytest.raises(TypeError):
+        FOVCollection({488: FOV(["y", "x"])})
+
+    with pytest.raises(TypeError):
+        FOVCollection(mask=[1, 2, 3])
