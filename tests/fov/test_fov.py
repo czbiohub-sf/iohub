@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from iohub.dataset_base import BaseFOV, FOVDict
+from iohub.fov import BaseFOV, FOVDict
 
 
 class FOV(BaseFOV):
