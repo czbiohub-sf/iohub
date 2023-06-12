@@ -1,14 +1,19 @@
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from iohub.dataset_base import BaseFOV, FOVCollection
+from iohub.dataset_base import BaseFOV, FOVDict
 
 
 class FOV(BaseFOV):
     def __init__(self, axes: list[str]) -> None:
         super().__init__()
         self._axes = axes
+
+    @property
+    def root(self) -> Path:
+        return Path()
 
     @property
     def axes_names(self) -> list[str]:
@@ -53,9 +58,9 @@ def test_missing_axes(axes: list[str], missing: list[int]) -> None:
             assert s == 10
 
 
-def test_fov_collection() -> None:
+def test_fov_dict() -> None:
 
-    good_collection = FOVCollection(
+    good_collection = FOVDict(
         {
             "488": FOV(["y", "x"]),
             "561": FOV(["y", "x"]),
@@ -74,7 +79,7 @@ def test_fov_collection() -> None:
         good_collection["segmentation"] = FOV(["x", "y"])
 
     with pytest.raises(TypeError):
-        FOVCollection({488: FOV(["y", "x"])})
+        FOVDict({488: FOV(["y", "x"])})
 
     with pytest.raises(TypeError):
-        FOVCollection(mask=[1, 2, 3])
+        FOVDict(mask=[1, 2, 3])

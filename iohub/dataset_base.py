@@ -13,7 +13,10 @@ _AXES_PREFIX = ["T", "C", "Z", "Y", "X"]
 
 
 class BaseFOV(ABC):
-    _root: Path
+    @property
+    @abstractmethod
+    def root(self) -> Path:
+        raise NotImplementedError
 
     @property
     @abstractmethod
@@ -105,10 +108,46 @@ class BaseFOV(ABC):
     def __eq__(self, other: BaseFOV) -> bool:
         if not isinstance(other, BaseFOV):
             return False
-        return self._root.absolute() == other._root.absolute()
+        return self.root.absolute() == other.root.absolute()
 
 
-class FOVCollection(Mapping):
+class BaseFOVMapping(Mapping):
+    @abstractmethod
+    def __enter__(self) -> BaseFOVMapping:
+        """Open the underlying file and return self."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> bool:
+        """Close the files."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def __contains__(self, position_key: str) -> bool:
+        """Check if a position is present in the collection."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def __len__(self) -> int:
+        raise NotImplementedError
+
+    @abstractmethod
+    def __getitem__(self, position_key: str) -> BaseFOV:
+        """FOV key position to FOV object."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def __iter__(self) -> Iterable[tuple[str, BaseFOV]]:
+        """Iterates over pairs of keys and FOVs."""
+        raise NotImplementedError
+
+
+class FOVDict(BaseFOVMapping):
     """
     Basic implementation of a mapping of strings to BaseFOVs.
     """
@@ -132,13 +171,13 @@ class FOVCollection(Mapping):
         """Checks if types are correct and key is unique."""
         if not isinstance(key, str):
             raise TypeError(
-                "FOVCollection key must be str. "
+                f"{self.__class__.__name__} key must be str. "
                 f"Found {key} with type {type(key)}"
             )
 
         if not isinstance(value, BaseFOV):
             raise TypeError(
-                "FOVCollection value subclass BaseFOV. "
+                f"{self.__class__.__name__} value must subclass BaseFOV. "
                 f"Found {key} with value type {type(value)}"
             )
 
@@ -162,7 +201,7 @@ class FOVCollection(Mapping):
         """Iterates over pairs of keys and FOVs."""
         return self._data.items()
 
-    def __enter__(self) -> FOVCollection:
+    def __enter__(self) -> FOVDict:
         """Open the underlying file and return self."""
         return self
 
