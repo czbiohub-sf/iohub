@@ -25,7 +25,7 @@ class BaseFOV(ABC):
 
     @property
     @abstractmethod
-    def channels(self) -> list[str]:
+    def channel_names(self) -> list[str]:
         raise NotImplementedError
 
     def channel_index(self, key: str) -> int:
@@ -102,7 +102,12 @@ class BaseFOV(ABC):
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
-        """Helper function for FOV spatial scale."""
+        """Helper function for FOV spatial scale (micrometer)."""
+        raise NotImplementedError
+
+    @property
+    def t_scale(self) -> float:
+        """Helper function for FOV time scale (seconds)."""
         raise NotImplementedError
 
     def __eq__(self, other: BaseFOV) -> bool:
