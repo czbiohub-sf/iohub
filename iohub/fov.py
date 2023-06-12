@@ -101,11 +101,13 @@ class BaseFOV(ABC):
         raise NotImplementedError
 
     @property
+    @abstractmethod
     def zyx_scale(self) -> tuple[float, float, float]:
         """Helper function for FOV spatial scale (micrometer)."""
         raise NotImplementedError
 
     @property
+    @abstractmethod
     def t_scale(self) -> float:
         """Helper function for FOV time scale (seconds)."""
         raise NotImplementedError

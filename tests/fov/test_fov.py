@@ -20,7 +20,7 @@ class FOV(BaseFOV):
         return self._axes
 
     @property
-    def channels(self) -> list[str]:
+    def channel_names(self) -> list[str]:
         return []
 
     def __getitem__(self, key: Any) -> Any:
@@ -33,6 +33,14 @@ class FOV(BaseFOV):
     @property
     def shape(self) -> Any:
         pass
+
+    @property
+    def zyx_scale(self) -> tuple[float, float, float]:
+        return (1.0,) * 3
+
+    @property
+    def t_scale(self) -> float:
+        raise 1.0
 
 
 @pytest.mark.parametrize(
