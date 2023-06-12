@@ -11,7 +11,7 @@ and how you can install and use the package.
 
 ## Issues
 
-We use [issues](https://github.com/czbiohub/iohub/issues) to track
+We use [issues](https://github.com/czbiohub-sf/iohub/issues) to track
 bug reports, feature requests, and provide user support.
 
 Before opening a new issue, please first search existing issues (including closed ones),
@@ -48,7 +48,7 @@ Is the feature within the scope of this project or another project?
 As is the case with any software project, possible improvements vastly out number the community's capacity.
 We use releases as a reference to focus the effort on near-term priorities.
 PRs within the scope of the next release will receive more attention.
-A list of planned release milestones can be found [here](https://github.com/czbiohub/iohub/milestones).
+A list of planned release milestones can be found [here](https://github.com/czbiohub-sf/iohub/milestones).
 
 ### Documentation change
 
@@ -60,7 +60,7 @@ particularly user guides that we can collaboratively edit.
 ## Making changes
 
 Any change made to the `main` branch or release maintenance branches
-need to be proposed in a [pull request](https://github.com/czbiohub/iohub/pulls) (PR).
+need to be proposed in a [pull request](https://github.com/czbiohub-sf/iohub/pulls) (PR).
 
 If there is an issue that can be addressed by the PR, please reference it.
 
@@ -85,11 +85,11 @@ clone the repository (the code blocks below are shell commands):
 
 ```sh
 cd # to the directory you want to work in
-git clone https://github.com/czbiohub/iohub.git
+git clone https://github.com/czbiohub-sf/iohub.git
 ```
 
 Otherwise, you can follow [these instructions](https://docs.github.com/en/get-started/quickstart/fork-a-repo)
-to [fork](https://github.com/czbiohub/iohub/fork) the repository.
+to [fork](https://github.com/czbiohub-sf/iohub/fork) the repository.
 
 Then install the package in editable mode with the development dependencies:
 

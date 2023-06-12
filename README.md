@@ -27,7 +27,7 @@ used at the Biohub and in the broader imaging community.
 Install iohub with pip:
 
 ```sh
-git clone https://github.com/czbiohub/iohub.git
+git clone https://github.com/czbiohub-sf/iohub.git
 pip install /path/to/iohub
 ```
 
@@ -83,8 +83,8 @@ with open_ome_zarr(
     dataset.print_tree()  # checks that new data has been written
 ```
 
-For more about API usage, refer to the [documentation](https://czbiohub.github.io/iohub/)
-and the [example scripts](https://github.com/czbiohub/iohub/tree/main/examples).
+For more about API usage, refer to the [documentation](https://czbiohub-sf.github.io/iohub/)
+and the [example scripts](https://github.com/czbiohub-sf/iohub/tree/main/examples).
 
 ### Reading Micro-Manager TIFF data
 

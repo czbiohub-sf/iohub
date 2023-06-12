@@ -67,7 +67,7 @@ project = "iohub"
 copyright = "2023. Chan Zuckerberg Biohub. All rights reserved"
 release = importlib_metadata.version("iohub")
 
-json_url = f"{html_baseurl.strip}/main/_static/switcher.json"
+json_url = f"{html_baseurl}/main/_static/switcher.json"
 if "dev" in release or "rc" in release:
     # json_url = "_static/switcher.json"
     version_match = "latest"
