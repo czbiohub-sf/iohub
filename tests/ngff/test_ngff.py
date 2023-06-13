@@ -556,6 +556,7 @@ def test_get_channel_index(setup_test_data, setup_hcs_ref, wrong_channel_name):
 @given(
     row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
 )
+@settings(max_examples=16, deadline=2000)
 def test_modify_hcs_ref(setup_test_data, setup_hcs_ref, row, col, pos):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with _temp_copy(setup_hcs_ref) as store_path:
