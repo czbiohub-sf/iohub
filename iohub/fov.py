@@ -219,4 +219,4 @@ class FOVDict(BaseFOVMapping):
         exc_tb: Optional[TracebackType],
     ) -> bool:
         """Close the files."""
-        return True
+        return False
