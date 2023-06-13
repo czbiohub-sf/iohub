@@ -71,7 +71,8 @@ class BaseFOV(ABC):
         if is_tuple:
             seq = tuple(seq)
 
-        assert len(seq) == len(_AXES_PREFIX)
+        if len(seq) != len(_AXES_PREFIX):
+            raise RuntimeError(f"Failed to pad raw axes {self.axes_names} to {_AXES_PREFIX}")
 
         return seq
 
