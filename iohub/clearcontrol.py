@@ -428,6 +428,10 @@ class ClearControlFOV(BaseFOV):
     @property
     def scale(self) -> list[float]:
         """Dataset temporal, channel and spacial scales."""
+        warnings.warn(
+            ".scale will be deprecated use .zyx_scale or .t_scale.",
+            category=DeprecationWarning,
+        )
         metadata = self.metadata()
         return [
             metadata["time_delta"],
