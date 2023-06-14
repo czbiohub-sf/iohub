@@ -9,6 +9,8 @@ import blosc2
 import numpy as np
 import pandas as pd
 
+from iohub.fov import BaseFOV
+
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
@@ -128,7 +130,7 @@ def _cached(f: Callable) -> Callable:
     return _key_cache_wrapper
 
 
-class ClearControlFOV:
+class ClearControlFOV(BaseFOV):
     """
     Reader class for Clear Control dataset
     https://github.com/royerlab/opensimview.
@@ -157,7 +159,7 @@ class ClearControlFOV:
         cache: bool = False,
     ):
         super().__init__()
-        self._data_path = Path(data_path)
+        self._root = Path(data_path)
         self._missing_value = missing_value
         self._dtype = np.uint16
         self._cache = cache
@@ -165,7 +167,11 @@ class ClearControlFOV:
         self._cache_array = None
 
     @property
-    def shape(self) -> tuple[int, ...]:
+    def root(self) -> Path:
+        return self._root
+
+    @property
+    def shape(self) -> tuple[int, int, int, int, int]:
         """
         Reads Clear Control index data of every data and returns
         the element-wise minimum shape.
@@ -177,7 +183,7 @@ class ClearControlFOV:
         minimum_size = 64
         numbers = re.compile(r"\d+\.\d+|\d+")
 
-        for index_filepath in self._data_path.glob("*.index.txt"):
+        for index_filepath in self._root.glob("*.index.txt"):
             with open(index_filepath, "rb") as f:
                 if index_filepath.stat().st_size > minimum_size:
                     f.seek(
@@ -195,19 +201,23 @@ class ClearControlFOV:
 
                 shape = [min(s, v) for s, v in zip(shape, values)]
 
-        shape.insert(1, len(self.channels))
+        shape.insert(1, len(self.channel_names))
         shape[0] += 1  # time points starts counts on zero
 
         return tuple(shape)
 
     @property
-    def channels(self) -> list[str]:
+    def axes_names(self) -> list[str]:
+        return ["T", "C", "Z", "Y", "X"]
+
+    @property
+    def channel_names(self) -> list[str]:
         """Return sorted channels name."""
         suffix = ".index.txt"
         return sorted(
             [
                 p.name.removesuffix(suffix)
-                for p in self._data_path.glob(f"*{suffix}")
+                for p in self._root.glob(f"*{suffix}")
             ]
         )
 
@@ -243,7 +253,7 @@ class ClearControlFOV:
         # single channel
         if isinstance(channels, str):
             volume_name = f"{str(time_point).zfill(6)}.blc"
-            volume_path = self._data_path / "stacks" / channels / volume_name
+            volume_path = self._root / "stacks" / channels / volume_name
             if not volume_path.exists():
                 if self._missing_value is None:
                     raise ValueError(f"{volume_path} not found.")
@@ -323,7 +333,7 @@ class ClearControlFOV:
     ) -> np.ndarray:
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
-        channels = np.asarray(self.channels)
+        channels = np.asarray(self.channel_names)
         time_pts = list(range(shape[0]))
         volume_shape = shape[-3:]
 
@@ -391,7 +401,7 @@ class ClearControlFOV:
     def metadata(self) -> dict[str, Any]:
         """Summarizes Clear Control metadata into a dictionary."""
         cc_metadata = []
-        for path in self._data_path.glob("*.metadata.txt"):
+        for path in self._root.glob("*.metadata.txt"):
             with open(path, mode="r") as f:
                 channel_metadata = pd.DataFrame(
                     [json.loads(s) for s in f.readlines()]
@@ -426,6 +436,22 @@ class ClearControlFOV:
             metadata["voxel_size_y"],
             metadata["voxel_size_x"],
         ]
+
+    @property
+    def zyx_scale(self) -> tuple[float, float, float]:
+        """Helper function for FOV spatial scale (micrometer)."""
+        metadata = self.metadata()
+        return (
+            metadata["voxel_size_z"],
+            metadata["voxel_size_y"],
+            metadata["voxel_size_x"],
+        )
+
+    @property
+    def t_scale(self) -> float:
+        """Helper function for FOV time scale (seconds)."""
+        metadata = self.metadata()
+        return metadata["time_delta"]
 
 
 def create_mock_clear_control_dataset(path: "StrOrBytesPath") -> None:
