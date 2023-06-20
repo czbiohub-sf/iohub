@@ -140,24 +140,13 @@ class NDTiffReader(ReaderBase):
         # TODO: try casting the dask array into a zarr array
         # using `dask.array.to_zarr()`.
         # Currently this call brings the data into memory
-
-        ax = [
-            ax_
-            for ax_ in ["position", "time", "channel", "z"]
-            if ax_ in self._axes
-        ]
-
-        if "position" in self._axes.keys():
-            # da is Dask array
-            da = self.dataset.as_array(axes=ax, position=position)
-        else:
-            if position not in (0, None):
-                warnings.warn(
-                    f"Position index {position} is not part of this dataset."
-                    f" Returning data at default position."
-                )
-            da = self.dataset.as_array(axes=ax)
-
+        if "position" not in self._axes.keys() and position not in (0, None):
+            warnings.warn(
+                f"Position index {position} is not part of this dataset. "
+                "Returning data at the default position."
+            )
+            position = None
+        da = self.dataset.as_array(position=position)
         shape = (
             self.frames,
             self.channels,
@@ -165,7 +154,7 @@ class NDTiffReader(ReaderBase):
             self.height,
             self.width,
         )
-
+        # add singleton axes so output is 5D
         return da.reshape(shape)
 
     def get_array(self, position: int) -> np.ndarray:
