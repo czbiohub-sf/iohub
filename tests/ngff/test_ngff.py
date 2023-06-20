@@ -208,7 +208,11 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
 )
-@settings(max_examples=16, deadline=2000)
+@settings(
+    max_examples=16,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
 def test_create_zeros(ch_shape_dtype, arr_name):
     """Test `iohub.ngff.Position.create_zeros()`"""
     channel_names, shape, dtype = ch_shape_dtype
