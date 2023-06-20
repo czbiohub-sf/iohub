@@ -5,6 +5,7 @@ import logging
 import math
 import os
 from copy import deepcopy
+from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Union
 
 import numpy as np
@@ -340,7 +341,19 @@ class ImageArray(zarr.Array):
         raise NotImplementedError
 
     def tensorstore(self):
-        raise NotImplementedError
+        import tensorstore as ts
+
+        assert self.path != "", "Zarr array must be stored on a file system."
+
+        ts_spec = {
+            "driver": "zarr",
+            "kvstore": {
+                "driver": "file",
+                "path": str(Path(self.path).resolve()),
+            },
+        }
+
+        return ts.open(ts_spec, create=False, open=True).result()
 
 
 class TiledImageArray(ImageArray):
