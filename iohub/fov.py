@@ -30,7 +30,7 @@ class BaseFOV(ABC):
 
     def channel_index(self, key: str) -> int:
         """Return index of given channel."""
-        return self.channels.index(key)
+        return self.channel_names.index(key)
 
     def _missing_axes(self) -> list[int]:
         """Return sorted indices of missing axes."""
