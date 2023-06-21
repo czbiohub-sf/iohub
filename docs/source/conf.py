@@ -210,4 +210,6 @@ sphinx_gallery_conf = {
     "gallery_dirs": "auto_examples",
     "download_all_examples": False,
     "filename_pattern": "/run_",
+    "min_reported_time": 2,
+    "show_signature": False,
 }
