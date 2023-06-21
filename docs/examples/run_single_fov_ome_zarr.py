@@ -1,12 +1,16 @@
-# %%
-# This script shows how to create a single-FOV, single-scale OME-Zarr dataset,
-# read data in read-only mode,
-# append an extra time point to an existing dataset,
-# and adding a new channel to an existing dataset.
-# It can be run as a plain Python script,
-# or as interactive cells in some IDEs.
+"""
+Single-FOV OME-Zarr
+===================
 
-import tempfile
+This script shows how to create a single-FOV, single-scale OME-Zarr dataset,
+read data in read-only mode,
+append an extra time point to an existing dataset,
+and adding a new channel to an existing dataset.
+"""
+
+# %%
+import os
+from tempfile import TemporaryDirectory
 
 import numpy as np
 
@@ -14,8 +18,8 @@ from iohub.ngff import open_ome_zarr
 
 # %%
 # Set storage path
-
-store_path = f"{tempfile.gettempdir()}/ome.zarr"
+tmp_dir = TemporaryDirectory()
+store_path = os.path.join(tmp_dir.name, "ome.zarr")
 print("Zarr store path", store_path)
 
 # %%
@@ -91,4 +95,7 @@ dataset.close()
 
 # %%
 # Try viewing the images with napari-ome-zarr
-print("Zarr store path", store_path)
+
+# %%
+# Clean up
+tmp_dir.cleanup()

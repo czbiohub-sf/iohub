@@ -1,32 +1,34 @@
+"""
+Writing a Large Array
+=====================
+
+This script shows how to store a larger-than-RAM array to a OME-Zarr dataset.
+The same method works for HCS datasets too.
+"""
+
 # %%
-# RUNNING THE FOLLOWING CODE WILL WRITE A LARGE FILE
-# This script shows how to store a larger-than-RAM array to a OME-Zarr dataset.
-# The same methods works for HCS datasets too.
-# It can be run as a plain Python script,
-# or as interactive cells in some IDEs.
-
-
+# .. warning:: Executing this example will write a large file.
+# Modify the store path manually.
 import numpy as np
 from tqdm import tqdm
 
 from iohub.ngff import open_ome_zarr
 
-# %%
-# FIXME: set Zarr store path here
 store_path = ""
 
 # %%
-# shape and data type of the large array
-# this array is about 10 GB, each time point is about 100 MB
-# it may not be actually larger than RAM but enough for demo
-# monitor the memory usage of python when the following runs
-# and it should take significantly less than 10 GB
+# Shape and data type of the large array
+# this array is about 10 GB, each time point is about 100 MB.
+# It may not be actually larger than RAM but enough for demo.
+# Monitor the memory usage of Python when the following runs
+# and it should take significantly less than 10 GB.
 shape = (100, 2, 25, 1024, 1024)
 dtype = np.uint16
 
 
 # %%
-# store this array by looping through the time points
+# .. note:: This will not run if the Zarr store path is not set above
+# Store this array by looping through the time points
 if store_path:
     with open_ome_zarr(
         store_path, layout="fov", mode="w-", channel_names=["DAPI", "GFP"]

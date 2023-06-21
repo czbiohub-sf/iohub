@@ -1,3 +1,18 @@
+"""
+Viewing Clear Control
+=====================
+
+Example of opening a Clear Control dataset and viewing with napari.
+
+Usage:
+
+    $ python view_clearcontrol_dataset.py <OPTIONAL Clear Control dataset>
+
+If the dataset path is not provided,
+it creates a mock dataset of random integers.
+"""
+
+
 import sys
 import tempfile
 import time
@@ -9,16 +24,6 @@ from iohub.clearcontrol import (
 
 
 def main():
-    """Example of opening a Clear Control dataset and viewing with napari.
-
-    Usage
-    -----
-
-    $ python view_clearcontrol_dataset <OPTIONAL Clear Control dataset>
-
-    If the dataset path is not provided it creates a mock dataset of random integers.
-
-    """
     import napari
 
     if len(sys.argv) < 2:

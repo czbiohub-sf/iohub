@@ -1,8 +1,14 @@
-# %%
-# This script shows how to create a tiled single-resolution OME-Zarr dataset,
-# make a tiles grid, and write data.
+"""
+Tiled OME-Zarr
+==============
 
+This script shows how to create a tiled single-resolution OME-Zarr dataset,
+make a tiles grid, and write data.
+"""
+
+# %%
 import os
+from tempfile import TemporaryDirectory
 
 import numpy as np
 
@@ -10,8 +16,9 @@ from iohub.ngff import open_ome_zarr
 
 # %%
 # Set storage path
-
-store_path = f'{os.path.expanduser("~/")}ome.zarr'
+tmp_dir = TemporaryDirectory()
+store_path = os.path.join(tmp_dir.name, "tiled.zarr")
+print("Zarr store path", store_path)
 
 # %%
 # Write 5D data to a new Zarr store
@@ -25,13 +32,14 @@ tile_shape = (5, 2, 3, 32, 32)
 with open_ome_zarr(
     store_path, layout="tiled", mode="a", channel_names=["DAPI", "GFP"]
 ) as dataset:
+    dtype = np.uint16
     tiles = dataset.make_tiles(
-        "tiled_raw", grid_shape=grid_shape, tile_shape=tile_shape
+        "tiled_raw", grid_shape=grid_shape, tile_shape=tile_shape, dtype=dtype
     )
     for row in range(grid_shape[0]):
         for column in range(grid_shape[1]):
             # each tile will be filled with different constant values
-            data = np.zeros(shape=tile_shape) + row + column
+            data = np.zeros(shape=tile_shape, dtype=dtype) + row + column
             tiles.write_tile(data, row, column)
 
 
@@ -50,3 +58,7 @@ with open_ome_zarr(store_path, layout="tiled", mode="r") as dataset:
 
 # %%
 # Try viewing the images with napari-ome-zarr
+
+# %%
+# Clean up
+tmp_dir.cleanup()
