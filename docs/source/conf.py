@@ -208,4 +208,6 @@ numpydoc_show_class_members = False
 sphinx_gallery_conf = {
     "examples_dirs": "../examples",
     "gallery_dirs": "auto_examples",
+    "download_all_examples": False,
+    "filename_pattern": "/run_",
 }
