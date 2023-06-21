@@ -18,7 +18,7 @@ help:
 
 clean:
 	-rm -rf $(BUILDDIR)/*
-	-rm -rf auto_examples/*
+	-rm -rf source/auto_examples/*
 
 build:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
