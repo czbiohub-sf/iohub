@@ -34,6 +34,7 @@ extensions = [
     "numpydoc",
     "sphinx_multiversion",
     "sphinx_sitemap",
+    "sphinx_gallery.gen_gallery",
 ]
 
 # default url is a dummy for local build
@@ -202,3 +203,9 @@ html_show_sphinx = False
 htmlhelp_basename = "iohubdoc"
 
 numpydoc_show_class_members = False
+
+# sphinx-gallery config
+sphinx_gallery_conf = {
+    "examples_dirs": "../examples",
+    "gallery_dirs": "auto_examples",
+}
