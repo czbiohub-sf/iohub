@@ -69,10 +69,9 @@ with open_ome_zarr(
     dataset.print_tree()
 
 # %%
-# .. note::
-# To see the coordinate transforms,
-# open the positions individually using napari-ome-zarr.
-# This will duplicate the layers (channels).
+# .. note:: To see the coordinate transforms,
+#     open the positions individually using napari-ome-zarr.
+#     This will duplicate the layers (channels).
 
 # %%
 # Clean up

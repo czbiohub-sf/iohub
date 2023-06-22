@@ -8,7 +8,7 @@ The same method works for HCS datasets too.
 
 # %%
 # .. warning:: Executing this example will write a large file.
-# Modify the store path manually.
+#     Modify the store path manually.
 import numpy as np
 from tqdm import tqdm
 
@@ -28,6 +28,7 @@ dtype = np.uint16
 
 # %%
 # .. note:: This will not run if the Zarr store path is not set above
+#
 # Store this array by looping through the time points
 if store_path:
     with open_ome_zarr(
