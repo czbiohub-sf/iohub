@@ -122,6 +122,5 @@ jobs:
           pip install ".[docs]"
 
       - name: Test docs build
-        run: |
-          cd docs
-          make build
+        working-directory: ./docs
+        run: make build
