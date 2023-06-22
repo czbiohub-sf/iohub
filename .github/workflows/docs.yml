@@ -40,7 +40,7 @@ jobs:
         working-directory: ./docs
         run: |
           echo $GITHUB_PAGES_URL
-          make build
+          make publish
           touch build/html/.nojekyll
       - name: Upload build artifacts
         uses: actions/upload-pages-artifact@v1
