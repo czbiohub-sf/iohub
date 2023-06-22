@@ -121,5 +121,5 @@ jobs:
       - name: Test docs build
         working-directory: ./docs
         run: |
-          tree -L 3
-          make build
+          sphinx-build --help
+          sphinx-build -b html -d build/doctrees source build/html -v
