@@ -8,9 +8,6 @@ coordinate transformations (i.e translation and scaling)
 """
 
 # %%
-# Setup
-# -----
-
 import os
 from tempfile import TemporaryDirectory
 
