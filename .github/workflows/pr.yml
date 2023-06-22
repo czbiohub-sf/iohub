@@ -120,4 +120,6 @@ jobs:
 
       - name: Test docs build
         working-directory: ./docs
-        run: make build
+        run: |
+          tree -L 3
+          make build
