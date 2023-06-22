@@ -7,12 +7,13 @@ import os
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
 
+import importlib_metadata
+
 # -- General configuration ----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
 # needs_sphinx = '1.0'
 
-import importlib_metadata
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -209,7 +210,7 @@ sphinx_gallery_conf = {
     "examples_dirs": "../examples",
     "gallery_dirs": "auto_examples",
     "download_all_examples": False,
-    "filename_pattern": "/run_",
+    # "filename_pattern": "/run_",
     "min_reported_time": 2,
     "show_signature": False,
 }
