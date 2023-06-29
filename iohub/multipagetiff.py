@@ -2,12 +2,144 @@ import glob
 import logging
 import os
 from copy import copy
+from pathlib import Path
+from typing import Iterable, Union
 
+import dask.array as da
 import numpy as np
+import xarray as xr
 import zarr
+from numpy.typing import ArrayLike
 from tifffile import TiffFile
 
+from iohub.fov import BaseFOV, BaseFOVMapping
 from iohub.reader_base import ReaderBase
+
+
+class MMOmeTiffFOV(BaseFOV):
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self._root = path
+
+    @property
+    def root(self) -> Path:
+        return self._root
+
+    @property
+    def axes_names(self) -> list[str]:
+        pass
+
+    @property
+    def shape(self) -> tuple[int, int, int, int, int]:
+        return super().shape
+
+    @property
+    def dtype(self) -> np.dtype:
+        return super().dtype
+
+    @property
+    def t_scale(self) -> float:
+        return super().t_scale
+
+    def __getitem__(
+        self, key: Union[int, slice, tuple[Union[int, slice], ...]]
+    ) -> ArrayLike:
+        return super().__getitem__(key)
+
+
+class MMStack(BaseFOVMapping):
+    """Micro-Manager multi-file OME-TIFF (MMStack) reader.
+
+    Parameters
+    ----------
+    data_path : StrOrBytesPath
+        Path to the directory containing OME-TIFF files
+        or the path to the first OME-TIFF file in the series
+    dask_item : bool, optional
+        Whether to return dask arrays instead of xarray from ``__getitem__()``,
+        by default False
+    """
+
+    def __init__(self, data_path: str, dask_item: bool = False):
+        super().__init__()
+        data_path = str(data_path)
+        if os.path.isfile(data_path):
+            if "ome.tif" in os.path.basename(data_path):
+                first_file = data_path
+            else:
+                raise ValueError("{data_path} is not a OME-TIFF file.")
+        elif os.path.isdir(data_path):
+            files = glob.glob(os.path.join(data_path, "*.ome.tif"))
+            if not files:
+                raise FileNotFoundError(
+                    f"Path {data_path} contains no OME-TIFF files, "
+                )
+            else:
+                first_file = files[0]
+        self.dirname = os.path.basename(os.path.dirname(first_file))
+        self._first_tif = TiffFile(first_file, is_mmstack=True)
+        self._parse_data()
+        self._store = None
+        self._asdask = dask_item
+
+    def _parse_data(self):
+        series = self._first_tif.series[0]
+        raw_dims = dict(
+            (axis, size)
+            for axis, size in zip(series.get_axes(), series.get_shape())
+        )
+        axes = ("R", "T", "C", "Z", "Y", "X")
+        dims = dict((ax, raw_dims.get(ax) or 1) for ax in axes)
+        logging.debug(f"Got dataset dimensions from tifffile: {dims}.")
+        (
+            self.positions,
+            self.frames,
+            self.channels,
+            self.slices,
+            self.height,
+            self.width,
+        ) = dims.values()
+        self._store = series.aszarr()
+        logging.debug(f"Opened {self._store}.")
+        data = da.from_zarr(zarr.open(self._store))
+        img = xr.DataArray(data, dims=raw_dims, name=self.dirname)
+        self._xdata = img.expand_dims(
+            [ax for ax in axes if ax not in img.dims]
+        ).transpose(*axes)
+
+    @property
+    def xdata(self):
+        return self._xdata
+
+    def __len__(self) -> int:
+        return self.positions
+
+    def __getitem__(self, key: int) -> MMOmeTiffFOV:
+        item = self.xdata.sel(R=key)
+        return item.data if self._asdask else item
+
+    def __setitem__(self, key, value) -> None:
+        raise PermissionError("MMStack is read-only.")
+
+    def __delitem__(self, key, value) -> None:
+        raise PermissionError("MMStack is read-only.")
+
+    def __contains__(self, key) -> bool:
+        return key in self.xdata.R
+
+    def __iter__(self) -> Iterable[tuple[str, BaseFOV]]:
+        for key in self.xdata.R:
+            yield key, self[key]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def close(self):
+        """Close file handles"""
+        self._first_tif.close()
 
 
 class MicromanagerOmeTiffReader(ReaderBase):
