@@ -156,6 +156,10 @@ class TIFFConverter:
         self.metadata["iohub_version"] = iohub_version
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
+            if hcs_plate:
+                raise ValueError(
+                    "grid_layout and hcs_plate must not be both true"
+                )
             logging.info("Generating HCS plate level grid.")
             try:
                 self.position_grid = _create_grid_from_coordinates(
@@ -378,6 +382,10 @@ class TIFFConverter:
     def _init_hcs_arrays(self, arr_kwargs):
         for row, col, fov in self.reader.hcs_position_labels:
             self._create_zeros_array(row, col, fov, arr_kwargs)
+        logging.info(
+            "Created HCS NGFF layout from Micro-Manager HCS position labels."
+        )
+        self.writer.print_tree()
 
     def _init_grid_arrays(self, arr_kwargs):
         for row, columns in enumerate(self.position_grid):
