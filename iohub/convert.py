@@ -15,6 +15,8 @@ from iohub.reader import (
     read_micromanager,
 )
 
+__all__ = ["TIFFConverter"]
+
 
 def _create_grid_from_coordinates(
     xy_coords: list[tuple[float, float]], rows: int, columns: int
@@ -137,11 +139,9 @@ class TIFFConverter:
         self.prefix_list = []
         self.label_positions = label_positions
         if hcs_plate:
-            if not isinstance(
-                self.reader, MicromanagerOmeTiffReader
-            ):
+            if not isinstance(self.reader, MicromanagerOmeTiffReader):
                 raise ValueError(
-                    f"HCS plate position not supported for {type(self.reader)}."
+                    f"HCS plate position not supported for {type(self.reader)}"
                 )
             # check if labels are available
             _ = self.reader.hcs_position_labels
