@@ -390,7 +390,6 @@ class TIFFConverter:
         pos = self.writer.create_position(row_name, col_name, pos_name)
         self.zarr_position_names.append(pos.zgroup.name)
         _ = pos.create_zeros(**arr_kwargs)
-        print(self.pos_names, self.zarr_position_names)
         pos.metadata.omero.name = self.pos_names[
             len(self.zarr_position_names) - 1
         ]
