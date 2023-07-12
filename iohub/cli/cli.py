@@ -80,7 +80,7 @@ def info(files, verbose):
     "-g",
     required=False,
     is_flag=True,
-    help="Arrange positions in a HCS grid layout",
+    help="Arrange FOVs in a row/column grid layout for tiled acquisition",
 )
 @click.option(
     "--label-positions",
@@ -94,7 +94,8 @@ def info(files, verbose):
     "-t",
     required=False,
     is_flag=True,
-    help="Arrage FOVs according to the MM HCS plate position labels",
+    help="Arrage FOVs into an HCS plate layout based on position labels. "
+    "Only supported for OME-TIFF datasets generated with the MM HCS plugin.",
 )
 def convert(
     input,
