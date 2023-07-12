@@ -92,9 +92,10 @@ class TIFFConverter:
         Write voxel size (XY pixel size and Z-step) as scaling transform,
         by default True
     hcs_plate : bool, optional
-        Create NGFF HCS layout based on position names generated from the
-        HCS postion generator in Micro-Manager (not supported on all datasets),
-        by default False
+        Create NGFF HCS layout based on position names from the
+        HCS Site Generator in Micro-Manager (only available for OME-TIFF),
+        and is ignored for other formats, by default None
+        (attempt to apply to OME-TIFF datasets, disable this with ``False``)
     """
 
     def __init__(
@@ -106,7 +107,7 @@ class TIFFConverter:
         chunks: tuple[int] = None,
         label_positions: bool = False,
         scale_voxels: bool = True,
-        hcs_plate: bool = False,
+        hcs_plate: bool = None,
     ):
         logging.debug("Checking output.")
         if not output_dir.strip("/").endswith(".zarr"):
@@ -138,14 +139,8 @@ class TIFFConverter:
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.prefix_list = []
         self.label_positions = label_positions
-        if hcs_plate:
-            if not isinstance(self.reader, MicromanagerOmeTiffReader):
-                raise ValueError(
-                    f"HCS plate position not supported for {type(self.reader)}"
-                )
-            # check if labels are available
-            _ = self.reader.hcs_position_labels
         self.hcs_plate = hcs_plate
+        self._check_hcs_sites()
         self._get_pos_names()
         logging.info(
             f"Found Dataset {self.save_name} with "
@@ -171,6 +166,25 @@ class TIFFConverter:
             self._make_default_grid()
         self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
         self.transform = self._scale_voxels() if scale_voxels else None
+
+    def _check_hcs_sites(self):
+        is_mmstack = isinstance(self.reader, MicromanagerOmeTiffReader)
+        if self.hcs_plate:
+            if is_mmstack:
+                self.hcs_sites = self.reader.hcs_position_labels
+            else:
+                raise ValueError(
+                    f"HCS plate position not supported for {type(self.reader)}"
+                )
+        elif self.hcs_plate is None and is_mmstack:
+            try:
+                self.hcs_sites = self.reader.hcs_position_labels
+                self.hcs_plate = True
+            except ValueError:
+                logging.debug(
+                    "HCS sites not detected, "
+                    "dumping all position into a single row."
+                )
 
     def _make_default_grid(self):
         self.position_grid = np.expand_dims(
@@ -380,7 +394,7 @@ class TIFFConverter:
             self._init_grid_arrays(arr_kwargs)
 
     def _init_hcs_arrays(self, arr_kwargs):
-        for row, col, fov in self.reader.hcs_position_labels:
+        for row, col, fov in self.hcs_sites:
             self._create_zeros_array(row, col, fov, arr_kwargs)
         logging.info(
             "Created HCS NGFF layout from Micro-Manager HCS position labels."

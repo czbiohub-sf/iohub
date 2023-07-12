@@ -89,23 +89,7 @@ def info(files, verbose):
     is_flag=True,
     help="Dump postion labels in MM metadata to Omero metadata",
 )
-@click.option(
-    "--hcs-plate",
-    "-t",
-    required=False,
-    is_flag=True,
-    help="Arrage FOVs into an HCS plate layout based on position labels. "
-    "Only supported for OME-TIFF datasets generated with the MM HCS plugin.",
-)
-def convert(
-    input,
-    output,
-    format,
-    scale_voxels,
-    grid_layout,
-    label_positions,
-    hcs_plate,
-):
+def convert(input, output, format, scale_voxels, grid_layout, label_positions):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
@@ -114,6 +98,5 @@ def convert(
         scale_voxels=scale_voxels,
         grid_layout=grid_layout,
         label_positions=label_positions,
-        hcs_plate=hcs_plate,
     )
     converter.run()
