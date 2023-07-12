@@ -94,8 +94,13 @@ def test_converter_ometiff_hcs_not_available(
             _ = TIFFConverter(data, output, hcs_plate=True)
 
 
-@pytest.fixture
-def mock_hcs_ome_tiff_reader(monkeypatch: pytest.MonkeyPatch):
+@pytest.fixture(scope="function")
+def mock_hcs_ome_tiff_reader(
+    setup_mm2gamma_ome_tiffs, monkeypatch: pytest.MonkeyPatch
+):
+    all_ometiffs, _, _ = setup_mm2gamma_ome_tiffs
+    # dataset with 4 positions without HCS site names
+    data = os.path.join(all_ometiffs, "mm2.0-20201209_4p_2t_5z_1c_512k_1")
     mock_stage_positions = [
         {"Label": "A1-Site_0"},
         {"Label": "A1-Site_1"},
@@ -107,14 +112,11 @@ def mock_hcs_ome_tiff_reader(monkeypatch: pytest.MonkeyPatch):
         "iohub.convert.MicromanagerOmeTiffReader.stage_positions",
         mock_stage_positions,
     )
-    return expected_ngff_name
+    return data, expected_ngff_name
 
 
-def test_converter_ometiff_mock_hcs(
-    setup_test_data, setup_mm2gamma_ome_tiffs, mock_hcs_ome_tiff_reader
-):
-    _, data, _ = setup_mm2gamma_ome_tiffs
-    expected_ngff_name = mock_hcs_ome_tiff_reader
+def test_converter_ometiff_mock_hcs(setup_test_data, mock_hcs_ome_tiff_reader):
+    data, expected_ngff_name = mock_hcs_ome_tiff_reader
     with TemporaryDirectory() as tmp_dir:
         output = os.path.join(tmp_dir, "converted.zarr")
         converter = TIFFConverter(data, output, hcs_plate=True)
