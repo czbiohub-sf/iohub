@@ -4,6 +4,7 @@ from glob import glob
 from tempfile import TemporaryDirectory
 
 import numpy as np
+import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from ndtiff import Dataset
@@ -81,6 +82,47 @@ def test_converter_ometiff(
                 _check_scale_transform(pos, scale_voxels)
                 intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
+
+
+def test_converter_ometiff_hcs_not_available(
+    setup_test_data, setup_mm2gamma_ome_tiffs
+):
+    _, _, data = setup_mm2gamma_ome_tiffs
+    with TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, "converted.zarr")
+        with pytest.raises(ValueError, match="position"):
+            _ = TIFFConverter(data, output, hcs_plate=True)
+
+
+@pytest.fixture
+def mock_hcs_ome_tiff_reader(monkeypatch: pytest.MonkeyPatch):
+    mock_stage_positions = [
+        {"Label": "A1-Site_0"},
+        {"Label": "A1-Site_1"},
+        {"Label": "B4-Site_0"},
+        {"Label": "H12-Site_0"},
+    ]
+    expected_ngff_name = {"A/1/0", "A/1/1", "B/4/0", "H/12/0"}
+    monkeypatch.setattr(
+        "iohub.convert.MicromanagerOmeTiffReader.stage_positions",
+        mock_stage_positions,
+    )
+    return expected_ngff_name
+
+
+def test_converter_ometiff_mock_hcs(
+    setup_test_data, setup_mm2gamma_ome_tiffs, mock_hcs_ome_tiff_reader
+):
+    _, data, _ = setup_mm2gamma_ome_tiffs
+    expected_ngff_name = mock_hcs_ome_tiff_reader
+    with TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, "converted.zarr")
+        converter = TIFFConverter(data, output, hcs_plate=True)
+        converter.run()
+        with open_ome_zarr(output, mode="r") as plate:
+            assert expected_ngff_name == {
+                name for name, _ in plate.positions()
+            }
 
 
 @given(**CONVERTER_TEST_GIVEN)
