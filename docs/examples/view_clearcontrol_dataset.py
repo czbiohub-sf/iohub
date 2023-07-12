@@ -12,6 +12,8 @@ If the dataset path is not provided,
 it creates a mock dataset of random integers.
 """
 
+# %%
+# Setup
 
 import sys
 import tempfile
@@ -22,31 +24,39 @@ from iohub.clearcontrol import (
     create_mock_clear_control_dataset,
 )
 
+# %%
+# Parse optional Clear Control dataset path.
+# Mock dataset is created if dataset path is not provided.
 
-def main():
+if len(sys.argv) < 2:
+    print("Loading mock random noise dataset ...")
+    path = f"{tempfile.gettempdir()}/dataset.cc"
+    create_mock_clear_control_dataset(path)
+else:
+    path = sys.argv[1]
+
+# %%
+# Open Clear Control dataset.
+
+s = time.time()
+cc = ClearControlFOV(path, cache=True)
+print("init time (secs)", time.time() - s)
+
+# %%
+# Time load time of a single volume.
+
+s = time.time()
+cc[0, 0]
+print("single volume load time (secs)", time.time() - s)
+
+
+# %%
+# Load dataset using napari
+if __name__ == "__main__":
     import napari
-
-    if len(sys.argv) < 2:
-        print("Loading mock random noise dataset ...")
-        path = f"{tempfile.gettempdir()}/dataset.cc"
-        create_mock_clear_control_dataset(path)
-    else:
-        path = sys.argv[1]
-
-    s = time.time()
-    cc = ClearControlFOV(path, cache=True)
-    print("init time (secs)", time.time() - s)
-
-    s = time.time()
-    cc[0, 0]
-    print("single volume load time (secs)", time.time() - s)
 
     s = time.time()
     napari.view_image(cc)
     print("napari load time (secs)", time.time() - s)
 
     napari.run()
-
-
-if __name__ == "__main__":
-    main()
