@@ -103,7 +103,8 @@ def channel_display_settings(
             clim = channel_settings["Other"]
     # Mapping channel name to color
     for key in CHANNEL_COLORS:
-        if chan_name in CHANNEL_COLORS[key]:
+        # Does chan_name have any of the values in the CHANNEL_COLORS[key] list as a substring?
+        if any([value in chan_name for value in CHANNEL_COLORS[key]]):
             display_color = color_to_hex(key)
             break
         else:
