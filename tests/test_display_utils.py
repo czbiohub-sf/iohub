@@ -6,6 +6,9 @@ def test_channel_display_settings():
     channel_name = "GFP"
     channel_meta = channel_display_settings(channel_name)
     assert channel_meta.color == "00FF00"
+    channel_name = "GFP EX488 EM525-45"
+    channel_meta = channel_display_settings(channel_name)
+    assert channel_meta.color == "00FF00"
     channel_name = "S0"
     channel_meta = channel_display_settings(channel_name)
     assert channel_meta.color == "FFFFFF"
