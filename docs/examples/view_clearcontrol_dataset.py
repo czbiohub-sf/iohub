@@ -53,10 +53,14 @@ print("single volume load time (secs)", time.time() - s)
 # %%
 # Load dataset using napari
 if __name__ == "__main__":
-    import napari
+    try:
+        import napari
 
-    s = time.time()
-    napari.view_image(cc)
-    print("napari load time (secs)", time.time() - s)
+        s = time.time()
+        napari.view_image(cc)
+        print("napari load time (secs)", time.time() - s)
 
-    napari.run()
+        napari.run()
+
+    except ModuleNotFoundError:
+        pass
