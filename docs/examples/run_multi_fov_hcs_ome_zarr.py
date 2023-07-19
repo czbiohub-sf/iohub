@@ -1,10 +1,16 @@
-# %%
-# This script writes a high content screening (HCS) OME-Zarr dataset
-# with a single FOV and a single scaling level per well,
-# and adds an extra well-position to an existing dataset.
-# It can be run as a plain Python script, or as interactive cells in some IDEs.
+"""
+Multi-FOV HCS OME-Zarr
+======================
 
-import tempfile
+This script writes a high content screening (HCS) OME-Zarr dataset
+with a single FOV and a single scaling level per well,
+and adds an extra well-position to an existing dataset.
+"""
+
+# %%
+
+import os
+from tempfile import TemporaryDirectory
 
 import numpy as np
 
@@ -13,7 +19,8 @@ from iohub.ngff import open_ome_zarr
 # %%
 # Set storage path
 
-store_path = f"{tempfile.gettempdir()}/hcs.zarr"
+tmp_dir = TemporaryDirectory()
+store_path = os.path.join(tmp_dir.name, "hcs.zarr")
 print("Zarr store path", store_path)
 
 # %%
@@ -60,4 +67,7 @@ with open_ome_zarr(store_path, mode="r+") as dataset:
 
 # %%
 # Try viewing the images with napari-ome-zarr
-print("Zarr store path", store_path)
+
+# %%
+# Clean up
+tmp_dir.cleanup()

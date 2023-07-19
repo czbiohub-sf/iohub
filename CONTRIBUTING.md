@@ -100,8 +100,9 @@ pip install -e ".[dev]"
 
 Then make the changes and [track them with Git](https://docs.github.com/en/get-started/using-git/about-git#example-contribute-to-an-existing-repository).
 
+### Developing documentation
 
-### Building documentation locally
+#### Building the HTML version locally
 
 Inside `/docs` folder
 
@@ -114,7 +115,20 @@ Generated HTML documentation can be found in
 the ``build/html`` directory. Open ``build/html/index.html`` to view the home
 page for the documentation.
 
+#### Writing examples
 
+Example scripts in the `docs/examples` directory
+are automatically compiled to RST with `sphinx-gallery`
+in the `docs/source/auto_examples` directory.
+Files that start with `run_` in the file name
+are executed during the build,
+and output (stdout, matplotlib plot) are rendered in HTML.
+
+They can also be executed as plain Python scripts
+or interactive code blocks in some IDEs (VS Code, PyCharm, Spyder etc.).
+
+See the syntax documentation
+[here](https://sphinx-gallery.github.io/stable/syntax.html).
 
 ### Testing
 

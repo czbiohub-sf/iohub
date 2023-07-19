@@ -34,5 +34,6 @@ Write
    :hidden:
 
    getting_started
+   auto_examples/index
    api
    contact_us
