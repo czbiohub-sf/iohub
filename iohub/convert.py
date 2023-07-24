@@ -8,8 +8,14 @@ from numpy.typing import NDArray
 from tqdm import tqdm
 
 from iohub._version import version as iohub_version
-from iohub.ngff import TransformationMeta, open_ome_zarr
-from iohub.reader import MicromanagerSequenceReader, read_micromanager
+from iohub.ngff import Position, TransformationMeta, open_ome_zarr
+from iohub.reader import (
+    MicromanagerOmeTiffReader,
+    MicromanagerSequenceReader,
+    read_micromanager,
+)
+
+__all__ = ["TIFFConverter"]
 
 
 def _create_grid_from_coordinates(
@@ -85,6 +91,11 @@ class TIFFConverter:
     scale_voxels : bool, optional
         Write voxel size (XY pixel size and Z-step) as scaling transform,
         by default True
+    hcs_plate : bool, optional
+        Create NGFF HCS layout based on position names from the
+        HCS Site Generator in Micro-Manager (only available for OME-TIFF),
+        and is ignored for other formats, by default None
+        (attempt to apply to OME-TIFF datasets, disable this with ``False``)
     """
 
     def __init__(
@@ -96,6 +107,7 @@ class TIFFConverter:
         chunks: tuple[int] = None,
         label_positions: bool = False,
         scale_voxels: bool = True,
+        hcs_plate: bool = None,
     ):
         logging.debug("Checking output.")
         if not output_dir.strip("/").endswith(".zarr"):
@@ -127,6 +139,8 @@ class TIFFConverter:
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.prefix_list = []
         self.label_positions = label_positions
+        self.hcs_plate = hcs_plate
+        self._check_hcs_sites()
         self._get_pos_names()
         logging.info(
             f"Found Dataset {self.save_name} with "
@@ -137,6 +151,10 @@ class TIFFConverter:
         self.metadata["iohub_version"] = iohub_version
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
+            if hcs_plate:
+                raise ValueError(
+                    "grid_layout and hcs_plate must not be both true"
+                )
             logging.info("Generating HCS plate level grid.")
             try:
                 self.position_grid = _create_grid_from_coordinates(
@@ -148,6 +166,25 @@ class TIFFConverter:
             self._make_default_grid()
         self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
         self.transform = self._scale_voxels() if scale_voxels else None
+
+    def _check_hcs_sites(self):
+        is_mmstack = isinstance(self.reader, MicromanagerOmeTiffReader)
+        if self.hcs_plate:
+            if is_mmstack:
+                self.hcs_sites = self.reader.hcs_position_labels
+            else:
+                raise ValueError(
+                    f"HCS plate position not supported for {type(self.reader)}"
+                )
+        elif self.hcs_plate is None and is_mmstack:
+            try:
+                self.hcs_sites = self.reader.hcs_position_labels
+                self.hcs_plate = True
+            except ValueError:
+                logging.debug(
+                    "HCS sites not detected, "
+                    "dumping all position into a single row."
+                )
 
     def _make_default_grid(self):
         self.position_grid = np.expand_dims(
@@ -329,7 +366,7 @@ class TIFFConverter:
             )
         ]
 
-    def _init_hcs_arrays(self):
+    def _init_zarr_arrays(self):
         self.writer = open_ome_zarr(
             self.output_dir,
             layout="hcs",
@@ -337,7 +374,7 @@ class TIFFConverter:
             channel_names=self._get_channel_names(),
             version="0.4",
         )
-        self.well_list = []
+        self.zarr_position_names = []
         arr_kwargs = {
             "name": "0",
             "shape": (
@@ -351,14 +388,34 @@ class TIFFConverter:
             "chunks": self.chunks,
             "transform": self.transform,
         }
+        if self.hcs_plate:
+            self._init_hcs_arrays(arr_kwargs)
+        else:
+            self._init_grid_arrays(arr_kwargs)
+
+    def _init_hcs_arrays(self, arr_kwargs):
+        for row, col, fov in self.hcs_sites:
+            self._create_zeros_array(row, col, fov, arr_kwargs)
+        logging.info(
+            "Created HCS NGFF layout from Micro-Manager HCS position labels."
+        )
+        self.writer.print_tree()
+
+    def _init_grid_arrays(self, arr_kwargs):
         for row, columns in enumerate(self.position_grid):
             for column in columns:
-                pos_name = self.pos_names[len(self.well_list)]
-                pos = self.writer.create_position(row, column, pos_name="0")
-                self.well_list.append(os.path.join(str(row), str(column)))
-                _ = pos.create_zeros(**arr_kwargs)
-                pos.metadata.omero.name = pos_name
-                pos.dump_meta()
+                self._create_zeros_array(row, column, "0", arr_kwargs)
+
+    def _create_zeros_array(
+        self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict
+    ) -> Position:
+        pos = self.writer.create_position(row_name, col_name, pos_name)
+        self.zarr_position_names.append(pos.zgroup.name)
+        _ = pos.create_zeros(**arr_kwargs)
+        pos.metadata.omero.name = self.pos_names[
+            len(self.zarr_position_names) - 1
+        ]
+        pos.dump_meta()
 
     def run(self, check_image: bool = True):
         """Runs the conversion.
@@ -370,7 +427,7 @@ class TIFFConverter:
             pixel values as in TIFF files, by default True
         """
         logging.debug("Setting up Zarr store.")
-        self._init_hcs_arrays()
+        self._init_zarr_arrays()
         bar_format = (
             "Status: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
@@ -387,8 +444,8 @@ class TIFFConverter:
                     "filling with zeros. Check if the raw data is incomplete."
                 )
                 continue
-            well = self.well_list[coord_reorder[0]]
-            zarr_img = self.writer[well]["0"]["0"]
+            pos_name = self.zarr_position_names[coord_reorder[0]]
+            zarr_img = self.writer[pos_name]["0"]
             zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)

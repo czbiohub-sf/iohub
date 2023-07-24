@@ -80,7 +80,7 @@ def info(files, verbose):
     "-g",
     required=False,
     is_flag=True,
-    help="Arrange positions in a HCS grid layout",
+    help="Arrange FOVs in a row/column grid layout for tiled acquisition",
 )
 @click.option(
     "--label-positions",
