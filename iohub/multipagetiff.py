@@ -1,53 +1,63 @@
+from __future__ import annotations
+
 import glob
 import logging
 import os
 from copy import copy
-from pathlib import Path
-from typing import Iterable, Union
+from typing import TYPE_CHECKING, Iterable, Union
 
 import dask.array as da
 import numpy as np
-import xarray as xr
+from xarray import DataArray
 import zarr
 from numpy.typing import ArrayLike
 from tifffile import TiffFile
 
-from iohub.fov import BaseFOV, BaseFOVMapping
-from iohub.reader_base import ReaderBase
+from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
+
+if TYPE_CHECKING:
+    from _typeshed import StrOrBytesPath
 
 
-class MMOmeTiffFOV(BaseFOV):
-    def __init__(self, path: Path) -> None:
-        super().__init__()
-        self._root = path
+def _normalize_mm_pos_key(key: Union[str, int]) -> int:
+    try:
+        return int(key)
+    except TypeError:
+        raise TypeError("Micro-Manager position keys must be integers.")
 
-    @property
-    def root(self) -> Path:
-        return self._root
+
+class MMOmeTiffFOV(MicroManagerFOV):
+    def __init__(self, parent: MMStack, key: int) -> None:
+        super().__init__(parent, key)
+        self._xdata = parent.xdata[key]
 
     @property
     def axes_names(self) -> list[str]:
-        pass
+        return list(self.xdata.dims)
 
     @property
     def shape(self) -> tuple[int, int, int, int, int]:
-        return super().shape
+        return self.xdata.shape
 
     @property
     def dtype(self) -> np.dtype:
-        return super().dtype
+        return self.xdata.dtype
 
     @property
     def t_scale(self) -> float:
-        return super().t_scale
+        return 1
 
     def __getitem__(
         self, key: Union[int, slice, tuple[Union[int, slice], ...]]
     ) -> ArrayLike:
-        return super().__getitem__(key)
+        return self.xdata[key]
+
+    @property
+    def xdata(self) -> DataArray:
+        return self._xdata
 
 
-class MMStack(BaseFOVMapping):
+class MMStack(MicroManagerFOVMapping):
     """Micro-Manager multi-file OME-TIFF (MMStack) reader.
 
     Parameters
@@ -55,12 +65,9 @@ class MMStack(BaseFOVMapping):
     data_path : StrOrBytesPath
         Path to the directory containing OME-TIFF files
         or the path to the first OME-TIFF file in the series
-    dask_item : bool, optional
-        Whether to return dask arrays instead of xarray from ``__getitem__()``,
-        by default False
     """
 
-    def __init__(self, data_path: str, dask_item: bool = False):
+    def __init__(self, data_path: StrOrBytesPath):
         super().__init__()
         data_path = str(data_path)
         if os.path.isfile(data_path):
@@ -76,11 +83,11 @@ class MMStack(BaseFOVMapping):
                 )
             else:
                 first_file = files[0]
-        self.dirname = os.path.basename(os.path.dirname(first_file))
+        self.root = os.path.dirname(first_file)
+        self.dirname = os.path.basename(self.root)
         self._first_tif = TiffFile(first_file, is_mmstack=True)
         self._parse_data()
         self._store = None
-        self._asdask = dask_item
 
     def _parse_data(self):
         series = self._first_tif.series[0]
@@ -102,10 +109,13 @@ class MMStack(BaseFOVMapping):
         self._store = series.aszarr()
         logging.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store))
-        img = xr.DataArray(data, dims=raw_dims, name=self.dirname)
-        self._xdata = img.expand_dims(
+        img = DataArray(data, dims=raw_dims, name=self.dirname)
+        xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
+        xset = xarr.to_dataset(dim="R")
+        self._xdata = xset
+        self._set_mm_meta
 
     @property
     def xdata(self):
@@ -114,9 +124,9 @@ class MMStack(BaseFOVMapping):
     def __len__(self) -> int:
         return self.positions
 
-    def __getitem__(self, key: int) -> MMOmeTiffFOV:
-        item = self.xdata.sel(R=key)
-        return item.data if self._asdask else item
+    def __getitem__(self, key: Union[str, int]) -> MMOmeTiffFOV:
+        key = _normalize_mm_pos_key(key)
+        return MMOmeTiffFOV(self, key)
 
     def __setitem__(self, key, value) -> None:
         raise PermissionError("MMStack is read-only.")
@@ -124,156 +134,27 @@ class MMStack(BaseFOVMapping):
     def __delitem__(self, key, value) -> None:
         raise PermissionError("MMStack is read-only.")
 
-    def __contains__(self, key) -> bool:
-        return key in self.xdata.R
+    def __contains__(self, key: Union[str, int]) -> bool:
+        key = _normalize_mm_pos_key(key)
+        return key in self.xdata
 
-    def __iter__(self) -> Iterable[tuple[str, BaseFOV]]:
-        for key in self.xdata.R:
+    def __iter__(self) -> Iterable[tuple[str, MMOmeTiffFOV]]:
+        for key in self.xdata:
             yield key, self[key]
 
-    def __enter__(self):
+    def __enter__(self) -> MMStack:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
-    def close(self):
+    def close(self) -> None:
         """Close file handles"""
         self._first_tif.close()
 
-
-class MicromanagerOmeTiffReader(ReaderBase):
-    def __init__(self, folder: str, extract_data: bool = False):
-        super().__init__()
-
-        """
-        Parameters
-        ----------
-        folder:         (str)
-            folder or file containing all ome-tiff files
-        extract_data:   (bool)
-            True if ome_series should be extracted immediately
-
-        """
-
-        # Add Initial Checks
-        if len(glob.glob(os.path.join(folder, "*.ome.tif"))) == 0:
-            raise ValueError(
-                (
-                    f"Path {folder} contains no `.ome.tif` files, "
-                    "please specify a valid input directory."
-                )
-            )
-
-        # Grab all image files
-        self.data_directory = folder
-        self._files = sorted(
-            glob.glob(os.path.join(self.data_directory, "*.ome.tif"))
-        )
-
-        # Generate Data Specific Properties
-        self.coords = None
-        self.coord_map = dict()
-        self.pos_names = []
-        self.position_arrays = dict()
-        self.positions = 0
-        self.frames = 0
-        self.channels = 0
-        self.slices = 0
-        self.height = 0
-        self.width = 0
-        self._infer_image_meta()
-
-        # Initialize MM attributes
-        self.channel_names = []
-
-        # Read MM data
-        self._set_mm_meta()
-
-        # Gather index map of file, page, byte offset
-        self._gather_index_maps()
-
-        # if extract data, create all of the virtual zarr stores up front
-        if extract_data:
-            for i in range(self.positions):
-                self._create_position_array(i)
-
-    def _gather_index_maps(self):
-        """
-        Will return a dictionary of {coord: (filepath, page, byte_offset)}
-        of length (N_Images) to later query
-
-        Returns
-        -------
-
-        """
-
-        positions = 0
-        frames = 0
-        channels = 0
-        slices = 0
-        for file in self._files:
-            tf = TiffFile(file)
-            meta = tf.micromanager_metadata["IndexMap"]
-            tf.close()
-            offsets = self._get_byte_offsets(meta)
-            for page, offset in enumerate(offsets):
-                coord = [0, 0, 0, 0]
-                coord[0] = meta["Position"][page]
-                coord[1] = meta["Frame"][page]
-                coord[2] = meta["Channel"][page]
-                coord[3] = meta["Slice"][page]
-                self.coord_map[tuple(coord)] = (file, page, offset)
-
-                # update dimensions as we go along,
-                # helps with incomplete datasets
-                if coord[0] + 1 > positions:
-                    positions = coord[0] + 1
-
-                if coord[1] + 1 > frames:
-                    frames = coord[1] + 1
-
-                if coord[2] + 1 > channels:
-                    channels = coord[2] + 1
-
-                if coord[3] + 1 > slices:
-                    slices = coord[3] + 1
-
-        # update dimensions to the largest dimensions present in the saved data
-        self.positions = positions
-        self.frames = frames
-        self.channels = channels
-        self.slices = slices
-
-    @staticmethod
-    def _get_byte_offsets(meta: dict):
-        """Get byte offsets from Micro-Manager metadata.
-
-        Parameters
-        ----------
-        meta : dict
-            Micro-Manager metadata in the OME-TIFF header
-
-        Returns
-        -------
-        list
-            List of byte offsets for image arrays in the multi-page TIFF file
-        """
-        offsets = meta["Offset"][meta["Offset"] > 0]
-        offsets[0] += 210  # first page array offset
-        offsets[1:] += 162  # image array offset
-        return list(offsets)
-
-    def _set_mm_meta(self):
-        """
-        assign image metadata from summary metadata
-
-        Returns
-        -------
-
-        """
-        with TiffFile(self._files[0]) as tif:
-            self.mm_meta = tif.micromanager_metadata
+    def _set_mm_meta(self) -> None:
+        """Assign image metadata from summary metadata."""
+        self.mm_meta = self._first_tif.micromanager_metadata
 
             mm_version = self.mm_meta["Summary"]["MicroManagerVersion"]
             if "beta" in mm_version:
@@ -288,22 +169,20 @@ class MicromanagerOmeTiffReader(ReaderBase):
                         )
                         self._stage_positions.append(pos)
 
-                # MM beta versions sometimes don't have 'ChNames',
-                # so I'm wrapping in a try-except and setting the
-                # channel names to empty strings if it fails.
-                try:
-                    for ch in self.mm_meta["Summary"]["ChNames"]:
-                        self.channel_names.append(ch)
-                except Exception:
-                    self.channel_names = self.mm_meta["Summary"][
-                        "Channels"
-                    ] * [
-                        ""
-                    ]  # empty strings
-
-            elif mm_version == "1.4.22":
+            # MM beta versions sometimes don't have 'ChNames',
+            # so I'm wrapping in a try-except and setting the
+            # channel names to empty strings if it fails.
+            try:
                 for ch in self.mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
+            except KeyError:
+                self.channel_names = self.mm_meta["Summary"]["Channels"] * [
+                    ""
+                ]  # empty strings
+
+        elif mm_version == "1.4.22":
+            for ch in self.mm_meta["Summary"]["ChNames"]:
+                self.channel_names.append(ch)
 
             else:
                 if self.mm_meta["Summary"]["Positions"] > 1:
@@ -315,20 +194,12 @@ class MicromanagerOmeTiffReader(ReaderBase):
                         )
                         self._stage_positions.append(pos)
 
-                for ch in self.mm_meta["Summary"]["ChNames"]:
-                    self.channel_names.append(ch)
+            for ch in self.mm_meta["Summary"]["ChNames"]:
+                self.channel_names.append(ch)
 
-            # dimensions based on mm metadata
-            # do not reflect final written dimensions
-            # these will change after data is loaded
-            self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
-            self.height = self.mm_meta["Summary"]["Height"]
-            self.width = self.mm_meta["Summary"]["Width"]
-            self.frames = self.mm_meta["Summary"]["Frames"]
-            self.slices = self.mm_meta["Summary"]["Slices"]
-            self.channels = self.mm_meta["Summary"]["Channels"]
+        self._z_step_size = self.mm_meta["Summary"]["z-step_um"]
 
-    def _simplify_stage_position(self, stage_pos: dict):
+    def _simplify_stage_position(self, stage_pos: dict) -> dict:
         """
         flattens the nested dictionary structure of stage_pos
         and removes superfluous keys
@@ -350,7 +221,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
             out.update({dev_pos["Device"]: dev_pos["Position_um"]})
         return out
 
-    def _simplify_stage_position_beta(self, stage_pos: dict):
+    def _simplify_stage_position_beta(self, stage_pos: dict) -> dict:
         """
         flattens the nested dictionary structure of stage_pos
         and removes superfluous keys
@@ -385,167 +256,39 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
         return new_dict
 
-    def _create_position_array(self, pos):
-        """maps all of the tiff data into a virtual zarr store
-        in memory for a given position
-
-        Parameters
-        ----------
-        pos:            (int) index of the position to create array under
-
-        Returns
-        -------
-
-        """
-
-        # intialize virtual zarr store and save it under positions
-        timepoints, channels, slices = self._get_dimensions(pos)
-        self.position_arrays[pos] = zarr.zeros(
-            shape=(timepoints, channels, slices, self.height, self.width),
-            chunks=(1, 1, 1, self.height, self.width),
-            dtype=self.dtype,
-        )
-        # add all the images with this specific dimension.
-        # Will be blank images if dataset
-        # is incomplete
-        for p, t, c, z in self.coord_map.keys():
-            if p == pos:
-                self.position_arrays[pos][t, c, z, :, :] = self.get_image(
-                    pos, t, c, z
-                )
-
-    def _infer_image_meta(self):
+    def _infer_image_meta(self) -> None:
         """
         Infer data type and pixel size from the first image plane metadata.
         """
-        with TiffFile(self._files[0]) as tf:
-            page = tf.pages[0]
-            self.dtype = page.dtype
-            for tag in page.tags.values():
-                if tag.name == "MicroManagerMetadata":
-                    # assuming X and Y pixel sizes are the same
-                    xy_size = tag.value.get("PixelSizeUm")
-                    self._xy_pixel_size = xy_size if xy_size else None
-                    return
-                else:
-                    continue
-            logging.warning(
-                "Micro-Manager image plane metadata cannot be loaded."
-            )
-            self._xy_pixel_size = None
+        page = self._first_tif.pages[0]
+        self.dtype = page.dtype
+        for tag in page.tags.values():
+            if tag.name == "MicroManagerMetadata":
+                # assuming X and Y pixel sizes are the same
+                xy_size = tag.value.get("PixelSizeUm")
+                self._xy_pixel_size = xy_size if xy_size else None
+                return
+            else:
+                continue
+        logging.warning(
+            "Micro-Manager image plane metadata cannot be loaded."
+        )
+        self._xy_pixel_size = None
 
     @property
-    def xy_pixel_size(self):
-        """XY pixel size of the camera in micrometers."""
+    def zyx_scale(self) -> tuple[float, float, float]:
+        """ZXY pixel size in micrometers."""
         if self._xy_pixel_size is None:
             raise AttributeError("XY pixel size cannot be determined.")
-        return self._xy_pixel_size
-
-    def _get_dimensions(self, position):
-        """
-        Gets the max dimensions from the current position
-        in case of incomplete datasets
-
-        Parameters
-        ----------
-        position:       (int) Position index to grab dimensions from
-
-        Returns
-        -------
-
-        """
-
-        t = 0
-        c = 0
-        z = 0
-
-        # dimension size = index + 1
-        for tup in self.coord_map.keys():
-            if position != tup[0]:
-                continue
-            else:
-                if tup[1] + 1 > t:
-                    t = tup[1] + 1
-                if tup[2] + 1 > c:
-                    c = tup[2] + 1
-                if tup[3] + 1 > z:
-                    z = tup[3] + 1
-
-        return t, c, z
-
-    def get_image(self, p, t, c, z):
-        """
-        get the image at a specific coordinate through memory mapping
-
-        Parameters
-        ----------
-        p:              (int) position index
-        t:              (int) time index
-        c:              (int) channel index
-        z:              (int) slice/z index
-
-        Returns
-        -------
-        image:          (np-array)
-            numpy array of shape (Y, X) at given coordinate
-
-        """
-
-        coord_key = (p, t, c, z)
-        coord = self.coord_map[coord_key]  # (file, page, offset)
-
-        return np.memmap(
-            coord[0],
-            dtype=self.dtype,
-            mode="r",
-            offset=coord[2],
-            shape=(self.height, self.width),
+        return (
+            float(v)
+            for v in (
+                self._z_step_size,
+                self._xy_pixel_size,
+                self._xy_pixel_size,
+            )
         )
 
-    def get_zarr(self, position):
-        """
-        return a zarr array for a given position
 
-        Parameters
-        ----------
-        position:       (int) position (aka ome-tiff scene)
-
-        Returns
-        -------
-        position:       (zarr.array)
-
-        """
-        if position not in self.position_arrays.keys():
-            self._create_position_array(position)
-        return self.position_arrays[position]
-
-    def get_array(self, position):
-        """
-        return a numpy array for a given position
-
-        Parameters
-        ----------
-        position:   (int) position (aka ome-tiff scene)
-
-        Returns
-        -------
-        position:   (np.ndarray)
-
-        """
-
-        # if position hasn't been initialized in memory, do that.
-        if position not in self.position_arrays.keys():
-            self._create_position_array(position)
-
-        return np.array(self.position_arrays[position])
-
-    def get_num_positions(self):
-        """
-        get total number of scenes referenced in ome-tiff metadata
-
-        Returns
-        -------
-        number of positions     (int)
-
-        """
-        return self.positions
+class MicromanagerOmeTiffReader:
+    pass
