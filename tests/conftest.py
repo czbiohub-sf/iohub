@@ -68,7 +68,7 @@ def setup_test_data():
 
 
 @pytest.fixture(scope="function")
-def setup_mm2gamma_ome_tiffs():
+def setup_mm2gamma_ome_tiffs(setup_test_data):
     test_data = pjoin(
         os.getcwd(), ".pytest_temp", "test_data", "MM20_ome-tiffs"
     )
