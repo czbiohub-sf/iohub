@@ -70,7 +70,9 @@ class NDTiffReader(ReaderBase):
                     img_metadata["YPosition_um_Intended"],
                 )
 
-            position_metadata["Label"] = str(self._axes["position"][p])
+            if "PositionName" in img_metadata.keys():
+                position_metadata["Label"] = img_metadata["PositionName"]
+
             pm_metadata["StagePositions"].append(position_metadata)
 
         return {"Summary": pm_metadata}
