@@ -39,11 +39,9 @@ class NDTiffReader(ReaderBase):
         pm_metadata = self.dataset.summary_metadata
         pm_metadata["MicroManagerVersion"] = "pycromanager"
         pm_metadata["Positions"] = self.get_num_positions()
-
         img_metadata = self.get_image_metadata(0, 0, 0, 0)
-        pm_metadata["z-step_um"] = None
-        pm_metadata["StagePositions"] = []
 
+        pm_metadata["z-step_um"] = None
         if "ZPosition_um_Intended" in img_metadata.keys():
             pm_metadata["z-step_um"] = np.around(
                 abs(
@@ -57,35 +55,43 @@ class NDTiffReader(ReaderBase):
                 decimals=3,
             ).astype(float)
 
-        for p in range(self.get_num_positions()):
-            position_metadata = {}
-            img_metadata = self.get_image_metadata(p, 0, 0, 0)
+        pm_metadata["StagePositions"] = []
+        if "position" in self._axes:
+            position_axis = self._axes["position"]
 
-            if all(
-                key in img_metadata.keys()
-                for key in ["XPosition_um_Intended", "YPosition_um_Intended"]
-            ):
-                position_metadata[img_metadata["Core-XYStage"]] = (
-                    img_metadata["XPosition_um_Intended"],
-                    img_metadata["YPosition_um_Intended"],
-                )
+            for position in position_axis:
+                position_metadata = {}
+                img_metadata = self.get_image_metadata(position, 0, 0, 0)
 
-            if "PositionName" in img_metadata.keys():
-                position_metadata["Label"] = img_metadata["PositionName"]
+                if all(
+                    key in img_metadata.keys()
+                    for key in [
+                        "XPosition_um_Intended",
+                        "YPosition_um_Intended",
+                    ]
+                ):
+                    position_metadata[img_metadata["Core-XYStage"]] = (
+                        img_metadata["XPosition_um_Intended"],
+                        img_metadata["YPosition_um_Intended"],
+                    )
 
-            pm_metadata["StagePositions"].append(position_metadata)
+                if "PositionName" in img_metadata.keys():
+                    position_metadata["Label"] = img_metadata["PositionName"]
+
+                pm_metadata["StagePositions"].append(position_metadata)
 
         return {"Summary": pm_metadata}
 
     def _check_coordinates(self, p, t, c, z):
-        if p == 0 and "position" not in self._axes.keys():
-            p = None
-        if t == 0 and "time" not in self._axes.keys():
-            t = None
-        if c == 0 and "channel" not in self._axes.keys():
-            c = None
-        if z == 0 and "z" not in self._axes.keys():
-            z = None
+        coord_names = ("position", "time", "channel", "z")
+        for coord, coord_name in zip((p, t, c, z), coord_names):
+            if coord == 0 and coord_name not in self._axes.keys():
+                coord = None
+            elif coord not in self._axes[coord_name]:
+                raise ValueError(
+                    f"Image coordinate {coord_name} = {coord} is not part of"
+                    "this dataset."
+                )
 
         return p, t, c, z
 
@@ -96,16 +102,18 @@ class NDTiffReader(ReaderBase):
             else 1
         )
 
-    def get_image(self, p, t, c, z) -> np.ndarray:
+    def get_image(
+        self, p: int or str, t: int, c: int or str, z: int
+    ) -> np.ndarray:
         """return the image at the provided PTCZ coordinates
 
         Parameters
         ----------
-        p : int
+        p : int or str
             position index
         t : int
             time index
-        c : int
+        c : int or str
             channel index
         z : int
             slice/z index
@@ -124,7 +132,7 @@ class NDTiffReader(ReaderBase):
 
         return image
 
-    def get_zarr(self, position: int) -> zarr.array:
+    def get_zarr(self, position: int or str) -> zarr.array:
         """.. danger::
             The behavior of this function is different from other
             ReaderBase children as it return a Dask array
@@ -146,12 +154,20 @@ class NDTiffReader(ReaderBase):
         # TODO: try casting the dask array into a zarr array
         # using `dask.array.to_zarr()`.
         # Currently this call brings the data into memory
-        if "position" not in self._axes.keys() and position not in (0, None):
-            warnings.warn(
-                f"Position index {position} is not part of this dataset. "
-                "Returning data at the default position."
-            )
-            position = None
+        if "position" in self._axes.keys():
+            if position not in self._axes["position"]:
+                raise ValueError(
+                    f"Position index {position} is not part of this dataset."
+                    f'Valid positions are: {self._axes["position"]}'
+                )
+        else:
+            if position not in (0, None):
+                warnings.warn(
+                    f"Position index {position} is not part of this dataset. "
+                    "Returning data at the default position."
+                )
+                position = None
+
         da = self.dataset.as_array(position=position)
         shape = (
             self.frames,
@@ -163,7 +179,7 @@ class NDTiffReader(ReaderBase):
         # add singleton axes so output is 5D
         return da.reshape(shape)
 
-    def get_array(self, position: int) -> np.ndarray:
+    def get_array(self, position: int or str) -> np.ndarray:
         """
         return a numpy array with shape TCZYX at the given position
 
@@ -179,21 +195,26 @@ class NDTiffReader(ReaderBase):
 
         return np.asarray(self.get_zarr(position))
 
-    def get_image_metadata(self, p, t, c, z) -> dict:
-        """
-        return image plane metadata at the requested PTCZ coordinates
+    def get_image_metadata(
+        self, p: int or str, t: int, c: int or str, z: int
+    ) -> dict:
+        """Return image plane metadata at the requested PTCZ coordinates
 
         Parameters
         ----------
-        p:              (int) position index
-        t:              (int) time index
-        c:              (int) channel index
-        z:              (int) slice/z index
+        p : int or str
+            position index
+        t : int
+            time index
+        c : int or str
+            channel index
+        z : int
+            slice/z index
 
         Returns
         -------
-        metadata:       (dict) image plane metadata dictionary
-
+        dict
+            image plane metadata
         """
         metadata = None
         p, t, c, z = self._check_coordinates(p, t, c, z)
