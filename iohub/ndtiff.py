@@ -57,17 +57,18 @@ class NDTiffReader(ReaderBase):
                 decimals=3,
             ).astype(float)
 
-        if "XPosition_um_Intended" in img_metadata.keys():
-            for p in range(self.get_num_positions()):
-                img_metadata = self.get_image_metadata(p, 0, 0, 0)
-                pm_metadata["StagePositions"].append(
-                    {
-                        img_metadata["Core-XYStage"]: (
-                            img_metadata["XPosition_um_Intended"],
-                            img_metadata["YPosition_um_Intended"],
-                        )
-                    }
+        for p in range(self.get_num_positions()):
+            position_metadata = {}
+            img_metadata = self.get_image_metadata(p, 0, 0, 0)
+
+            if all(key in img_metadata.keys() for key in ["XPosition_um_Intended", "YPosition_um_Intended"]):
+                position_metadata[img_metadata["Core-XYStage"]] = (
+                    img_metadata["XPosition_um_Intended"],
+                    img_metadata["YPosition_um_Intended"],
                 )
+            
+            position_metadata['Label'] = str(self._axes['position'][p])
+            pm_metadata["StagePositions"].append(position_metadata)
 
         return {"Summary": pm_metadata}
 
