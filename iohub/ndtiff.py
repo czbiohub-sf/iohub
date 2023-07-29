@@ -38,7 +38,7 @@ class NDTiffReader(ReaderBase):
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
         pm_metadata["MicroManagerVersion"] = "pycromanager"
-        pm_metadata["Positions"] = self.get_num_positions()
+        pm_metadata["Positions"] = self.get_num_positions() 
         img_metadata = self.get_image_metadata(0, 0, 0, 0)
 
         pm_metadata["z-step_um"] = None
@@ -82,18 +82,49 @@ class NDTiffReader(ReaderBase):
 
         return {"Summary": pm_metadata}
 
-    def _check_coordinates(self, p, t, c, z):
+    def _check_coordinates(self, p: int or str, t: int, c: int or str, z: int):
+        """
+        Check that the (p, t, c, z) coordinates are part of the ndtiff dataset.
+        Replace coordinates with None or string values in specific cases - see
+        below
+        """
+        coords = [p, t, c, z]
         coord_names = ("position", "time", "channel", "z")
-        for coord, coord_name in zip((p, t, c, z), coord_names):
-            if coord == 0 and coord_name not in self._axes.keys():
-                coord = None
-            elif coord not in self._axes[coord_name]:
-                raise ValueError(
-                    f"Image coordinate {coord_name} = {coord} is not part of"
-                    "this dataset."
-                )
 
-        return p, t, c, z
+        for i, coord_name in enumerate(coord_names):
+            coord = coords[i]
+            # If coord=0 is requested and the corresponding coordinate axis is
+            # not part of the dataset, the coordinate will be replaced with None
+            if coord==0 and coord_name not in self._axes.keys():
+                coords[i] = None
+
+            elif coord not in self._axes[coord_name]:
+                # If coord=0 is requested and the corresponding coordinate axis
+                # exists, but is string valued (e.g. {'Pos0', 'Pos1'}), a
+                # warning will be raised and the coordinate will be replaced by
+                # a random sample.
+                
+                # Coordinates are in sets, this for loop is a quick way to get
+                # one sample from the set without removing it:
+                # https://stackoverflow.com/questions/59825
+                for coord_sample in self._axes[coord_name]:
+                    break
+                if coords == 0 and isinstance(coord_sample, str):
+                    coords[i] = coord_sample
+                    warnings.warn(
+                        f"Indices of {coord_name} are string-valued. Returning "
+                        f"data image at {coord_name} = {coord}"
+                    )
+
+                # If coord != 0 and the coordinate axis exists, a ValueError
+                # will be raised
+                else:
+                    raise ValueError(
+                        f"Image coordinate {coord_name} = {coord} is not part of "
+                        "this dataset."
+                    )
+            
+        return *coords,
 
     def get_num_positions(self) -> int:
         return (
@@ -157,7 +188,7 @@ class NDTiffReader(ReaderBase):
         if "position" in self._axes.keys():
             if position not in self._axes["position"]:
                 raise ValueError(
-                    f"Position index {position} is not part of this dataset."
+                    f"Position index {position} is not part of this dataset. "
                     f'Valid positions are: {self._axes["position"]}'
                 )
         else:
