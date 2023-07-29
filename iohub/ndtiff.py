@@ -57,9 +57,7 @@ class NDTiffReader(ReaderBase):
 
         pm_metadata["StagePositions"] = []
         if "position" in self._axes:
-            position_axis = self._axes["position"]
-
-            for position in position_axis:
+            for position in self._axes["position"]:
                 position_metadata = {}
                 img_metadata = self.get_image_metadata(position, 0, 0, 0)
 
