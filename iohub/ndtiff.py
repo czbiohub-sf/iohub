@@ -73,8 +73,10 @@ class NDTiffReader(ReaderBase):
                         img_metadata["YPosition_um_Intended"],
                     )
 
-                if "PositionName" in img_metadata.keys():
-                    position_metadata["Label"] = img_metadata["PositionName"]
+                # Position label may also be obtained from "PositionName"
+                # metadata key with AcqEngJ >= 0.29.0
+                if isinstance(position, str):
+                    position_metadata["Label"] = position
 
                 pm_metadata["StagePositions"].append(position_metadata)
 
@@ -103,11 +105,10 @@ class NDTiffReader(ReaderBase):
                 # warning will be raised and the coordinate will be replaced by
                 # a random sample.
 
-                # Coordinates are in sets, this for loop is a quick way to get
-                # one sample from the set without removing it:
+                # Coordinates are in sets, here we get one sample from the set
+                # without removing it:
                 # https://stackoverflow.com/questions/59825
-                for coord_sample in self._axes[coord_name]:
-                    break
+                coord_sample = next(iter(self._axes[coord_name]))
                 if coords == 0 and isinstance(coord_sample, str):
                     coords[i] = coord_sample
                     warnings.warn(
