@@ -1,4 +1,5 @@
 import warnings
+from typing import Union
 
 import numpy as np
 import zarr
@@ -82,7 +83,9 @@ class NDTiffReader(ReaderBase):
 
         return {"Summary": pm_metadata}
 
-    def _check_coordinates(self, p: int or str, t: int, c: int or str, z: int):
+    def _check_coordinates(
+        self, p: Union[int, str], t: int, c: Union[int, str], z: int
+    ):
         """
         Check that the (p, t, c, z) coordinates are part of the ndtiff dataset.
         Replace coordinates with None or string values in specific cases - see
@@ -149,7 +152,7 @@ class NDTiffReader(ReaderBase):
         )
 
     def get_image(
-        self, p: int or str, t: int, c: int or str, z: int
+        self, p: Union[int, str], t: int, c: Union[int, str], z: int
     ) -> np.ndarray:
         """return the image at the provided PTCZ coordinates
 
@@ -178,7 +181,7 @@ class NDTiffReader(ReaderBase):
 
         return image
 
-    def get_zarr(self, position: int or str) -> zarr.array:
+    def get_zarr(self, position: Union[int, str]) -> zarr.array:
         """.. danger::
             The behavior of this function is different from other
             ReaderBase children as it return a Dask array
@@ -225,7 +228,7 @@ class NDTiffReader(ReaderBase):
         # add singleton axes so output is 5D
         return da.reshape(shape)
 
-    def get_array(self, position: int or str) -> np.ndarray:
+    def get_array(self, position: Union[int, str]) -> np.ndarray:
         """
         return a numpy array with shape TCZYX at the given position
 
@@ -242,7 +245,7 @@ class NDTiffReader(ReaderBase):
         return np.asarray(self.get_zarr(position))
 
     def get_image_metadata(
-        self, p: int or str, t: int, c: int or str, z: int
+        self, p: Union[int, str], t: int, c: Union[int, str], z: int
     ) -> dict:
         """Return image plane metadata at the requested PTCZ coordinates
 
