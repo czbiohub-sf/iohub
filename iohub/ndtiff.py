@@ -89,39 +89,54 @@ class NDTiffReader(ReaderBase):
         below
         """
         coords = [p, t, c, z]
-        coord_names = ("position", "time", "channel", "z")
+        axes = ("position", "time", "channel", "z")
 
-        for i, coord_name in enumerate(coord_names):
+        for i, axis in enumerate(axes):
             coord = coords[i]
-            # If coord=0 is requested and the corresponding coordinate axis is
-            # not part of the dataset, the coordinate will be replaced with
-            # None
-            if coord == 0 and coord_name not in self._axes.keys():
-                coords[i] = None
 
-            elif coord not in self._axes[coord_name]:
-                # If coord=0 is requested and the corresponding coordinate axis
-                # exists, but is string valued (e.g. {'Pos0', 'Pos1'}), a
-                # warning will be raised and the coordinate will be replaced by
-                # a random sample.
+            # Check if the axis is part of the dataset axes
+            if axis in self._axes.keys():
+                # Check if coordinate is part of the dataset axis
+                if coord in self._axes[axis]:
+                    # all good
+                    pass
 
-                # Coordinates are in sets, here we get one sample from the set
-                # without removing it:
-                # https://stackoverflow.com/questions/59825
-                coord_sample = next(iter(self._axes[coord_name]))
-                if coords == 0 and isinstance(coord_sample, str):
-                    coords[i] = coord_sample
-                    warnings.warn(
-                        f"Indices of {coord_name} are string-valued. Returning"
-                        f" data image at {coord_name} = {coord}"
-                    )
+                # The requested coordinate is not part of the axis
+                else:
+                    # If coord=0 is requested and the coordinate axis exists,
+                    # but is string valued (e.g. {'Pos0', 'Pos1'}), a warning
+                    # will be raised and the coordinate will be replaced by a
+                    # random sample.
 
-                # If coord != 0 and the coordinate axis exists, a ValueError
-                # will be raised
+                    # Coordinates are in sets, here we get one sample from the
+                    # set without removing it:
+                    # https://stackoverflow.com/questions/59825
+                    coord_sample = next(iter(self._axes[axis]))
+                    if coords == 0 and isinstance(coord_sample, str):
+                        coords[i] = coord_sample
+                        warnings.warn(
+                            f"Indices of {axis} are string-valued. "
+                            f"Returning data at {axis} = {coord}"
+                        )
+                    else:
+                        # If the coordinate is not part of the axis and
+                        # nonzero, a ValueError will be raised
+                        raise ValueError(
+                            f"Image coordinate {axis} = {coord} is not "
+                            "part of this dataset."
+                        )
+
+            # The axis is not part of the dataset axes
+            else:
+                # If coord = 0 is requested, the coordinate will be replaced
+                # with None
+                if coord == 0:
+                    coords[i] = None
+                # If coord != 0 is requested and the axis is not part of the
+                # dataset, ValueError will be raised
                 else:
                     raise ValueError(
-                        f"Image coordinate {coord_name} = {coord} is not part "
-                        "of this dataset."
+                        f"Axis {axis} is not part of this dataset"
                     )
 
         return (*coords,)
