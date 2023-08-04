@@ -75,3 +75,10 @@ def test_get_num_positions(setup_test_data, setup_pycromanager_test_data):
 
     mmr = NDTiffReader(rand_dir)
     assert mmr.get_num_positions() >= 1
+
+
+def test_v3_labeled_positions(ndtiff_v3_labeled_positions):
+    data_dir: str = ndtiff_v3_labeled_positions
+    reader = NDTiffReader(data_dir)
+    labels = reader.hcs_position_labels
+    assert isinstance(labels, list)
