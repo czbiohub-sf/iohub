@@ -3,6 +3,7 @@ import random
 import shutil
 from os.path import join as pjoin
 
+import fsspec
 import pytest
 from wget import download
 
@@ -53,7 +54,16 @@ def setup_test_data():
             output = pjoin(test_data, os.path.basename(url))
             download(url, out=output)
             shutil.unpack_archive(output, extract_dir=test_data)
-
+        ghfs = fsspec.filesystem(
+            "github", org="micro-manager", repo="NDTiffStorage"
+        )
+        v3_lp = pjoin(test_data, "ndtiff_v3_labeled_positions")
+        os.mkdir(v3_lp)
+        ghfs.get(
+            ghfs.ls("test_data/v3/labeled_positions_1"),
+            v3_lp,
+            recursive=True,
+        )
     yield test_data
 
 
@@ -210,3 +220,8 @@ def setup_pycromanager_test_data():
     )
 
     yield first_dir, rand_dir, ptcz_dir
+
+
+@pytest.fixture(scope="function")
+def ndtiff_v3_labeled_positions(setup_test_data):
+    yield pjoin(setup_test_data, "ndtiff_v3_labeled_positions")
