@@ -80,5 +80,5 @@ def test_get_num_positions(setup_test_data, setup_pycromanager_test_data):
 def test_v3_labeled_positions(ndtiff_v3_labeled_positions):
     data_dir: str = ndtiff_v3_labeled_positions
     reader = NDTiffReader(data_dir)
-    labels = reader.hcs_position_labels
-    assert isinstance(labels, list)
+    position_labels = [pos["Label"] for pos in reader.stage_positions]
+    assert position_labels == ["Pos0", "Pos1", "Pos2"]
