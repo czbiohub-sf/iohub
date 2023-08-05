@@ -115,7 +115,7 @@ class NDTiffReader(ReaderBase):
                     # set without removing it:
                     # https://stackoverflow.com/questions/59825
                     coord_sample = next(iter(self._axes[axis]))
-                    if coords == 0 and isinstance(coord_sample, str):
+                    if coord == 0 and isinstance(coord_sample, str):
                         coords[i] = coord_sample
                         warnings.warn(
                             f"Indices of {axis} are string-valued. "
