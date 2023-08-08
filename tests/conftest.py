@@ -3,6 +3,7 @@ import random
 import shutil
 from os.path import join as pjoin
 
+import fsspec
 import pytest
 from wget import download
 
@@ -29,7 +30,7 @@ MM2GAMMA_OMETIFF_SUBFOLDERS = {
 
 @pytest.fixture(scope="session")
 def setup_test_data():
-    temp_folder = pjoin(os.getcwd(), "pytest_temp")
+    temp_folder = pjoin(os.getcwd(), ".pytest_temp")
     test_data = pjoin(temp_folder, "test_data")
     if not os.path.isdir(temp_folder):
         os.mkdir(temp_folder)
@@ -53,14 +54,23 @@ def setup_test_data():
             output = pjoin(test_data, os.path.basename(url))
             download(url, out=output)
             shutil.unpack_archive(output, extract_dir=test_data)
-
+        ghfs = fsspec.filesystem(
+            "github", org="micro-manager", repo="NDTiffStorage"
+        )
+        v3_lp = pjoin(test_data, "ndtiff_v3_labeled_positions")
+        os.mkdir(v3_lp)
+        ghfs.get(
+            ghfs.ls("test_data/v3/labeled_positions_1"),
+            v3_lp,
+            recursive=True,
+        )
     yield test_data
 
 
 @pytest.fixture(scope="function")
 def setup_mm2gamma_ome_tiffs():
     test_data = pjoin(
-        os.getcwd(), "pytest_temp", "test_data", "MM20_ome-tiffs"
+        os.getcwd(), ".pytest_temp", "test_data", "MM20_ome-tiffs"
     )
 
     subfolders = [
@@ -83,7 +93,7 @@ def setup_mm2gamma_ome_tiffs_incomplete():
     """
 
     test_data = pjoin(
-        os.getcwd(), "pytest_temp", "test_data", "MM20_ometiff_incomplete"
+        os.getcwd(), ".pytest_temp", "test_data", "MM20_ometiff_incomplete"
     )
 
     src = pjoin(test_data, "mm2.0-20201209_20t_5z_3c_512k_incomplete_1")
@@ -94,7 +104,7 @@ def setup_mm2gamma_ome_tiffs_incomplete():
 @pytest.fixture(scope="function")
 def setup_mm2gamma_singlepage_tiffs():
     test_data = pjoin(
-        os.getcwd(), "pytest_temp", "test_data", "MM20_singlepage-tiffs"
+        os.getcwd(), ".pytest_temp", "test_data", "MM20_singlepage-tiffs"
     )
 
     subfolders = [
@@ -118,7 +128,7 @@ def setup_mm2gamma_singlepage_tiffs_incomplete():
     """
 
     test_data = pjoin(
-        os.getcwd(), "pytest_temp", "test_data", "MM20_singlepage_incomplete"
+        os.getcwd(), ".pytest_temp", "test_data", "MM20_singlepage_incomplete"
     )
 
     src = pjoin(test_data, "mm2.0-20201209_20t_5z_3c_512k_incomplete_1 2")
@@ -129,7 +139,7 @@ def setup_mm2gamma_singlepage_tiffs_incomplete():
 @pytest.fixture(scope="function")
 def setup_mm1422_ome_tiffs():
     test_data = pjoin(
-        os.getcwd(), "pytest_temp", "test_data", "MM1422_ome-tiffs"
+        os.getcwd(), ".pytest_temp", "test_data", "MM1422_ome-tiffs"
     )
 
     subfolders = [
@@ -148,7 +158,7 @@ def setup_mm1422_ome_tiffs():
 @pytest.fixture(scope="function")
 def setup_mm1422_singlepage_tiffs():
     test_data = pjoin(
-        os.getcwd(), "pytest_temp", "test_data", "MM1422_singlepage-tiffs"
+        os.getcwd(), ".pytest_temp", "test_data", "MM1422_singlepage-tiffs"
     )
 
     subfolders = [
@@ -166,7 +176,7 @@ def setup_mm1422_singlepage_tiffs():
 
 @pytest.fixture(scope="function")
 def setup_mm2gamma_zarr():
-    test_data = pjoin(os.getcwd(), "pytest_temp", "test_data", "MM20_zarr")
+    test_data = pjoin(os.getcwd(), ".pytest_temp", "test_data", "MM20_zarr")
 
     zp = pjoin(test_data, "mm2.0-20201209_4p_2t_5z_1c_512k_1.zarr")
 
@@ -179,7 +189,7 @@ def setup_mm2gamma_zarr():
 def setup_hcs_ref():
     yield pjoin(
         os.getcwd(),
-        "pytest_temp",
+        ".pytest_temp",
         "test_data",
         "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr",
     )
@@ -188,7 +198,7 @@ def setup_hcs_ref():
 @pytest.fixture(scope="function")
 def setup_pycromanager_test_data():
     test_data = pjoin(
-        os.getcwd(), "pytest_temp", "test_data", "MM20_pycromanager"
+        os.getcwd(), ".pytest_temp", "test_data", "MM20_pycromanager"
     )
     datasets = [
         "mm2.0-20210713_pm0.13.2_2c_1",
@@ -210,3 +220,8 @@ def setup_pycromanager_test_data():
     )
 
     yield first_dir, rand_dir, ptcz_dir
+
+
+@pytest.fixture(scope="function")
+def ndtiff_v3_labeled_positions(setup_test_data):
+    yield pjoin(setup_test_data, "ndtiff_v3_labeled_positions")
