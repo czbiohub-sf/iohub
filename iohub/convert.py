@@ -472,7 +472,8 @@ class TIFFConverter:
         if ndtiff:
             logging.info("Writing ND-TIFF image plane metadata...")
             with open(
-                os.path.join(self.output_dir, "image_plane_metadata.json"), mode="x"
+                os.path.join(self.output_dir, "image_plane_metadata.json"),
+                mode="x",
             ) as metadata_file:
                 json.dump(all_ndtiff_metadata, metadata_file, indent=4)
         self.writer.close()
