@@ -467,7 +467,7 @@ class TIFFConverter:
                 all_ndtiff_metadata[frame_key] = image_metadata
         self.writer.zgroup.attrs.update(self.metadata)
         with open(
-            os.path.join(self.output_dir, "NDTiff_meta.json"), mode="x"
+            os.path.join(self.output_dir, "ndtiff_metadata.json"), mode="x"
         ) as metadata_file:
             json.dump(all_ndtiff_metadata, metadata_file)
         self.writer.close()

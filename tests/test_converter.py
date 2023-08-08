@@ -163,7 +163,7 @@ def test_converter_ndtiff(
                 _check_scale_transform(pos, scale_voxels)
                 intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
-        with open(os.path.join(output, "NDTiff_meta.json")) as f:
+        with open(os.path.join(output, "ndtiff_metadata.json")) as f:
             metadata = json.load(f)
             assert len(metadata) == np.prod(raw_array.shape[:-2])
             key = pos_name + "/0/0/0/0"
