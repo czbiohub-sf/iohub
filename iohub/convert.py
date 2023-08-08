@@ -102,7 +102,7 @@ class TIFFConverter:
     Notes
     -----
     When converting ND-TIFF, the image plane metadata for all frames
-    are aggregated into a file named ``ndtiff_metadata.json``,
+    are aggregated into a file named ``image_plane_metadata.json``,
     and placed under the root Zarr group (alongside plate metadata).
     """
 
@@ -472,7 +472,7 @@ class TIFFConverter:
         if ndtiff:
             logging.info("Writing ND-TIFF image plane metadata...")
             with open(
-                os.path.join(self.output_dir, "ndtiff_metadata.json"), mode="x"
+                os.path.join(self.output_dir, "image_plane_metadata.json"), mode="x"
             ) as metadata_file:
                 json.dump(all_ndtiff_metadata, metadata_file, indent=4)
         self.writer.close()
