@@ -442,7 +442,10 @@ class TIFFConverter:
         )
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
-        all_ndtiff_metadata = {}
+        ndtiff = False
+        if isinstance(self.reader, NDTiffReader):
+            ndtiff = True
+            all_ndtiff_metadata = {}
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
@@ -458,7 +461,7 @@ class TIFFConverter:
             zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
-            if isinstance(self.reader, NDTiffReader):
+            if ndtiff:
                 image_metadata = self.reader.get_image_metadata(*coord_reorder)
                 # row/well/fov/img/T/C/Z
                 frame_key = "/".join(
@@ -466,8 +469,10 @@ class TIFFConverter:
                 )
                 all_ndtiff_metadata[frame_key] = image_metadata
         self.writer.zgroup.attrs.update(self.metadata)
-        with open(
-            os.path.join(self.output_dir, "ndtiff_metadata.json"), mode="x"
-        ) as metadata_file:
-            json.dump(all_ndtiff_metadata, metadata_file)
+        if ndtiff:
+            logging.info("Writing ND-TIFF image plane metadata...")
+            with open(
+                os.path.join(self.output_dir, "ndtiff_metadata.json"), mode="x"
+            ) as metadata_file:
+                json.dump(all_ndtiff_metadata, metadata_file)
         self.writer.close()
