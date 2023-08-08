@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from glob import glob
@@ -17,7 +18,6 @@ from iohub.reader import (
     MicromanagerSequenceReader,
     NDTiffReader,
 )
-
 
 CONVERTER_TEST_SETTINGS = settings(
     suppress_health_check=[HealthCheck.function_scoped_fixture],
@@ -159,10 +159,16 @@ def test_converter_ndtiff(
         converter.run(check_image=True)
         with open_ome_zarr(output, mode="r") as result:
             intensity = 0
-            for _, pos in result.positions():
+            for pos_name, pos in result.positions():
                 _check_scale_transform(pos, scale_voxels)
                 intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
+        with open(os.path.join(output, "NDTiff_meta.json")) as f:
+            metadata = json.load(f)
+            assert len(metadata) == np.prod(raw_array.shape[:-2])
+            key = pos_name + "/0/0/0/0"
+            assert key in metadata
+            assert "ElapsedTime-ms" in metadata[key]
 
 
 @given(**CONVERTER_TEST_GIVEN)
