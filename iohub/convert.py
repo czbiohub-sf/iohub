@@ -1,4 +1,5 @@
 import copy
+import json
 import logging
 import os
 from typing import Literal
@@ -12,6 +13,7 @@ from iohub.ngff import Position, TransformationMeta, open_ome_zarr
 from iohub.reader import (
     MicromanagerOmeTiffReader,
     MicromanagerSequenceReader,
+    NDTiffReader,
     read_micromanager,
 )
 
@@ -96,6 +98,12 @@ class TIFFConverter:
         HCS Site Generator in Micro-Manager (only available for OME-TIFF),
         and is ignored for other formats, by default None
         (attempt to apply to OME-TIFF datasets, disable this with ``False``)
+
+    Notes
+    -----
+    When converting ND-TIFF, the image plane metadata for all frames
+    are aggregated into a file named ``ndtiff_metadata.json``,
+    and placed under the root Zarr group (alongside plate metadata).
     """
 
     def __init__(
@@ -434,6 +442,7 @@ class TIFFConverter:
         )
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
+        all_ndtiff_metadata = {}
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
             img_raw = self._get_image_array(*coord_reorder)
@@ -449,5 +458,16 @@ class TIFFConverter:
             zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
+            if isinstance(self.reader, NDTiffReader):
+                image_metadata = self.reader.get_image_metadata(*coord_reorder)
+                # row/well/fov/img/T/C/Z
+                frame_key = "/".join(
+                    [zarr_img.path] + [str(i) for i in coord_reorder[1:]]
+                )
+                all_ndtiff_metadata[frame_key] = image_metadata
         self.writer.zgroup.attrs.update(self.metadata)
+        with open(
+            os.path.join(self.output_dir, "NDTiff_meta.json"), mode="x"
+        ) as metadata_file:
+            json.dump(all_ndtiff_metadata, metadata_file)
         self.writer.close()
