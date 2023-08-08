@@ -474,5 +474,5 @@ class TIFFConverter:
             with open(
                 os.path.join(self.output_dir, "ndtiff_metadata.json"), mode="x"
             ) as metadata_file:
-                json.dump(all_ndtiff_metadata, metadata_file)
+                json.dump(all_ndtiff_metadata, metadata_file, indent=4)
         self.writer.close()
