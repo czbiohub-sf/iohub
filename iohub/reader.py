@@ -318,7 +318,10 @@ def print_info(path: StrOrBytesPath, verbose=False):
                     f">>> dataset = open_ome_zarr('{path}', mode='r')",
                 ]
             )
-        if isinstance(reader, Position) or verbose:
+            print("Zarr hierarchy:")
+            reader.print_tree()
+
+        if isinstance(reader, Position):
             print("Zarr hierarchy:")
             reader.print_tree()
             print(f"\n(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
