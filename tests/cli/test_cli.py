@@ -71,6 +71,7 @@ def test_cli_info_ndtiff(
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Positions:\s+2", result.output)
+    assert "XY pixel size (um):" in result.output
 
 
 @given(verbose=st.booleans())
@@ -82,6 +83,12 @@ def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Wells:\s+1", result.output)
+
+    # Test on single position
+    result_pos = runner.invoke(
+        cli, ["info", os.path.join(setup_hcs_ref, "B", "03", "0")]
+    )
+    assert "Scale:" in result_pos.output
 
 
 @given(f=st.booleans(), g=st.booleans(), p=st.booleans(), s=st.booleans())
