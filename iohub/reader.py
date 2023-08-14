@@ -260,14 +260,13 @@ def print_info(path: StrOrBytesPath, verbose=False):
     sum_msg = "\n=== Summary ==="
     ch_msg = f"Channel names:\t {reader.channel_names}"
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
-    zyx_scale = (
-        reader.z_step_size,
-        reader.xy_pixel_size,
-        reader.xy_pixel_size,
-    )
-
     msgs = []
     if isinstance(reader, ReaderBase):
+        zyx_scale = (
+            reader.z_step_size,
+            reader.xy_pixel_size,
+            reader.xy_pixel_size,
+        )
         msgs.extend(
             [
                 sum_msg,
