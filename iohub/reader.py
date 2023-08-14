@@ -260,6 +260,12 @@ def print_info(path: StrOrBytesPath, verbose=False):
     sum_msg = "\n=== Summary ==="
     ch_msg = f"Channel names:\t {reader.channel_names}"
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
+    zyx_scale = (
+        reader.z_step_size,
+        reader.xy_pixel_size,
+        reader.xy_pixel_size,
+    )
+
     msgs = []
     if isinstance(reader, ReaderBase):
         msgs.extend(
@@ -271,7 +277,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 f"Channels:\t {reader.shape[1]}",
                 ch_msg,
                 f"(Z, Y, X) shape:\t {reader.shape[2:]}",
-                f"(Z, Y, X) scale (um):\t {(reader.z_step_size, reader.xy_pixel_size, reader.xy_pixel_size)}",
+                f"(Z, Y, X) scale (um):\t {zyx_scale}",
             ]
         )
         if verbose:
