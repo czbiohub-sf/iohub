@@ -87,9 +87,6 @@ class TIFFConverter:
     chunks : tuple[int], optional
         Chunk size of the output Zarr arrays, by default None
         (chunk by XY planes, this is the fastest at converting time)
-    label_positions : bool, optional
-        Dump postion labels in MM metadata to Omero metadata,
-        by default False
     scale_voxels : bool, optional
         Write voxel size (XY pixel size and Z-step) as scaling transform,
         by default True
@@ -113,7 +110,6 @@ class TIFFConverter:
         data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
         grid_layout: int = False,
         chunks: tuple[int] = None,
-        label_positions: bool = False,
         scale_voxels: bool = True,
         hcs_plate: bool = None,
     ):
@@ -125,6 +121,14 @@ class TIFFConverter:
         self.reader = read_micromanager(
             input_dir, data_type, extract_data=False
         )
+        if reader_type := type(self.reader) not in (
+            MicromanagerSequenceReader,
+            MicromanagerOmeTiffReader,
+            NDTiffReader,
+        ):
+            raise TypeError(
+                f"Reader type {reader_type} not supported for conversion."
+            )
         logging.debug("Finished initializing data.")
         self.summary_metadata = (
             self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
@@ -146,7 +150,6 @@ class TIFFConverter:
         self.x = self.reader.width
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.prefix_list = []
-        self.label_positions = label_positions
         self.hcs_plate = hcs_plate
         self._check_hcs_sites()
         self._get_pos_names()
@@ -176,15 +179,9 @@ class TIFFConverter:
         self.transform = self._scale_voxels() if scale_voxels else None
 
     def _check_hcs_sites(self):
-        is_mmstack = isinstance(self.reader, MicromanagerOmeTiffReader)
         if self.hcs_plate:
-            if is_mmstack:
-                self.hcs_sites = self.reader.hcs_position_labels
-            else:
-                raise ValueError(
-                    f"HCS plate position not supported for {type(self.reader)}"
-                )
-        elif self.hcs_plate is None and is_mmstack:
+            self.hcs_sites = self.reader.hcs_position_labels
+        elif self.hcs_plate is None:
             try:
                 self.hcs_sites = self.reader.hcs_position_labels
                 self.hcs_plate = True
@@ -195,9 +192,12 @@ class TIFFConverter:
                 )
 
     def _make_default_grid(self):
-        self.position_grid = np.expand_dims(
-            np.arange(self.p, dtype=int), axis=0
-        )
+        if isinstance(self.reader, NDTiffReader):
+            self.position_grid = np.array([self.pos_names])
+        else:
+            self.position_grid = np.expand_dims(
+                np.arange(self.p, dtype=int), axis=0
+            )
 
     def _gen_coordset(self):
         """Generates a coordinate set in the dimensional order
@@ -303,21 +303,16 @@ class TIFFConverter:
         """Append a list of pos names in ascending order
         (order in which they were acquired).
         """
-        if not self.label_positions:
-            self.pos_names = ["0"] * self.p
-        else:
+        if self.p > 1:
             self.pos_names = []
             for p in range(self.p):
-                if self.p > 1:
-                    try:
-                        name = self.summary_metadata["StagePositions"][p][
-                            "Label"
-                        ]
-                    except KeyError:
-                        name = None
-                else:
-                    name = None
+                name = (
+                    self.summary_metadata["StagePositions"][p].get("Label")
+                    or p
+                )
                 self.pos_names.append(name)
+        else:
+            self.pos_names = ["0"]
 
     def _get_image_array(self, p: int, t: int, c: int, z: int):
         try:
@@ -328,18 +323,22 @@ class TIFFConverter:
             return None
 
     def _get_coord_reorder(self, coord):
-        return (
+        reordered = [
             coord[self.p_dim],
             coord[self.t_dim],
             coord[self.c_dim],
             coord[self.z_dim],
-        )
+        ]
+        # string-valued position coordinates
+        if isinstance(self.reader, NDTiffReader):
+            reordered[0] = self.pos_names[reordered[0]]
+        return tuple(reordered)
 
     def _get_channel_names(self):
         cns = self.reader.channel_names
-        if not cns and isinstance(self.reader, MicromanagerSequenceReader):
+        if not cns:
             logging.warning(
-                "Using an empty channel name for the single channel."
+                "Cannot find channel names, using indices instead."
             )
             cns = [str(i) for i in range(self.c)]
         return cns
@@ -456,7 +455,11 @@ class TIFFConverter:
                     "filling with zeros. Check if the raw data is incomplete."
                 )
                 continue
-            pos_name = self.zarr_position_names[coord_reorder[0]]
+            if isinstance(coord_reorder[0], str):
+                pos_idx = self.pos_names.index(coord_reorder[0])
+            else:
+                pos_idx = coord_reorder[0]
+            pos_name = self.zarr_position_names[pos_idx]
             zarr_img = self.writer[pos_name]["0"]
             zarr_img[coord_reorder[1:]] = img_raw
             if check_image:
