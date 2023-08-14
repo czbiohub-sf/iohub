@@ -271,6 +271,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 f"Channels:\t {reader.shape[1]}",
                 ch_msg,
                 f"(Z, Y, X):\t {reader.shape[2:]}",
+                f"XY pixel size (um):\t {reader.xy_pixel_size}",
                 f"Z step (um):\t {reader.z_step_size}",
             ]
         )
@@ -316,5 +317,6 @@ def print_info(path: StrOrBytesPath, verbose=False):
         if isinstance(reader, Position) or verbose:
             print("Zarr hierarchy:")
             reader.print_tree()
+            print(f"\nScale:\t {reader.scale}")
         print("\n".join(msgs))
         reader.close()
