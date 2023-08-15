@@ -45,7 +45,7 @@ def setup_test_data():
     # Reference v0.4 HCS dataset from OME
     # See the last line of
     # https://github.com/ome/ngff/issues/140#issuecomment-1309972511
-    ome_hcs_url = "https://zenodo.org/record/7274533/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"  # noqa
+    ome_hcs_url = "https://zenodo.org/record/8091756/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"  # noqa
 
     # download files to temp folder
     if not os.listdir(test_data):
