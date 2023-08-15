@@ -309,21 +309,22 @@ def print_info(path: StrOrBytesPath, verbose=False):
                     f"Wells:\t\t {len(meta.wells)}",
                 ]
             )
+            if verbose:
+                print("Zarr hierarchy:")
+                reader.print_tree()
+                msgs.append(f"Positions:\t {len(list(reader.positions()))}")
+        else:
+            msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
         if verbose:
             msgs.extend(
                 [
-                    f"Positions:\t {len(list(reader.positions()))}",
                     code_msg,
                     ">>> from iohub import open_ome_zarr",
                     f">>> dataset = open_ome_zarr('{path}', mode='r')",
                 ]
             )
-            print("Zarr hierarchy:")
-            reader.print_tree()
-
         if isinstance(reader, Position):
             print("Zarr hierarchy:")
             reader.print_tree()
-            print(f"\n(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
         print("\n".join(msgs))
         reader.close()
