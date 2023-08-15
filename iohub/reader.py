@@ -283,8 +283,8 @@ def print_info(path: StrOrBytesPath, verbose=False):
             msgs.extend(
                 [
                     code_msg,
-                    ">>> from iohub import imread",
-                    f">>> reader = imread('{path}')",
+                    ">>> from iohub import read_micromanager",
+                    f">>> reader = read_micromanager('{path}')",
                 ]
             )
         print(str.join("\n", msgs))
