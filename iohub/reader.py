@@ -253,12 +253,12 @@ def print_info(path: StrOrBytesPath, verbose=False):
     except (ValueError, RuntimeError):
         print("Error: No compatible dataset is found.", file=sys.stderr)
         return
-    fmt_msg = f"Format:\t\t {fmt}"
+    fmt_msg = f"Format:\t\t\t {fmt}"
     if extra_info:
         if extra_info.startswith("0."):
             fmt_msg += " v" + extra_info
     sum_msg = "\n=== Summary ==="
-    ch_msg = f"Channel names:\t {reader.channel_names}"
+    ch_msg = f"Channel names:\t\t {reader.channel_names}"
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
     msgs = []
     if isinstance(reader, ReaderBase):
@@ -271,9 +271,9 @@ def print_info(path: StrOrBytesPath, verbose=False):
             [
                 sum_msg,
                 fmt_msg,
-                f"Positions:\t {reader.get_num_positions()}",
-                f"Time points:\t {reader.shape[0]}",
-                f"Channels:\t {reader.shape[1]}",
+                f"Positions:\t\t {reader.get_num_positions()}",
+                f"Time points:\t\t {reader.shape[0]}",
+                f"Channels:\t\t {reader.shape[1]}",
                 ch_msg,
                 f"(Z, Y, X) shape:\t {reader.shape[2:]}",
                 f"(Z, Y, X) scale (um):\t {zyx_scale}",
@@ -294,7 +294,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 sum_msg,
                 fmt_msg,
                 "".join(
-                    ["Axes:\t\t "]
+                    ["Axes:\t\t\t "]
                     + [f"{a.name} ({a.type}); " for a in reader.axes]
                 ),
                 ch_msg,
@@ -304,15 +304,15 @@ def print_info(path: StrOrBytesPath, verbose=False):
             meta = reader.metadata
             msgs.extend(
                 [
-                    f"Row names:\t {[r.name for r in meta.rows]}",
-                    f"Column names:\t {[c.name for c in meta.columns]}",
-                    f"Wells:\t\t {len(meta.wells)}",
+                    f"Row names:\t\t {[r.name for r in meta.rows]}",
+                    f"Column names:\t\t {[c.name for c in meta.columns]}",
+                    f"Wells:\t\t\t {len(meta.wells)}",
                 ]
             )
             if verbose:
                 print("Zarr hierarchy:")
                 reader.print_tree()
-                msgs.append(f"Positions:\t {len(list(reader.positions()))}")
+                msgs.append(f"Positions:\t\t {len(list(reader.positions()))}")
         else:
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
         if verbose:
