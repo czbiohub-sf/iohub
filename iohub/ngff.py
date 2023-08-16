@@ -771,7 +771,9 @@ class Position(NGFFNode):
                         axes=self.axes,
                         datasets=[dataset_meta],
                         name=name,
-                        coordinateTransformations=transform,
+                        coordinateTransformations=[
+                            TransformationMeta(type="identity")
+                        ],
                         metadata=extra_meta,
                     )
                 ],
