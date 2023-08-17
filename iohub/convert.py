@@ -2,7 +2,7 @@ import copy
 import json
 import logging
 import os
-from typing import Literal
+from typing import Literal, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -329,10 +329,16 @@ class TIFFConverter:
             coord[self.c_dim],
             coord[self.z_dim],
         ]
-        # string-valued position coordinates
-        if isinstance(self.reader, NDTiffReader):
-            reordered[0] = self.pos_names[reordered[0]]
         return tuple(reordered)
+
+    def _normalize_ndtiff_coord(
+        self, p: int, t: int, c: int, z: int
+    ) -> tuple[Union[str, int], ...]:
+        if self.reader.str_position_axis:
+            p = self.pos_names[p]
+        if self.reader.str_channel_axis:
+            c = self.reader.channel_names[c]
+        return p, t, c, z
 
     def _get_channel_names(self):
         cns = self.reader.channel_names
@@ -447,16 +453,18 @@ class TIFFConverter:
             all_ndtiff_metadata = {}
         for coord in tqdm(self.coords, bar_format=bar_format):
             coord_reorder = self._get_coord_reorder(coord)
-            img_raw = self._get_image_array(*coord_reorder)
+            if isinstance(self.reader, NDTiffReader):
+                p, t, c, z = self._normalize_ndtiff_coord(*coord_reorder)
+            else:
+                p, t, c, z = coord_reorder
+            img_raw = self._get_image_array(p, t, c, z)
             if img_raw is None or not getattr(img_raw, "shape", ()):
                 # Leave incomplete datasets zero-filled
                 logging.warning(
-                    f"Cannot load image at PTCZ={coord_reorder}, "
+                    f"Cannot load image at PTCZ={(p, t, c, z)}, "
                     "filling with zeros. Check if the raw data is incomplete."
                 )
                 continue
-            if isinstance(coord_reorder[0], str):
-                pos_idx = self.pos_names.index(coord_reorder[0])
             else:
                 pos_idx = coord_reorder[0]
             pos_name = self.zarr_position_names[pos_idx]
@@ -465,10 +473,10 @@ class TIFFConverter:
             if check_image:
                 self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
             if ndtiff:
-                image_metadata = self.reader.get_image_metadata(*coord_reorder)
+                image_metadata = self.reader.get_image_metadata(p, t, c, z)
                 # row/well/fov/img/T/C/Z
                 frame_key = "/".join(
-                    [zarr_img.path] + [str(i) for i in coord_reorder[1:]]
+                    [zarr_img.path] + [str(i) for i in (t, c, z)]
                 )
                 all_ndtiff_metadata[frame_key] = image_metadata
         self.writer.zgroup.attrs.update(self.metadata)
