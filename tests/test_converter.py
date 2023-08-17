@@ -32,7 +32,12 @@ CONVERTER_TEST_GIVEN = dict(
 
 
 def _check_scale_transform(position: Position, scale_voxels: bool):
-    tf = position.metadata.multiscales[0].coordinate_transformations[0]
+    """Check scale transformation of the highest resolution level."""
+    tf = (
+        position.metadata.multiscales[0]
+        .datasets[0]
+        .coordinate_transformations[0]
+    )
     if scale_voxels:
         assert tf.type == "scale"
         assert tf.scale[:2] == [1.0, 1.0]
