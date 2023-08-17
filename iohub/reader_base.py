@@ -127,8 +127,9 @@ class ReaderBase:
             ]
             return [(well[0], well[1:], fov) for well, fov in labels]
         except Exception:
+            labels = [pos.get("Label") for pos in self.stage_positions]
             raise ValueError(
                 "HCS position labels are in the format of "
                 "'A1-Site_0', 'H12-Site_1', ... "
-                f"Got labels {[pos['Label'] for pos in self.stage_positions]}"
+                f"Got labels {labels}"
             )

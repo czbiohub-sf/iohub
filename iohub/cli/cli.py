@@ -82,14 +82,7 @@ def info(files, verbose):
     is_flag=True,
     help="Arrange FOVs in a row/column grid layout for tiled acquisition",
 )
-@click.option(
-    "--label-positions",
-    "-p",
-    required=False,
-    is_flag=True,
-    help="Dump postion labels in MM metadata to Omero metadata",
-)
-def convert(input, output, format, scale_voxels, grid_layout, label_positions):
+def convert(input, output, format, scale_voxels, grid_layout):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
@@ -97,6 +90,5 @@ def convert(input, output, format, scale_voxels, grid_layout, label_positions):
         data_type=format,
         scale_voxels=scale_voxels,
         grid_layout=grid_layout,
-        label_positions=label_positions,
     )
     converter.run()

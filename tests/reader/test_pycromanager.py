@@ -80,5 +80,14 @@ def test_get_num_positions(setup_test_data, setup_pycromanager_test_data):
 def test_v3_labeled_positions(ndtiff_v3_labeled_positions):
     data_dir: str = ndtiff_v3_labeled_positions
     reader = NDTiffReader(data_dir)
+    assert reader.str_position_axis
+    assert not reader.str_channel_axis
     position_labels = [pos["Label"] for pos in reader.stage_positions]
     assert position_labels == ["Pos0", "Pos1", "Pos2"]
+
+
+def test_v2_non_str_axis(setup_test_data, setup_pycromanager_test_data):
+    first_dir, rand_dir, ptcz_dir = setup_pycromanager_test_data
+    reader = NDTiffReader(rand_dir)
+    assert not reader.str_position_axis
+    assert not reader.str_channel_axis

@@ -26,7 +26,6 @@ CONVERTER_TEST_SETTINGS = settings(
 
 CONVERTER_TEST_GIVEN = dict(
     grid_layout=st.booleans(),
-    label_positions=st.booleans(),
     scale_voxels=st.booleans(),
 )
 
@@ -51,7 +50,6 @@ def test_converter_ometiff(
     setup_test_data,
     setup_mm2gamma_ome_tiffs,
     grid_layout,
-    label_positions,
     scale_voxels,
 ):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
@@ -62,7 +60,6 @@ def test_converter_ometiff(
             data,
             output,
             grid_layout=grid_layout,
-            label_positions=label_positions,
             scale_voxels=scale_voxels,
         )
         assert isinstance(converter.reader, MicromanagerOmeTiffReader)
@@ -138,7 +135,6 @@ def test_converter_ndtiff(
     setup_test_data,
     setup_pycromanager_test_data,
     grid_layout,
-    label_positions,
     scale_voxels,
 ):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
@@ -149,7 +145,6 @@ def test_converter_ndtiff(
             data,
             output,
             grid_layout=grid_layout,
-            label_positions=label_positions,
             scale_voxels=scale_voxels,
         )
         assert isinstance(converter.reader, NDTiffReader)
@@ -176,13 +171,28 @@ def test_converter_ndtiff(
             assert "ElapsedTime-ms" in metadata[key]
 
 
+def test_converter_ndtiff_v3_position_labels(
+    ndtiff_v3_labeled_positions,
+):
+    with TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, "converted.zarr")
+        converter = TIFFConverter(ndtiff_v3_labeled_positions, output)
+        converter.run(check_image=True)
+        with open_ome_zarr(output, mode="r") as result:
+            assert result.channel_names == ["0"]
+            assert [name.split("/")[1] for name, _ in result.positions()] == [
+                "Pos0",
+                "Pos1",
+                "Pos2",
+            ]
+
+
 @given(**CONVERTER_TEST_GIVEN)
 @settings(CONVERTER_TEST_SETTINGS)
 def test_converter_singlepagetiff(
     setup_test_data,
     setup_mm2gamma_singlepage_tiffs,
     grid_layout,
-    label_positions,
     scale_voxels,
     caplog,
 ):
@@ -194,7 +204,6 @@ def test_converter_singlepagetiff(
             data,
             output,
             grid_layout=grid_layout,
-            label_positions=label_positions,
             scale_voxels=scale_voxels,
         )
         assert isinstance(converter.reader, MicromanagerSequenceReader)

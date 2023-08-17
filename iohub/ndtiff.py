@@ -1,5 +1,5 @@
 import warnings
-from typing import Union
+from typing import Literal, Union
 
 import numpy as np
 import zarr
@@ -18,7 +18,8 @@ class NDTiffReader(ReaderBase):
 
         self.dataset = Dataset(data_path)
         self._axes = self.dataset.axes
-
+        self._str_posistion_axis = self._check_str_axis("position")
+        self._str_channel_axis = self._check_str_axis("channel")
         self.frames = (
             len(self._axes["time"]) if "time" in self._axes.keys() else 1
         )
@@ -82,6 +83,23 @@ class NDTiffReader(ReaderBase):
                 pm_metadata["StagePositions"].append(position_metadata)
 
         return {"Summary": pm_metadata}
+
+    def _check_str_axis(self, axis: Literal["position", "channel"]) -> bool:
+        if axis in self._axes:
+            coord_sample = next(iter(self._axes[axis]))
+            return isinstance(coord_sample, str)
+        else:
+            return False
+
+    @property
+    def str_position_axis(self) -> bool:
+        """Position axis is string-valued"""
+        return self._str_posistion_axis
+
+    @property
+    def str_channel_axis(self) -> bool:
+        """Channel axis is string-valued"""
+        return self._str_channel_axis
 
     def _check_coordinates(
         self, p: Union[int, str], t: int, c: Union[int, str], z: int
