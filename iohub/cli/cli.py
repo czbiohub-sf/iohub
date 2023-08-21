@@ -101,3 +101,6 @@ def convert(input, output, format, scale_voxels, grid_layout, chunks):
         chunks=chunks,
     )
     converter.run()
+
+if __name__ == '__main__':
+    convert()

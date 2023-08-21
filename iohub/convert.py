@@ -7,6 +7,8 @@ from typing import Literal, Union
 import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
+from dask.array import to_zarr
+from itertools import product
 
 from iohub._version import version as iohub_version
 from iohub.ngff import Position, TransformationMeta, open_ome_zarr
@@ -357,22 +359,11 @@ class TIFFConverter:
             chunks[-3] > 1
             and np.prod(chunks) * bytes_per_pixel > MAX_CHUNK_SIZE
         ):
-            chunks[-3] = chunks[-3] // 2
-        # make sure chunks[-3] wasn't set to zero in the while loop above
-        chunks[-3] = np.maximum(chunks[-3], 1)
+            chunks[-3] = np.ceil(chunks[-3] / 2).astype(int)
 
         logging.debug(f"Zarr store chunk size will be set to {chunks}.")
 
         return tuple(chunks)
-
-    def _normalize_ndtiff_coord(
-        self, p: int, t: int, c: int, z: int
-    ) -> tuple[Union[str, int], ...]:
-        if self.reader.str_position_axis:
-            p = self.pos_names[p]
-        if self.reader.str_channel_axis:
-            c = self.reader.channel_names[c]
-        return p, t, c, z
 
     def _get_channel_names(self):
         cns = self.reader.channel_names
@@ -481,44 +472,63 @@ class TIFFConverter:
         )
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
-        ndtiff = False
         if isinstance(self.reader, NDTiffReader):
-            ndtiff = True
-            all_ndtiff_metadata = {}
-        for coord in tqdm(self.coords, bar_format=bar_format):
-            coord_reorder = self._get_coord_reorder(coord)
-            if isinstance(self.reader, NDTiffReader):
-                p, t, c, z = self._normalize_ndtiff_coord(*coord_reorder)
-            else:
+            for p_idx in tqdm(range(self.p), bar_format=bar_format):
+                pos_name = self.pos_name[p_idx] if self.reader.str_position_axis else p_idx
+                # TODO: what is a cleaner way to check for this?
+                if pos_name not in self.reader._axes["position"]:
+                    logging.warning(
+                        f"Cannot load data at position {pos_name}, "
+                        "filling with zeros. Raw data may be is incomplete."
+                    )
+                    continue
+
+                # TODO: some timepoints may also be missing
+                dask_arr = self.reader.get_zarr(position=pos_name)
+                zarr_pos_name = self.zarr_position_names[p_idx]
+                zarr_arr = self.writer[zarr_pos_name]["0"]
+
+                to_zarr(dask_arr.rechunk(self.chunks), zarr_arr)
+
+                logging.info("Writing ND-TIFF image plane metadata...")
+                all_ndtiff_metadata = {}
+                for t_idx, c_idx, z_idx in product(range(self.t), range(self.c), range(self.z)):
+                    channel_name = self.reader.channel_names[c_idx] if self.reader.str_channel_axis else c_idx
+                    image_metadata = self.reader.get_image_metadata(pos_name, t_idx, channel_name, z_idx)
+                    # row/well/fov/img/T/C/Z
+                    frame_key = "/".join(
+                        [zarr_arr.path] + [str(i) for i in (t_idx, c_idx, z_idx)]
+                    )
+                    all_ndtiff_metadata[frame_key] = image_metadata
+                with open(
+                    os.path.join(self.output_dir, "image_plane_metadata.json"),
+                    mode="a",
+                ) as metadata_file:
+                    json.dump(all_ndtiff_metadata, metadata_file, indent=4)
+                
+                if check_image:
+                    # Image checking is not currently supported for NDTiff readers
+                    pass
+
+        else:
+            for coord in tqdm(self.coords, bar_format=bar_format):
+                coord_reorder = self._get_coord_reorder(coord)
                 p, t, c, z = coord_reorder
-            img_raw = self._get_image_array(p, t, c, z)
-            if img_raw is None or not getattr(img_raw, "shape", ()):
-                # Leave incomplete datasets zero-filled
-                logging.warning(
-                    f"Cannot load image at PTCZ={(p, t, c, z)}, "
-                    "filling with zeros. Check if the raw data is incomplete."
-                )
-                continue
-            else:
-                pos_idx = coord_reorder[0]
-            pos_name = self.zarr_position_names[pos_idx]
-            zarr_img = self.writer[pos_name]["0"]
-            zarr_img[coord_reorder[1:]] = img_raw
-            if check_image:
-                self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
-            if ndtiff:
-                image_metadata = self.reader.get_image_metadata(p, t, c, z)
-                # row/well/fov/img/T/C/Z
-                frame_key = "/".join(
-                    [zarr_img.path] + [str(i) for i in (t, c, z)]
-                )
-                all_ndtiff_metadata[frame_key] = image_metadata
+                img_raw = self._get_image_array(p, t, c, z)
+                if img_raw is None or not getattr(img_raw, "shape", ()):
+                    # Leave incomplete datasets zero-filled
+                    logging.warning(
+                        f"Cannot load image at PTCZ={(p, t, c, z)}, "
+                        "filling with zeros. Check if the raw data is incomplete."
+                    )
+                    continue
+                else:
+                    pos_idx = coord_reorder[0]
+                pos_name = self.zarr_position_names[pos_idx]
+                zarr_img = self.writer[pos_name]["0"]
+                zarr_img[coord_reorder[1:]] = img_raw
+                if check_image:
+                    self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
+
         self.writer.zgroup.attrs.update(self.metadata)
-        if ndtiff:
-            logging.info("Writing ND-TIFF image plane metadata...")
-            with open(
-                os.path.join(self.output_dir, "image_plane_metadata.json"),
-                mode="x",
-            ) as metadata_file:
-                json.dump(all_ndtiff_metadata, metadata_file, indent=4)
         self.writer.close()
