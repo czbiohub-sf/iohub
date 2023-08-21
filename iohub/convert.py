@@ -18,6 +18,7 @@ from iohub.reader import (
 )
 
 __all__ = ["TIFFConverter"]
+MAX_CHUNK_SIZE = 500e6  # in bytes
 
 
 def _create_grid_from_coordinates(
@@ -84,7 +85,7 @@ class TIFFConverter:
         Whether to lay out the positions in a grid-like format
         based on how the data was acquired
         (useful for tiled acquisitions), by default False
-    chunks : tuple[int], optional
+    chunks : tuple[int] or Literal['XY', 'XYZ'], optional
         Chunk size of the output Zarr arrays, by default None
         (chunk by XY planes, this is the fastest at converting time)
     scale_voxels : bool, optional
@@ -109,7 +110,7 @@ class TIFFConverter:
         output_dir: str,
         data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
         grid_layout: int = False,
-        chunks: tuple[int] = None,
+        chunks: Union[tuple[int], Literal["XY", "XYZ"]] = None,
         scale_voxels: bool = True,
         hcs_plate: bool = None,
     ):
@@ -148,6 +149,7 @@ class TIFFConverter:
         self.z = self.reader.slices
         self.y = self.reader.height
         self.x = self.reader.width
+        self.dtype = self.reader.dtype
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.prefix_list = []
         self.hcs_plate = hcs_plate
@@ -175,7 +177,7 @@ class TIFFConverter:
                 self._make_default_grid()
         else:
             self._make_default_grid()
-        self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
+        self.chunks = self._gen_chunks(chunks)
         self.transform = self._scale_voxels() if scale_voxels else None
 
     def _check_hcs_sites(self):
@@ -331,6 +333,38 @@ class TIFFConverter:
         ]
         return tuple(reordered)
 
+    def _gen_chunks(self, input_chunks):
+        if not input_chunks:
+            chunks = [1, 1, 1, self.y, self.x]
+        elif isinstance(input_chunks, tuple):
+            chunks = list(input_chunks)
+        elif isinstance(input_chunks, str):
+            if input_chunks.lower == "xy":
+                chunks = [1, 1, 1, self.y, self.x]
+            elif input_chunks.lower == "xyz":
+                chunks = [1, 1, self.z, self.y, self.x]
+            else:
+                raise ValueError(f"{input_chunks} chunks are not supported.")
+        else:
+            raise TypeError(
+                f"Chunk type {type(input_chunks)} is not supported."
+            )
+
+        # limit chunks to MAX_CHUNK_SIZE bytes
+        bytes_per_pixel = np.dtype(self.dtype).itemsize
+        # it's OK if a single image is larger than MAX_CHUNK_SIZE
+        while (
+            chunks[-3] > 1
+            and np.prod(chunks) * bytes_per_pixel > MAX_CHUNK_SIZE
+        ):
+            chunks[-3] = chunks[-3] // 2
+        # make sure chunks[-3] wasn't set to zero in the while loop above
+        chunks[-3] = np.maximum(chunks[-3], 1)
+
+        logging.debug(f"Zarr store chunk size will be set to {chunks}.")
+
+        return tuple(chunks)
+
     def _normalize_ndtiff_coord(
         self, p: int, t: int, c: int, z: int
     ) -> tuple[Union[str, int], ...]:
@@ -397,7 +431,7 @@ class TIFFConverter:
                 self.y,
                 self.x,
             ),
-            "dtype": self.reader.dtype,
+            "dtype": self.dtype,
             "chunks": self.chunks,
             "transform": self.transform,
         }
