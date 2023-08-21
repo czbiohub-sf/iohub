@@ -475,7 +475,7 @@ class TIFFConverter:
         if isinstance(self.reader, NDTiffReader):
             for p_idx in tqdm(range(self.p), bar_format=bar_format):
                 pos_name = (
-                    self.pos_name[p_idx]
+                    self.pos_names[p_idx]
                     if self.reader.str_position_axis
                     else p_idx
                 )
