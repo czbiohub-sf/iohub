@@ -2,13 +2,13 @@ import copy
 import json
 import logging
 import os
+from itertools import product
 from typing import Literal, Union
 
 import numpy as np
+from dask.array import to_zarr
 from numpy.typing import NDArray
 from tqdm import tqdm
-from dask.array import to_zarr
-from itertools import product
 
 from iohub._version import version as iohub_version
 from iohub.ngff import Position, TransformationMeta, open_ome_zarr
@@ -474,7 +474,11 @@ class TIFFConverter:
         logging.info("Converting Images...")
         if isinstance(self.reader, NDTiffReader):
             for p_idx in tqdm(range(self.p), bar_format=bar_format):
-                pos_name = self.pos_name[p_idx] if self.reader.str_position_axis else p_idx
+                pos_name = (
+                    self.pos_name[p_idx]
+                    if self.reader.str_position_axis
+                    else p_idx
+                )
                 # TODO: what is a cleaner way to check for this?
                 if pos_name not in self.reader._axes["position"]:
                     logging.warning(
@@ -492,12 +496,21 @@ class TIFFConverter:
 
                 logging.info("Writing ND-TIFF image plane metadata...")
                 all_ndtiff_metadata = {}
-                for t_idx, c_idx, z_idx in product(range(self.t), range(self.c), range(self.z)):
-                    channel_name = self.reader.channel_names[c_idx] if self.reader.str_channel_axis else c_idx
-                    image_metadata = self.reader.get_image_metadata(pos_name, t_idx, channel_name, z_idx)
+                for t_idx, c_idx, z_idx in product(
+                    range(self.t), range(self.c), range(self.z)
+                ):
+                    channel_name = (
+                        self.reader.channel_names[c_idx]
+                        if self.reader.str_channel_axis
+                        else c_idx
+                    )
+                    image_metadata = self.reader.get_image_metadata(
+                        pos_name, t_idx, channel_name, z_idx
+                    )
                     # row/well/fov/img/T/C/Z
                     frame_key = "/".join(
-                        [zarr_arr.path] + [str(i) for i in (t_idx, c_idx, z_idx)]
+                        [zarr_arr.path]
+                        + [str(i) for i in (t_idx, c_idx, z_idx)]
                     )
                     all_ndtiff_metadata[frame_key] = image_metadata
                 with open(
@@ -505,9 +518,10 @@ class TIFFConverter:
                     mode="a",
                 ) as metadata_file:
                     json.dump(all_ndtiff_metadata, metadata_file, indent=4)
-                
+
                 if check_image:
-                    # Image checking is not currently supported for NDTiff readers
+                    # Image checking is not currently supported for
+                    # NDTiff readers
                     pass
 
         else:
@@ -518,8 +532,8 @@ class TIFFConverter:
                 if img_raw is None or not getattr(img_raw, "shape", ()):
                     # Leave incomplete datasets zero-filled
                     logging.warning(
-                        f"Cannot load image at PTCZ={(p, t, c, z)}, "
-                        "filling with zeros. Check if the raw data is incomplete."
+                        f"Cannot load image at PTCZ={(p, t, c, z)}, filling "
+                        "with zeros. Check if the raw data is incomplete."
                     )
                     continue
                 else:
@@ -528,7 +542,9 @@ class TIFFConverter:
                 zarr_img = self.writer[pos_name]["0"]
                 zarr_img[coord_reorder[1:]] = img_raw
                 if check_image:
-                    self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
+                    self._perform_image_check(
+                        zarr_img[coord_reorder[1:]], img_raw
+                    )
 
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
