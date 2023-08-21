@@ -473,6 +473,7 @@ class TIFFConverter:
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
         if isinstance(self.reader, NDTiffReader):
+            all_ndtiff_metadata = {}
             for p_idx in tqdm(range(self.p), bar_format=bar_format):
                 pos_name = (
                     self.pos_names[p_idx]
@@ -494,8 +495,6 @@ class TIFFConverter:
 
                 to_zarr(dask_arr.rechunk(self.chunks), zarr_arr)
 
-                logging.info("Writing ND-TIFF image plane metadata...")
-                all_ndtiff_metadata = {}
                 for t_idx, c_idx, z_idx in product(
                     range(self.t), range(self.c), range(self.z)
                 ):
@@ -513,16 +512,18 @@ class TIFFConverter:
                         + [str(i) for i in (t_idx, c_idx, z_idx)]
                     )
                     all_ndtiff_metadata[frame_key] = image_metadata
-                with open(
-                    os.path.join(self.output_dir, "image_plane_metadata.json"),
-                    mode="a",
-                ) as metadata_file:
-                    json.dump(all_ndtiff_metadata, metadata_file, indent=4)
 
                 if check_image:
                     # Image checking is not currently supported for
                     # NDTiff readers
                     pass
+
+            logging.info("Writing ND-TIFF image plane metadata...")
+            with open(
+                os.path.join(self.output_dir, "image_plane_metadata.json"),
+                mode="x",
+            ) as metadata_file:
+                json.dump(all_ndtiff_metadata, metadata_file, indent=4)
 
         else:
             for coord in tqdm(self.coords, bar_format=bar_format):
