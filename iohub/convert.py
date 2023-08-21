@@ -474,21 +474,24 @@ class TIFFConverter:
         logging.info("Converting Images...")
         if isinstance(self.reader, NDTiffReader):
             for p_idx in tqdm(range(self.p), bar_format=bar_format):
-                pos_name = (
+                ndtiff_pos_idx = (
                     self.pos_names[p_idx]
                     if self.reader.str_position_axis
                     else p_idx
                 )
-                # TODO: what is a cleaner way to check for this?
-                if pos_name not in self.reader._axes["position"]:
+                try:
+                    ndtiff_pos_idx, *_ = self.reader._check_coordinates(ndtiff_pos_idx, 0, 0, 0)
+                except ValueError:
+                    # Log warning and continue if some positions were not 
+                    # acquired in the dataset
                     logging.warning(
-                        f"Cannot load data at position {pos_name}, "
+                        f"Cannot load data at position {ndtiff_pos_idx}, "
                         "filling with zeros. Raw data may be is incomplete."
                     )
                     continue
 
                 # TODO: some timepoints may also be missing
-                dask_arr = self.reader.get_zarr(position=pos_name)
+                dask_arr = self.reader.get_zarr(position=ndtiff_pos_idx)
                 zarr_pos_name = self.zarr_position_names[p_idx]
                 zarr_arr = self.writer[zarr_pos_name]["0"]
 
@@ -505,7 +508,7 @@ class TIFFConverter:
                         else c_idx
                     )
                     image_metadata = self.reader.get_image_metadata(
-                        pos_name, t_idx, channel_name, z_idx
+                        ndtiff_pos_idx, t_idx, channel_name, z_idx
                     )
                     # row/well/fov/img/T/C/Z
                     frame_key = "/".join(
@@ -538,8 +541,8 @@ class TIFFConverter:
                     continue
                 else:
                     pos_idx = coord_reorder[0]
-                pos_name = self.zarr_position_names[pos_idx]
-                zarr_img = self.writer[pos_name]["0"]
+                ndtiff_pos_idx = self.zarr_position_names[pos_idx]
+                zarr_img = self.writer[ndtiff_pos_idx]["0"]
                 zarr_img[coord_reorder[1:]] = img_raw
                 if check_image:
                     self._perform_image_check(
