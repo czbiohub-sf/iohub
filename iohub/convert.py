@@ -339,9 +339,9 @@ class TIFFConverter:
         elif isinstance(input_chunks, tuple):
             chunks = list(input_chunks)
         elif isinstance(input_chunks, str):
-            if input_chunks.lower == "xy":
+            if input_chunks.lower() == "xy":
                 chunks = [1, 1, 1, self.y, self.x]
-            elif input_chunks.lower == "xyz":
+            elif input_chunks.lower() == "xyz":
                 chunks = [1, 1, self.z, self.y, self.x]
             else:
                 raise ValueError(f"{input_chunks} chunks are not supported.")

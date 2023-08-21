@@ -87,7 +87,7 @@ def info(files, verbose):
     "-c",
     required=False,
     default="XY",
-    help="Zarr chunk size given as, 'XY', 'XYZ', or a tuple of chunk "
+    help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
     "dimensions.",
 )
 def convert(input, output, format, scale_voxels, grid_layout, chunks):
