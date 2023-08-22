@@ -481,9 +481,11 @@ class TIFFConverter:
                     else p_idx
                 )
                 try:
-                    ndtiff_pos_idx, *_ = self.reader._check_coordinates(ndtiff_pos_idx, 0, 0, 0)
+                    ndtiff_pos_idx, *_ = self.reader._check_coordinates(
+                        ndtiff_pos_idx, 0, 0, 0
+                    )
                 except ValueError:
-                    # Log warning and continue if some positions were not 
+                    # Log warning and continue if some positions were not
                     # acquired in the dataset
                     logging.warning(
                         f"Cannot load data at position {ndtiff_pos_idx}, "

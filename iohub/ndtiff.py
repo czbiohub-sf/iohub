@@ -151,12 +151,12 @@ class NDTiffReader(ReaderBase):
             else:
                 # Nothing to do if coord == None
                 if coord is not None:
-                # If coord = 0 is requested, the coordinate will be replaced
-                # with None
+                    # If coord = 0 is requested, the coordinate will be
+                    # replaced with None
                     if coord == 0:
                         coords[i] = None
-                    # If coord != 0 is requested and the axis is not part of the
-                    # dataset, ValueError will be raised
+                    # If coord != 0 is requested and the axis is not part of
+                    # the dataset, ValueError will be raised
                     else:
                         raise ValueError(
                             f"Axis {axis} is not part of this dataset"
