@@ -2,13 +2,13 @@ import copy
 import json
 import logging
 import os
-from itertools import product
 from typing import Literal, Union
 
 import numpy as np
 from dask.array import to_zarr
 from numpy.typing import NDArray
 from tqdm import tqdm
+from tqdm.contrib.itertools import product
 
 from iohub._version import version as iohub_version
 from iohub.ngff import Position, TransformationMeta, open_ome_zarr
@@ -466,15 +466,25 @@ class TIFFConverter:
         """
         logging.debug("Setting up Zarr store.")
         self._init_zarr_arrays()
-        bar_format = (
-            "Status: |{bar:16}|{n_fmt}/{total_fmt} "
+        bar_format_positions = (
+            "Converting Positions: |{bar:16}|{n_fmt}/{total_fmt} "
+            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
+        )
+        bar_format_time_channel = (
+            "Converting Timepoints/Channels: |{bar:16}|{n_fmt}/{total_fmt} "
+            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
+        )
+        bar_format_images = (
+            "Converting Images: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
         if isinstance(self.reader, NDTiffReader):
             all_ndtiff_metadata = {}
-            for p_idx in tqdm(range(self.p), bar_format=bar_format):
+            for p_idx in tqdm(range(self.p), bar_format=bar_format_positions):
+                # ndtiff_pos_idx, ndtiff_t_idx, and ndtiff_channel_idx
+                # may be None
                 ndtiff_pos_idx = (
                     self.pos_names[p_idx]
                     if self.reader.str_position_axis
@@ -489,34 +499,71 @@ class TIFFConverter:
                     # acquired in the dataset
                     logging.warning(
                         f"Cannot load data at position {ndtiff_pos_idx}, "
-                        "filling with zeros. Raw data may be is incomplete."
+                        "filling with zeros. Raw data may be incomplete."
                     )
                     continue
 
-                # TODO: some timepoints may also be missing
                 dask_arr = self.reader.get_zarr(position=ndtiff_pos_idx)
                 zarr_pos_name = self.zarr_position_names[p_idx]
                 zarr_arr = self.writer[zarr_pos_name]["0"]
 
-                to_zarr(dask_arr.rechunk(self.chunks), zarr_arr)
-
-                for t_idx, c_idx, z_idx in product(
-                    range(self.t), range(self.c), range(self.z)
+                for t_idx, c_idx in product(
+                    range(self.t),
+                    range(self.c),
+                    bar_format=bar_format_time_channel,
+                    position=1,
+                    leave=False,
                 ):
-                    channel_name = (
+                    ndtiff_channel_idx = (
                         self.reader.channel_names[c_idx]
                         if self.reader.str_channel_axis
                         else c_idx
                     )
-                    image_metadata = self.reader.get_image_metadata(
-                        ndtiff_pos_idx, t_idx, channel_name, z_idx
+                    try:
+                        (
+                            _,
+                            ndtiff_t_idx,
+                            ndtiff_channel_idx,
+                            _,
+                        ) = self.reader._check_coordinates(
+                            ndtiff_pos_idx, t_idx, ndtiff_channel_idx, 0
+                        )
+                    except ValueError:
+                        # Log warning and continue if some T/C were not
+                        # acquired in the dataset
+                        logging.warning(
+                            f"Cannot load data at timepoint {t_idx},  channel "
+                            f"{c_idx}, filling with zeros. Raw data may be "
+                            "incomplete."
+                        )
+                        continue
+
+                    to_zarr(
+                        dask_arr[t_idx, c_idx][None, None, :].rechunk(
+                            self.chunks
+                        ),
+                        zarr_arr,
+                        region=(
+                            slice(t_idx, t_idx + 1),
+                            slice(c_idx, c_idx + 1),
+                        ),
                     )
-                    # row/well/fov/img/T/C/Z
-                    frame_key = "/".join(
-                        [zarr_arr.path]
-                        + [str(i) for i in (t_idx, c_idx, z_idx)]
-                    )
-                    all_ndtiff_metadata[frame_key] = image_metadata
+
+                    for z_idx in range(self.z):
+                        # this function will handle z_idx=0 when no z stacks
+                        # acquired
+                        image_metadata = self.reader.get_image_metadata(
+                            ndtiff_pos_idx,
+                            ndtiff_t_idx,
+                            ndtiff_channel_idx,
+                            z_idx,
+                        )
+                        # row/well/fov/img/T/C/Z
+                        frame_key = "/".join(
+                            [zarr_arr.path]
+                            + [str(i) for i in (t_idx, c_idx, z_idx)]
+                        )
+                        all_ndtiff_metadata[frame_key] = image_metadata
 
                 if check_image:
                     # Image checking is not currently supported for
@@ -531,7 +578,7 @@ class TIFFConverter:
                 json.dump(all_ndtiff_metadata, metadata_file, indent=4)
 
         else:
-            for coord in tqdm(self.coords, bar_format=bar_format):
+            for coord in tqdm(self.coords, bar_format=bar_format_images):
                 coord_reorder = self._get_coord_reorder(coord)
                 p, t, c, z = coord_reorder
                 img_raw = self._get_image_array(p, t, c, z)
