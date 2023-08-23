@@ -88,7 +88,7 @@ def info(files, verbose):
     required=False,
     default="XY",
     help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
-    "dimensions.",
+    "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
 )
 def convert(input, output, format, scale_voxels, grid_layout, chunks):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
