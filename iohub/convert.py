@@ -527,13 +527,11 @@ class TIFFConverter:
                     )
                     continue
 
+                data_slice = (slice(t_idx, t_idx + 1), slice(c_idx, c_idx + 1))
                 to_zarr(
-                    dask_arr[t_idx, c_idx][None, None, :].rechunk(self.chunks),
+                    dask_arr[data_slice].rechunk(self.chunks),
                     zarr_arr,
-                    region=(
-                        slice(t_idx, t_idx + 1),
-                        slice(c_idx, c_idx + 1),
-                    ),
+                    region=data_slice,
                 )
 
                 for z_idx in range(self.z):
