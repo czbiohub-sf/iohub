@@ -494,7 +494,7 @@ class TIFFConverter:
                 range(self.t),
                 range(self.c),
                 bar_format=bar_format_time_channel,
-                position=4,
+                position=1,
                 leave=False,
             ):
                 ndtiff_channel_idx = (
