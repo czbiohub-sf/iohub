@@ -306,7 +306,10 @@ class MicromanagerOmeTiffReader(ReaderBase):
     def xy_pixel_size(self):
         """XY pixel size of the camera in micrometers."""
         if self._xy_pixel_size is None:
-            raise AttributeError("XY pixel size cannot be determined.")
+            logging.warning(
+                "XY pixel size cannot be determined. Returning 1.0 um."
+            )
+            return 1.0
         return self._xy_pixel_size
 
     def _get_dimensions(self, position):
