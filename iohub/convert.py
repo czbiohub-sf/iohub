@@ -502,18 +502,24 @@ class TIFFConverter:
                     if self.reader.str_channel_axis
                     else c_idx
                 )
-                try:
-                    (
-                        _,
-                        ndtiff_t_idx,
-                        ndtiff_channel_idx,
-                        _,
-                    ) = self.reader._check_coordinates(
-                        ndtiff_pos_idx, t_idx, ndtiff_channel_idx, 0
-                    )
-                except ValueError:
-                    # Log warning and continue if some T/C were not
-                    # acquired in the dataset
+                # set ndtiff_t_idx and ndtiff_z_idx to None if these axes were
+                # not acquired
+                (
+                    _,
+                    ndtiff_t_idx,
+                    ndtiff_channel_idx,
+                    ndtiff_z_idx,
+                ) = self.reader._check_coordinates(
+                    ndtiff_pos_idx, t_idx, ndtiff_channel_idx, 0
+                )
+                # Log warning and continue if some T/C were not acquired in the
+                # dataset
+                if not self.reader.dataset.has_image(
+                    position=ndtiff_pos_idx,
+                    time=ndtiff_t_idx,
+                    channel=ndtiff_channel_idx,
+                    z=ndtiff_z_idx,
+                ):
                     logging.warning(
                         f"Cannot load data at timepoint {t_idx},  channel "
                         f"{c_idx}, filling with zeros. Raw data may be "
