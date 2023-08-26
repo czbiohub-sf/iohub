@@ -110,4 +110,4 @@ def test_cli_convert_ome_tiff(
             cmd += ["-g"]
         result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
-    assert "Status" in result.output
+    assert "Converting" in result.output

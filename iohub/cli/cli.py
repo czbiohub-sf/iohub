@@ -82,7 +82,15 @@ def info(files, verbose):
     is_flag=True,
     help="Arrange FOVs in a row/column grid layout for tiled acquisition",
 )
-def convert(input, output, format, scale_voxels, grid_layout):
+@click.option(
+    "--chunks",
+    "-c",
+    required=False,
+    default="XY",
+    help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
+    "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
+)
+def convert(input, output, format, scale_voxels, grid_layout, chunks):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
@@ -90,5 +98,6 @@ def convert(input, output, format, scale_voxels, grid_layout):
         data_type=format,
         scale_voxels=scale_voxels,
         grid_layout=grid_layout,
+        chunks=chunks,
     )
     converter.run()
