@@ -291,4 +291,5 @@ class MMStack(MicroManagerFOVMapping):
 
 
 class MicromanagerOmeTiffReader:
+    # FIXME: delete this. It's kept for now to avoid import error.
     pass
