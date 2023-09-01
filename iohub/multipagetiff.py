@@ -155,19 +155,18 @@ class MMStack(MicroManagerFOVMapping):
     def _set_mm_meta(self) -> None:
         """Assign image metadata from summary metadata."""
         self.mm_meta = self._first_tif.micromanager_metadata
+        mm_version = self.mm_meta["Summary"]["MicroManagerVersion"]
+        if "beta" in mm_version:
+            if self.mm_meta["Summary"]["Positions"] > 1:
+                self._stage_positions = []
 
-            mm_version = self.mm_meta["Summary"]["MicroManagerVersion"]
-            if "beta" in mm_version:
-                if self.mm_meta["Summary"]["Positions"] > 1:
-                    self._stage_positions = []
-
-                    for p in range(
-                        len(self.mm_meta["Summary"]["StagePositions"])
-                    ):
-                        pos = self._simplify_stage_position_beta(
-                            self.mm_meta["Summary"]["StagePositions"][p]
-                        )
-                        self._stage_positions.append(pos)
+                for p in range(
+                    len(self.mm_meta["Summary"]["StagePositions"])
+                ):
+                    pos = self._simplify_stage_position_beta(
+                        self.mm_meta["Summary"]["StagePositions"][p]
+                    )
+                    self._stage_positions.append(pos)
 
             # MM beta versions sometimes don't have 'ChNames',
             # so I'm wrapping in a try-except and setting the
