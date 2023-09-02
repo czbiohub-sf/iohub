@@ -96,7 +96,7 @@ class MMStack(MicroManagerFOVMapping):
             for axis, size in zip(series.get_axes(), series.get_shape())
         )
         axes = ("R", "T", "C", "Z", "Y", "X")
-        dims = dict((ax, raw_dims.get(ax) or 1) for ax in axes)
+        dims = dict((ax, raw_dims.get(ax, 1)) for ax in axes)
         logging.debug(f"Got dataset dimensions from tifffile: {dims}.")
         (
             self.positions,
