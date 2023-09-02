@@ -115,7 +115,7 @@ class MMStack(MicroManagerFOVMapping):
         ).transpose(*axes)
         xset = xarr.to_dataset(dim="R")
         self._xdata = xset
-        self._set_mm_meta
+        self._set_mm_meta()
 
     @property
     def xdata(self):

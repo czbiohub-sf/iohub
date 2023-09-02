@@ -21,6 +21,12 @@ def test_mmstack_getitem(random_ome_tiff_path):
     assert isinstance(mmstack[0], MMOmeTiffFOV)
 
 
+def test_mmstack_metadata(random_ome_tiff_path):
+    mmstack = MMStack(random_ome_tiff_path)
+    assert isinstance(mmstack.mm_meta, dict)
+    assert mmstack.mm_meta["Summary"]
+
+
 def test_fov_axes_names(random_ome_tiff_path):
     for _, fov in MMStack(random_ome_tiff_path):
         axes_names = fov.axes_names
