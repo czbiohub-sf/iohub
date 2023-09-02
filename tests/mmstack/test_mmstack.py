@@ -27,3 +27,11 @@ def test_fov_axes_names(random_ome_tiff_path):
         assert isinstance(axes_names, list)
         assert len(axes_names) == 5
         assert all([isinstance(name, str) for name in axes_names])
+
+
+def test_fov_getitem(random_ome_tiff_path):
+    for _, fov in MMStack(random_ome_tiff_path):
+        img = fov[:]
+        assert isinstance(img, DataArray)
+        assert len(img.shape) == 5
+        assert img[0, 0, 0, 0, 0] >= 0
