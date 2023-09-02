@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Iterable, Union
 
 import dask.array as da
 import numpy as np
-from xarray import DataArray
 import zarr
 from numpy.typing import ArrayLike
 from tifffile import TiffFile
+from xarray import DataArray
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
 
@@ -160,9 +160,7 @@ class MMStack(MicroManagerFOVMapping):
             if self.mm_meta["Summary"]["Positions"] > 1:
                 self._stage_positions = []
 
-                for p in range(
-                    len(self.mm_meta["Summary"]["StagePositions"])
-                ):
+                for p in range(len(self.mm_meta["Summary"]["StagePositions"])):
                     pos = self._simplify_stage_position_beta(
                         self.mm_meta["Summary"]["StagePositions"][p]
                     )
@@ -269,9 +267,7 @@ class MMStack(MicroManagerFOVMapping):
                 return
             else:
                 continue
-        logging.warning(
-            "Micro-Manager image plane metadata cannot be loaded."
-        )
+        logging.warning("Micro-Manager image plane metadata cannot be loaded.")
         self._xy_pixel_size = None
 
     @property
