@@ -146,7 +146,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
             mm_version = self.mm_meta["Summary"]["MicroManagerVersion"]
             if "beta" in mm_version:
                 if self.mm_meta["Summary"]["Positions"] > 1:
-                    self.stage_positions = []
+                    self._stage_positions = []
 
                     for p in range(
                         len(self.mm_meta["Summary"]["StagePositions"])
@@ -154,7 +154,7 @@ class MicromanagerOmeTiffReader(ReaderBase):
                         pos = self._simplify_stage_position_beta(
                             self.mm_meta["Summary"]["StagePositions"][p]
                         )
-                        self.stage_positions.append(pos)
+                        self._stage_positions.append(pos)
 
                 # MM beta versions sometimes don't have 'ChNames',
                 # so I'm wrapping in a try-except and setting the
@@ -175,13 +175,13 @@ class MicromanagerOmeTiffReader(ReaderBase):
 
             else:
                 if self.mm_meta["Summary"]["Positions"] > 1:
-                    self.stage_positions = []
+                    self._stage_positions = []
 
                     for p in range(self.mm_meta["Summary"]["Positions"]):
                         pos = self._simplify_stage_position(
                             self.mm_meta["Summary"]["StagePositions"][p]
                         )
-                        self.stage_positions.append(pos)
+                        self._stage_positions.append(pos)
 
                 for ch in self.mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)

@@ -59,7 +59,7 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
-pytest_temp/
+.pytest_temp/
 
 # Translations
 *.mo
@@ -80,6 +80,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/source/auto_examples/
 
 # PyBuilder
 target/

@@ -101,10 +101,14 @@ class MicromanagerSequenceReader(ReaderBase):
         elif "gamma" in mm_version:
             self._mm2gamma_meta_parser()
         else:
-            raise NotImplementedError(
-                "Current MicroManager reader only supports version "
-                f"1.4.22 and 2.0 but {mm_version} was detected"
-            )
+            try:
+                self._mm2gamma_meta_parser()
+            except Exception:
+                raise RuntimeError(
+                    "Current MicroManager reader only supports version "
+                    f"1.4.22 and 2.0 but {mm_version} was detected. "
+                    "Metadata parsing failed."
+                )
 
     def get_zarr(self, position):
         """

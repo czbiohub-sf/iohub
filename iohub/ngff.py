@@ -771,7 +771,9 @@ class Position(NGFFNode):
                         axes=self.axes,
                         datasets=[dataset_meta],
                         name=name,
-                        coordinateTransformations=transform,
+                        coordinateTransformations=[
+                            TransformationMeta(type="identity")
+                        ],
                         metadata=extra_meta,
                     )
                 ],
@@ -1238,6 +1240,79 @@ class Row(NGFFNode):
 
 class Plate(NGFFNode):
     _MEMBER_TYPE = Row
+
+    @classmethod
+    def from_positions(
+        cls,
+        store_path: StrOrBytesPath,
+        positions: dict[str, Position],
+    ) -> Plate:
+        """Create a new HCS store from existing OME-Zarr stores
+        by copying images and metadata from a dictionary of positions.
+
+        .. warning: This assumes same channel names and axes across the FOVs
+            and does not check for consistent shape and chunk size.
+
+        Parameters
+        ----------
+        store_path : StrOrBytesPath
+            Path of the new store
+        positions : dict[str, Position]
+            Dictionary where keys are destination path names ('row/column/fov')
+            and values are :py:class:`iohub.ngff.Position` objects.
+
+        Returns
+        -------
+        Plate
+            New plate with copied data
+
+        Examples
+        --------
+        Combine an HCS-layout store and an FOV-layout store:
+
+        >>> from iohub.ngff import open_ome_zarr, Plate
+
+        >>> with open_ome_zarr("hcs.zarr") as old_plate:
+        >>>     fovs = dict(old_plate.positions())
+
+        >>> with open_ome_zarr("fov.zarr") as old_position:
+        >>>     fovs["Z/1/0"] = old_position
+
+        >>> new_plate = Plate.from_positions("combined.zarr", fovs)
+        """
+        # get metadata from an arbitraty FOV
+        # deterministic because dicts are ordered
+        example_position = next(iter(positions.values()))
+        plate = open_ome_zarr(
+            store_path,
+            layout="hcs",
+            mode="w-",
+            channel_names=example_position.channel_names,
+            axes=example_position.axes,
+            version=example_position.version,
+        )
+        for name, src_pos in positions.items():
+            if not isinstance(src_pos, Position):
+                raise TypeError(
+                    f"Expected item type {type(Position)}, "
+                    f"got {type(src_pos)}"
+                )
+            name = normalize_storage_path(name)
+            if name in plate.zgroup:
+                raise FileExistsError(
+                    f"Duplicate name '{name}' after path normalization."
+                )
+            row, col, fov = name.split("/")
+            _ = plate.create_position(row, col, fov)
+            # overwrite position group
+            _ = zarr.copy_store(
+                src_pos.zgroup.store,
+                plate.zgroup.store,
+                source_path=src_pos.zgroup.name,
+                dest_path=name,
+                if_exists="replace",
+            )
+        return plate
 
     def __init__(
         self,

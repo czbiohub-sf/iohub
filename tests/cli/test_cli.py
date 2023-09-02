@@ -71,6 +71,7 @@ def test_cli_info_ndtiff(
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Positions:\s+2", result.output)
+    assert "scale (um)" in result.output
 
 
 @given(verbose=st.booleans())
@@ -82,20 +83,24 @@ def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Wells:\s+1", result.output)
+    # Test on single position
+    result_pos = runner.invoke(
+        cli, ["info", os.path.join(setup_hcs_ref, "B", "03", "0")]
+    )
+    assert "scale (um)" in result_pos.output
 
 
-@given(f=st.booleans(), g=st.booleans(), p=st.booleans(), s=st.booleans())
+@given(f=st.booleans(), g=st.booleans(), s=st.booleans())
 @settings(
     suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
 )
 def test_cli_convert_ome_tiff(
-    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, p, s
+    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, s
 ):
     _, _, input_dir = setup_mm2gamma_ome_tiffs
     runner = CliRunner()
     f = "-f ometiff" if f else ""
     g = "-g" if g else ""
-    p = "-p" if p else ""
     with TemporaryDirectory() as tmp_dir:
         output_dir = os.path.join(tmp_dir, "converted.zarr")
         cmd = ["convert", "-i", input_dir, "-o", output_dir, "-s", s]
@@ -103,8 +108,6 @@ def test_cli_convert_ome_tiff(
             cmd += ["-f", "ometiff"]
         if g:
             cmd += ["-g"]
-        if p:
-            cmd += ["-p"]
         result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
-    assert "Status" in result.output
+    assert "Converting" in result.output

@@ -80,16 +80,17 @@ def info(files, verbose):
     "-g",
     required=False,
     is_flag=True,
-    help="Arrange positions in a HCS grid layout",
+    help="Arrange FOVs in a row/column grid layout for tiled acquisition",
 )
 @click.option(
-    "--label-positions",
-    "-p",
+    "--chunks",
+    "-c",
     required=False,
-    is_flag=True,
-    help="Dump postion labels in MM metadata to Omero metadata",
+    default="XY",
+    help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
+    "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
 )
-def convert(input, output, format, scale_voxels, grid_layout, label_positions):
+def convert(input, output, format, scale_voxels, grid_layout, chunks):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
@@ -97,6 +98,6 @@ def convert(input, output, format, scale_voxels, grid_layout, label_positions):
         data_type=format,
         scale_voxels=scale_voxels,
         grid_layout=grid_layout,
-        label_positions=label_positions,
+        chunks=chunks,
     )
     converter.run()

@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
 from iohub.ngff import (
     TO_DICT_SETTINGS,
+    Plate,
     TransformationMeta,
     _open_store,
     _pad_shape,
@@ -561,8 +562,11 @@ def test_get_channel_index(setup_test_data, setup_hcs_ref, wrong_channel_name):
     row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
 )
 @settings(max_examples=16, deadline=2000)
-def test_modify_hcs_ref(setup_test_data, setup_hcs_ref, row, col, pos):
+def test_modify_hcs_ref(
+    setup_test_data, setup_hcs_ref, row: str, col: str, pos: str
+):
     """Test `iohub.ngff.open_ome_zarr()`"""
+    assume((row.lower() != "b"))
     with _temp_copy(setup_hcs_ref) as store_path:
         with open_ome_zarr(store_path, layout="hcs", mode="r+") as dataset:
             assert dataset.axes[0].name == "c"
@@ -627,3 +631,21 @@ def test_position_scale(channels_and_random_5d):
     ) as dataset:
         # round-trip test with the offical reader implementation
         assert dataset.scale == scale
+
+
+def test_combine_fovs_to_hcs(setup_test_data, setup_hcs_ref):
+    fovs = {}
+    fov_paths = ("A/1/0", "B/1/0", "H/12/9")
+    for path in fov_paths:
+        with open_ome_zarr(setup_hcs_ref) as hcs_store:
+            fovs[path] = hcs_store["B/03/0"]
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "combined.zarr")
+        combined_plate = Plate.from_positions(store_path, fovs)
+        # read data with an external reader
+        ext_reader = Reader(parse_url(combined_plate.zgroup.store.path))
+        node = list(ext_reader())[0]
+        plate_meta = node.metadata["metadata"]["plate"]
+        assert len(plate_meta["rows"]) == 3
+        assert len(plate_meta["columns"]) == 2
+        assert node.data[0].shape == (1, 2, 2160 * 3, 5120 * 2)

@@ -1,15 +1,26 @@
 import copy
+import json
 import logging
 import os
-from typing import Literal
+from typing import Literal, Union
 
 import numpy as np
+from dask.array import to_zarr
 from numpy.typing import NDArray
 from tqdm import tqdm
+from tqdm.contrib.itertools import product
 
 from iohub._version import version as iohub_version
-from iohub.ngff import TransformationMeta, open_ome_zarr
-from iohub.reader import MicromanagerSequenceReader, read_micromanager
+from iohub.ngff import Position, TransformationMeta, open_ome_zarr
+from iohub.reader import (
+    MicromanagerOmeTiffReader,
+    MicromanagerSequenceReader,
+    NDTiffReader,
+    read_micromanager,
+)
+
+__all__ = ["TIFFConverter"]
+MAX_CHUNK_SIZE = 500e6  # in bytes
 
 
 def _create_grid_from_coordinates(
@@ -76,15 +87,23 @@ class TIFFConverter:
         Whether to lay out the positions in a grid-like format
         based on how the data was acquired
         (useful for tiled acquisitions), by default False
-    chunks : tuple[int], optional
+    chunks : tuple[int] or Literal['XY', 'XYZ'], optional
         Chunk size of the output Zarr arrays, by default None
         (chunk by XY planes, this is the fastest at converting time)
-    label_positions : bool, optional
-        Dump postion labels in MM metadata to Omero metadata,
-        by default False
     scale_voxels : bool, optional
         Write voxel size (XY pixel size and Z-step) as scaling transform,
         by default True
+    hcs_plate : bool, optional
+        Create NGFF HCS layout based on position names from the
+        HCS Site Generator in Micro-Manager (only available for OME-TIFF),
+        and is ignored for other formats, by default None
+        (attempt to apply to OME-TIFF datasets, disable this with ``False``)
+
+    Notes
+    -----
+    When converting ND-TIFF, the image plane metadata for all frames
+    are aggregated into a file named ``image_plane_metadata.json``,
+    and placed under the root Zarr group (alongside plate metadata).
     """
 
     def __init__(
@@ -93,9 +112,9 @@ class TIFFConverter:
         output_dir: str,
         data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
         grid_layout: int = False,
-        chunks: tuple[int] = None,
-        label_positions: bool = False,
+        chunks: Union[tuple[int], Literal["XY", "XYZ"]] = None,
         scale_voxels: bool = True,
+        hcs_plate: bool = None,
     ):
         logging.debug("Checking output.")
         if not output_dir.strip("/").endswith(".zarr"):
@@ -105,6 +124,14 @@ class TIFFConverter:
         self.reader = read_micromanager(
             input_dir, data_type, extract_data=False
         )
+        if reader_type := type(self.reader) not in (
+            MicromanagerSequenceReader,
+            MicromanagerOmeTiffReader,
+            NDTiffReader,
+        ):
+            raise TypeError(
+                f"Reader type {reader_type} not supported for conversion."
+            )
         logging.debug("Finished initializing data.")
         self.summary_metadata = (
             self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
@@ -124,9 +151,11 @@ class TIFFConverter:
         self.z = self.reader.slices
         self.y = self.reader.height
         self.x = self.reader.width
+        self.dtype = self.reader.dtype
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.prefix_list = []
-        self.label_positions = label_positions
+        self.hcs_plate = hcs_plate
+        self._check_hcs_sites()
         self._get_pos_names()
         logging.info(
             f"Found Dataset {self.save_name} with "
@@ -137,6 +166,10 @@ class TIFFConverter:
         self.metadata["iohub_version"] = iohub_version
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
+            if hcs_plate:
+                raise ValueError(
+                    "grid_layout and hcs_plate must not be both true"
+                )
             logging.info("Generating HCS plate level grid.")
             try:
                 self.position_grid = _create_grid_from_coordinates(
@@ -146,13 +179,29 @@ class TIFFConverter:
                 self._make_default_grid()
         else:
             self._make_default_grid()
-        self.chunks = chunks if chunks else (1, 1, 1, self.y, self.x)
+        self.chunks = self._gen_chunks(chunks)
         self.transform = self._scale_voxels() if scale_voxels else None
 
+    def _check_hcs_sites(self):
+        if self.hcs_plate:
+            self.hcs_sites = self.reader.hcs_position_labels
+        elif self.hcs_plate is None:
+            try:
+                self.hcs_sites = self.reader.hcs_position_labels
+                self.hcs_plate = True
+            except ValueError:
+                logging.debug(
+                    "HCS sites not detected, "
+                    "dumping all position into a single row."
+                )
+
     def _make_default_grid(self):
-        self.position_grid = np.expand_dims(
-            np.arange(self.p, dtype=int), axis=0
-        )
+        if isinstance(self.reader, NDTiffReader):
+            self.position_grid = np.array([self.pos_names])
+        else:
+            self.position_grid = np.expand_dims(
+                np.arange(self.p, dtype=int), axis=0
+            )
 
     def _gen_coordset(self):
         """Generates a coordinate set in the dimensional order
@@ -258,21 +307,16 @@ class TIFFConverter:
         """Append a list of pos names in ascending order
         (order in which they were acquired).
         """
-        if not self.label_positions:
-            self.pos_names = ["0"] * self.p
-        else:
+        if self.p > 1:
             self.pos_names = []
             for p in range(self.p):
-                if self.p > 1:
-                    try:
-                        name = self.summary_metadata["StagePositions"][p][
-                            "Label"
-                        ]
-                    except KeyError:
-                        name = None
-                else:
-                    name = None
+                name = (
+                    self.summary_metadata["StagePositions"][p].get("Label")
+                    or p
+                )
                 self.pos_names.append(name)
+        else:
+            self.pos_names = ["0"]
 
     def _get_image_array(self, p: int, t: int, c: int, z: int):
         try:
@@ -283,18 +327,49 @@ class TIFFConverter:
             return None
 
     def _get_coord_reorder(self, coord):
-        return (
+        reordered = [
             coord[self.p_dim],
             coord[self.t_dim],
             coord[self.c_dim],
             coord[self.z_dim],
-        )
+        ]
+        return tuple(reordered)
+
+    def _gen_chunks(self, input_chunks):
+        if not input_chunks:
+            chunks = [1, 1, 1, self.y, self.x]
+        elif isinstance(input_chunks, tuple):
+            chunks = list(input_chunks)
+        elif isinstance(input_chunks, str):
+            if input_chunks.lower() == "xy":
+                chunks = [1, 1, 1, self.y, self.x]
+            elif input_chunks.lower() == "xyz":
+                chunks = [1, 1, self.z, self.y, self.x]
+            else:
+                raise ValueError(f"{input_chunks} chunks are not supported.")
+        else:
+            raise TypeError(
+                f"Chunk type {type(input_chunks)} is not supported."
+            )
+
+        # limit chunks to MAX_CHUNK_SIZE bytes
+        bytes_per_pixel = np.dtype(self.dtype).itemsize
+        # it's OK if a single image is larger than MAX_CHUNK_SIZE
+        while (
+            chunks[-3] > 1
+            and np.prod(chunks) * bytes_per_pixel > MAX_CHUNK_SIZE
+        ):
+            chunks[-3] = np.ceil(chunks[-3] / 2).astype(int)
+
+        logging.debug(f"Zarr store chunk size will be set to {chunks}.")
+
+        return tuple(chunks)
 
     def _get_channel_names(self):
         cns = self.reader.channel_names
-        if not cns and isinstance(self.reader, MicromanagerSequenceReader):
+        if not cns:
             logging.warning(
-                "Using an empty channel name for the single channel."
+                "Cannot find channel names, using indices instead."
             )
             cns = [str(i) for i in range(self.c)]
         return cns
@@ -329,7 +404,7 @@ class TIFFConverter:
             )
         ]
 
-    def _init_hcs_arrays(self):
+    def _init_zarr_arrays(self):
         self.writer = open_ome_zarr(
             self.output_dir,
             layout="hcs",
@@ -337,7 +412,7 @@ class TIFFConverter:
             channel_names=self._get_channel_names(),
             version="0.4",
         )
-        self.well_list = []
+        self.zarr_position_names = []
         arr_kwargs = {
             "name": "0",
             "shape": (
@@ -347,18 +422,140 @@ class TIFFConverter:
                 self.y,
                 self.x,
             ),
-            "dtype": self.reader.dtype,
+            "dtype": self.dtype,
             "chunks": self.chunks,
             "transform": self.transform,
         }
+        if self.hcs_plate:
+            self._init_hcs_arrays(arr_kwargs)
+        else:
+            self._init_grid_arrays(arr_kwargs)
+
+    def _init_hcs_arrays(self, arr_kwargs):
+        for row, col, fov in self.hcs_sites:
+            self._create_zeros_array(row, col, fov, arr_kwargs)
+        logging.info(
+            "Created HCS NGFF layout from Micro-Manager HCS position labels."
+        )
+        self.writer.print_tree()
+
+    def _init_grid_arrays(self, arr_kwargs):
         for row, columns in enumerate(self.position_grid):
             for column in columns:
-                pos_name = self.pos_names[len(self.well_list)]
-                pos = self.writer.create_position(row, column, pos_name="0")
-                self.well_list.append(os.path.join(str(row), str(column)))
-                _ = pos.create_zeros(**arr_kwargs)
-                pos.metadata.omero.name = pos_name
-                pos.dump_meta()
+                self._create_zeros_array(row, column, "0", arr_kwargs)
+
+    def _create_zeros_array(
+        self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict
+    ) -> Position:
+        pos = self.writer.create_position(row_name, col_name, pos_name)
+        self.zarr_position_names.append(pos.zgroup.name)
+        _ = pos.create_zeros(**arr_kwargs)
+        pos.metadata.omero.name = self.pos_names[
+            len(self.zarr_position_names) - 1
+        ]
+        pos.dump_meta()
+
+    def _convert_ndtiff(self):
+        bar_format_positions = (
+            "Converting Positions: |{bar:16}|{n_fmt}/{total_fmt} "
+            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
+        )
+        bar_format_time_channel = (
+            "Converting Timepoints/Channels: |{bar:16}|{n_fmt}/{total_fmt} "
+            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
+        )
+        all_ndtiff_metadata = {}
+        for p_idx in tqdm(range(self.p), bar_format=bar_format_positions):
+            # ndtiff_pos_idx, ndtiff_t_idx, and ndtiff_channel_idx
+            # may be None
+            ndtiff_pos_idx = (
+                self.pos_names[p_idx]
+                if self.reader.str_position_axis
+                else p_idx
+            )
+            try:
+                ndtiff_pos_idx, *_ = self.reader._check_coordinates(
+                    ndtiff_pos_idx, 0, 0, 0
+                )
+            except ValueError:
+                # Log warning and continue if some positions were not
+                # acquired in the dataset
+                logging.warning(
+                    f"Cannot load data at position {ndtiff_pos_idx}, "
+                    "filling with zeros. Raw data may be incomplete."
+                )
+                continue
+
+            dask_arr = self.reader.get_zarr(position=ndtiff_pos_idx)
+            zarr_pos_name = self.zarr_position_names[p_idx]
+            zarr_arr = self.writer[zarr_pos_name]["0"]
+
+            for t_idx, c_idx in product(
+                range(self.t),
+                range(self.c),
+                bar_format=bar_format_time_channel,
+                position=1,
+                leave=False,
+            ):
+                ndtiff_channel_idx = (
+                    self.reader.channel_names[c_idx]
+                    if self.reader.str_channel_axis
+                    else c_idx
+                )
+                # set ndtiff_t_idx and ndtiff_z_idx to None if these axes were
+                # not acquired
+                (
+                    _,
+                    ndtiff_t_idx,
+                    ndtiff_channel_idx,
+                    ndtiff_z_idx,
+                ) = self.reader._check_coordinates(
+                    ndtiff_pos_idx, t_idx, ndtiff_channel_idx, 0
+                )
+                # Log warning and continue if some T/C were not acquired in the
+                # dataset
+                if not self.reader.dataset.has_image(
+                    position=ndtiff_pos_idx,
+                    time=ndtiff_t_idx,
+                    channel=ndtiff_channel_idx,
+                    z=ndtiff_z_idx,
+                ):
+                    logging.warning(
+                        f"Cannot load data at timepoint {t_idx},  channel "
+                        f"{c_idx}, filling with zeros. Raw data may be "
+                        "incomplete."
+                    )
+                    continue
+
+                data_slice = (slice(t_idx, t_idx + 1), slice(c_idx, c_idx + 1))
+                to_zarr(
+                    dask_arr[data_slice].rechunk(self.chunks),
+                    zarr_arr,
+                    region=data_slice,
+                )
+
+                for z_idx in range(self.z):
+                    # this function will handle z_idx=0 when no z stacks
+                    # acquired
+                    image_metadata = self.reader.get_image_metadata(
+                        ndtiff_pos_idx,
+                        ndtiff_t_idx,
+                        ndtiff_channel_idx,
+                        z_idx,
+                    )
+                    # row/well/fov/img/T/C/Z
+                    frame_key = "/".join(
+                        [zarr_arr.path]
+                        + [str(i) for i in (t_idx, c_idx, z_idx)]
+                    )
+                    all_ndtiff_metadata[frame_key] = image_metadata
+
+        logging.info("Writing ND-TIFF image plane metadata...")
+        with open(
+            os.path.join(self.output_dir, "image_plane_metadata.json"),
+            mode="x",
+        ) as metadata_file:
+            json.dump(all_ndtiff_metadata, metadata_file, indent=4)
 
     def run(self, check_image: bool = True):
         """Runs the conversion.
@@ -370,27 +567,41 @@ class TIFFConverter:
             pixel values as in TIFF files, by default True
         """
         logging.debug("Setting up Zarr store.")
-        self._init_hcs_arrays()
-        bar_format = (
-            "Status: |{bar:16}|{n_fmt}/{total_fmt} "
+        self._init_zarr_arrays()
+        bar_format_images = (
+            "Converting Images: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
-        for coord in tqdm(self.coords, bar_format=bar_format):
-            coord_reorder = self._get_coord_reorder(coord)
-            img_raw = self._get_image_array(*coord_reorder)
-            if img_raw is None or not getattr(img_raw, "shape", ()):
-                # Leave incomplete datasets zero-filled
-                logging.warning(
-                    f"Cannot load image at PTCZ={coord_reorder}, "
-                    "filling with zeros. Check if the raw data is incomplete."
-                )
-                continue
-            well = self.well_list[coord_reorder[0]]
-            zarr_img = self.writer[well]["0"]["0"]
-            zarr_img[coord_reorder[1:]] = img_raw
+        if isinstance(self.reader, NDTiffReader):
             if check_image:
-                self._perform_image_check(zarr_img[coord_reorder[1:]], img_raw)
+                logging.info(
+                    "Checking converted image is not supported for ND-TIFF. "
+                    "Ignoring..."
+                )
+            self._convert_ndtiff()
+        else:
+            for coord in tqdm(self.coords, bar_format=bar_format_images):
+                coord_reorder = self._get_coord_reorder(coord)
+                p, t, c, z = coord_reorder
+                img_raw = self._get_image_array(p, t, c, z)
+                if img_raw is None or not getattr(img_raw, "shape", ()):
+                    # Leave incomplete datasets zero-filled
+                    logging.warning(
+                        f"Cannot load image at PTCZ={(p, t, c, z)}, filling "
+                        "with zeros. Check if the raw data is incomplete."
+                    )
+                    continue
+                else:
+                    pos_idx = coord_reorder[0]
+                ndtiff_pos_idx = self.zarr_position_names[pos_idx]
+                zarr_img = self.writer[ndtiff_pos_idx]["0"]
+                zarr_img[coord_reorder[1:]] = img_raw
+                if check_image:
+                    self._perform_image_check(
+                        zarr_img[coord_reorder[1:]], img_raw
+                    )
+
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()

@@ -13,11 +13,19 @@ I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) source
 .PHONY: help clean build publish
 
 help:
-	@echo "Please use \`make <target>' where <target> is one of"
-	@echo "  html       to make standalone HTML files"
+	@echo "Build iohub HTML documentation."
+	@echo
+	@echo "Usage: make COMMAND"
+	@echo
+	@echo "Commands:"
+	@echo "build\tBuild from current source code"
+	@echo "publish\tBuild multiple versions for publishing"
+	@echo "clean\tRemove all built files"
+	@echo "help\tShow this message and quit"
 
 clean:
 	-rm -rf $(BUILDDIR)/*
+	-rm -rf source/auto_examples/*
 
 build:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
