@@ -131,6 +131,8 @@ def rechunking(
     """
     logging.info("Starting Rechunking")
     print(input_zarr_path, output_zarr_path, chunk_size_zyx)
+    assert len(input_zarr_path) == 1
+
     input_zarr_path = input_zarr_path[0]
     output_zarr_path = Path(output_zarr_path)
 
