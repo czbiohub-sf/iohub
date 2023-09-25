@@ -128,14 +128,16 @@ class ReaderBase:
                 pos["Label"].split("-Site_") for pos in self.stage_positions
             ]
             return [(well[0], well[1:], fov) for well, fov in labels]
-        except ValueError:
+        except Exception:
             try:
                 # Look for "'1-Pos000_000', '2-Pos000_001', ... "
                 labels = [
                     pos["Label"].split("-Pos") for pos in self.stage_positions
                 ]
-                return [("0", well, fov.replace("_", "")) for well, fov in labels]
-            except ValueError:
+                return [
+                    ("0", well, fov.replace("_", "")) for well, fov in labels
+                ]
+            except Exception:
                 labels = [pos.get("Label") for pos in self.stage_positions]
                 raise ValueError(
                     "HCS position labels are in the format of "
