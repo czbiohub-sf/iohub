@@ -307,7 +307,7 @@ class TIFFConverter:
         """Append a list of pos names in ascending order
         (order in which they were acquired).
         """
-        if self.p > 1:
+        try:
             self.pos_names = []
             for p in range(self.p):
                 name = (
@@ -315,7 +315,7 @@ class TIFFConverter:
                     or p
                 )
                 self.pos_names.append(name)
-        else:
+        except Exception:
             self.pos_names = ["0"]
 
     def _get_image_array(self, p: int, t: int, c: int, z: int):
