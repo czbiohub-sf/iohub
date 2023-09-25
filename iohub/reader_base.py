@@ -134,7 +134,7 @@ class ReaderBase:
                 labels = [
                     pos["Label"].split("-Pos") for pos in self.stage_positions
                 ]
-                return [("0", well, fov) for well, fov in labels]
+                return [("0", well, fov.replace("_", "")) for well, fov in labels]
             except ValueError:
                 labels = [pos.get("Label") for pos in self.stage_positions]
                 raise ValueError(
