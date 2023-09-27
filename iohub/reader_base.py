@@ -1,4 +1,5 @@
 import zarr
+from typing import Union
 from numpy.typing import DTypeLike, NDArray
 
 
@@ -11,7 +12,7 @@ class ReaderBase:
         self.width: int = None
         self.dtype: DTypeLike = None
         self._mm_meta: dict = None
-        self._stage_positions: list[dict] = []
+        self._stage_positions: list[dict[str, Union[str, float]]] = []
         self.z_step_size: float = None
         self.channel_names: list[str] = None
 
@@ -118,7 +119,7 @@ class ReaderBase:
         Returns
         -------
         list[tuple[str, str, str]]
-            FOV name paths, e.g. ('A', '1', '0') or ('0', '1', '000_000')
+            FOV name paths, e.g. ('A', '1', '0') or ('0', '0', '1')
         """
         if not self.stage_positions:
             raise ValueError("Stage position metadata not available.")
@@ -131,11 +132,15 @@ class ReaderBase:
         except Exception:
             try:
                 # Look for "'1-Pos000_000', '2-Pos000_001', ... "
+                # and split into ('1', 'Pos000_000'), ...
                 labels = [
                     pos["Label"].split("-Pos") for pos in self.stage_positions
                 ]
+                # split '000_000' into ('000', '000')
+                # and remove leading zeros so output is ('0', '0', '0')
                 return [
-                    ("0", well, fov.replace("_", "")) for well, fov in labels
+                    (row, *[str(int(s)) for s in col_fov.split("_")])
+                    for row, col_fov in labels
                 ]
             except Exception:
                 labels = [pos.get("Label") for pos in self.stage_positions]
