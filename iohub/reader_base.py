@@ -1,5 +1,6 @@
-import zarr
 from typing import Union
+
+import zarr
 from numpy.typing import DTypeLike, NDArray
 
 
