@@ -311,7 +311,7 @@ class TIFFConverter:
             self.pos_names = []
             for p in range(self.p):
                 name = (
-                    self.summary_metadata["StagePositions"][p].get("Label")
+                    self.reader.stage_positions[p].get("Label")
                     or p
                 )
                 self.pos_names.append(name)
