@@ -173,16 +173,21 @@ class MicromanagerOmeTiffReader(ReaderBase):
                 for ch in self.mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
 
-            # Parsing of data acquired with the OpenCell 
+            # Parsing of data acquired with the OpenCell
             # acquisition script on the Dragonfly miroscope
-            elif mm_version == "2.0.1 20220920" and self.mm_meta["Summary"]["Prefix"] == "raw_data":
-                file_names = set([(key[0], val[0]) for key, val in self.coord_map.items()])
+            elif (
+                mm_version == "2.0.1 20220920"
+                and self.mm_meta["Summary"]["Prefix"] == "raw_data"
+            ):
+                file_names = set(
+                    [(key[0], val[0]) for key, val in self.coord_map.items()]
+                )
 
                 if self.mm_meta["Summary"]["Positions"] > 1:
                     self._stage_positions = [None] * self.positions
 
                     for p_idx, file_name in file_names:
-                        site_idx = int(file_name.split('_')[-1].split('-')[0])
+                        site_idx = int(file_name.split("_")[-1].split("-")[0])
                         pos = self._simplify_stage_position(
                             self.mm_meta["Summary"]["StagePositions"][site_idx]
                         )

@@ -310,10 +310,7 @@ class TIFFConverter:
         if self.p > 1:
             self.pos_names = []
             for p in range(self.p):
-                name = (
-                    self.reader.stage_positions[p].get("Label")
-                    or p
-                )
+                name = self.reader.stage_positions[p].get("Label") or p
                 self.pos_names.append(name)
         else:
             self.pos_names = ["0"]
