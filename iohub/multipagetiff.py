@@ -209,15 +209,17 @@ class MicromanagerOmeTiffReader(ReaderBase):
                 for ch in self.mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
 
-            # dimensions based on mm metadata
-            # do not reflect final written dimensions
-            # these will change after data is loaded
             self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
             self.height = self.mm_meta["Summary"]["Height"]
             self.width = self.mm_meta["Summary"]["Width"]
-            self.frames = self.mm_meta["Summary"]["Frames"]
-            self.slices = self.mm_meta["Summary"]["Slices"]
-            self.channels = self.mm_meta["Summary"]["Channels"]
+
+            # dimensions based on mm metadata
+            # do not reflect final written dimensions
+            # these set in _gather_index_maps
+            #
+            # self.frames = self.mm_meta["Summary"]["Frames"]
+            # self.slices = self.mm_meta["Summary"]["Slices"]
+            # self.channels = self.mm_meta["Summary"]["Channels"]
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
