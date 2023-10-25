@@ -120,7 +120,7 @@ class ReaderBase:
         Returns
         -------
         list[tuple[str, str, str]]
-            FOV name paths, e.g. ('A', '1', '0') or ('0', '0', '1')
+            FOV name paths, e.g. ('A', '1', '0') or ('0', '1', '000000')
         """
         if not self.stage_positions:
             raise ValueError("Stage position metadata not available.")
@@ -133,15 +133,15 @@ class ReaderBase:
         except Exception:
             try:
                 # Look for "'1-Pos000_000', '2-Pos000_001', ... "
-                # and split into ('1', 'Pos000_000'), ...
+                # and split into ('1', '000_000'), ...
                 labels = [
                     pos["Label"].split("-Pos") for pos in self.stage_positions
                 ]
-                # split '000_000' into ('000', '000')
-                # and remove leading zeros so output is ('0', '0', '0')
+                # remove underscore from FOV name, i.e. '000_000'
+                # collect all wells in row '0' so output is
+                # ('0', '1', '000000')
                 return [
-                    (row, *[str(int(s)) for s in col_fov.split("_")])
-                    for row, col_fov in labels
+                    ("0", col, fov.replace("_", "")) for col, fov in labels
                 ]
             except Exception:
                 labels = [pos.get("Label") for pos in self.stage_positions]
