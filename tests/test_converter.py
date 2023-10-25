@@ -148,9 +148,9 @@ def test_converter_ometiff_mock_non_hcs(mock_non_hcs_ome_tiff_reader):
 
 
 def test_converter_ometiff_hcs_numerical(
-    setup_test_data, setup_mm2gamma_ome_tiffs
+    setup_test_data, setup_mm2gamma_ome_tiff_hcs
 ):
-    _, data, _ = setup_mm2gamma_ome_tiffs
+    _, data, _ = setup_mm2gamma_ome_tiff_hcs
     with TemporaryDirectory() as tmp_dir:
         output = os.path.join(tmp_dir, "converted.zarr")
         converter = TIFFConverter(data, output, hcs_plate=True)
