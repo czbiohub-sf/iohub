@@ -310,10 +310,10 @@ class TIFFConverter:
         try:
             self.pos_names = []
             for p in range(self.p):
-                name = (
-                    self.summary_metadata["StagePositions"][p].get("Label")
-                    or p
-                )
+                try:
+                    name = self.reader.stage_positions[p]["Label"]
+                except (IndexError, KeyError):
+                    name = p
                 self.pos_names.append(name)
         except Exception:
             self.pos_names = ["0"]
@@ -357,7 +357,8 @@ class TIFFConverter:
         # it's OK if a single image is larger than MAX_CHUNK_SIZE
         while (
             chunks[-3] > 1
-            and np.prod(chunks) * bytes_per_pixel > MAX_CHUNK_SIZE
+            and np.prod(chunks, dtype=np.int64) * bytes_per_pixel
+            > MAX_CHUNK_SIZE
         ):
             chunks[-3] = np.ceil(chunks[-3] / 2).astype(int)
 
