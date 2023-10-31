@@ -86,16 +86,6 @@ def test_converter_ometiff(
         assert intensity == raw_array.sum()
 
 
-def test_converter_ometiff_hcs_not_available(
-    setup_test_data, setup_mm2gamma_ome_tiffs
-):
-    _, _, data = setup_mm2gamma_ome_tiffs
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        with pytest.raises(ValueError, match="position"):
-            _ = TIFFConverter(data, output, hcs_plate=True)
-
-
 @pytest.fixture(scope="function")
 def mock_hcs_ome_tiff_reader(
     setup_mm2gamma_ome_tiffs, monkeypatch: pytest.MonkeyPatch
@@ -117,6 +107,26 @@ def mock_hcs_ome_tiff_reader(
     return data, expected_ngff_name
 
 
+@pytest.fixture(scope="function")
+def mock_non_hcs_ome_tiff_reader(
+    setup_mm2gamma_ome_tiffs, monkeypatch: pytest.MonkeyPatch
+):
+    all_ometiffs, _, _ = setup_mm2gamma_ome_tiffs
+    # dataset with 4 positions without HCS site names
+    data = os.path.join(all_ometiffs, "mm2.0-20201209_4p_2t_5z_1c_512k_1")
+    mock_stage_positions = [
+        {"Label": "0"},
+        {"Label": "1"},
+        {"Label": "2"},
+        {"Label": "3"},
+    ]
+    monkeypatch.setattr(
+        "iohub.convert.MicromanagerOmeTiffReader.stage_positions",
+        mock_stage_positions,
+    )
+    return data
+
+
 def test_converter_ometiff_mock_hcs(setup_test_data, mock_hcs_ome_tiff_reader):
     data, expected_ngff_name = mock_hcs_ome_tiff_reader
     with TemporaryDirectory() as tmp_dir:
@@ -127,6 +137,28 @@ def test_converter_ometiff_mock_hcs(setup_test_data, mock_hcs_ome_tiff_reader):
             assert expected_ngff_name == {
                 name for name, _ in plate.positions()
             }
+
+
+def test_converter_ometiff_mock_non_hcs(mock_non_hcs_ome_tiff_reader):
+    data = mock_non_hcs_ome_tiff_reader
+    with TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, "converted.zarr")
+        with pytest.raises(ValueError, match="HCS position labels"):
+            TIFFConverter(data, output, hcs_plate=True)
+
+
+def test_converter_ometiff_hcs_numerical(
+    setup_test_data, setup_mm2gamma_ome_tiff_hcs
+):
+    _, data, _ = setup_mm2gamma_ome_tiff_hcs
+    with TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, "converted.zarr")
+        converter = TIFFConverter(data, output, hcs_plate=True)
+        converter.run()
+        with open_ome_zarr(output, mode="r") as plate:
+            for name, _ in plate.positions():
+                for segment in name.split("/"):
+                    assert segment.isdigit()
 
 
 @given(**CONVERTER_TEST_GIVEN)
