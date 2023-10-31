@@ -307,16 +307,13 @@ class TIFFConverter:
         """Append a list of pos names in ascending order
         (order in which they were acquired).
         """
-        try:
-            self.pos_names = []
-            for p in range(self.p):
-                try:
-                    name = self.reader.stage_positions[p]["Label"]
-                except (IndexError, KeyError):
-                    name = p
-                self.pos_names.append(name)
-        except Exception:
-            self.pos_names = ["0"]
+        self.pos_names = []
+        for p in range(self.p):
+            try:
+                name = self.reader.stage_positions[p]["Label"]
+            except (IndexError, KeyError):
+                name = str(p)
+            self.pos_names.append(name)
 
     def _get_image_array(self, p: int, t: int, c: int, z: int):
         try:
