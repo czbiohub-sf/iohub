@@ -929,7 +929,7 @@ class Position(NGFFNode):
             )
 
             chunks = _pad_shape(
-                _scale_integers(array.shape[-3:], factor), len(shape)
+                _scale_integers(array.chunks, factor), len(shape)
             )
 
             transforms = deepcopy(
