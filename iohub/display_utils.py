@@ -8,7 +8,15 @@ from iohub.ngff_meta import ChannelMeta, WindowDict
 """ Dictionary with key works and most popular fluorescent probes """
 CHANNEL_COLORS = {
     # emission around 510-525 nm
-    "lime": ["GFP", "Green", "Alexa488", "GCaMP", "FITC", "mNeon", "MitoViewGreen"],
+    "lime": [
+        "GFP",
+        "Green",
+        "Alexa488",
+        "GCaMP",
+        "FITC",
+        "mNeon",
+        "MitoViewGreen",
+    ],
     # emission around 580 - 610 nm
     "magenta": [
         "TXR",
