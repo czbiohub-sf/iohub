@@ -9,48 +9,24 @@ from iohub.ngff_meta import ChannelMeta, WindowDict
 CHANNEL_COLORS = {
     # emission around 510-525 nm
     "lime": [
-        "GFP",
         "Green",
-        "Alexa488",
-        "GCaMP",
+        "GFP",
         "FITC",
         "mNeon",
-        "MitoViewGreen",
     ],
     # emission around 580 - 610 nm
     "magenta": [
+        "Magenta",
         "TXR",
         "RFP",
         "mScarlet",
         "mCherry",
-        "dTomato",
-        "magenta",
-        "Alexa568",
-        "LysotrackerRed",
     ],
     # emission around 440 - 460 nmm
-    "blue": ["DAPI", "Blue", "BFP"],
+    "blue": ["Blue", "DAPI", "BFP", "Hoechst"],
     "red": ["Red"],
-    "yellow": ["Cy3", "Yellow"],  # Emission around 540-570 nm
-    "orange": ["Orange", "Cy5", "MitoView633"],  # emission around 650-680 nm
-    "white": [
-        "S0",
-        "S1",
-        "S2",
-        "S3",
-        "S4",
-        "BF",
-        "Phase2D",
-        "Phase3D",
-        "Retardance",
-        "Orientation",
-        "State0",
-        "State1",
-        "State2",
-        "State3",
-        "State4",
-        "white",
-    ],
+    "yellow": ["Yellow", "Cy3"],  # Emission around 540-570 nm
+    "orange": ["Orange", "Cy5"],  # emission around 650-680 nm
 }
 
 
