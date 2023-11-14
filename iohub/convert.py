@@ -549,14 +549,18 @@ class TIFFConverter:
                     position_image_plane_metadata[frame_key] = image_metadata
 
             logging.info("Writing ND-TIFF image plane metadata...")
-            # image plane metadata is save in 
+            # image plane metadata is save in
             # output_dir/row/well/fov/img/image_plane_metadata.json,
             # e.g. output_dir/A/1/FOV0/0/image_plane_metadata.json
             with open(
-                os.path.join(self.output_dir, zarr_arr.path, "image_plane_metadata.json"),
+                os.path.join(
+                    self.output_dir, zarr_arr.path, "image_plane_metadata.json"
+                ),
                 mode="x",
             ) as metadata_file:
-                json.dump(position_image_plane_metadata, metadata_file, indent=4)
+                json.dump(
+                    position_image_plane_metadata, metadata_file, indent=4
+                )
 
     def run(self, check_image: bool = True):
         """Runs the conversion.

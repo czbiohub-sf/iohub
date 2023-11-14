@@ -195,10 +195,14 @@ def test_converter_ndtiff(
                 _check_scale_transform(pos, scale_voxels)
                 intensity += pos["0"][:].sum()
                 assert os.path.isfile(
-                    os.path.join(output, pos_name, "0", "image_plane_metadata.json")
+                    os.path.join(
+                        output, pos_name, "0", "image_plane_metadata.json"
+                    )
                 )
         assert intensity == raw_array.sum()
-        with open(os.path.join(output, pos_name, "0", "image_plane_metadata.json")) as f:
+        with open(
+            os.path.join(output, pos_name, "0", "image_plane_metadata.json")
+        ) as f:
             metadata = json.load(f)
             assert len(metadata) == np.prod(raw_array.shape[1:-2])
             key = "0/0/0"
