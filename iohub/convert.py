@@ -307,16 +307,13 @@ class TIFFConverter:
         """Append a list of pos names in ascending order
         (order in which they were acquired).
         """
-        if self.p > 1:
-            self.pos_names = []
-            for p in range(self.p):
-                try:
-                    name = self.reader.stage_positions[p]["Label"]
-                except (IndexError, KeyError):
-                    name = p
-                self.pos_names.append(name)
-        else:
-            self.pos_names = ["0"]
+        self.pos_names = []
+        for p in range(self.p):
+            try:
+                name = self.reader.stage_positions[p]["Label"]
+            except (IndexError, KeyError):
+                name = str(p)
+            self.pos_names.append(name)
 
     def _get_image_array(self, p: int, t: int, c: int, z: int):
         try:
@@ -465,8 +462,9 @@ class TIFFConverter:
             "Converting Timepoints/Channels: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
-        all_ndtiff_metadata = {}
         for p_idx in tqdm(range(self.p), bar_format=bar_format_positions):
+            position_image_plane_metadata = {}
+
             # ndtiff_pos_idx, ndtiff_t_idx, and ndtiff_channel_idx
             # may be None
             ndtiff_pos_idx = (
@@ -544,19 +542,25 @@ class TIFFConverter:
                         ndtiff_channel_idx,
                         z_idx,
                     )
-                    # row/well/fov/img/T/C/Z
+                    # T/C/Z
                     frame_key = "/".join(
-                        [zarr_arr.path]
-                        + [str(i) for i in (t_idx, c_idx, z_idx)]
+                        [str(i) for i in (t_idx, c_idx, z_idx)]
                     )
-                    all_ndtiff_metadata[frame_key] = image_metadata
+                    position_image_plane_metadata[frame_key] = image_metadata
 
-        logging.info("Writing ND-TIFF image plane metadata...")
-        with open(
-            os.path.join(self.output_dir, "image_plane_metadata.json"),
-            mode="x",
-        ) as metadata_file:
-            json.dump(all_ndtiff_metadata, metadata_file, indent=4)
+            logging.info("Writing ND-TIFF image plane metadata...")
+            # image plane metadata is save in
+            # output_dir/row/well/fov/img/image_plane_metadata.json,
+            # e.g. output_dir/A/1/FOV0/0/image_plane_metadata.json
+            with open(
+                os.path.join(
+                    self.output_dir, zarr_arr.path, "image_plane_metadata.json"
+                ),
+                mode="x",
+            ) as metadata_file:
+                json.dump(
+                    position_image_plane_metadata, metadata_file, indent=4
+                )
 
     def run(self, check_image: bool = True):
         """Runs the conversion.
