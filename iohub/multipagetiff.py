@@ -83,6 +83,13 @@ class MicromanagerOmeTiffReader(ReaderBase):
         for file in self._files:
             tf = TiffFile(file)
             meta = tf.micromanager_metadata["IndexMap"]
+            meta = {
+                "Channel": meta[:, 0],
+                "Slice": meta[:, 1],
+                "Frame": meta[:, 2],
+                "Position": meta[:, 3],
+                "Offset": meta[:, 4],
+            }
             tf.close()
             offsets = self._get_byte_offsets(meta)
             for page, offset in enumerate(offsets):

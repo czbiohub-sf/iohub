@@ -96,7 +96,7 @@ def setup_mm2gamma_ome_tiff_hcs():
         f for f in os.listdir(test_data) if os.path.isdir(pjoin(test_data, f))
     ]
     # select datasets with multiple positioons; here they all have 4 positions
-    hcs_subfolders = [f for f in subfolders if '4p' in f]
+    hcs_subfolders = [f for f in subfolders if "4p" in f]
 
     # specific folder
     one_folder = pjoin(test_data, hcs_subfolders[0])

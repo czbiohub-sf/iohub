@@ -14,7 +14,6 @@ def _mock_fov(
     shape: tuple[int, ...],
     scale: tuple[float, float, float],
 ) -> Position:
-
     ds_path = tmp_path / "ds.zarr"
     channels = [str(i) for i in range(shape[1])]
 
@@ -47,7 +46,6 @@ def _mock_fov(
 
 @pytest.mark.parametrize("ndim", [2, 5])
 def test_pyramid(tmp_path: Path, ndim: int) -> None:
-
     # not all shapes not divisible by 2
     shape = (2, 2, 67, 115, 128)[-ndim:]
     scale = (2, 0.5, 0.5)[-min(3, ndim) :]

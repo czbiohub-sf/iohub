@@ -59,7 +59,6 @@ def test_output_dims_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 
 def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
-
     _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
@@ -70,7 +69,6 @@ def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 
 def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
-
     _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
@@ -82,7 +80,6 @@ def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 
 def test_get_image_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
-
     _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)
@@ -94,7 +91,6 @@ def test_get_image_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
 
 
 def test_get_num_positions_mm2gamma(setup_test_data, setup_mm2gamma_zarr):
-
     _ = setup_test_data
     src = setup_mm2gamma_zarr
     mmr = ZarrReader(src)

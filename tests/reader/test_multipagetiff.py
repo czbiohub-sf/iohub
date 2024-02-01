@@ -62,7 +62,6 @@ def test_output_dims_mm2gamma_incomplete(
 
 
 def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
-
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = MicromanagerOmeTiffReader(rand_folder, extract_data=True)
@@ -73,7 +72,6 @@ def test_get_zarr_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
-
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = MicromanagerOmeTiffReader(rand_folder, extract_data=True)
@@ -84,7 +82,6 @@ def test_get_array_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
 
 
 def test_get_num_positions_mm2gamma(setup_test_data, setup_mm2gamma_ome_tiffs):
-
     _ = setup_test_data
     _, _, rand_folder = setup_mm2gamma_ome_tiffs
     mmr = MicromanagerOmeTiffReader(rand_folder, extract_data=True)
@@ -132,7 +129,6 @@ def test_output_dims_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 
 
 def test_get_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
-
     _ = setup_test_data
     _, _, rand_folder = setup_mm1422_ome_tiffs
     mmr = MicromanagerOmeTiffReader(rand_folder, extract_data=True)
@@ -143,7 +139,6 @@ def test_get_zarr_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 
 
 def test_get_array_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
-
     _ = setup_test_data
     _, _, rand_folder = setup_mm1422_ome_tiffs
     mmr = MicromanagerOmeTiffReader(rand_folder, extract_data=True)
@@ -154,7 +149,6 @@ def test_get_array_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
 
 
 def test_get_num_positions_mm1422(setup_test_data, setup_mm1422_ome_tiffs):
-
     _ = setup_test_data
     _, _, rand_folder = setup_mm1422_ome_tiffs
     mmr = MicromanagerOmeTiffReader(rand_folder, extract_data=True)

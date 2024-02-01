@@ -95,7 +95,12 @@ def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
     suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
 )
 def test_cli_convert_ome_tiff(
-    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, s, chk,
+    setup_test_data,
+    setup_mm2gamma_ome_tiffs,
+    f,
+    g,
+    s,
+    chk,
 ):
     _, _, input_dir = setup_mm2gamma_ome_tiffs
     runner = CliRunner()
