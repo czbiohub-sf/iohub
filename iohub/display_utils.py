@@ -7,37 +7,26 @@ from iohub.ngff_meta import ChannelMeta, WindowDict
 
 """ Dictionary with key works and most popular fluorescent probes """
 CHANNEL_COLORS = {
-    "lime": ["GFP", "Green", "Alexa488", "GCaMP", "FITC", "mNeon"],
+    # emission around 510-525 nm
+    "lime": [
+        "Green",
+        "GFP",
+        "FITC",
+        "mNeon",
+    ],
+    # emission around 580 - 610 nm
     "magenta": [
+        "Magenta",
         "TXR",
         "RFP",
         "mScarlet",
         "mCherry",
-        "dTomato",
-        "Cy5",
-        "Alexa561",
     ],
-    "blue": ["DAPI", "Blue", "BFP"],
+    # emission around 440 - 460 nmm
+    "blue": ["Blue", "DAPI", "BFP", "Hoechst"],
     "red": ["Red"],
-    "orange": ["Orange", "Cy3"],
-    "yellow": ["Alexa561"],
-    "white": [
-        "S0",
-        "S1",
-        "S2",
-        "S3",
-        "S4",
-        "BF",
-        "Phase2D",
-        "Phase3D",
-        "Retardance",
-        "Orientation",
-        "State0",
-        "State1",
-        "State2",
-        "State3",
-        "State4",
-    ],
+    "yellow": ["Yellow", "Cy3"],  # Emission around 540-570 nm
+    "orange": ["Orange", "Cy5"],  # emission around 650-680 nm
 }
 
 

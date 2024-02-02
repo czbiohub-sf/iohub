@@ -90,20 +90,21 @@ def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
     assert "scale (um)" in result_pos.output
 
 
-@given(f=st.booleans(), g=st.booleans(), s=st.booleans())
+@given(f=st.booleans(), g=st.booleans(), s=st.booleans(), chk=st.booleans())
 @settings(
     suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
 )
 def test_cli_convert_ome_tiff(
-    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, s
+    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, s, chk,
 ):
     _, _, input_dir = setup_mm2gamma_ome_tiffs
     runner = CliRunner()
     f = "-f ometiff" if f else ""
     g = "-g" if g else ""
+    chk = "--check-image" if chk else "--no-check-image"
     with TemporaryDirectory() as tmp_dir:
         output_dir = os.path.join(tmp_dir, "converted.zarr")
-        cmd = ["convert", "-i", input_dir, "-o", output_dir, "-s", s]
+        cmd = ["convert", "-i", input_dir, "-o", output_dir, "-s", s, chk]
         if f:
             cmd += ["-f", "ometiff"]
         if g:
