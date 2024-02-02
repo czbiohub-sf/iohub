@@ -13,7 +13,6 @@ from iohub.reader_base import ReaderBase
 
 
 class ZarrReader(ReaderBase):
-
     """
     .. deprecated:: 0.0.1
         `ZarrReader` will be removed in future iohub releases,
