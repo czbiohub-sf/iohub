@@ -63,7 +63,7 @@ class NDTiffReader(ReaderBase):
                 position_metadata = {}
                 img_metadata = self.get_image_metadata(position, 0, 0, 0)
 
-                if all(
+                if img_metadata is not None and all(
                     key in img_metadata.keys()
                     for key in [
                         "XPosition_um_Intended",

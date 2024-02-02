@@ -177,9 +177,32 @@ class MMStack(MicroManagerFOVMapping):
                     ""
                 ]  # empty strings
 
-        elif mm_version == "1.4.22":
-            for ch in self.mm_meta["Summary"]["ChNames"]:
-                self.channel_names.append(ch)
+            elif mm_version == "1.4.22":
+                for ch in self.mm_meta["Summary"].get("ChNames", []):
+                    self.channel_names.append(ch)
+
+            # Parsing of data acquired with the OpenCell
+            # acquisition script on the Dragonfly miroscope
+            elif (
+                mm_version == "2.0.1 20220920"
+                and self.mm_meta["Summary"]["Prefix"] == "raw_data"
+            ):
+                file_names = set(
+                    [(key[0], val[0]) for key, val in self.coord_map.items()]
+                )
+
+                if self.mm_meta["Summary"]["Positions"] > 1:
+                    self._stage_positions = [None] * self.positions
+
+                    for p_idx, file_name in file_names:
+                        site_idx = int(file_name.split("_")[-1].split("-")[0])
+                        pos = self._simplify_stage_position(
+                            self.mm_meta["Summary"]["StagePositions"][site_idx]
+                        )
+                        self._stage_positions[p_idx] = pos
+
+                for ch in self.mm_meta["Summary"]["ChNames"]:
+                    self.channel_names.append(ch)
 
             else:
                 if self.mm_meta["Summary"]["Positions"] > 1:
@@ -191,12 +214,22 @@ class MMStack(MicroManagerFOVMapping):
                         )
                         self._stage_positions.append(pos)
 
-            for ch in self.mm_meta["Summary"]["ChNames"]:
-                self.channel_names.append(ch)
+                for ch in self.mm_meta["Summary"].get("ChNames", []):
+                    self.channel_names.append(ch)
 
-        self._z_step_size = self.mm_meta["Summary"]["z-step_um"]
+            self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
+            self.height = self.mm_meta["Summary"]["Height"]
+            self.width = self.mm_meta["Summary"]["Width"]
 
-    def _simplify_stage_position(self, stage_pos: dict) -> dict:
+            # dimensions based on mm metadata
+            # do not reflect final written dimensions
+            # these set in _gather_index_maps
+            #
+            # self.frames = self.mm_meta["Summary"]["Frames"]
+            # self.slices = self.mm_meta["Summary"]["Slices"]
+            # self.channels = self.mm_meta["Summary"]["Channels"]
+
+    def _simplify_stage_position(self, stage_pos: dict):
         """
         flattens the nested dictionary structure of stage_pos
         and removes superfluous keys

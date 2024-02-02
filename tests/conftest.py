@@ -87,6 +87,27 @@ def setup_mm2gamma_ome_tiffs(setup_test_data):
 
 
 @pytest.fixture(scope="function")
+def setup_mm2gamma_ome_tiff_hcs():
+    test_data = pjoin(
+        os.getcwd(), ".pytest_temp", "test_data", "MM20_ome-tiffs"
+    )
+
+    subfolders = [
+        f for f in os.listdir(test_data) if os.path.isdir(pjoin(test_data, f))
+    ]
+    # select datasets with multiple positioons; here they all have 4 positions
+    hcs_subfolders = [f for f in subfolders if '4p' in f]
+
+    # specific folder
+    one_folder = pjoin(test_data, hcs_subfolders[0])
+    # random folder
+    rand_folder = pjoin(test_data, random.choice(hcs_subfolders))
+    # return path to unzipped folder containing test images
+    # as well as specific folder paths
+    yield test_data, one_folder, rand_folder
+
+
+@pytest.fixture(scope="function")
 def setup_mm2gamma_ome_tiffs_incomplete():
     """
     This fixture returns a dataset with 11 timepoints

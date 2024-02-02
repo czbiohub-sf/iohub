@@ -90,7 +90,23 @@ def info(files, verbose):
     help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
     "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
 )
-def convert(input, output, format, scale_voxels, grid_layout, chunks):
+@click.option(
+    "--check-image/--no-check-image",
+    "-chk/-no-chk",
+    required=False,
+    is_flag=True,
+    default=True,
+    help="Checks copied image data with original data.",
+)
+def convert(
+    input,
+    output,
+    format,
+    scale_voxels,
+    grid_layout,
+    chunks,
+    check_image,
+):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
@@ -100,4 +116,4 @@ def convert(input, output, format, scale_voxels, grid_layout, chunks):
         grid_layout=grid_layout,
         chunks=chunks,
     )
-    converter.run()
+    converter.run(check_image=check_image)
