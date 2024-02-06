@@ -11,7 +11,7 @@ import natsort
 import tifffile as tiff
 import zarr
 
-from iohub.multipagetiff import MMStack
+from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
 from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
 # from iohub.singlepagetiff import MicromanagerSequenceReader

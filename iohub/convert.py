@@ -224,7 +224,8 @@ class TIFFConverter:
 
     def _gen_chunks(self, input_chunks):
         if not input_chunks:
-            chunks = [1, 1, 1, self.y, self.x]
+            logging.debug("No chunk size specified, using ZYX.")
+            chunks = [1, 1, self.z, self.y, self.x]
         elif isinstance(input_chunks, tuple):
             chunks = list(input_chunks)
         elif isinstance(input_chunks, str):

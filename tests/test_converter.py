@@ -13,6 +13,13 @@ from iohub.convert import TIFFConverter
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
 
+from tests.conftest import mm2gamma_ome_tiffs
+
+
+def pytest_generate_tests(metafunc):
+    if "mm2gamma_ome_tiff" in metafunc.fixturenames:
+        metafunc.parametrize("mm2gamma_ome_tiff", mm2gamma_ome_tiffs)
+
 
 def _check_scale_transform(position: Position) -> None:
     """Check scale transformation of the highest resolution level."""
@@ -26,14 +33,14 @@ def _check_scale_transform(position: Position) -> None:
 
 
 def _check_chunks(
-    position: Position, chunks: Literal["XY", "XYZ"] | tuple[int]
+    position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] | None
 ) -> None:
     """Check chunk size of the highest resolution level."""
     img = position["0"]
     match chunks:
         case "XY":
             assert img.chunks == (1,) * 3 + img.shape[-2:]
-        case "XYZ":
+        case "XYZ" | None:
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
             assert img.chunks == chunks
@@ -42,33 +49,36 @@ def _check_chunks(
 
 
 @pytest.mark.parametrize("grid_layout", [True, False])
-def test_converter_ometiff(mm2gamma_ome_tiffs, grid_layout):
+@pytest.mark.parametrize("chunks", ["XY", "XYZ", (1, 1, 3, 256, 256)])
+def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
-    for data in mm2gamma_ome_tiffs:
-        with TemporaryDirectory() as tmp_dir:
-            output = os.path.join(tmp_dir, "converted.zarr")
-            converter = TIFFConverter(data, output, grid_layout=grid_layout)
-            assert isinstance(converter.reader, MMStack)
-            with TiffFile(next(data.glob("*.tif*"))) as tf:
-                raw_array = tf.asarray()
-                assert (
-                    converter.summary_metadata
-                    == tf.micromanager_metadata["Summary"]
-                )
-            assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-                raw_array.shape
-            ), data
-            assert list(converter.metadata.keys()) == [
-                "iohub_version",
-                "Summary",
-            ]
-            converter()
-            with open_ome_zarr(output, mode="r") as result:
-                intensity = 0
-                for _, pos in result.positions():
-                    _check_scale_transform(pos)
-                    intensity += pos["0"][:].sum()
-            assert intensity == raw_array.sum()
+    with TemporaryDirectory() as tmp_dir:
+        output = os.path.join(tmp_dir, "converted.zarr")
+        converter = TIFFConverter(
+            mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks
+        )
+        assert isinstance(converter.reader, MMStack)
+        with TiffFile(next(mm2gamma_ome_tiff.glob("*.tif*"))) as tf:
+            raw_array = tf.asarray()
+            assert (
+                converter.summary_metadata
+                == tf.micromanager_metadata["Summary"]
+            )
+        assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
+            raw_array.shape
+        )
+        assert list(converter.metadata.keys()) == [
+            "iohub_version",
+            "Summary",
+        ]
+        converter()
+        with open_ome_zarr(output, mode="r") as result:
+            intensity = 0
+            for _, pos in result.positions():
+                _check_scale_transform(pos)
+                _check_chunks(pos, chunks)
+                intensity += pos["0"][:].sum()
+        assert intensity == raw_array.sum()
 
 
 @pytest.fixture(scope="function")

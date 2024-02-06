@@ -3,7 +3,7 @@ import re
 import pytest
 from xarray import DataArray
 
-from iohub.multipagetiff import MMOmeTiffFOV, MMStack
+from iohub.mmstack import MMOmeTiffFOV, MMStack
 from tests.conftest import mm2gamma_ome_tiffs
 
 

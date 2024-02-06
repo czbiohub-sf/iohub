@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 import zarr
 
-from iohub.multipagetiff import MicromanagerOmeTiffReader
+from iohub.mmstack import MicromanagerOmeTiffReader
 from iohub.ndtiff import NDTiffReader
 from iohub.reader import read_micromanager
 from iohub.singlepagetiff import MicromanagerSequenceReader
