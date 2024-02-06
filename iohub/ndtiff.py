@@ -1,22 +1,64 @@
+from __future__ import annotations
+
 import warnings
-from typing import Literal, Union
+from pathlib import Path
+from typing import Iterable, Literal
 
 import numpy as np
-import zarr
 from ndtiff import Dataset
+from numpy.typing import ArrayLike
+from xarray import DataArray
+from xarray import Dataset as XDataset
 
-from iohub.reader_base import ReaderBase
+from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
 
 
-class NDTiffReader(ReaderBase):
+class NDTiffFOV(MicroManagerFOV):
+    def __init__(self, parent: NDTiffDataset, key: int) -> None:
+        super().__init__(parent, key)
+        self._xdata = parent[key]
+
+    @property
+    def axes_names(self) -> list[str]:
+        return list(self._xdata.dims)
+
+    @property
+    def shape(self) -> tuple[int, int, int, int, int]:
+        return self._xdata.shape
+
+    @property
+    def dtype(self) -> np.dtype:
+        return self._xdata.dtype
+
+    @property
+    def t_scale(self) -> float:
+        return 1.0
+
+    def __getitem__(
+        self, key: int | slice | tuple[int | slice, ...]
+    ) -> ArrayLike:
+        return self._xdata[key]
+
+    @property
+    def xdata(self) -> DataArray:
+        return self._xdata
+
+
+class NDTiffDataset(MicroManagerFOVMapping):
     """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
     effectively a wrapper of the `ndtiff.Dataset` class.
     """
 
-    def __init__(self, data_path: str):
+    def __init__(self, data_path: Path | str):
         super().__init__()
-
+        data_path = Path(data_path)
+        if not data_path.is_dir():
+            raise FileNotFoundError(
+                f"{data_path} is not a valid NDTiff dataset."
+            )
         self.dataset = Dataset(data_path)
+        self.root = data_path
+        self.dirname = data_path.name
         self._axes = self.dataset.axes
         self._str_posistion_axis = self._check_str_axis("position")
         self._str_channel_axis = self._check_str_axis("channel")
@@ -31,11 +73,33 @@ class NDTiffReader(ReaderBase):
         self.width = self.dataset.image_width
         self.dtype = self.dataset.dtype
 
-        self.mm_meta = self._get_summary_metadata()
+        self._mm_meta = self._get_summary_metadata()
         self.channel_names = list(self.dataset.get_channel_names())
-        self.stage_positions = self.mm_meta["Summary"]["StagePositions"]
-        self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
-        self.xy_pixel_size = self.mm_meta["Summary"]["PixelSize_um"]
+        self.stage_positions = self._mm_meta["Summary"]["StagePositions"]
+        self.z_step_size = self._mm_meta["Summary"]["z-step_um"]
+        self.xy_pixel_size = self._mm_meta["Summary"]["PixelSize_um"]
+        self._all_position_keys = self._parse_all_position_keys()
+        self._gather_xdata()
+
+    def __enter__(self) -> NDTiffDataset:
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> bool:
+        return False
+
+    def __iter__(self) -> Iterable[tuple[str, NDTiffFOV]]:
+        for key in self._all_position_keys:
+            yield str(key), NDTiffFOV(self, key)
+
+    def __contains__(self, key: str | int) -> bool:
+        return key in self._all_position_keys
+
+    def __len__(self) -> int:
+        return len(self._all_position_keys)
+
+    def __getitem__(self, key: int | str) -> NDTiffFOV:
+        key = self._check_position_key(key)
+        return NDTiffFOV(self, key)
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
@@ -101,9 +165,7 @@ class NDTiffReader(ReaderBase):
         """Channel axis is string-valued"""
         return self._str_channel_axis
 
-    def _check_coordinates(
-        self, p: Union[int, str], t: int, c: Union[int, str], z: int
-    ):
+    def _check_coordinates(self, p: int | str, t: int, c: int | str, z: int):
         """
         Check that the (p, t, c, z) coordinates are part of the ndtiff dataset.
         Replace coordinates with None or string values in specific cases - see
@@ -164,108 +226,50 @@ class NDTiffReader(ReaderBase):
 
         return (*coords,)
 
-    def get_num_positions(self) -> int:
+    def _parse_all_position_keys(self) -> list[int | str | None]:
         return (
             len(self._axes["position"])
             if "position" in self._axes.keys()
-            else 1
+            else [None]
         )
 
-    def get_image(
-        self, p: Union[int, str], t: int, c: Union[int, str], z: int
-    ) -> np.ndarray:
-        """return the image at the provided PTCZ coordinates
-
-        Parameters
-        ----------
-        p : int or str
-            position index
-        t : int
-            time index
-        c : int or str
-            channel index
-        z : int
-            slice/z index
-
-        Returns
-        -------
-        np.ndarray
-            numpy array of shape (Y, X) at given coordinate
-        """
-
-        image = None
-        p, t, c, z = self._check_coordinates(p, t, c, z)
-
-        if self.dataset.has_image(position=p, time=t, channel=c, z=z):
-            image = self.dataset.read_image(position=p, time=t, channel=c, z=z)
-
-        return image
-
-    def get_zarr(self, position: Union[int, str]) -> zarr.array:
-        """.. danger::
-            The behavior of this function is different from other
-            ReaderBase children as it return a Dask array
-            rather than a zarr array.
-
-        Return a lazy-loaded dask array with shape TCZYX at the given position.
-        Data is not loaded into memory.
-
-
-        Parameters
-        ----------
-        position:       (int) position index
-
-        Returns
-        -------
-        position:       (zarr.array)
-
-        """
-        # TODO: try casting the dask array into a zarr array
-        # using `dask.array.to_zarr()`.
-        # Currently this call brings the data into memory
+    def _check_position_key(self, key: int | str) -> bool:
         if "position" in self._axes.keys():
-            if position not in self._axes["position"]:
+            if key not in self._axes["position"]:
                 raise ValueError(
-                    f"Position index {position} is not part of this dataset. "
+                    f"Position index {key} is not part of this dataset. "
                     f'Valid positions are: {self._axes["position"]}'
                 )
         else:
-            if position not in (0, None):
+            if key not in (0, None):
                 warnings.warn(
-                    f"Position index {position} is not part of this dataset. "
+                    f"Position index {key} is not part of this dataset. "
                     "Returning data at the default position."
                 )
-                position = None
+                key = None
+        return key
 
-        da = self.dataset.as_array(position=position)
-        shape = (
-            self.frames,
-            self.channels,
-            self.slices,
-            self.height,
-            self.width,
-        )
-        # add singleton axes so output is 5D
-        return da.reshape(shape)
-
-    def get_array(self, position: Union[int, str]) -> np.ndarray:
-        """
-        return a numpy array with shape TCZYX at the given position
-
-        Parameters
-        ----------
-        position:       (int) position index
-
-        Returns
-        -------
-        position:       (np.ndarray)
-
-        """
-
-        return np.asarray(self.get_zarr(position))
+    def _gather_xdata(self) -> None:
+        das = []
+        for key in self._all_position_keys:
+            da = self.dataset.as_array(position=self._check_position_key(key))
+            shape = (
+                self.frames,
+                self.channels,
+                self.slices,
+                self.height,
+                self.width,
+            )
+            # add singleton axes so output is 5D
+            da = DataArray(da.reshape(shape), dims=self._axes.keys())
+        if self._all_position_keys == [None]:
+            pkeys = ["0"]
+        else:
+            pkeys = [str(k) for k in self._all_position_keys]
+        self._xdata = XDataset(das, coords={"position": pkeys})
 
     def get_image_metadata(
-        self, p: Union[int, str], t: int, c: Union[int, str], z: int
+        self, p: int | str, t: int, c: int | str, z: int
     ) -> dict:
         """Return image plane metadata at the requested PTCZ coordinates
 
