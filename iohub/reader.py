@@ -11,13 +11,12 @@ import natsort
 import tifffile as tiff
 import zarr
 
-from iohub.multipagetiff import MicromanagerOmeTiffReader
-from iohub.ndtiff import NDTiffReader
+from iohub.multipagetiff import MMStack
+from iohub.ndtiff import NDTiffDataset
 from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
-from iohub.reader_base import ReaderBase
-from iohub.singlepagetiff import MicromanagerSequenceReader
-from iohub.upti import UPTIReader
-from iohub.zarrfile import ZarrReader
+# from iohub.singlepagetiff import MicromanagerSequenceReader
+# from iohub.upti import UPTIReader
+# from iohub.zarrfile import ZarrReader
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -134,6 +133,7 @@ def _get_sub_dirs(f: str):
 
 
 def _infer_format(path: str):
+    path = str(path)
     extra_info = None
     if ngff_version := _check_zarr_data_type(path):
         data_type = "omezarr"
@@ -157,7 +157,6 @@ def read_micromanager(
     data_type: Literal[
         "singlepagetiff", "ometiff", "ndtiff", "omezarr"
     ] = None,
-    extract_data: bool = False,
     log_level: int = logging.WARNING,
 ):
     """Read image arrays and metadata from a Micro-Manager dataset.
@@ -172,9 +171,6 @@ def read_micromanager(
     data_type :
     Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"], optional
         Dataset format, by default None
-    extract_data : bool, optional
-        True if ome_series should be extracted immediately for TIFF datasets,
-        by default False
     log_level : int, optional
         One of 0, 10, 20, 30, 40, 50 for
         NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL, respectively,
@@ -198,9 +194,9 @@ def read_micromanager(
         data_type, extra_info = _infer_format(path)
     # identify data structure type
     if data_type == "ometiff":
-        return MicromanagerOmeTiffReader(path, extract_data)
+        return MMStack(path)
     elif data_type == "singlepagetiff":
-        return MicromanagerSequenceReader(path, extract_data)
+        return MicromanagerSequenceReader(path)
     elif data_type == "omezarr":
         if extra_info is None:
             _, extra_info = _infer_format(path)
@@ -218,9 +214,9 @@ def read_micromanager(
             raise ValueError(f"NGFF version {extra_info} is not supported.")
         return ZarrReader(path, version=extra_info)
     elif data_type == "ndtiff":
-        return NDTiffReader(path)
+        return NDTiffDataset(path)
     elif data_type == "upti":
-        return UPTIReader(path, extract_data)
+        return UPTIReader(path)
     else:
         raise ValueError(f"Reader of type {data_type} is not implemented")
 
@@ -261,7 +257,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
     ch_msg = f"Channel names:\t\t {reader.channel_names}"
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
     msgs = []
-    if isinstance(reader, ReaderBase):
+    if True:
         zyx_scale = (
             reader.z_step_size,
             reader.xy_pixel_size,

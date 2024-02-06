@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import glob
 import logging
-import os
 from copy import copy
-from typing import TYPE_CHECKING, Iterable, Union
+from typing import TYPE_CHECKING, Iterable
 
+from pathlib import Path
 import dask.array as da
 import numpy as np
 import zarr
@@ -15,15 +14,36 @@ from xarray import DataArray
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
 
+
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-def _normalize_mm_pos_key(key: Union[str, int]) -> int:
+__all__ = ["MMOmeTiffFOV", "MMStack"]
+
+
+def _normalize_mm_pos_key(key: str | int) -> int:
     try:
         return int(key)
     except TypeError:
         raise TypeError("Micro-Manager position keys must be integers.")
+
+
+def find_first_ome_tiff_in_mmstack(data_path: Path) -> Path:
+    if data_path.is_file():
+        if "ome.tif" in data_path.name:
+            return data_path
+        else:
+            raise ValueError("{data_path} is not a OME-TIFF file.")
+    elif data_path.is_dir():
+        files = data_path.glob("*.ome.tif")
+        try:
+            return next(files)
+        except StopIteration:
+            raise FileNotFoundError(
+                f"Path {data_path} contains no OME-TIFF files."
+            )
+    raise FileNotFoundError(f"Path {data_path} does not exist.")
 
 
 class MMOmeTiffFOV(MicroManagerFOV):
@@ -33,24 +53,22 @@ class MMOmeTiffFOV(MicroManagerFOV):
 
     @property
     def axes_names(self) -> list[str]:
-        return list(self.xdata.dims)
+        return list(self._xdata.dims)
 
     @property
     def shape(self) -> tuple[int, int, int, int, int]:
-        return self.xdata.shape
+        return self._xdata.shape
 
     @property
     def dtype(self) -> np.dtype:
-        return self.xdata.dtype
+        return self._xdata.dtype
 
     @property
     def t_scale(self) -> float:
-        return 1
+        return 1.0
 
-    def __getitem__(
-        self, key: Union[int, slice, tuple[Union[int, slice], ...]]
-    ) -> ArrayLike:
-        return self.xdata[key]
+    def __getitem__(self, key: int | slice | tuple[int | slice]) -> ArrayLike:
+        return self._xdata[key]
 
     @property
     def xdata(self) -> DataArray:
@@ -69,22 +87,10 @@ class MMStack(MicroManagerFOVMapping):
 
     def __init__(self, data_path: StrOrBytesPath):
         super().__init__()
-        data_path = str(data_path)
-        if os.path.isfile(data_path):
-            if "ome.tif" in os.path.basename(data_path):
-                first_file = data_path
-            else:
-                raise ValueError("{data_path} is not a OME-TIFF file.")
-        elif os.path.isdir(data_path):
-            files = glob.glob(os.path.join(data_path, "*.ome.tif"))
-            if not files:
-                raise FileNotFoundError(
-                    f"Path {data_path} contains no OME-TIFF files, "
-                )
-            else:
-                first_file = files[0]
-        self.root = os.path.dirname(first_file)
-        self.dirname = os.path.basename(self.root)
+        data_path = Path(data_path)
+        first_file = find_first_ome_tiff_in_mmstack(data_path)
+        self.root = first_file.parent
+        self.dirname = self.root.name
         self._first_tif = TiffFile(first_file, is_mmstack=True)
         self._parse_data()
         self._store = None
@@ -116,6 +122,7 @@ class MMStack(MicroManagerFOVMapping):
         xset = xarr.to_dataset(dim="R")
         self._xdata = xset
         self._set_mm_meta()
+        self._infer_image_meta()
 
     @property
     def xdata(self):
@@ -124,7 +131,7 @@ class MMStack(MicroManagerFOVMapping):
     def __len__(self) -> int:
         return self.positions
 
-    def __getitem__(self, key: Union[str, int]) -> MMOmeTiffFOV:
+    def __getitem__(self, key: str | int) -> MMOmeTiffFOV:
         key = _normalize_mm_pos_key(key)
         return MMOmeTiffFOV(self, key)
 
@@ -134,13 +141,13 @@ class MMStack(MicroManagerFOVMapping):
     def __delitem__(self, key, value) -> None:
         raise PermissionError("MMStack is read-only.")
 
-    def __contains__(self, key: Union[str, int]) -> bool:
+    def __contains__(self, key: str | int) -> bool:
         key = _normalize_mm_pos_key(key)
         return key in self.xdata
 
     def __iter__(self) -> Iterable[tuple[str, MMOmeTiffFOV]]:
         for key in self.xdata:
-            yield key, self[key]
+            yield str(key), self[key]
 
     def __enter__(self) -> MMStack:
         return self
@@ -154,15 +161,18 @@ class MMStack(MicroManagerFOVMapping):
 
     def _set_mm_meta(self) -> None:
         """Assign image metadata from summary metadata."""
-        self.mm_meta = self._first_tif.micromanager_metadata
-        mm_version = self.mm_meta["Summary"]["MicroManagerVersion"]
+        self._mm_meta = self._first_tif.micromanager_metadata
+        self.channel_names = []
+        mm_version = self._mm_meta["Summary"]["MicroManagerVersion"]
         if "beta" in mm_version:
-            if self.mm_meta["Summary"]["Positions"] > 1:
+            if self._mm_meta["Summary"]["Positions"] > 1:
                 self._stage_positions = []
 
-                for p in range(len(self.mm_meta["Summary"]["StagePositions"])):
+                for p in range(
+                    len(self._mm_meta["Summary"]["StagePositions"])
+                ):
                     pos = self._simplify_stage_position_beta(
-                        self.mm_meta["Summary"]["StagePositions"][p]
+                        self._mm_meta["Summary"]["StagePositions"][p]
                     )
                     self._stage_positions.append(pos)
 
@@ -170,64 +180,56 @@ class MMStack(MicroManagerFOVMapping):
             # so I'm wrapping in a try-except and setting the
             # channel names to empty strings if it fails.
             try:
-                for ch in self.mm_meta["Summary"]["ChNames"]:
+                for ch in self._mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
-            except KeyError:
-                self.channel_names = self.mm_meta["Summary"]["Channels"] * [
+            except Exception:
+                self.channel_names = self._mm_meta["Summary"]["Channels"] * [
                     ""
                 ]  # empty strings
 
-            elif mm_version == "1.4.22":
-                for ch in self.mm_meta["Summary"].get("ChNames", []):
-                    self.channel_names.append(ch)
+        elif mm_version == "1.4.22":
+            for ch in self._mm_meta["Summary"].get("ChNames", []):
+                self.channel_names.append(ch)
 
-            # Parsing of data acquired with the OpenCell
-            # acquisition script on the Dragonfly miroscope
-            elif (
-                mm_version == "2.0.1 20220920"
-                and self.mm_meta["Summary"]["Prefix"] == "raw_data"
-            ):
-                file_names = set(
-                    [(key[0], val[0]) for key, val in self.coord_map.items()]
-                )
+        # Parsing of data acquired with the OpenCell
+        # acquisition script on the Dragonfly miroscope
+        elif (
+            mm_version == "2.0.1 20220920"
+            and self._mm_meta["Summary"]["Prefix"] == "raw_data"
+        ):
+            file_names = set(
+                [(key[0], val[0]) for key, val in self.coord_map.items()]
+            )
 
-                if self.mm_meta["Summary"]["Positions"] > 1:
-                    self._stage_positions = [None] * self.positions
+            if self._mm_meta["Summary"]["Positions"] > 1:
+                self._stage_positions = [None] * self.positions
 
-                    for p_idx, file_name in file_names:
-                        site_idx = int(file_name.split("_")[-1].split("-")[0])
-                        pos = self._simplify_stage_position(
-                            self.mm_meta["Summary"]["StagePositions"][site_idx]
-                        )
-                        self._stage_positions[p_idx] = pos
+                for p_idx, file_name in file_names:
+                    site_idx = int(file_name.split("_")[-1].split("-")[0])
+                    pos = self._simplify_stage_position(
+                        self._mm_meta["Summary"]["StagePositions"][site_idx]
+                    )
+                    self._stage_positions[p_idx] = pos
 
-                for ch in self.mm_meta["Summary"]["ChNames"]:
-                    self.channel_names.append(ch)
+            for ch in self._mm_meta["Summary"]["ChNames"]:
+                self.channel_names.append(ch)
 
-            else:
-                if self.mm_meta["Summary"]["Positions"] > 1:
-                    self._stage_positions = []
+        else:
+            if self._mm_meta["Summary"]["Positions"] > 1:
+                self._stage_positions = []
 
-                    for p in range(self.mm_meta["Summary"]["Positions"]):
-                        pos = self._simplify_stage_position(
-                            self.mm_meta["Summary"]["StagePositions"][p]
-                        )
-                        self._stage_positions.append(pos)
+                for p in range(self._mm_meta["Summary"]["Positions"]):
+                    pos = self._simplify_stage_position(
+                        self._mm_meta["Summary"]["StagePositions"][p]
+                    )
+                    self._stage_positions.append(pos)
 
-                for ch in self.mm_meta["Summary"].get("ChNames", []):
-                    self.channel_names.append(ch)
+            for ch in self._mm_meta["Summary"].get("ChNames", []):
+                self.channel_names.append(ch)
 
-            self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
-            self.height = self.mm_meta["Summary"]["Height"]
-            self.width = self.mm_meta["Summary"]["Width"]
-
-            # dimensions based on mm metadata
-            # do not reflect final written dimensions
-            # these set in _gather_index_maps
-            #
-            # self.frames = self.mm_meta["Summary"]["Frames"]
-            # self.slices = self.mm_meta["Summary"]["Slices"]
-            # self.channels = self.mm_meta["Summary"]["Channels"]
+        self._z_step_size = self._mm_meta["Summary"]["z-step_um"]
+        self.height = self._mm_meta["Summary"]["Height"]
+        self.width = self._mm_meta["Summary"]["Width"]
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
@@ -316,8 +318,3 @@ class MMStack(MicroManagerFOVMapping):
                 self._xy_pixel_size,
             )
         )
-
-
-class MicromanagerOmeTiffReader:
-    # FIXME: delete this. It's kept for now to avoid import error.
-    pass

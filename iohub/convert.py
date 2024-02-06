@@ -1,21 +1,19 @@
-import copy
 import json
 import logging
 import os
-from typing import Literal, Union
+from typing import Literal
 
 import numpy as np
 from dask.array import to_zarr
-from numpy.typing import NDArray
 from tqdm import tqdm
 from tqdm.contrib.itertools import product
 
 from iohub._version import version as iohub_version
 from iohub.ngff import Position, TransformationMeta, open_ome_zarr
 from iohub.reader import (
-    MicromanagerOmeTiffReader,
-    MicromanagerSequenceReader,
-    NDTiffReader,
+    MMStack,
+    # MicromanagerSequenceReader,
+    NDTiffDataset,
     read_micromanager,
 )
 
@@ -78,9 +76,9 @@ class TIFFConverter:
     Parameters
     ----------
     input_dir : str
-        Input directory
+        Input directory path
     output_dir : str
-        Output directory
+        Output zarr directory path
     data_type : Literal['singlepagetiff', 'ometiff', 'ndtiff'], optional
         Input data type, by default None
     grid_layout : bool, optional
@@ -90,9 +88,6 @@ class TIFFConverter:
     chunks : tuple[int] or Literal['XY', 'XYZ'], optional
         Chunk size of the output Zarr arrays, by default None
         (chunk by XY planes, this is the fastest at converting time)
-    scale_voxels : bool, optional
-        Write voxel size (XY pixel size and Z-step) as scaling transform,
-        by default True
     hcs_plate : bool, optional
         Create NGFF HCS layout based on position names from the
         HCS Site Generator in Micro-Manager (only available for OME-TIFF),
@@ -112,8 +107,7 @@ class TIFFConverter:
         output_dir: str,
         data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
         grid_layout: int = False,
-        chunks: Union[tuple[int], Literal["XY", "XYZ"]] = None,
-        scale_voxels: bool = True,
+        chunks: tuple[int] | Literal["XY", "XYZ"] = None,
         hcs_plate: bool = None,
     ):
         logging.debug("Checking output.")
@@ -121,13 +115,10 @@ class TIFFConverter:
             raise ValueError("Please specify .zarr at the end of your output")
         self.output_dir = output_dir
         logging.info("Initializing data.")
-        self.reader = read_micromanager(
-            input_dir, data_type, extract_data=False
-        )
+        self.reader = read_micromanager(input_dir, data_type)
         if reader_type := type(self.reader) not in (
-            MicromanagerSequenceReader,
-            MicromanagerOmeTiffReader,
-            NDTiffReader,
+            MMStack,
+            NDTiffDataset,
         ):
             raise TypeError(
                 f"Reader type {reader_type} not supported for conversion."
@@ -139,13 +130,7 @@ class TIFFConverter:
         self.save_name = os.path.basename(output_dir)
         logging.debug("Getting dataset summary information.")
         self.coord_map = dict()
-        self.p = self.reader.get_num_positions()
-        if self.p is None and isinstance(
-            self.reader, MicromanagerSequenceReader
-        ):
-            # single page tiff reader may not return total positions
-            # for `get_num_positions()`
-            self.p = self.reader.num_positions
+        self.p = len(self.reader)
         self.t = self.reader.frames
         self.c = self.reader.channels
         self.z = self.reader.slices
@@ -161,7 +146,6 @@ class TIFFConverter:
             f"Found Dataset {self.save_name} with "
             f"dimensions (P, T, C, Z, Y, X): {self.dim}"
         )
-        self._gen_coordset()
         self.metadata = dict()
         self.metadata["iohub_version"] = iohub_version
         self.metadata["Summary"] = self.summary_metadata
@@ -180,7 +164,7 @@ class TIFFConverter:
         else:
             self._make_default_grid()
         self.chunks = self._gen_chunks(chunks)
-        self.transform = self._scale_voxels() if scale_voxels else None
+        self.transform = self._scale_voxels()
 
     def _check_hcs_sites(self):
         if self.hcs_plate:
@@ -196,82 +180,12 @@ class TIFFConverter:
                 )
 
     def _make_default_grid(self):
-        if isinstance(self.reader, NDTiffReader):
+        if isinstance(self.reader, NDTiffDataset):
             self.position_grid = np.array([self.pos_names])
         else:
             self.position_grid = np.expand_dims(
                 np.arange(self.p, dtype=int), axis=0
             )
-
-    def _gen_coordset(self):
-        """Generates a coordinate set in the dimensional order
-        to which the data was acquired.
-        This is important for keeping track of where
-        we are in the tiff file during conversion
-
-        Returns
-        -------
-        list(tuples) w/ length [N_images]
-
-        """
-
-        # if acquisition information is not present
-        # make an arbitrary dimension order
-        if (
-            not self.summary_metadata
-            or "AxisOrder" not in self.summary_metadata.keys()
-        ):
-            self.p_dim = 0
-            self.t_dim = 1
-            self.c_dim = 2
-            self.z_dim = 3
-
-            self.dim_order = ["position", "time", "channel", "z"]
-
-            # Assume data was collected slice first
-            dims = [
-                self.reader.slices,
-                self.reader.channels,
-                self.reader.frames,
-                self.reader.get_num_positions(),
-            ]
-
-        # get the order in which the data was collected to minimize i/o calls
-        else:
-            # 4 possible dimensions: p, c, t, z
-            n_dim = 4
-            hashmap = {
-                "position": self.p,
-                "time": self.t,
-                "channel": self.c,
-                "z": self.z,
-            }
-
-            self.dim_order = copy.copy(self.summary_metadata["AxisOrder"])
-
-            dims = []
-            for i in range(n_dim):
-                if i < len(self.dim_order):
-                    dims.append(hashmap[self.dim_order[i]])
-                else:
-                    dims.append(1)
-
-            # Reverse the dimension order and gather dimension indices
-            self.dim_order.reverse()
-            self.p_dim = self.dim_order.index("position")
-            self.t_dim = self.dim_order.index("time")
-            self.c_dim = self.dim_order.index("channel")
-            self.z_dim = self.dim_order.index("z")
-
-        # create array of coordinate tuples with innermost dimension
-        # being the first dim acquired
-        self.coords = [
-            (dim3, dim2, dim1, dim0)
-            for dim3 in range(dims[3])
-            for dim2 in range(dims[2])
-            for dim1 in range(dims[1])
-            for dim0 in range(dims[0])
-        ]
 
     def _get_position_coords(self):
         row_max = 0
@@ -296,13 +210,6 @@ class TIFFConverter:
 
         return coords_list, row_max + 1, col_max + 1
 
-    def _perform_image_check(self, zarr_img: NDArray, tiff_img: NDArray):
-        if not np.array_equal(zarr_img, tiff_img):
-            raise ValueError(
-                "Converted Zarr image does not match the raw data. "
-                "Conversion Failed."
-            )
-
     def _get_pos_names(self):
         """Append a list of pos names in ascending order
         (order in which they were acquired).
@@ -314,23 +221,6 @@ class TIFFConverter:
             except (IndexError, KeyError):
                 name = str(p)
             self.pos_names.append(name)
-
-    def _get_image_array(self, p: int, t: int, c: int, z: int):
-        try:
-            return np.asarray(self.reader.get_image(p, t, c, z))
-        except KeyError:
-            # Converter will log a warning and
-            # fill zeros if the image does not exist
-            return None
-
-    def _get_coord_reorder(self, coord):
-        reordered = [
-            coord[self.p_dim],
-            coord[self.t_dim],
-            coord[self.c_dim],
-            coord[self.z_dim],
-        ]
-        return tuple(reordered)
 
     def _gen_chunks(self, input_chunks):
         if not input_chunks:
@@ -373,32 +263,9 @@ class TIFFConverter:
         return cns
 
     def _scale_voxels(self):
-        z_um = self.reader.z_step_size
-        if self.z_dim > 1 and not z_um:
-            logging.warning(
-                "Z step size is not available. "
-                "Setting the Z axis scaling factor to 1."
-            )
-            z_um = 1.0
-        xy_warning = (
-            " Setting X and Y scaling factors to 1."
-            " Suppress this warning by setting `scale-voxels` to false."
-        )
-        if isinstance(self.reader, MicromanagerSequenceReader):
-            logging.warning(
-                "Pixel size detection is not supported for single-page TIFFs."
-                + xy_warning
-            )
-            xy_um = 1.0
-        else:
-            try:
-                xy_um = self.reader.xy_pixel_size
-            except AttributeError as e:
-                logging.warning(str(e) + xy_warning)
-                xy_um = 1.0
         return [
             TransformationMeta(
-                type="scale", scale=[1.0, 1.0, z_um, xy_um, xy_um]
+                type="scale", scale=[1.0, 1.0, *self.reader.zyx_scale]
             )
         ]
 
@@ -562,15 +429,8 @@ class TIFFConverter:
                     position_image_plane_metadata, metadata_file, indent=4
                 )
 
-    def run(self, check_image: bool = True):
-        """Runs the conversion.
-
-        Parameters
-        ----------
-        check_image : bool, optional
-            Whether to check that the written Zarr array has the same
-            pixel values as in TIFF files, by default True
-        """
+    def __call__(self):
+        """Runs the conversion."""
         logging.debug("Setting up Zarr store.")
         self._init_zarr_arrays()
         bar_format_images = (
@@ -579,34 +439,17 @@ class TIFFConverter:
         )
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
-        if isinstance(self.reader, NDTiffReader):
-            if check_image:
-                logging.info(
-                    "Checking converted image is not supported for ND-TIFF. "
-                    "Ignoring..."
-                )
-            self._convert_ndtiff()
-        else:
-            for coord in tqdm(self.coords, bar_format=bar_format_images):
-                coord_reorder = self._get_coord_reorder(coord)
-                p, t, c, z = coord_reorder
-                img_raw = self._get_image_array(p, t, c, z)
-                if img_raw is None or not getattr(img_raw, "shape", ()):
-                    # Leave incomplete datasets zero-filled
-                    logging.warning(
-                        f"Cannot load image at PTCZ={(p, t, c, z)}, filling "
-                        "with zeros. Check if the raw data is incomplete."
-                    )
-                    continue
-                else:
-                    pos_idx = coord_reorder[0]
-                ndtiff_pos_idx = self.zarr_position_names[pos_idx]
-                zarr_img = self.writer[ndtiff_pos_idx]["0"]
-                zarr_img[coord_reorder[1:]] = img_raw
-                if check_image:
-                    self._perform_image_check(
-                        zarr_img[coord_reorder[1:]], img_raw
-                    )
+        match self.reader:
+            case NDTiffDataset():
+                self._convert_ndtiff()
+            case MMStack():
+                for p_idx in tqdm(range(self.p), bar_format=bar_format_images):
+                    da = self.reader[p_idx].xdata.data
+                    zarr_pos_name = self.zarr_position_names[p_idx]
+                    zarr_arr = self.writer[zarr_pos_name]["0"]
+                    to_zarr(da.rechunk(self.chunks), zarr_arr)
+            case _:
+                raise NotImplementedError()
 
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
