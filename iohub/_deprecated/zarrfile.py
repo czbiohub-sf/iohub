@@ -9,7 +9,7 @@ from typing import Literal
 import numpy as np
 import zarr
 
-from iohub.reader_base import ReaderBase
+from iohub._deprecated.reader_base import ReaderBase
 
 
 class ZarrReader(ReaderBase):

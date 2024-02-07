@@ -75,20 +75,20 @@ mm2gamma_singlepage_tiffs_incomplete = (
 )
 
 
-setup_mm1422_ome_tiffs = subdirs(test_datasets, "MM1422_ome-tiffs")
+mm1422_ome_tiffs = subdirs(test_datasets, "MM1422_ome-tiffs")
 
 
-setup_mm1422_singlepage_tiffs = subdirs(
+mm1422_singlepage_tiffs = subdirs(
     test_datasets, "MM1422_singlepage-tiffs"
 )
 
 
-setup_mm2gamma_zarr = (
+mm2gamma_zarr_v01 = (
     test_datasets / "MM20_zarr" / "mm2.0-20201209_4p_2t_5z_1c_512k_1.zarr"
 )
 
 
-setup_hcs_ref = (
+hcs_ref = (
     test_datasets / "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"
 )
 

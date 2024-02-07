@@ -1,24 +1,38 @@
 import json
 import logging
 import os
-from tempfile import TemporaryDirectory
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
 import pytest
 from ndtiff import Dataset
-from tifffile import TiffFile, TiffSequence
+from tifffile import TiffFile
 
 from iohub.convert import TIFFConverter
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
-
-from tests.conftest import mm2gamma_ome_tiffs
+from tests.conftest import (
+    mm2gamma_ome_tiffs,
+    ndtiff_v2_datasets,
+    ndtiff_v3_labeled_positions,
+)
 
 
 def pytest_generate_tests(metafunc):
     if "mm2gamma_ome_tiff" in metafunc.fixturenames:
         metafunc.parametrize("mm2gamma_ome_tiff", mm2gamma_ome_tiffs)
+    if "ndtiff_datasets" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "ndtiff_datasets",
+            ndtiff_v2_datasets + [ndtiff_v3_labeled_positions],
+        )
+    if "grid_layout" in metafunc.fixturenames:
+        metafunc.parametrize("grid_layout", [True, False])
+    if "chunks" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "chunks", ["XY", "XYZ", (1, 1, 3, 256, 256), None]
+        )
 
 
 def _check_scale_transform(position: Position) -> None:
@@ -48,46 +62,52 @@ def _check_chunks(
             assert False
 
 
-@pytest.mark.parametrize("grid_layout", [True, False])
-@pytest.mark.parametrize("chunks", ["XY", "XYZ", (1, 1, 3, 256, 256)])
-def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks):
+def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        converter = TIFFConverter(
-            mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks
+    output = tmpdir / "converted.zarr"
+    converter = TIFFConverter(
+        mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks
+    )
+    assert isinstance(converter.reader, MMStack)
+    with TiffFile(next(mm2gamma_ome_tiff.glob("*.tif*"))) as tf:
+        raw_array = tf.asarray()
+        assert (
+            converter.summary_metadata == tf.micromanager_metadata["Summary"]
         )
-        assert isinstance(converter.reader, MMStack)
-        with TiffFile(next(mm2gamma_ome_tiff.glob("*.tif*"))) as tf:
-            raw_array = tf.asarray()
-            assert (
-                converter.summary_metadata
-                == tf.micromanager_metadata["Summary"]
+    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
+        raw_array.shape
+    )
+    assert list(converter.metadata.keys()) == [
+        "iohub_version",
+        "Summary",
+    ]
+    converter()
+    with open_ome_zarr(output, mode="r") as result:
+        intensity = 0
+        for pos_name, pos in result.positions():
+            _check_scale_transform(pos)
+            _check_chunks(pos, chunks)
+            intensity += pos["0"][:].sum()
+            assert os.path.isfile(
+                os.path.join(
+                    output, pos_name, "0", "image_plane_metadata.json"
+                )
             )
-        assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-            raw_array.shape
-        )
-        assert list(converter.metadata.keys()) == [
-            "iohub_version",
-            "Summary",
-        ]
-        converter()
-        with open_ome_zarr(output, mode="r") as result:
-            intensity = 0
-            for _, pos in result.positions():
-                _check_scale_transform(pos)
-                _check_chunks(pos, chunks)
-                intensity += pos["0"][:].sum()
         assert intensity == raw_array.sum()
+
+
+@pytest.fixture(scope="module")
+def example_ome_tiff() -> Path:
+    for d in mm2gamma_ome_tiffs:
+        if d.name == "mm2.0-20201209_4p_2t_5z_1c_512k_1":
+            return d
 
 
 @pytest.fixture(scope="function")
 def mock_hcs_ome_tiff_reader(
-    setup_mm2gamma_ome_tiffs, monkeypatch: pytest.MonkeyPatch
+    example_ome_tiff, monkeypatch: pytest.MonkeyPatch
 ):
-    all_ometiffs, _, _ = setup_mm2gamma_ome_tiffs
     # dataset with 4 positions without HCS site names
-    data = os.path.join(all_ometiffs, "mm2.0-20201209_4p_2t_5z_1c_512k_1")
     mock_stage_positions = [
         {"Label": "A1-Site_0"},
         {"Label": "A1-Site_1"},
@@ -96,19 +116,17 @@ def mock_hcs_ome_tiff_reader(
     ]
     expected_ngff_name = {"A/1/0", "A/1/1", "B/4/0", "H/12/0"}
     monkeypatch.setattr(
-        "iohub.convert.MicromanagerOmeTiffReader.stage_positions",
+        "iohub.convert.MMStack.stage_positions",
         mock_stage_positions,
     )
-    return data, expected_ngff_name
+    return example_ome_tiff, expected_ngff_name
 
 
 @pytest.fixture(scope="function")
 def mock_non_hcs_ome_tiff_reader(
-    setup_mm2gamma_ome_tiffs, monkeypatch: pytest.MonkeyPatch
+    example_ome_tiff, monkeypatch: pytest.MonkeyPatch
 ):
-    all_ometiffs, _, _ = setup_mm2gamma_ome_tiffs
     # dataset with 4 positions without HCS site names
-    data = os.path.join(all_ometiffs, "mm2.0-20201209_4p_2t_5z_1c_512k_1")
     mock_stage_positions = [
         {"Label": "0"},
         {"Label": "1"},
@@ -116,144 +134,83 @@ def mock_non_hcs_ome_tiff_reader(
         {"Label": "3"},
     ]
     monkeypatch.setattr(
-        "iohub.convert.MicromanagerOmeTiffReader.stage_positions",
+        "iohub.convert.MMStack.stage_positions",
         mock_stage_positions,
     )
-    return data
+    return example_ome_tiff
 
 
-def test_converter_ometiff_mock_hcs(setup_test_data, mock_hcs_ome_tiff_reader):
+def test_converter_ometiff_mock_hcs(mock_hcs_ome_tiff_reader, tmpdir):
     data, expected_ngff_name = mock_hcs_ome_tiff_reader
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        converter = TIFFConverter(data, output, hcs_plate=True)
-        converter.run()
-        with open_ome_zarr(output, mode="r") as plate:
-            assert expected_ngff_name == {
-                name for name, _ in plate.positions()
-            }
+    output = tmpdir / "converted.zarr"
+    converter = TIFFConverter(data, output, hcs_plate=True)
+    converter()
+    with open_ome_zarr(output, mode="r") as plate:
+        assert expected_ngff_name == {name for name, _ in plate.positions()}
 
 
-def test_converter_ometiff_mock_non_hcs(mock_non_hcs_ome_tiff_reader):
+def test_converter_ometiff_mock_non_hcs(mock_non_hcs_ome_tiff_reader, tmpdir):
     data = mock_non_hcs_ome_tiff_reader
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        with pytest.raises(ValueError, match="HCS position labels"):
-            TIFFConverter(data, output, hcs_plate=True)
+    output = tmpdir / "converted.zarr"
+    with pytest.raises(ValueError, match="HCS position labels"):
+        TIFFConverter(data, output, hcs_plate=True)
 
 
-def test_converter_ometiff_hcs_numerical(
-    setup_test_data, setup_mm2gamma_ome_tiff_hcs
-):
-    _, data, _ = setup_mm2gamma_ome_tiff_hcs
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        converter = TIFFConverter(data, output, hcs_plate=True)
-        converter.run()
-        with open_ome_zarr(output, mode="r") as plate:
-            for name, _ in plate.positions():
-                for segment in name.split("/"):
-                    assert segment.isdigit()
+def test_converter_ometiff_hcs_numerical(example_ome_tiff, tmpdir):
+    output = tmpdir / "converted.zarr"
+    converter = TIFFConverter(example_ome_tiff, output, hcs_plate=True)
+    converter()
+    with open_ome_zarr(output, mode="r") as plate:
+        for name, _ in plate.positions():
+            for segment in name.split("/"):
+                assert segment.isdigit()
 
 
-@pytest.mark.parametrize("grid_layout", [True, False])
-def test_converter_ndtiff(
-    setup_test_data,
-    setup_pycromanager_test_data,
-    grid_layout,
-    scale_voxels,
-):
+def test_converter_ndtiff(ndtiff_datasets: Path, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
-    _, _, data = setup_pycromanager_test_data
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        converter = TIFFConverter(
-            data,
-            output,
-            grid_layout=grid_layout,
-            scale_voxels=scale_voxels,
-        )
-        assert isinstance(converter.reader, NDTiffDataset)
-        raw_array = np.asarray(Dataset(data).as_array())
-        assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-            raw_array.shape
-        )
-        assert list(converter.metadata.keys()) == [
-            "iohub_version",
-            "Summary",
-        ]
-        converter.run(check_image=True)
-        with open_ome_zarr(output, mode="r") as result:
-            intensity = 0
-            for pos_name, pos in result.positions():
-                _check_scale_transform(pos, scale_voxels)
-                intensity += pos["0"][:].sum()
-                assert os.path.isfile(
-                    os.path.join(
-                        output, pos_name, "0", "image_plane_metadata.json"
-                    )
+    output = tmpdir / "converted.zarr"
+    converter = TIFFConverter(
+        ndtiff_datasets, output, grid_layout=grid_layout, chunks=chunks
+    )
+    assert isinstance(converter.reader, NDTiffDataset)
+    raw_array = np.asarray(Dataset(str(ndtiff_datasets)).as_array())
+    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
+        raw_array.shape
+    )
+    assert list(converter.metadata.keys()) == [
+        "iohub_version",
+        "Summary",
+    ]
+    converter()
+    with open_ome_zarr(output, mode="r") as result:
+        intensity = 0
+        for pos_name, pos in result.positions():
+            _check_scale_transform(pos)
+            _check_chunks(pos, chunks)
+            intensity += pos["0"][:].sum()
+            assert os.path.isfile(
+                os.path.join(
+                    output, pos_name, "0", "image_plane_metadata.json"
                 )
-        assert intensity == raw_array.sum()
-        with open(
-            os.path.join(output, pos_name, "0", "image_plane_metadata.json")
-        ) as f:
-            metadata = json.load(f)
-            assert len(metadata) == np.prod(raw_array.shape[1:-2])
-            key = "0/0/0"
-            assert key in metadata
-            assert "ElapsedTime-ms" in metadata[key]
+            )
+    assert intensity == raw_array.sum()
+    with open(
+        os.path.join(output, pos_name, "0", "image_plane_metadata.json")
+    ) as f:
+        metadata = json.load(f)
+        key = "0/0/0"
+        assert key in metadata
+        assert "ElapsedTime-ms" in metadata[key]
 
 
-def test_converter_ndtiff_v3_position_labels(
-    ndtiff_v3_labeled_positions,
-):
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        converter = TIFFConverter(ndtiff_v3_labeled_positions, output)
-        converter.run(check_image=True)
-        with open_ome_zarr(output, mode="r") as result:
-            assert result.channel_names == ["0"]
-            assert [name.split("/")[1] for name, _ in result.positions()] == [
-                "Pos0",
-                "Pos1",
-                "Pos2",
-            ]
-
-
-@pytest.mark.skip(reason="Not implemented")
-@pytest.mark.parametrize("grid_layout", [True, False])
-def test_converter_singlepagetiff(
-    setup_test_data,
-    setup_mm2gamma_singlepage_tiffs,
-    grid_layout,
-    scale_voxels,
-    caplog,
-):
-    logging.getLogger("tifffile").setLevel(logging.ERROR)
-    _, _, data = setup_mm2gamma_singlepage_tiffs
-    with TemporaryDirectory() as tmp_dir:
-        output = os.path.join(tmp_dir, "converted.zarr")
-        converter = TIFFConverter(
-            data,
-            output,
-            grid_layout=grid_layout,
-            scale_voxels=scale_voxels,
-        )
-        assert isinstance(converter.reader, MicromanagerSequenceReader)
-        if scale_voxels:
-            assert "Pixel size detection is not supported" in caplog.text
-        with TiffSequence(data.glob("**/*.tif*")) as ts:
-            raw_array = ts.asarray()
-        assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-            raw_array.shape
-        )
-        assert list(converter.metadata.keys()) == [
-            "iohub_version",
-            "Summary",
+def test_converter_ndtiff_v3_position_labels(tmpdir):
+    output = tmpdir / "converted.zarr"
+    converter = TIFFConverter(ndtiff_v3_labeled_positions, output)
+    converter()
+    with open_ome_zarr(output, mode="r") as result:
+        assert result.channel_names == ["0"]
+        assert [name.split("/")[1] for name, _ in result.positions()] == [
+            "Pos0",
+            "Pos1",
+            "Pos2",
         ]
-        converter.run(check_image=True)
-        with open_ome_zarr(output, mode="r") as result:
-            intensity = 0
-            for _, pos in result.positions():
-                intensity += pos["0"][:].sum()
-        assert intensity == raw_array.sum()

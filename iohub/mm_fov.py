@@ -21,11 +21,31 @@ class MicroManagerFOV(BaseFOV):
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
-        return self.parent.zyx_scales
+        return self.parent.zyx_scale
 
     @property
     def channel_names(self) -> list[str]:
         return self.parent.channel_names
+
+    def frame_metadata(self, t: int, z: int, c: int) -> dict | None:
+        """
+        Return image plane metadata for a given camera frame.
+
+        Parameters
+        ----------
+        t : int
+            Time index.
+        z : int
+            Z slice index.
+        c : int
+            Channel index.
+
+        Returns
+        -------
+        dict | None
+            Image plane metadata. None if not available.
+        """
+        raise NotImplementedError
 
 
 class MicroManagerFOVMapping(BaseFOVMapping):

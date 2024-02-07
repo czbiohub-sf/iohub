@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import warnings
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Any, Iterable, Literal
 
 import numpy as np
+from natsort import natsorted
 from ndtiff import Dataset
 from numpy.typing import ArrayLike
 from xarray import DataArray
@@ -16,7 +17,7 @@ from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
 class NDTiffFOV(MicroManagerFOV):
     def __init__(self, parent: NDTiffDataset, key: int) -> None:
         super().__init__(parent, key)
-        self._xdata = parent[key]
+        self._xdata = parent.xdata[key]
 
     @property
     def axes_names(self) -> list[str]:
@@ -43,6 +44,9 @@ class NDTiffFOV(MicroManagerFOV):
     def xdata(self) -> DataArray:
         return self._xdata
 
+    def frame_metadata(self, t: int, c: int, z: int) -> dict[str, Any]:
+        return self.parent.get_image_metadata(self._position, t, c, z)
+
 
 class NDTiffDataset(MicroManagerFOVMapping):
     """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
@@ -56,7 +60,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
             raise FileNotFoundError(
                 f"{data_path} is not a valid NDTiff dataset."
             )
-        self.dataset = Dataset(data_path)
+        self.dataset = Dataset(str(data_path))
         self.root = data_path
         self.dirname = data_path.name
         self._axes = self.dataset.axes
@@ -73,39 +77,45 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self.width = self.dataset.image_width
         self.dtype = self.dataset.dtype
 
+        self._all_position_keys = self._parse_all_position_keys()
         self._mm_meta = self._get_summary_metadata()
         self.channel_names = list(self.dataset.get_channel_names())
         self.stage_positions = self._mm_meta["Summary"]["StagePositions"]
-        self.z_step_size = self._mm_meta["Summary"]["z-step_um"]
-        self.xy_pixel_size = self._mm_meta["Summary"]["PixelSize_um"]
-        self._all_position_keys = self._parse_all_position_keys()
+        z_step_size = float(self._mm_meta["Summary"]["z-step_um"] or 1.0)
+        xy_pixel_size = float(self._mm_meta["Summary"]["PixelSize_um"] or 1.0)
+        self.zyx_scale = (z_step_size, xy_pixel_size, xy_pixel_size)
         self._gather_xdata()
 
     def __enter__(self) -> NDTiffDataset:
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> bool:
-        return False
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
 
     def __iter__(self) -> Iterable[tuple[str, NDTiffFOV]]:
-        for key in self._all_position_keys:
-            yield str(key), NDTiffFOV(self, key)
+        for key in self.xdata.keys():
+            key = str(key)
+            yield key, NDTiffFOV(self, key)
 
     def __contains__(self, key: str | int) -> bool:
-        return key in self._all_position_keys
+        return str(key) in self._xdata
 
     def __len__(self) -> int:
         return len(self._all_position_keys)
 
     def __getitem__(self, key: int | str) -> NDTiffFOV:
-        key = self._check_position_key(key)
-        return NDTiffFOV(self, key)
+        return NDTiffFOV(self, str(key))
+
+    def close(self) -> None:
+        self.dataset.close()
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
         pm_metadata["MicroManagerVersion"] = "pycromanager"
-        pm_metadata["Positions"] = self.get_num_positions()
-        img_metadata = self.get_image_metadata(0, 0, 0, 0)
+        pm_metadata["Positions"] = len(self)
+        img_metadata = self.get_image_metadata(
+            self._all_position_keys[0], 0, 0, 0
+        )
 
         pm_metadata["z-step_um"] = None
         if "ZPosition_um_Intended" in img_metadata.keys():
@@ -165,6 +175,10 @@ class NDTiffDataset(MicroManagerFOVMapping):
         """Channel axis is string-valued"""
         return self._str_channel_axis
 
+    @property
+    def ndtiff_axes(self) -> tuple[str]:
+        return ("position", "time", "channel", "z", "y", "x")
+
     def _check_coordinates(self, p: int | str, t: int, c: int | str, z: int):
         """
         Check that the (p, t, c, z) coordinates are part of the ndtiff dataset.
@@ -172,7 +186,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         below
         """
         coords = [p, t, c, z]
-        axes = ("position", "time", "channel", "z")
+        axes = self.ndtiff_axes[:4]
 
         for i, axis in enumerate(axes):
             coord = coords[i]
@@ -224,14 +238,10 @@ class NDTiffDataset(MicroManagerFOVMapping):
                             f"Axis {axis} is not part of this dataset"
                         )
 
-        return (*coords,)
+        return tuple(coords)
 
     def _parse_all_position_keys(self) -> list[int | str | None]:
-        return (
-            len(self._axes["position"])
-            if "position" in self._axes.keys()
-            else [None]
-        )
+        return natsorted(list(self._axes.get("position", [None])))
 
     def _check_position_key(self, key: int | str) -> bool:
         if "position" in self._axes.keys():
@@ -250,23 +260,29 @@ class NDTiffDataset(MicroManagerFOVMapping):
         return key
 
     def _gather_xdata(self) -> None:
-        das = []
-        for key in self._all_position_keys:
-            da = self.dataset.as_array(position=self._check_position_key(key))
-            shape = (
-                self.frames,
-                self.channels,
-                self.slices,
-                self.height,
-                self.width,
-            )
-            # add singleton axes so output is 5D
-            da = DataArray(da.reshape(shape), dims=self._axes.keys())
+        shape = (
+            len(self),
+            self.frames,
+            self.channels,
+            self.slices,
+            self.height,
+            self.width,
+        )
         if self._all_position_keys == [None]:
             pkeys = ["0"]
         else:
             pkeys = [str(k) for k in self._all_position_keys]
-        self._xdata = XDataset(das, coords={"position": pkeys})
+        # add singleton axes so output is always (p, t, c, z, y, x)
+        da = DataArray(
+            self.dataset.as_array().reshape(shape),
+            dims=self.ndtiff_axes,
+            name=self.dirname,
+        ).assign_coords(position=pkeys)
+        self._xdata = da.to_dataset(dim="position")
+
+    @property
+    def xdata(self) -> XDataset:
+        return self._xdata
 
     def get_image_metadata(
         self, p: int | str, t: int, c: int | str, z: int
@@ -290,11 +306,12 @@ class NDTiffDataset(MicroManagerFOVMapping):
             image plane metadata
         """
         metadata = None
+        if not self.str_position_axis and isinstance(p, str):
+            if p.isdigit():
+                p = int(p)
         p, t, c, z = self._check_coordinates(p, t, c, z)
-
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
             metadata = self.dataset.read_metadata(
                 position=p, time=t, channel=c, z=z
             )
-
         return metadata

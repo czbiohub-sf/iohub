@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -10,12 +11,7 @@ from tqdm.contrib.itertools import product
 
 from iohub._version import version as iohub_version
 from iohub.ngff import Position, TransformationMeta, open_ome_zarr
-from iohub.reader import (
-    MMStack,
-    # MicromanagerSequenceReader,
-    NDTiffDataset,
-    read_micromanager,
-)
+from iohub.reader import MMStack, NDTiffDataset, read_images
 
 __all__ = ["TIFFConverter"]
 MAX_CHUNK_SIZE = 500e6  # in bytes
@@ -79,8 +75,6 @@ class TIFFConverter:
         Input directory path
     output_dir : str
         Output zarr directory path
-    data_type : Literal['singlepagetiff', 'ometiff', 'ndtiff'], optional
-        Input data type, by default None
     grid_layout : bool, optional
         Whether to lay out the positions in a grid-like format
         based on how the data was acquired
@@ -105,17 +99,17 @@ class TIFFConverter:
         self,
         input_dir: str,
         output_dir: str,
-        data_type: Literal["singlepagetiff", "ometiff", "ndtiff"] = None,
         grid_layout: int = False,
         chunks: tuple[int] | Literal["XY", "XYZ"] = None,
         hcs_plate: bool = None,
     ):
         logging.debug("Checking output.")
-        if not output_dir.strip("/").endswith(".zarr"):
+        output_dir = Path(output_dir)
+        if "zarr" in output_dir.suffixes:
             raise ValueError("Please specify .zarr at the end of your output")
         self.output_dir = output_dir
         logging.info("Initializing data.")
-        self.reader = read_micromanager(input_dir, data_type)
+        self.reader = read_images(input_dir)
         if reader_type := type(self.reader) not in (
             MMStack,
             NDTiffDataset,
@@ -136,7 +130,6 @@ class TIFFConverter:
         self.z = self.reader.slices
         self.y = self.reader.height
         self.x = self.reader.width
-        self.dtype = self.reader.dtype
         self.dim = (self.p, self.t, self.c, self.z, self.y, self.x)
         self.prefix_list = []
         self.hcs_plate = hcs_plate
@@ -241,7 +234,7 @@ class TIFFConverter:
             )
 
         # limit chunks to MAX_CHUNK_SIZE bytes
-        bytes_per_pixel = np.dtype(self.dtype).itemsize
+        bytes_per_pixel = np.dtype(self.reader.dtype).itemsize
         # it's OK if a single image is larger than MAX_CHUNK_SIZE
         while (
             chunks[-3] > 1
@@ -288,7 +281,7 @@ class TIFFConverter:
                 self.y,
                 self.x,
             ),
-            "dtype": self.dtype,
+            "dtype": self.reader.dtype,
             "chunks": self.chunks,
             "transform": self.transform,
         }
@@ -321,136 +314,66 @@ class TIFFConverter:
         ]
         pos.dump_meta()
 
-    def _convert_ndtiff(self):
-        bar_format_positions = (
-            "Converting Positions: |{bar:16}|{n_fmt}/{total_fmt} "
-            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
-        )
+    def _convert_image_plane_metadata(self, fov, zarr_name: str):
+        logging.info("Writing image plane metadata...")
         bar_format_time_channel = (
-            "Converting Timepoints/Channels: |{bar:16}|{n_fmt}/{total_fmt} "
+            "Timepoints/Channels: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
-        for p_idx in tqdm(range(self.p), bar_format=bar_format_positions):
-            position_image_plane_metadata = {}
-
-            # ndtiff_pos_idx, ndtiff_t_idx, and ndtiff_channel_idx
-            # may be None
-            ndtiff_pos_idx = (
-                self.pos_names[p_idx]
-                if self.reader.str_position_axis
-                else p_idx
-            )
-            try:
-                ndtiff_pos_idx, *_ = self.reader._check_coordinates(
-                    ndtiff_pos_idx, 0, 0, 0
-                )
-            except ValueError:
-                # Log warning and continue if some positions were not
-                # acquired in the dataset
-                logging.warning(
-                    f"Cannot load data at position {ndtiff_pos_idx}, "
-                    "filling with zeros. Raw data may be incomplete."
-                )
-                continue
-
-            dask_arr = self.reader.get_zarr(position=ndtiff_pos_idx)
-            zarr_pos_name = self.zarr_position_names[p_idx]
-            zarr_arr = self.writer[zarr_pos_name]["0"]
-
-            for t_idx, c_idx in product(
-                range(self.t),
-                range(self.c),
-                bar_format=bar_format_time_channel,
-                position=1,
-                leave=False,
-            ):
-                ndtiff_channel_idx = (
+        position_image_plane_metadata = {}
+        for t_idx, c_idx in product(
+            range(self.t),
+            range(self.c),
+            bar_format=bar_format_time_channel,
+            position=1,
+            leave=False,
+        ):
+            c_key = c_idx
+            if isinstance(self.reader, NDTiffDataset):
+                c_key = (
                     self.reader.channel_names[c_idx]
                     if self.reader.str_channel_axis
                     else c_idx
                 )
-                # set ndtiff_t_idx and ndtiff_z_idx to None if these axes were
-                # not acquired
-                (
-                    _,
-                    ndtiff_t_idx,
-                    ndtiff_channel_idx,
-                    ndtiff_z_idx,
-                ) = self.reader._check_coordinates(
-                    ndtiff_pos_idx, t_idx, ndtiff_channel_idx, 0
-                )
-                # Log warning and continue if some T/C were not acquired in the
-                # dataset
-                if not self.reader.dataset.has_image(
-                    position=ndtiff_pos_idx,
-                    time=ndtiff_t_idx,
-                    channel=ndtiff_channel_idx,
-                    z=ndtiff_z_idx,
-                ):
+            for z_idx in range(self.z):
+                metadata = fov.frame_metadata(t=t_idx, c=c_key, z=z_idx)
+                if metadata is None:
                     logging.warning(
                         f"Cannot load data at timepoint {t_idx},  channel "
                         f"{c_idx}, filling with zeros. Raw data may be "
                         "incomplete."
                     )
                     continue
-
-                data_slice = (slice(t_idx, t_idx + 1), slice(c_idx, c_idx + 1))
-                to_zarr(
-                    dask_arr[data_slice].rechunk(self.chunks),
-                    zarr_arr,
-                    region=data_slice,
-                )
-
-                for z_idx in range(self.z):
-                    # this function will handle z_idx=0 when no z stacks
-                    # acquired
-                    image_metadata = self.reader.get_image_metadata(
-                        ndtiff_pos_idx,
-                        ndtiff_t_idx,
-                        ndtiff_channel_idx,
-                        z_idx,
-                    )
-                    # T/C/Z
-                    frame_key = "/".join(
-                        [str(i) for i in (t_idx, c_idx, z_idx)]
-                    )
-                    position_image_plane_metadata[frame_key] = image_metadata
-
-            logging.info("Writing ND-TIFF image plane metadata...")
-            # image plane metadata is save in
-            # output_dir/row/well/fov/img/image_plane_metadata.json,
-            # e.g. output_dir/A/1/FOV0/0/image_plane_metadata.json
-            with open(
-                os.path.join(
-                    self.output_dir, zarr_arr.path, "image_plane_metadata.json"
-                ),
-                mode="x",
-            ) as metadata_file:
-                json.dump(
-                    position_image_plane_metadata, metadata_file, indent=4
-                )
+                # T/C/Z
+                frame_key = "/".join([str(i) for i in (t_idx, c_idx, z_idx)])
+                position_image_plane_metadata[frame_key] = metadata
+        # image plane metadata is save in
+        # output_dir/row/well/fov/img/image_plane_metadata.json,
+        # e.g. output_dir/A/1/FOV0/0/image_plane_metadata.json
+        with open(
+            os.path.join(
+                self.output_dir, zarr_name, "image_plane_metadata.json"
+            ),
+            mode="x",
+        ) as metadata_file:
+            json.dump(position_image_plane_metadata, metadata_file, indent=4)
 
     def __call__(self):
         """Runs the conversion."""
         logging.debug("Setting up Zarr store.")
         self._init_zarr_arrays()
         bar_format_images = (
-            "Converting Images: |{bar:16}|{n_fmt}/{total_fmt} "
+            "Converting Positions: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
         # Run through every coordinate and convert in acquisition order
         logging.info("Converting Images...")
-        match self.reader:
-            case NDTiffDataset():
-                self._convert_ndtiff()
-            case MMStack():
-                for p_idx in tqdm(range(self.p), bar_format=bar_format_images):
-                    da = self.reader[p_idx].xdata.data
-                    zarr_pos_name = self.zarr_position_names[p_idx]
-                    zarr_arr = self.writer[zarr_pos_name]["0"]
-                    to_zarr(da.rechunk(self.chunks), zarr_arr)
-            case _:
-                raise NotImplementedError()
-
+        for p_idx, (_, fov) in tqdm(
+            enumerate(self.reader), bar_format=bar_format_images
+        ):
+            zarr_pos_name = self.zarr_position_names[p_idx]
+            zarr_img = self.writer[zarr_pos_name]["0"]
+            to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
+            self._convert_image_plane_metadata(fov, zarr_img.path)
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()

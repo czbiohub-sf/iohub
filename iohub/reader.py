@@ -11,12 +11,13 @@ import natsort
 import tifffile as tiff
 import zarr
 
+from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
 from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
-# from iohub.singlepagetiff import MicromanagerSequenceReader
-# from iohub.upti import UPTIReader
-# from iohub.zarrfile import ZarrReader
+from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
+from iohub._deprecated.upti import UPTIReader
+from iohub._deprecated.zarrfile import ZarrReader
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -152,7 +153,7 @@ def _infer_format(path: str):
     return (data_type, extra_info)
 
 
-def read_micromanager(
+def read_images(
     path: str,
     data_type: Literal[
         "singlepagetiff", "ometiff", "ndtiff", "omezarr"
@@ -243,7 +244,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
             if fmt == "omezarr" and extra_info == "0.4":
                 reader = open_ome_zarr(path, mode="r")
             else:
-                reader = read_micromanager(
+                reader = read_images(
                     path, data_type=fmt, log_level=logging.ERROR
                 )
     except (ValueError, RuntimeError):
@@ -257,30 +258,23 @@ def print_info(path: StrOrBytesPath, verbose=False):
     ch_msg = f"Channel names:\t\t {reader.channel_names}"
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
     msgs = []
-    if True:
-        zyx_scale = (
-            reader.z_step_size,
-            reader.xy_pixel_size,
-            reader.xy_pixel_size,
-        )
+    if isinstance(reader, BaseFOVMapping):
+        _, first_fov = next(reader)
         msgs.extend(
             [
                 sum_msg,
                 fmt_msg,
-                f"Positions:\t\t {reader.get_num_positions()}",
-                f"Time points:\t\t {reader.shape[0]}",
-                f"Channels:\t\t {reader.shape[1]}",
-                ch_msg,
-                f"(Z, Y, X) shape:\t {reader.shape[2:]}",
-                f"(Z, Y, X) scale (um):\t {zyx_scale}",
+                f"FOVs:\t\t {len(reader)}",
+                f"FOV shape (T, C, Z, Y, X):\t {first_fov.shape}",
+                f"(Z, Y, X) scale (um):\t {first_fov.zyx_scale}",
             ]
         )
         if verbose:
             msgs.extend(
                 [
                     code_msg,
-                    ">>> from iohub import read_micromanager",
-                    f">>> reader = read_micromanager('{path}')",
+                    ">>> from iohub import read_images",
+                    f">>> reader = read_images('{path}')",
                 ]
             )
         print(str.join("\n", msgs))

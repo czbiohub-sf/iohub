@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 from copy import copy
+from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 
-from pathlib import Path
 import dask.array as da
 import numpy as np
 import zarr
@@ -13,7 +13,6 @@ from tifffile import TiffFile
 from xarray import DataArray
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
-
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -47,7 +46,7 @@ def find_first_ome_tiff_in_mmstack(data_path: Path) -> Path:
 
 
 class MMOmeTiffFOV(MicroManagerFOV):
-    def __init__(self, parent: MMStack, key: int) -> None:
+    def __init__(self, parent: MMStack, key: str) -> None:
         super().__init__(parent, key)
         self._xdata = parent.xdata[key]
 
@@ -73,6 +72,10 @@ class MMOmeTiffFOV(MicroManagerFOV):
     @property
     def xdata(self) -> DataArray:
         return self._xdata
+
+    def frame_metadata(self, t: int, c: int, z: int) -> dict:
+        """Read image plane metadata from the OME-TIFF file."""
+        return self.parent.read_image_metadata(self._position, t, c, z)
 
 
 class MMStack(MicroManagerFOVMapping):
@@ -115,6 +118,7 @@ class MMStack(MicroManagerFOVMapping):
         self._store = series.aszarr()
         logging.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store))
+        self.dtype = data.dtype
         img = DataArray(data, dims=raw_dims, name=self.dirname)
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
@@ -226,8 +230,9 @@ class MMStack(MicroManagerFOVMapping):
 
             for ch in self._mm_meta["Summary"].get("ChNames", []):
                 self.channel_names.append(ch)
-
-        self._z_step_size = self._mm_meta["Summary"]["z-step_um"]
+        self._z_step_size = float(
+            self._mm_meta["Summary"].get("z-step_um", 1.0)
+        )
         self.height = self._mm_meta["Summary"]["Height"]
         self.width = self._mm_meta["Summary"]["Width"]
 
@@ -288,33 +293,46 @@ class MMStack(MicroManagerFOVMapping):
 
         return new_dict
 
+    def read_image_metadata(
+        self, p: int, t: int, c: int, z: int
+    ) -> dict | None:
+        """Read image plane metadata from the OME-TIFF file."""
+        multi_index = (p, t, c, z)
+        tif_shape = (self.positions, self.frames, self.channels, self.slices)
+        idx = np.ravel_multi_index(multi_index, tif_shape)
+        # `TiffPageSeries` is not a collection of `TiffPage` objects
+        # but a mixture of `TiffPage` and `TiffFrame` objects
+        # https://github.com/cgohlke/tifffile/issues/179
+        page = self._first_tif.series[0].pages[idx].aspage()
+        try:
+            return page.tags["MicroManagerMetadata"].value
+        except KeyError:
+            return None
+
     def _infer_image_meta(self) -> None:
         """
         Infer data type and pixel size from the first image plane metadata.
         """
-        page = self._first_tif.pages[0]
-        self.dtype = page.dtype
-        for tag in page.tags.values():
-            if tag.name == "MicroManagerMetadata":
-                # assuming X and Y pixel sizes are the same
-                xy_size = tag.value.get("PixelSizeUm")
-                self._xy_pixel_size = xy_size if xy_size else None
+        metadata = self.read_image_metadata(0, 0, 0, 0)
+        if metadata is not None:
+            try:
+                self._xy_pixel_size = float(
+                    self.read_image_metadata(0, 0, 0, 0)["PixelSizeUm"]
+                )
                 return
-            else:
-                continue
-        logging.warning("Micro-Manager image plane metadata cannot be loaded.")
-        self._xy_pixel_size = None
+            except Exception:
+                pass
+        logging.warning(
+            "Micro-Manager image plane metadata cannot be loaded. "
+            "XY pixel size cannot be determined, defaulting to 1.0 um."
+        )
+        self._xy_pixel_size = 1.0
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
         """ZXY pixel size in micrometers."""
-        if self._xy_pixel_size is None:
-            raise AttributeError("XY pixel size cannot be determined.")
         return (
-            float(v)
-            for v in (
-                self._z_step_size,
-                self._xy_pixel_size,
-                self._xy_pixel_size,
-            )
+            self._z_step_size,
+            self._xy_pixel_size,
+            self._xy_pixel_size,
         )
