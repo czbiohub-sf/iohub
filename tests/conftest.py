@@ -71,7 +71,7 @@ mm2gamma_singlepage_tiffs = subdirs(test_datasets, "MM20_singlepage-tiffs")
 mm2gamma_singlepage_tiffs_incomplete = (
     test_datasets
     / "MM20_singlepage_incomplete"
-    / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1"
+    / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1 2"
 )
 
 
