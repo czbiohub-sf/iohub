@@ -1,5 +1,7 @@
-import click
 import pathlib
+
+import click
+
 from iohub._version import __version__
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info

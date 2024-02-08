@@ -5,18 +5,19 @@ import logging
 import os
 import sys
 import warnings
-from typing import TYPE_CHECKING, Literal
 from pathlib import Path
+from typing import TYPE_CHECKING, Literal
+
 import natsort
 import tifffile as tiff
 import zarr
 
+from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
+from iohub._deprecated.zarrfile import ZarrReader
 from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
 from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
-from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
-from iohub._deprecated.zarrfile import ZarrReader
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
