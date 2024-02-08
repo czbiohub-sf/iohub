@@ -52,7 +52,6 @@ class MicroManagerFOVMapping(BaseFOVMapping):
     def __init__(self):
         self._mm_meta: dict = None
         self._stage_positions: list[dict[str, str | float]] = []
-        self.z_step_size: float = None
         self.channel_names: list[str] = None
 
     @property

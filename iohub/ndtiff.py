@@ -83,7 +83,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self.stage_positions = self._mm_meta["Summary"]["StagePositions"]
         z_step_size = float(self._mm_meta["Summary"]["z-step_um"] or 1.0)
         xy_pixel_size = float(self._mm_meta["Summary"]["PixelSize_um"] or 1.0)
-        self.zyx_scale = (z_step_size, xy_pixel_size, xy_pixel_size)
+        self._zyx_scale = (z_step_size, xy_pixel_size, xy_pixel_size)
         self._gather_xdata()
 
     def __enter__(self) -> NDTiffDataset:
@@ -108,6 +108,10 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
     def close(self) -> None:
         self.dataset.close()
+
+    @property
+    def zyx_scale(self) -> tuple[float, float, float]:
+        return self._zyx_scale
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata

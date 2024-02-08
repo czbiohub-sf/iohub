@@ -4,7 +4,7 @@ import logging
 from copy import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
-from warnings import filterwarnings, catch_warnings
+from warnings import catch_warnings, filterwarnings
 
 import dask.array as da
 import numpy as np
@@ -231,9 +231,16 @@ class MMStack(MicroManagerFOVMapping):
 
             for ch in self._mm_meta["Summary"].get("ChNames", []):
                 self.channel_names.append(ch)
-        self._z_step_size = float(
-            self._mm_meta["Summary"].get("z-step_um", 1.0)
-        )
+        z_step_size = float(self._mm_meta["Summary"].get("z-step_um", 1.0))
+        if z_step_size == 0:
+            if self.slices == 1:
+                z_step_size = 1.0
+            else:
+                logging.warning(
+                    f"Z-step size is {z_step_size} um in the metadata, "
+                    "Using 1.0 um instead."
+                )
+        self._z_step_size = z_step_size
         self.height = self._mm_meta["Summary"]["Height"]
         self.width = self._mm_meta["Summary"]["Width"]
         self._t_scale = (
