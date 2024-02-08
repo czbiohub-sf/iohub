@@ -73,7 +73,8 @@ class MicroManagerFOVMapping(BaseFOVMapping):
     def stage_positions(self, value):
         if not isinstance(value, list):
             raise TypeError(
-                f"Type of `stage_position` should be `list`, got `{type(value)}`."
+                "Type of `stage_position` should be `list`, "
+                f"got `{type(value)}`."
             )
         self._stage_positions = value
 
