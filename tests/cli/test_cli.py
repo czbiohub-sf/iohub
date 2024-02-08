@@ -1,15 +1,33 @@
 import os
-import pathlib
+from pathlib import Path
 import re
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from click.testing import CliRunner
-from hypothesis import HealthCheck, given, settings
-from hypothesis import strategies as st
+import pytest
 
 from iohub._version import __version__
 from iohub.cli.cli import cli
+
+from tests.conftest import (
+    mm2gamma_ome_tiffs,
+    ndtiff_v2_datasets,
+    ndtiff_v3_labeled_positions,
+    hcs_ref,
+)
+
+
+def pytest_generate_tests(metafunc):
+    if "mm2gamma_ome_tiff" in metafunc.fixturenames:
+        metafunc.parametrize("mm2gamma_ome_tiff", mm2gamma_ome_tiffs)
+    if "verbose" in metafunc.fixturenames:
+        metafunc.parametrize("verbose", ["-v", None])
+    if "ndtiff_dataset" in metafunc.fixturenames:
+        metafunc.parametrize(
+            "ndtiff_dataset",
+            ndtiff_v2_datasets + [ndtiff_v3_labeled_positions],
+        )
 
 
 def test_cli_entry():
@@ -35,80 +53,53 @@ def test_cli_version():
     assert str(__version__) in result.output
 
 
-@given(verbose=st.booleans())
-@settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=2000
-)
-def test_cli_info_mock(setup_test_data, setup_mm2gamma_ome_tiffs, verbose):
-    _, f1, f2 = setup_mm2gamma_ome_tiffs
+def test_cli_info_mock(mm2gamma_ome_tiff, verbose):
     runner = CliRunner()
+    # resolve path with pathlib to be consistent with `click.Path`
+    # this will not normalize partition symbol to lower case on Windows
+    path = mm2gamma_ome_tiff.resolve()
     with patch("iohub.cli.cli.print_info") as mock:
-        cmd = ["info", f1, f2]
+        cmd = ["info", str(path)]
         if verbose:
-            cmd += ["-v"]
+            cmd.append(verbose)
         result = runner.invoke(cli, cmd)
-        # resolve path with pathlib to be consistent with `click.Path`
-        # this will not normalize partition symbol to lower case on Windows
-        mock.assert_called_with(
-            str(pathlib.Path(f2).resolve()), verbose=verbose
-        )
+        mock.assert_called_with(path, verbose=bool(verbose))
         assert result.exit_code == 0
         assert "Reading" in result.output
 
 
-@given(verbose=st.booleans())
-@settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=2000
-)
-def test_cli_info_ndtiff(
-    setup_test_data, setup_pycromanager_test_data, verbose
-):
-    _, _, data = setup_pycromanager_test_data
+def test_cli_info_ndtiff(ndtiff_dataset, verbose):
     runner = CliRunner()
-    cmd = ["info", data]
+    cmd = ["info", str(ndtiff_dataset)]
     if verbose:
-        cmd += ["-v"]
+        cmd.append(verbose)
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
-    assert re.search(r"Positions:\s+2", result.output)
+    assert re.search(r"FOVs:\s+\d", result.output)
     assert "scale (um)" in result.output
 
 
-@given(verbose=st.booleans())
-def test_cli_info_ome_zarr(setup_test_data, setup_hcs_ref, verbose):
+def test_cli_info_ome_zarr(verbose):
     runner = CliRunner()
-    cmd = ["info", setup_hcs_ref]
+    cmd = ["info", str(hcs_ref)]
     if verbose:
-        cmd += ["-v"]
+        cmd.append(verbose)
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Wells:\s+1", result.output)
     # Test on single position
-    result_pos = runner.invoke(
-        cli, ["info", os.path.join(setup_hcs_ref, "B", "03", "0")]
-    )
+    result_pos = runner.invoke(cli, ["info", str(hcs_ref / "B" / "03" / "0")])
     assert "scale (um)" in result_pos.output
 
 
-@given(f=st.booleans(), g=st.booleans(), s=st.booleans(), chk=st.booleans())
-@settings(
-    suppress_health_check=[HealthCheck.function_scoped_fixture], deadline=20000
-)
-def test_cli_convert_ome_tiff(
-    setup_test_data, setup_mm2gamma_ome_tiffs, f, g, s, chk,
-):
-    _, _, input_dir = setup_mm2gamma_ome_tiffs
+@pytest.mark.parametrize("grid_layout", ["-g", None])
+def test_cli_convert_ome_tiff(grid_layout, tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
     runner = CliRunner()
-    f = "-f ometiff" if f else ""
-    g = "-g" if g else ""
-    chk = "--check-image" if chk else "--no-check-image"
-    with TemporaryDirectory() as tmp_dir:
-        output_dir = os.path.join(tmp_dir, "converted.zarr")
-        cmd = ["convert", "-i", input_dir, "-o", output_dir, "-s", s, chk]
-        if f:
-            cmd += ["-f", "ometiff"]
-        if g:
-            cmd += ["-g"]
-        result = runner.invoke(cli, cmd)
-    assert result.exit_code == 0
+    output_dir = tmpdir / "converted.zarr"
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir]
+    if grid_layout:
+        cmd.append(grid_layout)
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code == 0, result.output
     assert "Converting" in result.output

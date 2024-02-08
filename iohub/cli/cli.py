@@ -1,12 +1,14 @@
 import click
-
+import pathlib
 from iohub._version import __version__
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
 
 VERSION = __version__
 
-_DATASET_PATH = click.Path(exists=True, file_okay=False, resolve_path=True)
+_DATASET_PATH = click.Path(
+    exists=True, file_okay=False, resolve_path=True, path_type=pathlib.Path
+)
 
 
 @click.group()
@@ -60,22 +62,6 @@ def info(files, verbose):
     help="Output zarr store (/**/converted.zarr)",
 )
 @click.option(
-    "--format",
-    "-f",
-    required=False,
-    type=str,
-    help="Data type, 'ometiff', 'ndtiff', 'singlepagetiff'",
-)
-@click.option(
-    "--scale-voxels",
-    "-s",
-    required=False,
-    type=bool,
-    default=True,
-    help="Write voxel size (XY pixel size and Z-step, in micrometers) "
-    "as scale coordinate transformation in NGFF. By default true.",
-)
-@click.option(
     "--grid-layout",
     "-g",
     required=False,
@@ -90,30 +76,12 @@ def info(files, verbose):
     help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
     "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
 )
-@click.option(
-    "--check-image/--no-check-image",
-    "-chk/-no-chk",
-    required=False,
-    is_flag=True,
-    default=True,
-    help="Checks copied image data with original data.",
-)
-def convert(
-    input,
-    output,
-    format,
-    scale_voxels,
-    grid_layout,
-    chunks,
-    check_image,
-):
+def convert(input, output, grid_layout, chunks):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
         output_dir=output,
-        data_type=format,
-        scale_voxels=scale_voxels,
         grid_layout=grid_layout,
         chunks=chunks,
     )
-    converter.run(check_image=check_image)
+    converter()

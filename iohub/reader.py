@@ -6,7 +6,7 @@ import os
 import sys
 import warnings
 from typing import TYPE_CHECKING, Literal
-
+from pathlib import Path
 import natsort
 import tifffile as tiff
 import zarr
@@ -16,7 +16,6 @@ from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
 from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
 from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
-from iohub._deprecated.upti import UPTIReader
 from iohub._deprecated.zarrfile import ZarrReader
 
 if TYPE_CHECKING:
@@ -50,7 +49,7 @@ def _find_ngff_version_in_zarr_group(group: zarr.Group):
             return group.attrs[key].get("version")
 
 
-def _check_zarr_data_type(src: str):
+def _check_zarr_data_type(src: Path):
     try:
         root = zarr.open(src, "r")
         if version := _find_ngff_version_in_zarr_group(root):
@@ -65,19 +64,16 @@ def _check_zarr_data_type(src: str):
     return "unknown"
 
 
-def _check_single_page_tiff(src: str):
-    # pick parent directory in case a .tif file is selected
-    if src.endswith(".tif"):
+def _check_single_page_tiff(src: Path):
+    if src.is_file():
         src = os.path.dirname(src)
-
-    files = glob.glob(os.path.join(src, "*.tif"))
+    files = src.glob("*.tif")
     if len(files) == 0:
         sub_dirs = _get_sub_dirs(src)
         if sub_dirs:
-            path = os.path.join(src, sub_dirs[0])
-            files = glob.glob(os.path.join(path, "*.tif"))
+            files = (src / sub_dirs[0]).glob("*.tif")
             if len(files) > 0:
-                with tiff.TiffFile(os.path.join(path, files[0])) as tf:
+                with tiff.TiffFile(next(files)) as tf:
                     if (
                         len(tf.pages) == 1
                     ):  # and tf.pages[0].is_multipage is False:
@@ -85,26 +81,22 @@ def _check_single_page_tiff(src: str):
     return False
 
 
-def _check_multipage_tiff(src: str):
-    # pick parent directory in case a .tif file is selected
-    if src.endswith(".tif"):
-        src = os.path.dirname(src)
-
-    files = glob.glob(os.path.join(src, "*.tif"))
-    if len(files) > 0:
-        with tiff.TiffFile(files[0]) as tf:
-            if len(tf.pages) > 1:
-                return True
-            elif tf.is_multipage is False and tf.is_ome is True:
-                return True
+def _check_multipage_tiff(src: Path):
+    if src.is_file():
+        src = src.parent
+    file = next(src.glob("*.tif"))
+    with tiff.TiffFile(file) as tf:
+        if len(tf.pages) > 1:
+            return True
+        elif tf.is_multipage is False and tf.is_ome is True:
+            return True
     return False
 
 
-def _check_ndtiff(src: str):
+def _check_ndtiff(src: Path):
     # go two levels up in case a .tif file is selected
-    if src.endswith(".tif"):
-        src = os.path.abspath(os.path.join(src, "../.."))
-
+    if src.is_file() and "tif" in src.suffixes:
+        src = src.parent.parent
     # shortcut, may not be foolproof
     if os.path.exists(os.path.join(src, "Full resolution", "NDTiff.index")):
         return True
@@ -113,28 +105,14 @@ def _check_ndtiff(src: str):
     return False
 
 
-def _get_sub_dirs(f: str):
-    """
-    subdir walk
-    from https://github.com/mehta-lab/reconstruct-order
-
-    Parameters
-    ----------
-    f:              (str)
-
-    Returns
-    -------
-    sub_dir_name    (list) natsorted list of subdirectories
-    """
-
-    sub_dir_path = glob.glob(os.path.join(f, "*/"))
-    sub_dir_name = [os.path.split(subdir[:-1])[1] for subdir in sub_dir_path]
+def _get_sub_dirs(directory: Path) -> list[str]:
+    """ """
+    sub_dir_name = [subdir.name for subdir in directory.glob("*/")]
     #    assert subDirName, 'No sub directories found'
     return natsort.natsorted(sub_dir_name)
 
 
-def _infer_format(path: str):
-    path = str(path)
+def _infer_format(path: Path):
     extra_info = None
     if ngff_version := _check_zarr_data_type(path):
         data_type = "omezarr"
@@ -154,7 +132,7 @@ def _infer_format(path: str):
 
 
 def read_images(
-    path: str,
+    path: StrOrBytesPath,
     data_type: Literal[
         "singlepagetiff", "ometiff", "ndtiff", "omezarr"
     ] = None,
@@ -167,7 +145,7 @@ def read_images(
 
     Parameters
     ----------
-    path : str
+    path : StrOrBytesPath
         File path, directory path to ome-tiff series, or Zarr root path
     data_type :
     Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"], optional
@@ -188,7 +166,7 @@ def read_images(
         format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",  # noqa
     )
     logging.getLogger(__name__)
-
+    path = Path(path).resolve()
     # try to guess data type
     extra_info = None
     if not data_type:
@@ -216,8 +194,6 @@ def read_images(
         return ZarrReader(path, version=extra_info)
     elif data_type == "ndtiff":
         return NDTiffDataset(path)
-    elif data_type == "upti":
-        return UPTIReader(path)
     else:
         raise ValueError(f"Reader of type {data_type} is not implemented")
 
@@ -234,7 +210,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
         and full tree for HCS Plates in OME-Zarr,
         by default False
     """
-    path = os.path.realpath(path)
+    path = Path(path).resolve()
     try:
         with warnings.catch_warnings():
             warnings.filterwarnings(
@@ -259,13 +235,19 @@ def print_info(path: StrOrBytesPath, verbose=False):
     code_msg = "\nThis datset can be opened with iohub in Python code:\n"
     msgs = []
     if isinstance(reader, BaseFOVMapping):
-        _, first_fov = next(reader)
+        _, first_fov = next(iter(reader))
+        shape_msg = ", ".join(
+            [
+                f"{a}={s}"
+                for s, a in zip(first_fov.shape, ("T", "C", "Z", "Y", "X"))
+            ]
+        )
         msgs.extend(
             [
                 sum_msg,
                 fmt_msg,
-                f"FOVs:\t\t {len(reader)}",
-                f"FOV shape (T, C, Z, Y, X):\t {first_fov.shape}",
+                f"FOVs:\t\t\t {len(reader)}",
+                f"FOV shape:\t\t {shape_msg}",
                 f"(Z, Y, X) scale (um):\t {first_fov.zyx_scale}",
             ]
         )

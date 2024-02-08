@@ -377,3 +377,4 @@ class TIFFConverter:
             self._convert_image_plane_metadata(fov, zarr_img.path)
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
+        self.reader.close()

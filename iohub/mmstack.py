@@ -4,6 +4,7 @@ import logging
 from copy import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
+from warnings import filterwarnings, catch_warnings
 
 import dask.array as da
 import numpy as np
@@ -64,7 +65,7 @@ class MMOmeTiffFOV(MicroManagerFOV):
 
     @property
     def t_scale(self) -> float:
-        return 1.0
+        return self.parent._t_scale
 
     def __getitem__(self, key: int | slice | tuple[int | slice]) -> ArrayLike:
         return self._xdata[key]
@@ -125,7 +126,7 @@ class MMStack(MicroManagerFOVMapping):
         ).transpose(*axes)
         xset = xarr.to_dataset(dim="R")
         self._xdata = xset
-        self._set_mm_meta()
+        self._set_mm_meta(self._first_tif.micromanager_metadata)
         self._infer_image_meta()
 
     @property
@@ -163,9 +164,9 @@ class MMStack(MicroManagerFOVMapping):
         """Close file handles"""
         self._first_tif.close()
 
-    def _set_mm_meta(self) -> None:
+    def _set_mm_meta(self, mm_meta: dict) -> None:
         """Assign image metadata from summary metadata."""
-        self._mm_meta = self._first_tif.micromanager_metadata
+        self._mm_meta = mm_meta
         self.channel_names = []
         mm_version = self._mm_meta["Summary"]["MicroManagerVersion"]
         if "beta" in mm_version:
@@ -235,6 +236,9 @@ class MMStack(MicroManagerFOVMapping):
         )
         self.height = self._mm_meta["Summary"]["Height"]
         self.width = self._mm_meta["Summary"]["Width"]
+        self._t_scale = (
+            float(self._mm_meta["Summary"].get("Interval_ms", 1e3)) / 1e3
+        )
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
@@ -303,11 +307,15 @@ class MMStack(MicroManagerFOVMapping):
         # `TiffPageSeries` is not a collection of `TiffPage` objects
         # but a mixture of `TiffPage` and `TiffFrame` objects
         # https://github.com/cgohlke/tifffile/issues/179
-        page = self._first_tif.series[0].pages[idx].aspage()
-        try:
-            return page.tags["MicroManagerMetadata"].value
-        except KeyError:
-            return None
+        with catch_warnings():
+            filterwarnings(
+                "ignore", message=r".*from closed file.*", module="tifffile"
+            )
+            page = self._first_tif.series[0].pages[idx].aspage()
+            try:
+                return page.tags["MicroManagerMetadata"].value
+            except KeyError:
+                return None
 
     def _infer_image_meta(self) -> None:
         """
@@ -316,9 +324,7 @@ class MMStack(MicroManagerFOVMapping):
         metadata = self.read_image_metadata(0, 0, 0, 0)
         if metadata is not None:
             try:
-                self._xy_pixel_size = float(
-                    self.read_image_metadata(0, 0, 0, 0)["PixelSizeUm"]
-                )
+                self._xy_pixel_size = float(metadata["PixelSizeUm"])
                 return
             except Exception:
                 pass
