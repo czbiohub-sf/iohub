@@ -20,8 +20,7 @@ MAX_CHUNK_SIZE = 500e6  # in bytes
 def _create_grid_from_coordinates(
     xy_coords: list[tuple[float, float]], rows: int, columns: int
 ):
-    """Function to create a grid from XY-position coordinates.
-    Useful for generating HCS Zarr metadata.
+    """Create a grid from XY-position coordinates.
 
     Parameters
     ----------
@@ -66,7 +65,7 @@ def _create_grid_from_coordinates(
 
 class TIFFConverter:
     """Convert Micro-Manager TIFF formats
-    (single-page TIFF, OME-TIFF, ND-TIFF) into HCS OME-Zarr.
+    (OME-TIFF, ND-TIFF) into HCS OME-Zarr.
     Each FOV will be written to a separate well in the plate layout.
 
     Parameters
@@ -90,9 +89,9 @@ class TIFFConverter:
 
     Notes
     -----
-    When converting ND-TIFF, the image plane metadata for each FOV
-    is aggregated into a file named ``image_plane_metadata.json``,
-    and placed under the Zarr array directory (e.g. ``/A/2/1/0/``).
+    The image plane metadata for each FOV is aggregated into a JSON file,
+    and placed under the Zarr array directory
+    (e.g. ``/row/column/fov/0/image_plane_metadata.json``).
     """
 
     def __init__(
@@ -351,9 +350,7 @@ class TIFFConverter:
         # output_dir/row/well/fov/img/image_plane_metadata.json,
         # e.g. output_dir/A/1/FOV0/0/image_plane_metadata.json
         with open(
-            os.path.join(
-                self.output_dir, zarr_name, "image_plane_metadata.json"
-            ),
+            self.output_dir / zarr_name / "image_plane_metadata.json",
             mode="x",
         ) as metadata_file:
             json.dump(position_image_plane_metadata, metadata_file, indent=4)
