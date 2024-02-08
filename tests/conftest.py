@@ -26,7 +26,7 @@ def download_data():
         print("Downloading test files...")
         for url in (custom_url, ome_hcs_url):
             output = test_data / Path(url).name
-            download(url, out=output)
+            download(url, out=str(output))
             shutil.unpack_archive(output, extract_dir=test_data)
         ghfs = fsspec.filesystem(
             "github", org="micro-manager", repo="NDTiffStorage"
@@ -35,7 +35,7 @@ def download_data():
         Path.mkdir(v3_lp)
         ghfs.get(
             ghfs.ls("test_data/v3/labeled_positions_1"),
-            v3_lp,
+            str(v3_lp),
             recursive=True,
         )
     return test_data
@@ -78,9 +78,7 @@ mm2gamma_singlepage_tiffs_incomplete = (
 mm1422_ome_tiffs = subdirs(test_datasets, "MM1422_ome-tiffs")
 
 
-mm1422_singlepage_tiffs = subdirs(
-    test_datasets, "MM1422_singlepage-tiffs"
-)
+mm1422_singlepage_tiffs = subdirs(test_datasets, "MM1422_singlepage-tiffs")
 
 
 mm2gamma_zarr_v01 = (
@@ -88,9 +86,7 @@ mm2gamma_zarr_v01 = (
 )
 
 
-hcs_ref = (
-    test_datasets / "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"
-)
+hcs_ref = test_datasets / "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"
 
 
 ndtiff_v2_datasets = subdirs(test_datasets, "MM20_pycromanager")
