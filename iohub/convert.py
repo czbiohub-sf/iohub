@@ -80,7 +80,7 @@ class TIFFConverter:
         (useful for tiled acquisitions), by default False
     chunks : tuple[int] or Literal['XY', 'XYZ'], optional
         Chunk size of the output Zarr arrays, by default None
-        (chunk by XY planes, this is the fastest at converting time)
+        (chunk by XYZ volumes or 500 MB size limit, whichever is smaller)
     hcs_plate : bool, optional
         Create NGFF HCS layout based on position names from the
         HCS Site Generator in Micro-Manager (only available for OME-TIFF),
