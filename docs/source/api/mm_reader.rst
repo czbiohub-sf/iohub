@@ -1,6 +1,6 @@
-Read Micro-Manager datasets
-===========================
+Read multi-FOV datasets
+=======================
 
 .. currentmodule:: iohub
 
-.. autofunction:: read_micromanager
+.. autofunction:: read_images

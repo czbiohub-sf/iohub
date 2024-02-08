@@ -71,9 +71,9 @@ class TIFFConverter:
 
     Parameters
     ----------
-    input_dir : str
+    input_dir : str | Path
         Input directory path
-    output_dir : str
+    output_dir : str | Path
         Output zarr directory path
     grid_layout : bool, optional
         Whether to lay out the positions in a grid-like format
@@ -90,15 +90,15 @@ class TIFFConverter:
 
     Notes
     -----
-    When converting ND-TIFF, the image plane metadata for all frames
-    are aggregated into a file named ``image_plane_metadata.json``,
-    and placed under the root Zarr group (alongside plate metadata).
+    When converting ND-TIFF, the image plane metadata for each FOV
+    is aggregated into a file named ``image_plane_metadata.json``,
+    and placed under the Zarr array directory (e.g. ``/A/2/1/0/``).
     """
 
     def __init__(
         self,
-        input_dir: str,
-        output_dir: str,
+        input_dir: str | Path,
+        output_dir: str | Path,
         grid_layout: int = False,
         chunks: tuple[int] | Literal["XY", "XYZ"] = None,
         hcs_plate: bool = None,
@@ -358,8 +358,16 @@ class TIFFConverter:
         ) as metadata_file:
             json.dump(position_image_plane_metadata, metadata_file, indent=4)
 
-    def __call__(self):
-        """Runs the conversion."""
+    def __call__(self) -> None:
+        """
+        Runs the conversion.
+
+        Examples
+        --------
+        >>> from iohub.convert import TIFFConverter
+        >>> converter = TIFFConverter("input/path/", "output/path/")
+        >>> converter()
+        """
         logging.debug("Setting up Zarr store.")
         self._init_zarr_arrays()
         bar_format_images = (
