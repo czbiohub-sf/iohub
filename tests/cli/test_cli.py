@@ -1,7 +1,4 @@
-import os
-from pathlib import Path
 import re
-from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from click.testing import CliRunner

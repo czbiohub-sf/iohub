@@ -54,7 +54,7 @@ mm2gamma_ome_tiffs = subdirs(test_datasets, "MM20_ome-tiffs")
 mm2gamma_ome_tiffs_hcs = [p for p in mm2gamma_ome_tiffs if "4p" in p.name]
 
 
-# This fixture returns a dataset with 11 timepoints
+# This is a dataset with 11 timepoints
 # The MDA definition at start of the experiment specifies 20 timepoints
 mm2gamma_ome_tiffs_incomplete = (
     test_datasets
@@ -66,7 +66,7 @@ mm2gamma_ome_tiffs_incomplete = (
 mm2gamma_singlepage_tiffs = subdirs(test_datasets, "MM20_singlepage-tiffs")
 
 
-# This fixture returns a dataset with 11 timepoints
+# This is a dataset with 11 timepoints
 # The MDA definition at start of the experiment specifies 20 timepoints
 mm2gamma_singlepage_tiffs_incomplete = (
     test_datasets
