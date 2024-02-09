@@ -208,7 +208,7 @@ def test_converter_ndtiff_v3_position_labels(tmpdir):
     converter = TIFFConverter(ndtiff_v3_labeled_positions, output)
     converter()
     with open_ome_zarr(output, mode="r") as result:
-        assert result.channel_names == ["0"]
+        assert result.channel_names == ["Channel0"]
         assert [name.split("/")[1] for name, _ in result.positions()] == [
             "Pos0",
             "Pos1",
