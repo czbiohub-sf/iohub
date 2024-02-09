@@ -11,7 +11,6 @@ import zarr
 
 from iohub._deprecated.reader_base import ReaderBase
 
-
 _logger = logging.getLogger(__name__)
 
 
