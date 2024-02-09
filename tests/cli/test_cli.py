@@ -19,7 +19,7 @@ def pytest_generate_tests(metafunc):
     if "mm2gamma_ome_tiff" in metafunc.fixturenames:
         metafunc.parametrize("mm2gamma_ome_tiff", mm2gamma_ome_tiffs)
     if "verbose" in metafunc.fixturenames:
-        metafunc.parametrize("verbose", ["-v", None])
+        metafunc.parametrize("verbose", ["-v", False])
     if "ndtiff_dataset" in metafunc.fixturenames:
         metafunc.parametrize(
             "ndtiff_dataset",
@@ -72,6 +72,7 @@ def test_cli_info_ndtiff(ndtiff_dataset, verbose):
         cmd.append(verbose)
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
+    assert "Channel names" in result.output
     assert re.search(r"FOVs:\s+\d", result.output)
     assert "scale (um)" in result.output
 
@@ -86,7 +87,9 @@ def test_cli_info_ome_zarr(verbose):
     assert re.search(r"Wells:\s+1", result.output)
     # Test on single position
     result_pos = runner.invoke(cli, ["info", str(hcs_ref / "B" / "03" / "0")])
+    assert "Channel names" in result_pos.output
     assert "scale (um)" in result_pos.output
+    assert "Chunk size" in result_pos.output
 
 
 @pytest.mark.parametrize("grid_layout", ["-g", None])

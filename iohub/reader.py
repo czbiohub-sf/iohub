@@ -248,6 +248,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 fmt_msg,
                 f"FOVs:\t\t\t {len(reader)}",
                 f"FOV shape:\t\t {shape_msg}",
+                ch_msg,
                 f"(Z, Y, X) scale (um):\t {first_fov.zyx_scale}",
             ]
         )
@@ -287,6 +288,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 msgs.append(f"Positions:\t\t {len(list(reader.positions()))}")
         else:
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
+            msgs.append(f"Chunk size:\t\t {tuple(reader['0'].chunks)}")
         if verbose:
             msgs.extend(
                 [
