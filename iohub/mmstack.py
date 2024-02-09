@@ -332,11 +332,13 @@ class MMStack(MicroManagerFOVMapping):
         if metadata is not None:
             try:
                 self._xy_pixel_size = float(metadata["PixelSizeUm"])
-                return
+                if self._xy_pixel_size > 0:
+                    return
             except Exception:
-                pass
+                logging.warning(
+                    "Micro-Manager image plane metadata cannot be loaded."
+                )
         logging.warning(
-            "Micro-Manager image plane metadata cannot be loaded. "
             "XY pixel size cannot be determined, defaulting to 1.0 um."
         )
         self._xy_pixel_size = 1.0
