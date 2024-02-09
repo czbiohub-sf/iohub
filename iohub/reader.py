@@ -285,10 +285,12 @@ def print_info(path: StrOrBytesPath, verbose=False):
             if verbose:
                 print("Zarr hierarchy:")
                 reader.print_tree()
-                msgs.append(f"Positions:\t\t {len(list(reader.positions()))}")
+                positions = list(reader.positions())
+                msgs.append(f"Positions:\t\t {len(positions)}")
+                msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
         else:
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
-            msgs.append(f"Chunk size:\t\t {tuple(reader['0'].chunks)}")
+            msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
         if verbose:
             msgs.extend(
                 [

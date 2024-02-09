@@ -85,6 +85,7 @@ def test_cli_info_ome_zarr(verbose):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     assert re.search(r"Wells:\s+1", result.output)
+    assert ("Chunk size" in result.output) == bool(verbose)
     # Test on single position
     result_pos = runner.invoke(cli, ["info", str(hcs_ref / "B" / "03" / "0")])
     assert "Channel names" in result_pos.output
