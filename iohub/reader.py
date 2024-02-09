@@ -136,7 +136,6 @@ def read_images(
     data_type: Literal[
         "singlepagetiff", "ometiff", "ndtiff", "omezarr"
     ] = None,
-    log_level: int = logging.WARNING,
 ):
     """Read image arrays and metadata from a Micro-Manager dataset.
     Supported formats are Micro-Manager-acquired TIFF datasets
@@ -150,22 +149,12 @@ def read_images(
     data_type :
     Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"], optional
         Dataset format, by default None
-    log_level : int, optional
-        One of 0, 10, 20, 30, 40, 50 for
-        NOTSET, DEBUG, INFO, WARNING, ERROR, CRITICAL, respectively,
-        by default logging.WARNING
 
     Returns
     -------
     Reader
         A child instance of ReaderBase
     """
-
-    logging.basicConfig(
-        level=log_level,
-        format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s",  # noqa
-    )
-    logging.getLogger(__name__)
     path = Path(path).resolve()
     # try to guess data type
     extra_info = None
