@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 import sys
 import warnings
@@ -20,27 +19,6 @@ from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
-
-# replicate from aicsimageio logging mechanism
-###############################################################################
-
-# modify the logging.ERROR level lower for more info
-# CRITICAL
-# ERROR
-# WARNING
-# INFO
-# DEBUG
-# NOTSET
-# logging.basicConfig(
-#     level=logging.DEBUG,
-#     format="[%(levelname)4s: %(module)s:%(lineno)4s %(asctime)s] %(message)s"
-# )
-# log = logging.getLogger(__name__)
-
-###############################################################################
-
-
-# todo: add dim_order to all reader objects
 
 
 def _find_ngff_version_in_zarr_group(group: zarr.Group):
@@ -201,17 +179,11 @@ def print_info(path: StrOrBytesPath, verbose=False):
     """
     path = Path(path).resolve()
     try:
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore", category=UserWarning, module="iohub"
-            )
-            fmt, extra_info = _infer_format(path)
-            if fmt == "omezarr" and extra_info == "0.4":
-                reader = open_ome_zarr(path, mode="r")
-            else:
-                reader = read_images(
-                    path, data_type=fmt, log_level=logging.ERROR
-                )
+        fmt, extra_info = _infer_format(path)
+        if fmt == "omezarr" and extra_info == "0.4":
+            reader = open_ome_zarr(path, mode="r")
+        else:
+            reader = read_images(path, data_type=fmt)
     except (ValueError, RuntimeError):
         print("Error: No compatible dataset is found.", file=sys.stderr)
         return
