@@ -83,5 +83,6 @@ def test_fov_getitem(ome_tiff):
         assert isinstance(img, DataArray)
         assert img.ndim == 5
         assert img[0, 0, 0, 0, 0] >= 0
-        assert img.sel(T=0, Z=0, C=0, Y=0, X=0) >= 0
+        for ch in fov.channel_names:
+            assert img.sel(T=0, Z=0, C=ch, Y=0, X=0) >= 0
     mmstack.close()

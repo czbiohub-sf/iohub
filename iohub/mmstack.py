@@ -117,6 +117,7 @@ class MMStack(MicroManagerFOVMapping):
             self.height,
             self.width,
         ) = dims.values()
+        self._set_mm_meta(self._first_tif.micromanager_metadata)
         self._store = series.aszarr()
         _logger.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store))
@@ -125,9 +126,9 @@ class MMStack(MicroManagerFOVMapping):
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
+        xarr.coords["C"] = self.channel_names
         xset = xarr.to_dataset(dim="R")
         self._xdata = xset
-        self._set_mm_meta(self._first_tif.micromanager_metadata)
         self._infer_image_meta()
 
     @property
