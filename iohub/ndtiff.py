@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import warnings
 from pathlib import Path
 from typing import Any, Iterable, Literal
@@ -12,6 +13,9 @@ from xarray import DataArray
 from xarray import Dataset as XDataset
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
+
+__all__ = ["NDTiffDataset", "NDTiffFOV"]
+_logger = logging.getLogger(__name__)
 
 
 class NDTiffFOV(MicroManagerFOV):
@@ -80,6 +84,12 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self._all_position_keys = self._parse_all_position_keys()
         self._mm_meta = self._get_summary_metadata()
         self.channel_names = list(self.dataset.get_channel_names())
+        if not self.channel_names:
+            self.channel_names = [f"Channel{i}" for i in range(self.channels)]
+            _logger.warning(
+                "No channel names found in metadata. Using defaults: "
+                f"{self.channel_names}"
+            )
         self.stage_positions = self._mm_meta["Summary"]["StagePositions"]
         z_step_size = float(self._mm_meta["Summary"]["z-step_um"] or 1.0)
         xy_pixel_size = float(self._mm_meta["Summary"]["PixelSize_um"] or 1.0)
@@ -281,7 +291,8 @@ class NDTiffDataset(MicroManagerFOVMapping):
             self.dataset.as_array().reshape(shape),
             dims=self.ndtiff_axes,
             name=self.dirname,
-        ).assign_coords(position=pkeys)
+            coords={"position": pkeys, "channel": self.channel_names},
+        )
         self._xdata = da.to_dataset(dim="position")
 
     @property

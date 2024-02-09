@@ -56,3 +56,14 @@ def test_dataset_v2_num_positions(ndtiff_dataset):
     with NDTiffDataset(ndtiff_dataset) as dataset:
         p_match = re.search(r"_(\d+)p_", str(ndtiff_dataset))
         assert len(dataset) == int(p_match.group(1)) if p_match else 1
+
+
+def test_fov_getitem(ndtiff_dataset):
+    with NDTiffDataset(ndtiff_dataset) as dataset:
+        for _, fov in dataset:
+            img = fov[:]
+            assert isinstance(img, DataArray)
+            assert img.ndim == 5
+            assert img[0, 0, 0, 0, 0] >= 0
+            for ch in fov.channel_names:
+                assert img.sel(time=0, channel=ch, z=0, y=0, x=0) >= 0
