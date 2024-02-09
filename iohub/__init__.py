@@ -5,7 +5,6 @@ iohub
 N-dimensional bioimaging data I/O with OME metadata in Python
 """
 
-
 import logging
 
 from iohub.ngff import open_ome_zarr
