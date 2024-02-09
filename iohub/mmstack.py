@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 
 __all__ = ["MMOmeTiffFOV", "MMStack"]
+_logger = logging.getLogger(__name__)
 
 
 def _normalize_mm_pos_key(key: str | int) -> int:
@@ -107,7 +108,7 @@ class MMStack(MicroManagerFOVMapping):
         )
         axes = ("R", "T", "C", "Z", "Y", "X")
         dims = dict((ax, raw_dims.get(ax, 1)) for ax in axes)
-        logging.debug(f"Got dataset dimensions from tifffile: {dims}.")
+        _logger.debug(f"Got dataset dimensions from tifffile: {dims}.")
         (
             self.positions,
             self.frames,
@@ -117,7 +118,7 @@ class MMStack(MicroManagerFOVMapping):
             self.width,
         ) = dims.values()
         self._store = series.aszarr()
-        logging.debug(f"Opened {self._store}.")
+        _logger.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store))
         self.dtype = data.dtype
         img = DataArray(data, dims=raw_dims, name=self.dirname)
@@ -236,7 +237,7 @@ class MMStack(MicroManagerFOVMapping):
             if self.slices == 1:
                 z_step_size = 1.0
             else:
-                logging.warning(
+                _logger.warning(
                     f"Z-step size is {z_step_size} um in the metadata, "
                     "Using 1.0 um instead."
                 )
@@ -335,10 +336,10 @@ class MMStack(MicroManagerFOVMapping):
                 if self._xy_pixel_size > 0:
                     return
             except Exception:
-                logging.warning(
+                _logger.warning(
                     "Micro-Manager image plane metadata cannot be loaded."
                 )
-        logging.warning(
+        _logger.warning(
             "XY pixel size cannot be determined, defaulting to 1.0 um."
         )
         self._xy_pixel_size = 1.0

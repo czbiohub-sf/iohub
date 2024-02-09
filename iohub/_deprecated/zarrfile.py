@@ -12,6 +12,9 @@ import zarr
 from iohub._deprecated.reader_base import ReaderBase
 
 
+_logger = logging.getLogger(__name__)
+
+
 class ZarrReader(ReaderBase):
     """
     .. deprecated:: 0.0.1
@@ -29,7 +32,7 @@ class ZarrReader(ReaderBase):
     ):
         super().__init__()
 
-        logging.warning(
+        _logger.warning(
             DeprecationWarning(
                 "`iohub.zarrfile.ZarrReader` is deprecated "
                 "and will be removed in the future. "

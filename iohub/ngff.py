@@ -35,6 +35,8 @@ from iohub.ngff_meta import (
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
+_logger = logging.getLogger(__name__)
+
 
 def _pad_shape(shape: tuple[int], target: int = 5):
     """Pad shape tuple to a target length."""
@@ -53,7 +55,7 @@ def _open_store(
             f"Dataset directory not found at {store_path}."
         )
     if version != "0.4":
-        logging.warning(
+        _logger.warning(
             "\n".join(
                 "IOHub is only tested against OME-NGFF v0.4.",
                 f"Requested version {version} may not work properly.",
@@ -253,7 +255,7 @@ class NGFFNode:
             try:
                 yield key, self[key]
             except Exception:
-                logging.warning(
+                _logger.warning(
                     "Skipped item at {}: invalid {}.".format(
                         key, type(self._MEMBER_TYPE)
                     )
@@ -288,7 +290,7 @@ class NGFFNode:
         msg = "Zarr group at {} does not have valid metadata for {}".format(
             self._group.path, type(self)
         )
-        logging.warning(msg)
+        _logger.warning(msg)
 
     def _parse_meta(self):
         """Parse and set NGFF metadata from `.zattrs`."""
@@ -745,9 +747,9 @@ class Position(NGFFNode):
             if data_shape[ch_axis] > num_ch:
                 raise ValueError(msg)
             elif data_shape[ch_axis] < num_ch:
-                logging.warning(msg)
+                _logger.warning(msg)
         else:
-            logging.info(
+            _logger.info(
                 "Dataset channel axis is not set. "
                 "Skipping channel shape check."
             )
@@ -1340,7 +1342,7 @@ class Plate(NGFFNode):
 
     def _parse_meta(self):
         if plate_meta := self.zattrs.get("plate"):
-            logging.debug(f"Loading HCS metadata from file: {plate_meta}")
+            _logger.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
         else:
             self._warn_invalid_meta()
@@ -1357,13 +1359,13 @@ class Plate(NGFFNode):
             well_grp = next(row_grp.groups())[1]
             pos_grp = next(well_grp.groups())[1]
         except StopIteration:
-            logging.warning(f"{msg} No position is found in the dataset.")
+            _logger.warning(f"{msg} No position is found in the dataset.")
             return
         try:
             pos = Position(pos_grp)
             setattr(self, attr, getattr(pos, attr))
         except AttributeError:
-            logging.warning(f"{msg} Invalid metadata at the first position")
+            _logger.warning(f"{msg} Invalid metadata at the first position")
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
@@ -1641,7 +1643,7 @@ def open_ome_zarr(
             raise FileExistsError(store_path)
     elif mode == "w":
         if os.path.exists(store_path):
-            logging.warning(f"Overwriting data at {store_path}")
+            _logger.warning(f"Overwriting data at {store_path}")
     else:
         raise ValueError(f"Invalid persistence mode '{mode}'.")
     root = _open_store(store_path, mode, version, synchronizer)

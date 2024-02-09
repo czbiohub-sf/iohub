@@ -14,6 +14,8 @@ from iohub.ngff import Position, TransformationMeta, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset, read_images
 
 __all__ = ["TIFFConverter"]
+_logger = logging.getLogger(__name__)
+
 MAX_CHUNK_SIZE = 500e6  # in bytes
 
 
@@ -102,12 +104,12 @@ class TIFFConverter:
         chunks: tuple[int] | Literal["XY", "XYZ"] = None,
         hcs_plate: bool = None,
     ):
-        logging.debug("Checking output.")
+        _logger.debug("Checking output.")
         output_dir = Path(output_dir)
         if "zarr" in output_dir.suffixes:
             raise ValueError("Please specify .zarr at the end of your output")
         self.output_dir = output_dir
-        logging.info("Initializing data.")
+        _logger.info("Initializing data.")
         self.reader = read_images(input_dir)
         if reader_type := type(self.reader) not in (
             MMStack,
@@ -116,12 +118,12 @@ class TIFFConverter:
             raise TypeError(
                 f"Reader type {reader_type} not supported for conversion."
             )
-        logging.debug("Finished initializing data.")
+        _logger.debug("Finished initializing data.")
         self.summary_metadata = (
             self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
         )
         self.save_name = os.path.basename(output_dir)
-        logging.debug("Getting dataset summary information.")
+        _logger.debug("Getting dataset summary information.")
         self.coord_map = dict()
         self.p = len(self.reader)
         self.t = self.reader.frames
@@ -134,7 +136,7 @@ class TIFFConverter:
         self.hcs_plate = hcs_plate
         self._check_hcs_sites()
         self._get_pos_names()
-        logging.info(
+        _logger.info(
             f"Found Dataset {self.save_name} with "
             f"dimensions (P, T, C, Z, Y, X): {self.dim}"
         )
@@ -146,7 +148,7 @@ class TIFFConverter:
                 raise ValueError(
                     "grid_layout and hcs_plate must not be both true"
                 )
-            logging.info("Generating HCS plate level grid.")
+            _logger.info("Generating HCS plate level grid.")
             try:
                 self.position_grid = _create_grid_from_coordinates(
                     *self._get_position_coords()
@@ -166,7 +168,7 @@ class TIFFConverter:
                 self.hcs_sites = self.reader.hcs_position_labels
                 self.hcs_plate = True
             except ValueError:
-                logging.debug(
+                _logger.debug(
                     "HCS sites not detected, "
                     "dumping all position into a single row."
                 )
@@ -216,7 +218,7 @@ class TIFFConverter:
 
     def _gen_chunks(self, input_chunks):
         if not input_chunks:
-            logging.debug("No chunk size specified, using ZYX.")
+            _logger.debug("No chunk size specified, using ZYX.")
             chunks = [1, 1, self.z, self.y, self.x]
         elif isinstance(input_chunks, tuple):
             chunks = list(input_chunks)
@@ -242,14 +244,14 @@ class TIFFConverter:
         ):
             chunks[-3] = np.ceil(chunks[-3] / 2).astype(int)
 
-        logging.debug(f"Zarr store chunk size will be set to {chunks}.")
+        _logger.debug(f"Zarr store chunk size will be set to {chunks}.")
 
         return tuple(chunks)
 
     def _get_channel_names(self):
         cns = self.reader.channel_names
         if not cns:
-            logging.warning(
+            _logger.warning(
                 "Cannot find channel names, using indices instead."
             )
             cns = [str(i) for i in range(self.c)]
@@ -292,7 +294,7 @@ class TIFFConverter:
     def _init_hcs_arrays(self, arr_kwargs):
         for row, col, fov in self.hcs_sites:
             self._create_zeros_array(row, col, fov, arr_kwargs)
-        logging.info(
+        _logger.info(
             "Created HCS NGFF layout from Micro-Manager HCS position labels."
         )
         self.writer.print_tree()
@@ -314,7 +316,7 @@ class TIFFConverter:
         pos.dump_meta()
 
     def _convert_image_plane_metadata(self, fov, zarr_name: str):
-        logging.info("Writing image plane metadata...")
+        _logger.info("Writing image plane metadata...")
         bar_format_time_channel = (
             "Timepoints/Channels: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
@@ -337,7 +339,7 @@ class TIFFConverter:
             for z_idx in range(self.z):
                 metadata = fov.frame_metadata(t=t_idx, c=c_key, z=z_idx)
                 if metadata is None:
-                    logging.warning(
+                    _logger.warning(
                         f"Cannot load data at timepoint {t_idx},  channel "
                         f"{c_idx}, filling with zeros. Raw data may be "
                         "incomplete."
@@ -365,14 +367,14 @@ class TIFFConverter:
         >>> converter = TIFFConverter("input/path/", "output/path/")
         >>> converter()
         """
-        logging.debug("Setting up Zarr store.")
+        _logger.debug("Setting up Zarr store.")
         self._init_zarr_arrays()
         bar_format_images = (
             "Converting Positions: |{bar:16}|{n_fmt}/{total_fmt} "
             "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
         )
         # Run through every coordinate and convert in acquisition order
-        logging.info("Converting Images...")
+        _logger.info("Converting Images...")
         for p_idx, (_, fov) in tqdm(
             enumerate(self.reader), bar_format=bar_format_images
         ):
