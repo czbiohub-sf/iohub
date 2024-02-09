@@ -137,7 +137,7 @@ class TIFFConverter:
         self._check_hcs_sites()
         self._get_pos_names()
         _logger.info(
-            f"Found Dataset {self.save_name} with "
+            f"Found Dataset {input_dir} with "
             f"dimensions (P, T, C, Z, Y, X): {self.dim}"
         )
         self.metadata = dict()
@@ -316,18 +316,14 @@ class TIFFConverter:
         pos.dump_meta()
 
     def _convert_image_plane_metadata(self, fov, zarr_name: str):
-        _logger.info("Writing image plane metadata...")
-        bar_format_time_channel = (
-            "Timepoints/Channels: |{bar:16}|{n_fmt}/{total_fmt} "
-            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
-        )
         position_image_plane_metadata = {}
         for t_idx, c_idx in product(
             range(self.t),
             range(self.c),
-            bar_format=bar_format_time_channel,
-            position=1,
+            desc="Converting frame metadata",
+            unit="frame",
             leave=False,
+            ncols=80,
         ):
             c_key = c_idx
             if isinstance(self.reader, NDTiffDataset):
@@ -348,9 +344,6 @@ class TIFFConverter:
                 # T/C/Z
                 frame_key = "/".join([str(i) for i in (t_idx, c_idx, z_idx)])
                 position_image_plane_metadata[frame_key] = metadata
-        # image plane metadata is save in
-        # output_dir/row/well/fov/img/image_plane_metadata.json,
-        # e.g. output_dir/A/1/FOV0/0/image_plane_metadata.json
         with open(
             self.output_dir / zarr_name / "image_plane_metadata.json",
             mode="x",
@@ -369,16 +362,15 @@ class TIFFConverter:
         """
         _logger.debug("Setting up Zarr store.")
         self._init_zarr_arrays()
-        bar_format_images = (
-            "Converting Positions: |{bar:16}|{n_fmt}/{total_fmt} "
-            "(Time Remaining: {remaining}), {rate_fmt}{postfix}]"
-        )
         # Run through every coordinate and convert in acquisition order
-        _logger.info("Converting Images...")
-        for p_idx, (_, fov) in tqdm(
-            enumerate(self.reader), bar_format=bar_format_images
+        _logger.debug("Converting images.")
+        for zarr_pos_name, (_, fov) in tqdm(
+            zip(self.zarr_position_names, self.reader, strict=True),
+            total=len(self.reader),
+            desc="Converting images",
+            unit="FOV",
+            ncols=80,
         ):
-            zarr_pos_name = self.zarr_position_names[p_idx]
             zarr_img = self.writer[zarr_pos_name]["0"]
             to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
             self._convert_image_plane_metadata(fov, zarr_img.path)
