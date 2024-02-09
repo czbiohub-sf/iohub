@@ -1,7 +1,7 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+"""
+iohub
+=====
 
-"""iohub
 N-dimensional bioimaging data I/O with OME metadata in Python
 """
 
