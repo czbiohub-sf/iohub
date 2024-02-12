@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import sys
 import warnings
 from pathlib import Path
@@ -44,7 +43,7 @@ def _check_zarr_data_type(src: Path):
 
 def _check_single_page_tiff(src: Path):
     if src.is_file():
-        src = os.path.dirname(src)
+        src = src.parent
     files = src.glob("*.tif")
     if len(files) == 0:
         sub_dirs = _get_sub_dirs(src)
@@ -76,9 +75,9 @@ def _check_ndtiff(src: Path):
     if src.is_file() and "tif" in src.suffixes:
         src = src.parent.parent
     # shortcut, may not be foolproof
-    if os.path.exists(os.path.join(src, "Full resolution", "NDTiff.index")):
+    if Path(src, "Full resolution", "NDTiff.index").exists():
         return True
-    elif os.path.exists(os.path.join(src, "NDTiff.index")):
+    elif Path(src, "NDTiff.index").exists():
         return True
     return False
 
