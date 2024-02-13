@@ -71,12 +71,14 @@ def _check_multipage_tiff(src: Path):
 
 
 def _check_ndtiff(src: Path):
-    # go two levels up in case a .tif file is selected
+    # select parent directory if a .tif file is selected
     if src.is_file() and "tif" in src.suffixes:
-        src = src.parent.parent
-    # shortcut, may not be foolproof
+        if _check_ndtiff(src.parent) or _check_ndtiff(src.parent.parent):
+            return True
+    # ndtiff v2
     if Path(src, "Full resolution", "NDTiff.index").exists():
         return True
+    # ndtiff v3
     elif Path(src, "NDTiff.index").exists():
         return True
     return False
