@@ -15,7 +15,7 @@ __all__ = ["open_ome_zarr", "read_images"]
 
 
 _level = os.environ.get("IOHUB_LOG_LEVEL", logging.INFO)
-if _level.isdigit():
+if str(_level).isdigit():
     _level = int(_level)
 
 logging.basicConfig()
