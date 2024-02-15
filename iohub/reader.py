@@ -45,23 +45,30 @@ def _check_single_page_tiff(src: Path):
     if src.is_file():
         src = src.parent
     files = src.glob("*.tif")
-    if len(files) == 0:
+    try:
+        next(files)
+    except StopIteration:
         sub_dirs = _get_sub_dirs(src)
         if sub_dirs:
             files = (src / sub_dirs[0]).glob("*.tif")
-            if len(files) > 0:
+            try:
                 with tiff.TiffFile(next(files)) as tf:
                     if (
                         len(tf.pages) == 1
                     ):  # and tf.pages[0].is_multipage is False:
                         return True
+            except StopIteration:
+                pass
     return False
 
 
 def _check_multipage_tiff(src: Path):
     if src.is_file():
         src = src.parent
-    file = next(src.glob("*.tif"))
+    try:
+        file = next(src.glob("*.tif"))
+    except StopIteration:
+        return False
     with tiff.TiffFile(file) as tf:
         if len(tf.pages) > 1:
             return True
