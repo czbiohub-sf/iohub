@@ -74,7 +74,7 @@ def info(files, verbose):
     "--chunks",
     "-c",
     required=False,
-    default="XY",
+    default="XYZ",
     help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
     "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
 )
