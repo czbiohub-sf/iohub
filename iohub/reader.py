@@ -93,7 +93,9 @@ def _check_ndtiff(src: Path):
 
 def _get_sub_dirs(directory: Path) -> list[str]:
     """ """
-    sub_dir_name = [subdir.name for subdir in directory.glob("*/")]
+    sub_dir_name = [
+        subdir.name for subdir in directory.iterdir() if subdir.is_dir()
+    ]
     #    assert subDirName, 'No sub directories found'
     return natsort.natsorted(sub_dir_name)
 
