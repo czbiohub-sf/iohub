@@ -126,6 +126,15 @@ class MMStack(MicroManagerFOVMapping):
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
+        if self.channels > len(self.channel_names):
+            for c in range(self.channels):
+                if c >= len(self.channel_names):
+                    self.channel_names.append(f"Channel{c}")
+            _logger.warning(
+                "Number of channel names in the metadata is "
+                "smaller than the number of channels. "
+                f"Completing with fallback names: {self.channel_names}."
+            )
         xarr.coords["C"] = self.channel_names
         xset = xarr.to_dataset(dim="R")
         self._xdata = xset

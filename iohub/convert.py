@@ -248,15 +248,6 @@ class TIFFConverter:
 
         return tuple(chunks)
 
-    def _get_channel_names(self):
-        cns = self.reader.channel_names
-        if not cns:
-            _logger.warning(
-                "Cannot find channel names, using indices instead."
-            )
-            cns = [str(i) for i in range(self.c)]
-        return cns
-
     def _scale_voxels(self):
         return [
             TransformationMeta(
@@ -269,7 +260,7 @@ class TIFFConverter:
             self.output_dir,
             layout="hcs",
             mode="w-",
-            channel_names=self._get_channel_names(),
+            channel_names=self.reader.channel_names,
             version="0.4",
         )
         self.zarr_position_names = []
