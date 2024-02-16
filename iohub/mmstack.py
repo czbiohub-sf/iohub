@@ -98,7 +98,11 @@ class MMStack(MicroManagerFOVMapping):
         self.dirname = self.root.name
         self._first_tif = TiffFile(first_file, is_mmstack=True)
         _logger.debug(f"Parsing {first_file} as MMStack.")
-        self._parse_data()
+        with catch_warnings():
+            # The IJMetadata tag (50839) is sometimes not written
+            # See https://micro-manager.org/Micro-Manager_File_Formats
+            filterwarnings("ignore", message=r"*50839*", module="tifffile")
+            self._parse_data()
         self._store = None
 
     def _parse_data(self):
