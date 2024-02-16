@@ -75,7 +75,7 @@ class MMOmeTiffFOV(MicroManagerFOV):
     def xdata(self) -> DataArray:
         return self._xdata
 
-    def frame_metadata(self, t: int, c: int, z: int) -> dict:
+    def frame_metadata(self, t: int, c: int, z: int) -> dict | None:
         """Read image plane metadata from the OME-TIFF file."""
         return self.parent.read_image_metadata(self._position, t, c, z)
 
@@ -320,7 +320,12 @@ class MMStack(MicroManagerFOVMapping):
             filterwarnings(
                 "ignore", message=r".*from closed file.*", module="tifffile"
             )
-            page = self._first_tif.series[0].pages[idx].aspage()
+            page = self._first_tif.series[0].pages[idx]
+            if page:
+                page = page.aspage()
+            else:
+                # invalid page
+                return None
             try:
                 return page.tags["MicroManagerMetadata"].value
             except KeyError:
