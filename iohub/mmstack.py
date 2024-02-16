@@ -323,6 +323,9 @@ class MMStack(MicroManagerFOVMapping):
         multi_index = (p, t, c, z)
         tif_shape = (self.positions, self.frames, self.channels, self.slices)
         idx = np.ravel_multi_index(multi_index, tif_shape)
+        return self._read_frame_metadata(idx)
+
+    def _read_frame_metadata(self, idx: int) -> dict | None:
         # `TiffPageSeries` is not a collection of `TiffPage` objects
         # but a mixture of `TiffPage` and `TiffFrame` objects
         # https://github.com/cgohlke/tifffile/issues/179
@@ -332,13 +335,19 @@ class MMStack(MicroManagerFOVMapping):
             )
             page = self._first_tif.series[0].pages[idx]
             if page:
-                page = page.aspage()
+                try:
+                    page = page.aspage()
+                except ValueError:
+                    _logger.warning("Cannot read tags from virtual frame.")
+                    return None
             else:
                 # invalid page
+                _logger.warning(f"Page {idx} is not present in the dataset.")
                 return None
             try:
                 return page.tags["MicroManagerMetadata"].value
             except KeyError:
+                _logger.warning("The Micro-Manager metadata tag is not found.")
                 return None
 
     def _infer_image_meta(self) -> None:
@@ -346,7 +355,7 @@ class MMStack(MicroManagerFOVMapping):
         Infer data type and pixel size from the first image plane metadata.
         """
         _logger.debug("Inferring image metadata.")
-        metadata = self.read_image_metadata(0, 0, 0, 0)
+        metadata = self._read_frame_metadata(0)
         if metadata is not None:
             try:
                 self._xy_pixel_size = float(metadata["PixelSizeUm"])
