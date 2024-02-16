@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 import warnings
 from pathlib import Path
@@ -18,6 +19,8 @@ from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
+
+_logger = logging.getLogger(__name__)
 
 
 def _find_ngff_version_in_zarr_group(group: zarr.Group):
@@ -148,6 +151,7 @@ def read_images(
     extra_info = None
     if not data_type:
         data_type, extra_info = _infer_format(path)
+    _logger.debug(f"Detected data type: {data_type} {extra_info}")
     # identify data structure type
     if data_type == "ometiff":
         return MMStack(path)

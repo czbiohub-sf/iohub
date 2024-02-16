@@ -97,6 +97,7 @@ class MMStack(MicroManagerFOVMapping):
         self.root = first_file.parent
         self.dirname = self.root.name
         self._first_tif = TiffFile(first_file, is_mmstack=True)
+        _logger.debug(f"Parsing {first_file} as MMStack.")
         self._parse_data()
         self._store = None
 
@@ -344,6 +345,7 @@ class MMStack(MicroManagerFOVMapping):
         """
         Infer data type and pixel size from the first image plane metadata.
         """
+        _logger.debug("Inferring image metadata.")
         metadata = self.read_image_metadata(0, 0, 0, 0)
         if metadata is not None:
             try:
