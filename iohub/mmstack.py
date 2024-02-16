@@ -333,7 +333,11 @@ class MMStack(MicroManagerFOVMapping):
             filterwarnings(
                 "ignore", message=r".*from closed file.*", module="tifffile"
             )
-            page = self._first_tif.series[0].pages[idx]
+            try:
+                # virtual frames
+                page = self._first_tif.pages[idx]
+            except IndexError:
+                page = self._first_tif.series[0].pages[idx]
             if page:
                 try:
                     page = page.aspage()
