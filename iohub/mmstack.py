@@ -101,7 +101,7 @@ class MMStack(MicroManagerFOVMapping):
         with catch_warnings():
             # The IJMetadata tag (50839) is sometimes not written
             # See https://micro-manager.org/Micro-Manager_File_Formats
-            filterwarnings("ignore", message=r"*50839*", module="tifffile")
+            filterwarnings("ignore", message=r".*50839.*", module="tifffile")
             self._parse_data()
         self._store = None
 
