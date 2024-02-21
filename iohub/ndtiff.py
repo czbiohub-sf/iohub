@@ -131,9 +131,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
         p_idx = self._all_position_keys[0]
         c_idx = self._ndtiff_channel_names[0]
-        img_metadata = self.get_image_metadata(
-            p_idx, 0, c_idx, 0
-        )
+        img_metadata = self.get_image_metadata(p_idx, 0, c_idx, 0)
 
         pm_metadata["z-step_um"] = None
         if "ZPosition_um_Intended" in img_metadata.keys():
