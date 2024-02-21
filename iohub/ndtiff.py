@@ -82,9 +82,10 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self.dtype = self.dataset.dtype
 
         self._all_position_keys = self._parse_all_position_keys()
+        self._ndtiff_channel_names = list(self._axes.get("channel", [None]))
         self._mm_meta = self._get_summary_metadata()
-        self.channel_names = list(self.dataset.get_channel_names())
-        if not self.channel_names:
+        self.channel_names = self._ndtiff_channel_names
+        if not self.channel_names[0]:
             self.channel_names = [f"Channel{i}" for i in range(self.channels)]
             _logger.warning(
                 "No channel names found in metadata. Using defaults: "
@@ -127,18 +128,21 @@ class NDTiffDataset(MicroManagerFOVMapping):
         pm_metadata = self.dataset.summary_metadata
         pm_metadata["MicroManagerVersion"] = "pycromanager"
         pm_metadata["Positions"] = len(self)
+
+        p_idx = self._all_position_keys[0]
+        c_idx = self._ndtiff_channel_names[0]
         img_metadata = self.get_image_metadata(
-            self._all_position_keys[0], 0, 0, 0
+            p_idx, 0, c_idx, 0
         )
 
         pm_metadata["z-step_um"] = None
         if "ZPosition_um_Intended" in img_metadata.keys():
             pm_metadata["z-step_um"] = np.around(
                 abs(
-                    self.get_image_metadata(0, 0, 0, 1)[
+                    self.get_image_metadata(p_idx, 0, c_idx, 1)[
                         "ZPosition_um_Intended"
                     ]
-                    - self.get_image_metadata(0, 0, 0, 0)[
+                    - self.get_image_metadata(p_idx, 0, c_idx, 0)[
                         "ZPosition_um_Intended"
                     ]
                 ),
@@ -149,7 +153,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         if "position" in self._axes:
             for position in self._axes["position"]:
                 position_metadata = {}
-                img_metadata = self.get_image_metadata(position, 0, 0, 0)
+                img_metadata = self.get_image_metadata(position, 0, c_idx, 0)
 
                 if img_metadata is not None and all(
                     key in img_metadata.keys()
