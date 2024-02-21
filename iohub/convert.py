@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -122,7 +121,7 @@ class TIFFConverter:
         self.summary_metadata = (
             self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
         )
-        self.save_name = os.path.basename(output_dir)
+        self.save_name = output_dir.name
         _logger.debug("Getting dataset summary information.")
         self.coord_map = dict()
         self.p = len(self.reader)
