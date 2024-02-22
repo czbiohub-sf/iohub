@@ -19,6 +19,7 @@ def test_dataset_ctx(ndtiff_dataset):
     with NDTiffDataset(ndtiff_dataset) as dataset:
         assert isinstance(dataset, NDTiffDataset)
         assert len(dataset) > 0
+        assert "NDTiffDataset" in dataset.__repr__()
 
 
 def test_dataset_nonexisting(tmpdir):
@@ -36,9 +37,12 @@ def test_dataset_getitem_v2(ndtiff_v2):
 def test_dataset_v3_labeled_positions():
     dataset = NDTiffDataset(ndtiff_v3_labeled_positions)
     assert len(dataset) == 3
-    for (key, fov), name in zip(dataset, ["Pos0", "Pos1", "Pos2"]):
+    positions = ["Pos0", "Pos1", "Pos2"]
+    for (key, fov), name in zip(dataset, positions):
         assert key == name
         assert isinstance(fov, NDTiffFOV)
+        assert name in dataset.__repr__()
+        assert key in fov.__repr__()
     with pytest.raises(KeyError):
         dataset["0"]
         dataset[0]

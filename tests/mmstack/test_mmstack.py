@@ -20,6 +20,7 @@ def test_mmstack_ctx(ome_tiff):
     with MMStack(ome_tiff) as mmstack:
         assert isinstance(mmstack, MMStack)
         assert len(mmstack) > 0
+        assert "MMStack" in mmstack.__repr__()
 
 
 def test_mmstack_nonexisting(tmpdir):
@@ -34,6 +35,8 @@ def test_mmstack_getitem(ome_tiff):
     for key, fov in mmstack:
         assert isinstance(key, str)
         assert isinstance(fov, MMOmeTiffFOV)
+        assert key in mmstack.__repr__()
+        assert key in fov.__repr__()
     mmstack.close()
 
 
