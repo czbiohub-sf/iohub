@@ -85,7 +85,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self._ndtiff_channel_names = list(self._axes.get("channel", [None]))
         self._mm_meta = self._get_summary_metadata()
         self.channel_names = self._ndtiff_channel_names
-        if not self.channel_names[0]:
+        if self.channel_names[0] is None:
             self.channel_names = [f"Channel{i}" for i in range(self.channels)]
             _logger.warning(
                 "No channel names found in metadata. Using defaults: "
