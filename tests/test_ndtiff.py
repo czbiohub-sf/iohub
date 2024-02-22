@@ -27,6 +27,13 @@ def test_dataset_nonexisting(tmpdir):
         NDTiffDataset(tmpdir / "nonexisting")
 
 
+def test_dataset_metadata(ndtiff_dataset):
+    with NDTiffDataset(ndtiff_dataset) as dataset:
+        assert isinstance(dataset.micromanager_metadata, dict)
+        assert dataset.micromanager_metadata["Summary"]
+        assert isinstance(dataset.micromanager_summary, dict)
+
+
 @pytest.mark.parametrize("ndtiff_v2", ndtiff_v2_datasets)
 def test_dataset_getitem_v2(ndtiff_v2):
     with NDTiffDataset(ndtiff_v2) as dataset:

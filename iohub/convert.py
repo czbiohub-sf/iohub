@@ -118,9 +118,7 @@ class TIFFConverter:
                 f"Reader type {reader_type} not supported for conversion."
             )
         _logger.debug("Finished initializing data.")
-        self.summary_metadata = (
-            self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
-        )
+        self.summary_metadata = self.reader.micromanager_summary
         self.save_name = output_dir.name
         _logger.debug("Getting dataset summary information.")
         self.coord_map = dict()

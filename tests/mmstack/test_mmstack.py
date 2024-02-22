@@ -65,8 +65,9 @@ def test_mmstack_num_timepoints_incomplete():
 
 def test_mmstack_metadata(ome_tiff):
     with MMStack(ome_tiff) as mmstack:
-        assert isinstance(mmstack.mm_meta, dict)
-        assert mmstack.mm_meta["Summary"]
+        assert isinstance(mmstack.micromanager_metadata, dict)
+        assert mmstack.micromanager_metadata["Summary"]
+        assert mmstack.micromanager_summary
 
 
 def test_fov_axes_names(ome_tiff):
