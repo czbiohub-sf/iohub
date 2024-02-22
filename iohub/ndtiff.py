@@ -57,6 +57,8 @@ class NDTiffDataset(MicroManagerFOVMapping):
     effectively a wrapper of the `ndtiff.Dataset` class.
     """
 
+    _ndtiff_axes: tuple[str] = ("position", "time", "channel", "z", "y", "x")
+
     def __init__(self, data_path: Path | str):
         super().__init__()
         data_path = Path(data_path)
@@ -68,6 +70,11 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self.root = data_path
         self.dirname = data_path.name
         self._axes = self.dataset.axes
+        if any([a for a in self._axes.keys() if a not in self._ndtiff_axes]):
+            raise NotImplementedError(
+                f"Custom axis names {self._axes.keys()} are not supported. "
+                f"Supported axes are: {self._ndtiff_axes}"
+            )
         self._str_posistion_axis = self._check_str_axis("position")
         self._str_channel_axis = self._check_str_axis("channel")
         self.frames = (
@@ -85,7 +92,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self._ndtiff_channel_names = list(self._axes.get("channel", [None]))
         self._mm_meta = self._get_summary_metadata()
         self.channel_names = self._ndtiff_channel_names
-        if self.channel_names[0] is None:
+        if self.channel_names[0] is None or self.channel_names[0] == 0:
             self.channel_names = [f"Channel{i}" for i in range(self.channels)]
             _logger.warning(
                 "No channel names found in metadata. Using defaults: "
@@ -191,10 +198,6 @@ class NDTiffDataset(MicroManagerFOVMapping):
         """Channel axis is string-valued"""
         return self._str_channel_axis
 
-    @property
-    def ndtiff_axes(self) -> tuple[str]:
-        return ("position", "time", "channel", "z", "y", "x")
-
     def _check_coordinates(self, p: int | str, t: int, c: int | str, z: int):
         """
         Check that the (p, t, c, z) coordinates are part of the ndtiff dataset.
@@ -202,7 +205,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         below
         """
         coords = [p, t, c, z]
-        axes = self.ndtiff_axes[:4]
+        axes = self._ndtiff_axes[:4]
 
         for i, axis in enumerate(axes):
             coord = coords[i]
@@ -291,7 +294,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         # add singleton axes so output is always (p, t, c, z, y, x)
         da = DataArray(
             self.dataset.as_array().reshape(shape),
-            dims=self.ndtiff_axes,
+            dims=self._ndtiff_axes,
             name=self.dirname,
             coords={"position": pkeys, "channel": self.channel_names},
         )
