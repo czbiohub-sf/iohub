@@ -307,6 +307,7 @@ class TIFFConverter:
 
     def _convert_image_plane_metadata(self, fov, zarr_name: str):
         position_image_plane_metadata = {}
+        sorted_keys = []
         for t_idx, c_idx in product(
             range(self.t),
             range(self.c),
@@ -331,9 +332,13 @@ class TIFFConverter:
                         "incomplete."
                     )
                     continue
-                # T/C/Z
-                frame_key = "/".join([str(i) for i in (t_idx, c_idx, z_idx)])
-                position_image_plane_metadata[frame_key] = metadata
+                if not sorted_keys:
+                    # Sort keys, ordering keys without dashes first
+                    sorted_keys = sorted(metadata.keys(), key=lambda x: ('-' in x, x))
+                
+                sorted_metadata = {key: metadata[key] for key in sorted_keys}
+                frame_key = "/".join([str(i) for i in (t_idx, c_idx, z_idx)]) # T/C/Z
+                position_image_plane_metadata[frame_key] = sorted_metadata
         with open(
             self.output_dir / zarr_name / "image_plane_metadata.json",
             mode="x",
