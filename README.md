@@ -100,9 +100,9 @@ and the [example scripts](https://github.com/czbiohub-sf/iohub/tree/main/example
 Read a directory containing a TIFF dataset:
 
 ```py
-from iohub import read_micromanager
+from iohub import read_images
 
-reader = read_micromanager("/path/to/data/")
+reader = read_images("/path/to/data/")
 print(reader.shape)
 ```
 

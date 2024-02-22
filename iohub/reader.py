@@ -165,7 +165,7 @@ def read_images(
             warnings.warn(
                 UserWarning(
                     "For NGFF v0.4 datasets, `iohub.open_ome_zarr()` "
-                    "is preferred over `iohub.read_micromanager()`. "
+                    "is preferred over `iohub.read_images()`. "
                     "Note that `open_ome_zarr()` will return "
                     "an NGFFNode object instead of a ReaderBase instance."
                 )
