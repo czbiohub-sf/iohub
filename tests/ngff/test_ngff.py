@@ -422,7 +422,7 @@ def test_create_tiled(channel_names):
     grid_shape=tiles_rc_st,
     arr_name=short_alpha_numeric,
 )
-@settings(suppress_health_check=[HealthCheck.data_too_large])
+@settings(suppress_health_check=[HealthCheck.too_slow])
 def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
     """Test `iohub.ngff.TiledPosition.make_tiles()` and  `...get_tile()`"""
     with TemporaryDirectory() as temp_dir:
