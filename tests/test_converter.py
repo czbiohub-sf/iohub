@@ -84,6 +84,8 @@ def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
     converter()
     with open_ome_zarr(output, mode="r") as result:
         intensity = 0
+        if grid_layout and converter.p > 1:
+            assert len(result) < converter.p
         for pos_name, pos in result.positions():
             _check_scale_transform(pos)
             _check_chunks(pos, chunks)

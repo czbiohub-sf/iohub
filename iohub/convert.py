@@ -189,14 +189,19 @@ class TIFFConverter:
         if not self.reader.stage_positions:
             raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
-            stage_pos = pos.get("XYStage")
+            stage_pos = pos.get("XYStage") or pos.get("XY")
             if stage_pos is None:
                 raise ValueError(
                     f"Stage position is not available for position {idx}"
                 )
-            coords_list.append(pos["XYStage"])
-            row = pos["GridRow"]
-            col = pos["GridCol"]
+            coords_list.append(stage_pos)
+            try:
+                row = pos["GridRow"]
+                col = pos["GridCol"]
+            except KeyError:
+                raise ValueError(
+                    f"Grid indices not available for position {idx}"
+                )
             row_max = row if row > row_max else row_max
             col_max = col if col > col_max else col_max
 
