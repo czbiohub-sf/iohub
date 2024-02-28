@@ -94,8 +94,8 @@ class MMStack(MicroManagerFOVMapping):
         super().__init__()
         data_path = Path(data_path)
         first_file = find_first_ome_tiff_in_mmstack(data_path)
-        self.root = first_file.parent
-        self.dirname = self.root.name
+        self._root = first_file.parent
+        self.dirname = self._root.name
         self._first_tif = TiffFile(first_file, is_mmstack=True)
         _logger.debug(f"Parsing {first_file} as MMStack.")
         with catch_warnings():

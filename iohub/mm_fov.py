@@ -26,7 +26,7 @@ class MicroManagerFOV(BaseFOV):
 
     @property
     def root(self) -> Path:
-        return self.parent.root
+        return self.parent._root
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
@@ -63,12 +63,18 @@ class MicroManagerFOV(BaseFOV):
 
 class MicroManagerFOVMapping(BaseFOVMapping):
     def __init__(self):
+        self._root: Path = None
         self._mm_meta: dict = None
         self._stage_positions: list[dict[str, str | float]] = []
         self.channel_names: list[str] = None
 
     def __repr__(self) -> str:
         return (f"Type: {type(self)}\nData:\n") + self.xdata.__repr__()
+
+    @property
+    def root(self) -> Path:
+        """Root directory of the dataset."""
+        return self._root
 
     @property
     def micromanager_metadata(self) -> dict | None:
