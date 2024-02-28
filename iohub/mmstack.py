@@ -380,7 +380,6 @@ class MMStack(MicroManagerFOVMapping):
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
-        """ZXY pixel size in micrometers."""
         return (
             self._z_step_size,
             self._xy_pixel_size,

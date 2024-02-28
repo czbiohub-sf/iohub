@@ -26,7 +26,7 @@ class MicroManagerFOV(BaseFOV):
 
     @property
     def root(self) -> Path:
-        return self.parent._root
+        return self.parent.root
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
@@ -145,3 +145,8 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                     "'A1-Site_0', 'H12-Site_1', or '1-Pos000_000' "
                     f"Got labels {labels}"
                 )
+
+    @property
+    def zyx_scale(self) -> tuple[float, float, float]:
+        """ZXY pixel size in micrometers."""
+        raise NotImplementedError
