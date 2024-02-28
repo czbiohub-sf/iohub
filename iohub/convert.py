@@ -150,7 +150,8 @@ class TIFFConverter:
                 self.position_grid = _create_grid_from_coordinates(
                     *self._get_position_coords()
                 )
-            except ValueError:
+            except ValueError as e:
+                _logger.warning(f"Failed to generate grid layout: {e}")
                 self._make_default_grid()
         else:
             self._make_default_grid()
