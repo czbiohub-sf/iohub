@@ -30,8 +30,8 @@ jobs:
           pip install black
       - name: Check code styling with Black
         run: |
-          black --diff -S -t py39 iohub
-          black --check -S -t py39 iohub
+          black --diff -S -t py310 iohub
+          black --check -S -t py310 iohub
 
   lint:
     name: Lint Check

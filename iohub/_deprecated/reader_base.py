@@ -30,16 +30,20 @@ class ReaderBase:
         return self.frames, self.channels, self.slices, self.height, self.width
 
     @property
-    def mm_meta(self):
+    def micromanager_metadata(self) -> dict | None:
         return self._mm_meta
 
-    @mm_meta.setter
-    def mm_meta(self, value):
+    @micromanager_metadata.setter
+    def micromanager_metadata(self, value):
         if not isinstance(value, dict):
             raise TypeError(
                 f"Type of `mm_meta` should be `dict`, got `{type(value)}`."
             )
         self._mm_meta = value
+
+    @property
+    def micromanager_summary(self) -> dict | None:
+        return self._mm_meta.get("Summary", None)
 
     @property
     def stage_positions(self):

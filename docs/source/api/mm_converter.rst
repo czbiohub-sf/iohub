@@ -11,3 +11,4 @@ Convert TIFF to OME-Zarr
 
 .. autoclass:: TIFFConverter
    :members:
+   :special-members: __call__

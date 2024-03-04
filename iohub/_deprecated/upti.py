@@ -6,11 +6,10 @@ import numpy as np
 import tifffile as tiff
 import zarr
 
-from iohub.reader_base import ReaderBase
+from iohub._deprecated.reader_base import ReaderBase
 
 
 class UPTIReader(ReaderBase):
-
     """
     Reader for UPTI raw data.
     Accepts both new live UPTI and older UPTI format.
