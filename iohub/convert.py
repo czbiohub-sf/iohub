@@ -180,8 +180,8 @@ class TIFFConverter:
             )
 
     def _get_position_coords(self):
-        row_max = 0
-        col_max = 0
+        rows = set()
+        cols = set()
         coords_list = []
 
         # TODO: read rows, cols directly from XY corods
@@ -196,16 +196,14 @@ class TIFFConverter:
                 )
             coords_list.append(stage_pos)
             try:
-                row = pos["GridRow"]
-                col = pos["GridCol"]
+                rows.add(pos["GridRow"])
+                cols.add(pos["GridCol"])
             except KeyError:
                 raise ValueError(
                     f"Grid indices not available for position {idx}"
                 )
-            row_max = row if row > row_max else row_max
-            col_max = col if col > col_max else col_max
 
-        return coords_list, row_max + 1, col_max + 1
+        return coords_list, len(rows), len(cols)
 
     def _get_pos_names(self):
         """Append a list of pos names in ascending order
