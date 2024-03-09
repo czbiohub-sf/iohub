@@ -189,7 +189,7 @@ class TIFFConverter:
         if not self.reader.stage_positions:
             raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
-            stage_pos = pos.get("XYStage") or pos.get("XY")
+            stage_pos = pos.get("XYStage") or pos.get("XY") or pos.get("XY Stage")
             if stage_pos is None:
                 raise ValueError(
                     f"Stage position is not available for position {idx}"
