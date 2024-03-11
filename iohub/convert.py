@@ -180,21 +180,32 @@ class TIFFConverter:
             )
 
     def _get_position_coords(self):
+        """Get the position coordinates from the reader metadata.
+
+        Raises:
+            ValueError: If stage positions are not available.
+
+        Returns:
+            list: XY stage position coordinates.
+            int: Number of grid rows.
+            int: Number of grid columns.
+        """
         rows = set()
         cols = set()
-        coords_list = []
+        xy_coords = []
 
-        # TODO: read rows, cols directly from XY corods
         # TODO: account for non MM2gamma meta?
         if not self.reader.stage_positions:
             raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
-            stage_pos = pos.get("XYStage") or pos.get("XY") or pos.get("XY Stage")
+            stage_pos = (
+                pos.get("XYStage") or pos.get("XY") or pos.get("XY Stage")
+            )
             if stage_pos is None:
                 raise ValueError(
                     f"Stage position is not available for position {idx}"
                 )
-            coords_list.append(stage_pos)
+            xy_coords.append(stage_pos)
             try:
                 rows.add(pos["GridRow"])
                 cols.add(pos["GridCol"])
@@ -203,7 +214,7 @@ class TIFFConverter:
                     f"Grid indices not available for position {idx}"
                 )
 
-        return coords_list, len(rows), len(cols)
+        return xy_coords, len(rows), len(cols)
 
     def _get_pos_names(self):
         """Append a list of pos names in ascending order
