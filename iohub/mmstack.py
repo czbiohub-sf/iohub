@@ -127,7 +127,7 @@ class MMStack(MicroManagerFOVMapping):
         self._store = series.aszarr()
         _logger.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store))
-        data = data[:self.positions] # not all positions may have been acquires
+        data = data[:self.positions] # not all positions may have been acquired
         self.dtype = data.dtype
         img = DataArray(data, dims=raw_dims, name=self.dirname)
         xarr = img.expand_dims(
