@@ -127,8 +127,6 @@ class MMStack(MicroManagerFOVMapping):
         self._store = series.aszarr()
         _logger.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store))
-        # not all positions in the position list may have been acquired
-        data = data[: self.positions]
         self.dtype = data.dtype
         img = DataArray(data, dims=raw_dims, name=self.dirname)
         xarr = img.expand_dims(
@@ -143,6 +141,8 @@ class MMStack(MicroManagerFOVMapping):
                 "smaller than the number of channels. "
                 f"Completing with fallback names: {self.channel_names}."
             )
+        # not all positions in the position list may have been acquired
+        xarr = xarr[: self.positions]
         xarr.coords["C"] = self.channel_names
         xset = xarr.to_dataset(dim="R")
         self._xdata = xset
