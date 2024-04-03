@@ -9,10 +9,10 @@ from warnings import catch_warnings, filterwarnings
 import dask.array as da
 import numpy as np
 import zarr
+from natsort import natsorted
 from numpy.typing import ArrayLike
 from tifffile import TiffFile
 from xarray import DataArray
-from natsort import natsorted
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
 
@@ -127,7 +127,8 @@ class MMStack(MicroManagerFOVMapping):
         self._store = series.aszarr()
         _logger.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store))
-        data = data[:self.positions] # not all positions may have been acquired
+        # not all positions in the position list may have been acquired
+        data = data[: self.positions]
         self.dtype = data.dtype
         img = DataArray(data, dims=raw_dims, name=self.dirname)
         xarr = img.expand_dims(
