@@ -9,6 +9,7 @@ from warnings import catch_warnings, filterwarnings
 import dask.array as da
 import numpy as np
 import zarr
+from natsort import natsorted
 from numpy.typing import ArrayLike
 from tifffile import TiffFile
 from xarray import DataArray
@@ -140,6 +141,8 @@ class MMStack(MicroManagerFOVMapping):
                 "smaller than the number of channels. "
                 f"Completing with fallback names: {self.channel_names}."
             )
+        # not all positions in the position list may have been acquired
+        xarr = xarr[: self.positions]
         xarr.coords["C"] = self.channel_names
         xset = xarr.to_dataset(dim="R")
         self._xdata = xset
@@ -150,7 +153,7 @@ class MMStack(MicroManagerFOVMapping):
         return self._xdata
 
     def __len__(self) -> int:
-        return self.positions
+        return len(self.xdata.keys())
 
     def __getitem__(self, key: str | int) -> MMOmeTiffFOV:
         key = _normalize_mm_pos_key(key)
@@ -218,15 +221,14 @@ class MMStack(MicroManagerFOVMapping):
             mm_version == "2.0.1 20220920"
             and self._mm_meta["Summary"]["Prefix"] == "raw_data"
         ):
-            file_names = set(
-                [(key[0], val[0]) for key, val in self.coord_map.items()]
-            )
+            files = natsorted(self.root.glob("*.ome.tif"))
+            self.positions = len(files)  # not all positions are saved
 
             if self._mm_meta["Summary"]["Positions"] > 1:
                 self._stage_positions = [None] * self.positions
 
-                for p_idx, file_name in file_names:
-                    site_idx = int(file_name.split("_")[-1].split("-")[0])
+                for p_idx, file_name in enumerate(files):
+                    site_idx = int(str(file_name).split("_")[-1].split("-")[0])
                     pos = self._simplify_stage_position(
                         self._mm_meta["Summary"]["StagePositions"][site_idx]
                     )
