@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from xarray import DataArray
+
 from iohub.fov import BaseFOV, BaseFOVMapping
 
 
@@ -9,6 +11,14 @@ class MicroManagerFOV(BaseFOV):
     def __init__(self, parent: MicroManagerFOVMapping, key: int) -> None:
         self._position = key
         self._parent = parent
+
+    def __repr__(self) -> str:
+        return (
+            f"Type: {type(self)}\n"
+            f"Parent: {self.parent}\n"
+            f"FOV key: {self._position}\n"
+            f"Data:\n"
+        ) + self.xdata.__repr__()
 
     @property
     def parent(self) -> MicroManagerFOVMapping:
@@ -25,6 +35,10 @@ class MicroManagerFOV(BaseFOV):
     @property
     def channel_names(self) -> list[str]:
         return self.parent.channel_names
+
+    @property
+    def xdata(self) -> DataArray:
+        raise NotImplementedError
 
     def frame_metadata(self, t: int, z: int, c: int) -> dict | None:
         """
@@ -49,21 +63,35 @@ class MicroManagerFOV(BaseFOV):
 
 class MicroManagerFOVMapping(BaseFOVMapping):
     def __init__(self):
+        self._root: Path = None
         self._mm_meta: dict = None
         self._stage_positions: list[dict[str, str | float]] = []
         self.channel_names: list[str] = None
 
+    def __repr__(self) -> str:
+        return (f"Type: {type(self)}\nData:\n") + self.xdata.__repr__()
+
     @property
-    def mm_meta(self):
+    def root(self) -> Path:
+        """Root directory of the dataset."""
+        return self._root
+
+    @property
+    def micromanager_metadata(self) -> dict | None:
         return self._mm_meta
 
-    @mm_meta.setter
-    def mm_meta(self, value):
+    @micromanager_metadata.setter
+    def micromanager_metadata(self, value):
         if not isinstance(value, dict):
             raise TypeError(
                 f"Type of `mm_meta` should be `dict`, got `{type(value)}`."
             )
         self._mm_meta = value
+
+    @property
+    def micromanager_summary(self) -> dict | None:
+        """Micro-manager summary metadata."""
+        return self._mm_meta.get("Summary", None)
 
     @property
     def stage_positions(self):
@@ -117,3 +145,8 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                     "'A1-Site_0', 'H12-Site_1', or '1-Pos000_000' "
                     f"Got labels {labels}"
                 )
+
+    @property
+    def zyx_scale(self) -> tuple[float, float, float]:
+        """ZXY pixel size in micrometers."""
+        raise NotImplementedError

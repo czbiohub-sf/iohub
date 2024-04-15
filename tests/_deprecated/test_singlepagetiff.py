@@ -23,7 +23,7 @@ def test_constructor(single_page_tiff):
         no data extraction in this test
     """
     mmr = MicromanagerSequenceReader(single_page_tiff, extract_data=False)
-    assert mmr.mm_meta is not None
+    assert mmr.micromanager_metadata is not None
     assert mmr.width > 0
     assert mmr.height > 0
     assert mmr.frames > 0

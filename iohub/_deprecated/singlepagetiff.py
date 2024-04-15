@@ -91,9 +91,9 @@ class MicromanagerSequenceReader(ReaderBase):
         # pull one metadata sample and extract experiment dimensions
         metadata_path = os.path.join(one_pos, "metadata.txt")
         with open(metadata_path, "r") as f:
-            self.mm_meta = json.load(f)
+            self._mm_meta = json.load(f)
 
-        mm_version = self.mm_meta["Summary"]["MicroManagerVersion"]
+        mm_version = self._mm_meta["Summary"]["MicroManagerVersion"]
         if mm_version == "1.4.22":
             self._mm1_meta_parser()
         elif "beta" in mm_version:
@@ -402,12 +402,12 @@ class MicromanagerSequenceReader(ReaderBase):
         -------
 
         """
-        self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
-        self.width = self.mm_meta["Summary"]["Width"]
-        self.height = self.mm_meta["Summary"]["Height"]
-        self.frames = self.mm_meta["Summary"]["Frames"]
-        self.slices = self.mm_meta["Summary"]["Slices"]
-        self.channels = self.mm_meta["Summary"]["Channels"]
+        self.z_step_size = self._mm_meta["Summary"]["z-step_um"]
+        self.width = self._mm_meta["Summary"]["Width"]
+        self.height = self._mm_meta["Summary"]["Height"]
+        self.frames = self._mm_meta["Summary"]["Frames"]
+        self.slices = self._mm_meta["Summary"]["Slices"]
+        self.channels = self._mm_meta["Summary"]["Channels"]
 
     def _mm2beta_meta_parser(self):
         """
@@ -418,14 +418,14 @@ class MicromanagerSequenceReader(ReaderBase):
         -------
 
         """
-        self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
+        self.z_step_size = self._mm_meta["Summary"]["z-step_um"]
         self.width = int(
-            self.mm_meta["Summary"]["UserData"]["Width"]["PropVal"]
+            self._mm_meta["Summary"]["UserData"]["Width"]["PropVal"]
         )
         self.height = int(
-            self.mm_meta["Summary"]["UserData"]["Height"]["PropVal"]
+            self._mm_meta["Summary"]["UserData"]["Height"]["PropVal"]
         )
-        self.time_stamp = self.mm_meta["Summary"]["StartTime"]
+        self.time_stamp = self._mm_meta["Summary"]["StartTime"]
 
     def _mm2gamma_meta_parser(self):
         """
@@ -436,18 +436,18 @@ class MicromanagerSequenceReader(ReaderBase):
         -------
 
         """
-        keys_list = list(self.mm_meta.keys())
+        keys_list = list(self._mm_meta.keys())
         if "FrameKey-0-0-0" in keys_list[1]:
-            roi_string = self.mm_meta[keys_list[1]]["ROI"]
+            roi_string = self._mm_meta[keys_list[1]]["ROI"]
             self.width = int(roi_string.split("-")[2])
             self.height = int(roi_string.split("-")[3])
         elif "Metadata-" in keys_list[2]:
-            self.width = self.mm_meta[keys_list[2]]["Width"]
-            self.height = self.mm_meta[keys_list[2]]["Height"]
+            self.width = self._mm_meta[keys_list[2]]["Width"]
+            self.height = self._mm_meta[keys_list[2]]["Height"]
         else:
             raise ValueError("Metadata file incompatible with metadata reader")
 
-        self.z_step_size = self.mm_meta["Summary"]["z-step_um"]
-        self.frames = self.mm_meta["Summary"]["Frames"]
-        self.slices = self.mm_meta["Summary"]["Slices"]
-        self.channels = self.mm_meta["Summary"]["Channels"]
+        self.z_step_size = self._mm_meta["Summary"]["z-step_um"]
+        self.frames = self._mm_meta["Summary"]["Frames"]
+        self.slices = self._mm_meta["Summary"]["Slices"]
+        self.channels = self._mm_meta["Summary"]["Channels"]

@@ -14,7 +14,7 @@ def test_constructor_mm2gamma():
     """
     mmr = read_images(mm2gamma_zarr_v01)
     assert isinstance(mmr, ZarrReader)
-    assert mmr.mm_meta is not None
+    assert mmr.micromanager_metadata is not None
     assert mmr.z_step_size is not None
     assert mmr.width > 0
     assert mmr.height > 0

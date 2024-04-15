@@ -67,7 +67,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
                 f"{data_path} is not a valid NDTiff dataset."
             )
         self.dataset = Dataset(str(data_path))
-        self.root = data_path
+        self._root = data_path
         self.dirname = data_path.name
         self._axes = self.dataset.axes
         if any([a for a in self._axes.keys() if a not in self._ndtiff_axes]):

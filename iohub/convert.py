@@ -118,9 +118,7 @@ class TIFFConverter:
                 f"Reader type {reader_type} not supported for conversion."
             )
         _logger.debug("Finished initializing data.")
-        self.summary_metadata = (
-            self.reader.mm_meta["Summary"] if self.reader.mm_meta else None
-        )
+        self.summary_metadata = self.reader.micromanager_summary
         self.save_name = output_dir.name
         _logger.debug("Getting dataset summary information.")
         self.coord_map = dict()
@@ -152,7 +150,8 @@ class TIFFConverter:
                 self.position_grid = _create_grid_from_coordinates(
                     *self._get_position_coords()
                 )
-            except ValueError:
+            except ValueError as e:
+                _logger.warning(f"Failed to generate grid layout: {e}")
                 self._make_default_grid()
         else:
             self._make_default_grid()
@@ -181,27 +180,41 @@ class TIFFConverter:
             )
 
     def _get_position_coords(self):
-        row_max = 0
-        col_max = 0
-        coords_list = []
+        """Get the position coordinates from the reader metadata.
 
-        # TODO: read rows, cols directly from XY corods
+        Raises:
+            ValueError: If stage positions are not available.
+
+        Returns:
+            list: XY stage position coordinates.
+            int: Number of grid rows.
+            int: Number of grid columns.
+        """
+        rows = set()
+        cols = set()
+        xy_coords = []
+
         # TODO: account for non MM2gamma meta?
         if not self.reader.stage_positions:
             raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
-            stage_pos = pos.get("XYStage")
+            stage_pos = (
+                pos.get("XYStage") or pos.get("XY") or pos.get("XY Stage")
+            )
             if stage_pos is None:
                 raise ValueError(
                     f"Stage position is not available for position {idx}"
                 )
-            coords_list.append(pos["XYStage"])
-            row = pos["GridRow"]
-            col = pos["GridCol"]
-            row_max = row if row > row_max else row_max
-            col_max = col if col > col_max else col_max
+            xy_coords.append(stage_pos)
+            try:
+                rows.add(pos["GridRow"])
+                cols.add(pos["GridCol"])
+            except KeyError:
+                raise ValueError(
+                    f"Grid indices not available for position {idx}"
+                )
 
-        return coords_list, row_max + 1, col_max + 1
+        return xy_coords, len(rows), len(cols)
 
     def _get_pos_names(self):
         """Append a list of pos names in ascending order
