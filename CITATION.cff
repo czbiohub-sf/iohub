@@ -37,11 +37,11 @@ authors:
     orcid: 'https://orcid.org/0000-0002-1016-2447'
   - given-names: Cameron
     family-names: Foltz
-    affiliation: CZ Biohub
+    affiliation: Chan Zuckerberg Biohub San Francisco
     orcid: 'https://orcid.org/0000-0001-8933-2172'
   - given-names: Li-Hao
     family-names: Yeh
-    affiliation: CZ Biohub
+    affiliation: Chan Zuckerberg Biohub San Francisco
     orcid: 'https://orcid.org/0000-0003-2803-5996'
   - given-names: Shalin
     family-names: Mehta
@@ -49,9 +49,7 @@ authors:
     orcid: 'https://orcid.org/0000-0002-2542-3582'
 repository-code: 'https://github.com/czbiohub-sf/iohub/'
 url: 'https://czbiohub-sf.github.io/iohub/'
-abstract: >-
-  N-dimensional bioimaging data I/O with OME metadata in
-  Python
+abstract: Pythonic and parallelizable I/O for N-dimensional imaging data with OME metadata
 keywords:
   - python
   - image-metadata
