@@ -1,0 +1,61 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: iohub
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Ziwen
+    family-names: Liu
+    email: ziwen.liu@czbiohub.org
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0001-7482-1299'
+  - given-names: Ivan
+    family-names: Ivanov
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0001-6389-0213'
+    affiliation: Chan Zuckerberg Biohub San Francisco
+  - given-names: Jordão
+    family-names: Bragantini
+    orcid: 'https://orcid.org/0000-0001-7652-2735'
+    email: jordao.bragantini@czbiohub.org
+    affiliation: Chan Zuckerberg Biohub San Francisco
+  - given-names: Talon
+    family-names: Chandler
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0002-3033-674X'
+  - given-names: Ahmet Can
+    family-names: Solak
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0002-1381-8309'
+  - given-names: Eduardo
+    family-names: Hirata-Miyasaki
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0002-1016-2447'
+  - given-names: Cameron
+    family-names: Foltz
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0001-8933-2172'
+  - given-names: Li-Hao
+    family-names: Yeh
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0003-2803-5996'
+  - given-names: Shalin
+    family-names: Mehta
+    affiliation: Chan Zuckerberg Biohub San Francisco
+    orcid: 'https://orcid.org/0000-0002-2542-3582'
+repository-code: 'https://github.com/czbiohub-sf/iohub/'
+url: 'https://czbiohub-sf.github.io/iohub/'
+abstract: Pythonic and parallelizable I/O for N-dimensional imaging data with OME metadata
+keywords:
+  - python
+  - image-metadata
+  - bioimaging
+  - ndimensional-arrays
+license: BSD-3-Clause
+commit: a4d43a2a8cd8d4abce00e475f9f1699d451eba9f
+version: 0.1.0
+date-released: '2024-02-14'

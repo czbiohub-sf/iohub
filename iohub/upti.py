@@ -10,7 +10,6 @@ from iohub.reader_base import ReaderBase
 
 
 class UPTIReader(ReaderBase):
-
     """
     Reader for UPTI raw data.
     Accepts both new live UPTI and older UPTI format.
