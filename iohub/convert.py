@@ -7,6 +7,7 @@ import numpy as np
 from dask.array import to_zarr
 from tqdm import tqdm
 from tqdm.contrib.itertools import product
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from iohub._version import version as iohub_version
 from iohub.ngff import Position, TransformationMeta, open_ome_zarr
@@ -343,8 +344,8 @@ class TIFFConverter:
                     if not missing_data_warning_issued:
                         missing_data_warning_issued = True
                         _logger.warning(
-                            f"Cannot load data at timepoint {t_idx},  channel "
-                            f"{c_idx}, filling with zeros. Raw data may be "
+                            f"Cannot load data at P: {zarr_name}, T: {t_idx}, "
+                            f"C: {c_idx}, filling with zeros. Raw data may be "
                             "incomplete."
                         )
                     continue
@@ -378,16 +379,17 @@ class TIFFConverter:
         self._init_zarr_arrays()
         # Run through every coordinate and convert in acquisition order
         _logger.debug("Converting images.")
-        for zarr_pos_name, (_, fov) in tqdm(
-            zip(self.zarr_position_names, self.reader, strict=True),
-            total=len(self.reader),
-            desc="Converting images",
-            unit="FOV",
-            ncols=80,
-        ):
-            zarr_img = self.writer[zarr_pos_name]["0"]
-            to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
-            self._convert_image_plane_metadata(fov, zarr_img.path)
+        with logging_redirect_tqdm():
+            for zarr_pos_name, (_, fov) in tqdm(
+                zip(self.zarr_position_names, self.reader, strict=True),
+                total=len(self.reader),
+                desc="Converting images",
+                unit="FOV",
+                ncols=80,
+            ):
+                zarr_img = self.writer[zarr_pos_name]["0"]
+                to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
+                self._convert_image_plane_metadata(fov, zarr_img.path)
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
         self.reader.close()
