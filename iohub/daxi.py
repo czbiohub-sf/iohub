@@ -48,14 +48,22 @@ class DaXiFOV:
 
         self._missing_value = missing_value
         self._dtype = np.uint16
-        self._channels = self._metadata[self._CHANNELS_KEY]
+        self._wavelengths = self._metadata[self._CHANNELS_KEY]
 
         shape_dict = self._metadata[self._SHAPE_KEY]
 
+        self._channels = [
+            f"v{v}_c{wl}"
+            for v in range(shape_dict["V"])
+            for wl in self._wavelengths
+        ]
+
         self._raw_shape = tuple(shape_dict[k] for k in self._SHAPE_IDX)
 
-        shape_dict["Z"] //= len(self._channels)
-        shape_dict["V"] *= len(self._channels)
+        shape_dict["Z"] //= len(self._wavelengths)
+        shape_dict["V"] *= len(self._wavelengths)
+        # y and x are flipped in comparison to DaXi file format
+        shape_dict["Y"], shape_dict["X"] = shape_dict["X"], shape_dict["Y"]
 
         self._shape = tuple(shape_dict[k] for k in self._SHAPE_IDX)
 
@@ -70,7 +78,7 @@ class DaXiFOV:
                                     shape=self._shape[2:],
                                     dtype=self._dtype,
                                 )
-                                for c in range(len(self._channels))
+                                for c in range(len(self._wavelengths))
                             ]
                         )
                         for v in range(self._raw_shape[1])
@@ -107,12 +115,14 @@ class DaXiFOV:
                 self._shape[2:], self._missing_value, dtype=self._dtype
             )
 
-        return np.memmap(
+        arr = np.memmap(
             self._volume_path(t, v),
             dtype=self._dtype,
             shape=self._raw_shape[2:],
             mode="r",
-        )[c :: len(self._channels)]
+        )[c :: len(self._wavelengths)]
+        # inverting y and x and flipping new x to match original DaXi format
+        return np.flip(arr.transpose((0, 2, 1)), axis=-1)
 
     def _volume_path(self, t: int, v: int) -> Path:
         """
@@ -189,6 +199,12 @@ class DaXiFOV:
             0.439,
             0.439,
         ]
+
+    @staticmethod
+    def is_valid_path(path: "StrOrBytesPath") -> bool:
+        """Check if a path is a valid DaXi dataset."""
+        path = Path(path)
+        return path.exists() and (path / "metadata.yaml").exists()
 
 
 def create_mock_daxi_dataset(path: "StrOrBytesPath") -> None:
