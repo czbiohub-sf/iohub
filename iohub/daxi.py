@@ -46,8 +46,13 @@ class DaXiFOV:
         with open(self._data_path / "metadata.yaml") as f:
             self._metadata = yaml.safe_load(f)
 
-        self._missing_value = missing_value
         self._dtype = np.uint16
+
+        if missing_value is None:
+            self._missing_value = np.iinfo(self._dtype).max
+        else:
+            self._missing_value = missing_value
+
         self._wavelengths = self._metadata[self._CHANNELS_KEY]
 
         shape_dict = self._metadata[self._SHAPE_KEY]
