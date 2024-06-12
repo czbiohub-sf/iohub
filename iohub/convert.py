@@ -352,7 +352,7 @@ class TIFFConverter:
                 if not sorted_keys:
                     # Sort keys, ordering keys without dashes first
                     sorted_keys = sorted(
-                        metadata.keys(), key=lambda x: ('-' in x, x)
+                        metadata.keys(), key=lambda x: ("-" in x, x)
                     )
 
                 sorted_metadata = {key: metadata[key] for key in sorted_keys}
