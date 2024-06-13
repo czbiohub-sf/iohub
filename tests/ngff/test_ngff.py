@@ -199,7 +199,7 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
         # round-trip test with the offical reader implementation
         ext_reader = Reader(parse_url(dataset.zgroup.store.path))
         node = list(ext_reader())[0]
-        assert node.metadata["channel_names"] == channel_names
+        assert node.metadata["name"] == channel_names
         assert node.specs[0].datasets == [arr_name]
         assert node.data[0].shape == random_5d.shape
         assert node.data[0].dtype == random_5d.dtype
