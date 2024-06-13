@@ -26,7 +26,7 @@ CHANNEL_COLORS = {
     "blue": ["Blue", "DAPI", "BFP", "Hoechst"],
     "red": ["Red"],
     "yellow": ["Yellow", "Cy3"],  # Emission around 540-570 nm
-    "orange": ["Orange", "Cy5"],  # emission around 650-680 nm
+    "orange": ["Orange", "Cy5", "Y5"],  # emission around 650-680 nm
 }
 
 
