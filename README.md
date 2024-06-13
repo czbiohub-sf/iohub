@@ -93,7 +93,7 @@ with open_ome_zarr(
 ```
 
 For more about API usage, refer to the [documentation](https://czbiohub-sf.github.io/iohub/)
-and the [example scripts](https://github.com/czbiohub-sf/iohub/tree/main/examples).
+and the [example scripts](https://github.com/czbiohub-sf/iohub/tree/main/docs/examples).
 
 ### Reading Micro-Manager TIFF data
 
