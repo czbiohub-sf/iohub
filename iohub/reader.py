@@ -10,6 +10,7 @@ import natsort
 import tifffile as tiff
 import zarr
 
+from iohub._deprecated.reader_base import ReaderBase
 from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
 from iohub._deprecated.zarrfile import ZarrReader
 from iohub.fov import BaseFOVMapping
@@ -127,7 +128,7 @@ def read_images(
     data_type: Literal[
         "singlepagetiff", "ometiff", "ndtiff", "omezarr"
     ] = None,
-):
+) -> ReaderBase | BaseFOVMapping:
     """Read image arrays and metadata from a Micro-Manager dataset.
     Supported formats are Micro-Manager-acquired TIFF datasets
     (single-page TIFF, multi-page OME-TIFF, NDTIFF),
@@ -143,8 +144,8 @@ def read_images(
 
     Returns
     -------
-    Reader
-        A child instance of ReaderBase
+    ReaderBase | BaseFOVMapping
+        Image collection object for the dataset
     """
     path = Path(path).resolve()
     # try to guess data type

@@ -27,7 +27,7 @@ used at the Biohub and in the broader imaging community.
 
 ### Installation
 
-Install a pre-release of iohub with pip:
+Install a released version of iohub from PyPI with pip:
 
 ```sh
 pip install iohub
@@ -103,7 +103,7 @@ Read a directory containing a TIFF dataset:
 from iohub import read_images
 
 reader = read_images("/path/to/data/")
-print(reader.shape)
+print(reader)
 ```
 
 ## Why iohub?
