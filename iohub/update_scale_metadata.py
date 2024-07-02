@@ -6,6 +6,9 @@ from iohub.ngff_meta import TransformationMeta
 
 def update_scale_metadata(
     input_position_dirpaths: List[str],
+    x_scale: float = None,
+    y_scale: float = None,
+    z_scale: float = None,
 ):
     with open_ome_zarr(input_position_dirpaths[0]) as input_dataset:
         print(
@@ -18,9 +21,10 @@ def update_scale_metadata(
     print(
         "The old scale will be saved in a metadata field named 'old_scale', and the new scale will adhere to the NGFF spec."
     )
-    new_scale = []
-    for character in "zyx":
-        new_scale.append(float(input(f"Enter a new {character} scale: ")))
+    new_scale = [z_scale, y_scale, x_scale]
+    for i, character in enumerate("zyx"):
+        if new_scale[i] is None:
+            new_scale[i] = (float(input(f"Enter a new {character} scale: ")))
 
     for input_position_dirpath in input_position_dirpaths:
         with open_ome_zarr(input_position_dirpath, layout="fov", mode="a") as input_dataset:
