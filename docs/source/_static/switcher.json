@@ -2,5 +2,9 @@
     {
         "version": "latest",
         "url": "/main/index.html"
+    },
+    {
+        "version": "v0.1.0",
+        "url": "/v0.1.0/index.html"
     }
 ]
