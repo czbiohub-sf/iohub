@@ -6,9 +6,9 @@ from iohub.ngff_meta import TransformationMeta
 
 def update_scale_metadata(
     input_position_dirpaths: List[str],
-    x_scale: float = None,
-    y_scale: float = None,
     z_scale: float = None,
+    y_scale: float = None,
+    x_scale: float = None,
 ):
     with open_ome_zarr(input_position_dirpaths[0]) as input_dataset:
         print(
