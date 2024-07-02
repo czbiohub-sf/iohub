@@ -4,6 +4,7 @@ from iohub._version import __version__
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
 from iohub.update_scale_metadata import update_scale_metadata as _update_scale_metadata
+from mantis.cli.parsing import input_position_dirpaths
 
 VERSION = __version__
 
@@ -122,14 +123,28 @@ def convert(
 
 @cli.command()
 @click.help_option("-h", "--help")
-@click.argument(
-    "files",
-    nargs=-1,
-    required=True,
-    type=_DATASET_PATH,
+@input_position_dirpaths()
+@click.option(
+   "--x-scale",
+   "-x",
+    required=False,
+    type=float,
+    help="New x scale",
 )
-def update_scale_metadata(
-    files
-):
+@click.option(
+   "--y-scale",
+   "-y",
+    required=False,
+    type=float,
+    help="New y scale",
+)
+@click.option(
+   "--z-scale",
+   "-z",
+    required=False,
+    type=float,
+    help="New z scale",
+)
+def update_scale_metadata(input_position_dirpaths, z_scale, y_scale, x_scale):
     """Update scale metadata in OME-Zarr datasets"""
-    _update_scale_metadata(files)
+    _update_scale_metadata(input_position_dirpaths, z_scale=z_scale, y_scale=y_scale, x_scale=x_scale)
