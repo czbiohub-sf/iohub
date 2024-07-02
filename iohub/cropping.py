@@ -61,23 +61,21 @@ class OMEZarrHandler:
     def slice_and_assign(self):
         print("Starting slice and assign process")
         
-        # Open the base OME-Zarr store
+        # Open OME-Zarr store
         ds = self.open_zarr_store(self.base_path)
         
         # Get positions and channel indices
         positions = self.get_positions(ds)
         channel_indices = self.get_channel_indices(ds)
 
-        # Set shape, chunks, and scale based on an example position
+        # Set shape, chunks, and scale 
         example_position = positions[0][1]  
         array_shape = example_position['0'].shape
         scale = example_position.scale
         shape = self.calculate_shape(array_shape)
         chunks = (1, 1, 1, shape[3], shape[4])
 
-        #scale = (1.0, 1.0, 0.23947195669052998, 0.39464974089282584, 0.39464974106189504)
-
-        # Generate position keys
+        # position keys
         position_keys = [self.validate_position_key(path) for path, _ in positions]
         position_keys = [key for key in position_keys if key is not None]
 
@@ -92,21 +90,18 @@ class OMEZarrHandler:
         for path, position in positions:
             try:
                 array = position['0']
-                # Slice the array and select channels in a single line
+                # Slice the array and select channels 
                 sliced_array = array[self.time_index, channel_indices, self.z_index, self.y_index, self.x_index]
 
-                # Assign the sliced array to the corresponding position in the new Zarr store
+                # Assign the sliced array to the corresponding position in the new store
                 new_position = new_ds[path]
                 new_position['0'][:] = sliced_array
                 print(f"Updated position {path} with shape {sliced_array.shape}")
 
             except KeyError:
-                print(f"Position path: {path} does not contain an array named '0'.")
-
-        print("Finished updating all positions.")
+                print(f"Position path: {path} does not contain an array")
 
 if __name__ == "__main__":
-    # User configurable variables
     base_path = '/hpc/projects/intracellular_dashboard/viral-sensor/2024_02_04_A549_DENV_ZIKV_timelapse/2-register/registered.zarr'
     store_path = '/hpc/mydata/alishba.imran/test1.zarr'
     channel_names = ['RFP', 'Phase3D']  # list of channel names
