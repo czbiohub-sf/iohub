@@ -3,6 +3,7 @@ import click
 from iohub._version import __version__
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
+from iohub.update_scale_metadata import update_scale_metadata as _update_scale_metadata
 
 VERSION = __version__
 
@@ -117,3 +118,18 @@ def convert(
         chunks=chunks,
     )
     converter.run(check_image=check_image)
+
+
+@cli.command()
+@click.help_option("-h", "--help")
+@click.argument(
+    "files",
+    nargs=-1,
+    required=True,
+    type=_DATASET_PATH,
+)
+def update_scale_metadata(
+    files
+):
+    """Update scale metadata in OME-Zarr datasets"""
+    _update_scale_metadata(files)

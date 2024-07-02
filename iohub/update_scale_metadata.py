@@ -1,15 +1,9 @@
 from typing import List
 
-import click
-
 from iohub import open_ome_zarr
 from iohub.ngff_meta import TransformationMeta
 
-from mantis.cli.parsing import input_position_dirpaths
 
-
-@click.command()
-@input_position_dirpaths()
 def update_scale_metadata(
     input_position_dirpaths: List[str],
 ):
