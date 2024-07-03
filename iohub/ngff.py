@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import csv
 from copy import deepcopy
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Union
 
@@ -12,6 +13,7 @@ import zarr
 from numcodecs import Blosc
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
+import zarr.storage
 from zarr.util import normalize_storage_path
 
 from iohub.display_utils import channel_display_settings
@@ -1564,6 +1566,61 @@ class Plate(NGFFNode):
         for _, well in self.wells():
             for _, position in well.positions():
                 yield position.zgroup.path, position
+    
+    def rename_wells(self, well_names_csv: str):
+        """Modifies well names (and relevant zattrs) according to old and new paths specified in csv file. 
+
+        CSV input should be in the format:
+
+        oldrow/oldcolumn, newrow/newcolumn
+        
+        For example:
+
+        0/0, 0/A
+        0/1, 0/B
+        0/2, 0/C
+
+        rename_wells will adjust well paths from 0/0 --> 0/A, 0/1  -> 0/B
+
+        """
+        
+        names = []
+
+        with open(well_names_csv, mode='r', newline='', encoding='utf-8') as csvfile:
+            csvreader = csv.reader(csvfile)
+            for row in csvreader:
+                names.append([row[0], row[1]]) 
+
+        names = np.array(names)  ### names is a 2D array of [old_well_path, new_well_path
+
+        modified_wells = []
+        modified_columns = []
+        modified_rows = []
+
+        for old_well_path, new_well_path in names:
+            old_row, old_column = old_well_path.split('/')
+            new_row, new_column = new_well_path.split('/')
+
+            for well in self.metadata.wells:
+
+                if well.path == old_well_path and well not in modified_wells:
+                    well.path = new_well_path ### update well metadata
+                    zarr.storage.rename(self.zgroup._store, old_well_path, new_well_path) ### update well paths
+                    modified_wells.append(well)
+            
+            for column in self.metadata.columns:
+
+                if column.name == old_column and column not in modified_columns:
+                    column.name = new_column ### update column metadata
+                    modified_columns.append(column)
+
+            for row in self.metadata.rows:
+
+                if row.name == old_row and row not in modified_rows:
+                    row.name = new_row ### update row metadata
+                    modified_rows.append(row)
+        
+        self.dump_meta()
 
 
 def open_ome_zarr(
