@@ -1565,6 +1565,50 @@ class Plate(NGFFNode):
             for _, position in well.positions():
                 yield position.zgroup.path, position
 
+    def rename_well(
+        self,
+        well,
+        old_well_path: str,
+        new_well_path: str,
+        modified={},
+        single_well=True,
+    ):
+        """Rename a well.
+
+        Parameters
+        ----------
+        old_well_path : str
+            Old name of well
+        new_well_path : str
+            New name of well
+        modified : dict, optional
+            Tracks modified wells
+        single well: bool, optional
+            True: renaming one well, False: renaming multiple wells
+        """
+        old_row, old_column = old_well_path.split("/")
+        new_row, new_column = new_well_path.split("/")
+
+        if well.path == old_well_path:
+            well.path = new_well_path  # update well metadata
+            zarr.storage.rename(
+                self.zgroup._store, old_well_path, new_well_path
+            )  # update well paths
+
+        for column in self.metadata.columns:
+            if column.name == old_column and column not in modified["columns"]:
+                column.name = new_column  # update column metadata
+                if not single_well:
+                    modified["columns"].append(column)
+
+        for row in self.metadata.rows:
+            if row.name == old_row and row not in modified["rows"]:
+                row.name = new_row  # update row metadata
+                if not single_well:
+                    modified["rows"].append(row)
+
+        self.dump_meta()
+
 
 def open_ome_zarr(
     store_path: StrOrBytesPath,
