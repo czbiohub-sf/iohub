@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import csv
 from copy import deepcopy
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Union
 
@@ -12,6 +13,7 @@ import zarr
 from numcodecs import Blosc
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
+import zarr.storage
 from zarr.util import normalize_storage_path
 
 from iohub.display_utils import channel_display_settings
@@ -1564,6 +1566,41 @@ class Plate(NGFFNode):
         for _, well in self.wells():
             for _, position in well.positions():
                 yield position.zgroup.path, position
+    
+    def rename_well(self, well, old_well_path: str, new_well_path: str, modified = {}, single_well = True):
+        """Rename a well. 
+
+        Parameters
+        ----------
+        old_well_path : str
+            Old name of well
+        new_well_path : str
+            New name of well
+        modified : dict
+            Keeps track of modified wells, columns, and rows when renaming multiple wells at once at CLI level
+        single well: bool
+            True indicates that only one well is being renamed, False indicates remaining multiple wells at once at CLI level
+        """
+        old_row, old_column = old_well_path.split('/')
+        new_row, new_column = new_well_path.split('/')
+
+        if well.path == old_well_path:
+            well.path = new_well_path ### update well metadata
+            zarr.storage.rename(self.zgroup._store, old_well_path, new_well_path) ### update well paths
+        
+        for column in self.metadata.columns:
+            if column.name == old_column and column not in modified['columns']:
+                column.name = new_column ### update column metadata
+                if not single_well:
+                    modified['columns'].append(column)
+
+        for row in self.metadata.rows:
+            if row.name == old_row and row not in modified['rows']:
+                row.name = new_row ### update row metadata
+                if not single_well:
+                    modified['rows'].append(row)
+                
+        self.dump_meta()
 
 
 def open_ome_zarr(
