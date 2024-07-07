@@ -1567,59 +1567,39 @@ class Plate(NGFFNode):
             for _, position in well.positions():
                 yield position.zgroup.path, position
     
-    def rename_wells(self, well_names_csv: str):
-        """Modifies well names (and relevant zattrs) according to old and new paths specified in csv file. 
+    def rename_well(self, well, old_well_path: str, new_well_path: str, modified = {}, single_well = True):
+        """Rename a well. 
 
-        CSV input should be in the format:
-
-        oldrow/oldcolumn, newrow/newcolumn
-        
-        For example:
-
-        0/0, 0/A
-        0/1, 0/B
-        0/2, 0/C
-
-        rename_wells will adjust well paths from 0/0 --> 0/A, 0/1  -> 0/B
-
+        Parameters
+        ----------
+        old_well_path : str
+            Old name of well
+        new_well_path : str
+            New name of well
+        modified : dict
+            Keeps track of modified wells, columns, and rows when renaming multiple wells at once at CLI level
+        single well: bool
+            True indicates that only one well is being renamed, False indicates remaining multiple wells at once at CLI level
         """
+        old_row, old_column = old_well_path.split('/')
+        new_row, new_column = new_well_path.split('/')
+
+        if well.path == old_well_path:
+            well.path = new_well_path ### update well metadata
+            zarr.storage.rename(self.zgroup._store, old_well_path, new_well_path) ### update well paths
         
-        names = []
+        for column in self.metadata.columns:
+            if column.name == old_column and column not in modified['columns']:
+                column.name = new_column ### update column metadata
+                if not single_well:
+                    modified['columns'].append(column)
 
-        with open(well_names_csv, mode='r', newline='', encoding='utf-8') as csvfile:
-            csvreader = csv.reader(csvfile)
-            for row in csvreader:
-                names.append([row[0], row[1]]) 
-
-        names = np.array(names)  ### names is a 2D array of [old_well_path, new_well_path
-
-        modified_wells = []
-        modified_columns = []
-        modified_rows = []
-
-        for old_well_path, new_well_path in names:
-            old_row, old_column = old_well_path.split('/')
-            new_row, new_column = new_well_path.split('/')
-
-            for well in self.metadata.wells:
-
-                if well.path == old_well_path and well not in modified_wells:
-                    well.path = new_well_path ### update well metadata
-                    zarr.storage.rename(self.zgroup._store, old_well_path, new_well_path) ### update well paths
-                    modified_wells.append(well)
-            
-            for column in self.metadata.columns:
-
-                if column.name == old_column and column not in modified_columns:
-                    column.name = new_column ### update column metadata
-                    modified_columns.append(column)
-
-            for row in self.metadata.rows:
-
-                if row.name == old_row and row not in modified_rows:
-                    row.name = new_row ### update row metadata
-                    modified_rows.append(row)
-        
+        for row in self.metadata.rows:
+            if row.name == old_row and row not in modified['rows']:
+                row.name = new_row ### update row metadata
+                if not single_well:
+                    modified['rows'].append(row)
+                
         self.dump_meta()
 
 

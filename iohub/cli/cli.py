@@ -1,10 +1,13 @@
 import pathlib
 
 import click
+import csv
 
 from iohub._version import __version__
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
+from iohub.ngff import rename_well
+from iohub.ngff import open_ome_zarr
 
 VERSION = __version__
 
@@ -87,3 +90,49 @@ def convert(input, output, grid_layout, chunks):
         chunks=chunks,
     )
     converter()
+
+@click.command()
+@click.help_option("-h", "--help")
+@click.argument(
+    "csvfile",
+    type=click.File('r'),
+)
+@click.argument(
+    "zarrfile",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, resolve_path=True, path_type=pathlib.Path),
+)
+
+def rename_wells_cli(csvfile, zarrfile):
+    """Rename wells based on CSV file
+
+    The CSV file should have two columns: old_well_path and new_well_path.
+    """
+    names = []
+
+    print(f"Opening csv...")
+
+    csvreader = csv.reader(csvfile)
+    for row in csvreader:
+        if len(row) != 2:
+            raise ValueError(f"Invalid csv row format: {row}. Each row must have exactly two columns.")
+        names.append([row[0], row[1]])
+
+    plate = open_ome_zarr(zarrfile, mode = 'a')
+
+    modified = {}
+    modified['wells'] = []
+    modified['rows'] = []
+    modified['columns'] = []
+
+    print(f"Renaming wells....")
+
+    well_paths = [plate.metadata.wells[i].path for i in range(len(plate.metadata.wells))]
+
+    for old_well_path, new_well_path in names:
+        if old_well_path not in well_paths:
+            raise ValueError(f"Old well path '{old_well_path}' not found in the plate metadata.")        
+        for well in plate.metadata.wells:
+            if well.path == old_well_path and well not in modified['wells']:
+                rename_well(plate, well, old_well_path, new_well_path, modified, False)
+                modified['wells'].append(well)
+    
