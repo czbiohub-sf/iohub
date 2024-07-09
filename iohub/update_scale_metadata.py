@@ -12,14 +12,17 @@ def update_scale_metadata(
 ):
     with open_ome_zarr(input_position_dirpaths[0]) as input_dataset:
         print(
-            f"The first dataset in the list you provided has (z, y, x) scale {input_dataset.scale[2:]}"
+            f"The first dataset in the list you provided"
+            f"has (z, y, x) scale {input_dataset.scale[2:]}"
         )
 
     print(
-        "Please enter the new z, y, and x scales that you would like to apply to all of the positions in the list."
+        "Please enter the new z, y, and x scales that you would like"
+        "to apply to all of the positions in the list."
     )
     print(
-        "The old scale will be saved in a metadata field named 'old_scale', and the new scale will adhere to the NGFF spec."
+        "The old scale will be saved in a metadata field named 'old_scale',"
+        "and the new scale will adhere to the NGFF spec."
     )
     new_scale = [z_scale, y_scale, x_scale]
     for i, character in enumerate("zyx"):
