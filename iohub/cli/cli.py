@@ -91,23 +91,23 @@ def convert(input, output, grid_layout, chunks):
     converter()
 
 
-@click.command()
+@cli.command()
 @click.help_option("-h", "--help")
-@click.argument(
-    "csvfile",
+@click.option(
+    "-i",
+    "input.zarr",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=True,
+    help="Path to the input Zarr file.",
+)
+@click.option(
+    "-c",
+    "names.csv",
     type=click.File("r"),
+    required=True,
+    help="Path to the CSV file containing well names.",
 )
-@click.argument(
-    "zarrfile",
-    type=click.Path(
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        resolve_path=True,
-        path_type=pathlib.Path,
-    ),
-)
-def rename_wells_cli(csvfile, zarrfile):
+def rename_wells(csvfile, zarrfile):
     """Rename wells based on CSV file
 
     The CSV file should have two columns: old_well_path and new_well_path.
@@ -143,6 +143,6 @@ def rename_wells_cli(csvfile, zarrfile):
         for well in plate.metadata.wells:
             if well.path == old_well_path and well not in modified["wells"]:
                 plate.rename_well(
-                    plate, well, old_well_path, new_well_path, modified, False
+                    well, old_well_path, new_well_path, modified, False
                 )
                 modified["wells"].append(well)
