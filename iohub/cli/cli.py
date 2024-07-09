@@ -95,14 +95,14 @@ def convert(input, output, grid_layout, chunks):
 @click.help_option("-h", "--help")
 @click.option(
     "-i",
-    "input.zarr",
+    "--input",
     type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
     help="Path to the input Zarr file.",
 )
 @click.option(
     "-c",
-    "names.csv",
+    "--csv",
     type=click.File("r"),
     required=True,
     help="Path to the CSV file containing well names.",
