@@ -24,11 +24,13 @@ def update_scale_metadata(
     new_scale = [z_scale, y_scale, x_scale]
     for i, character in enumerate("zyx"):
         if new_scale[i] is None:
-            new_scale[i] = (float(input(f"Enter a new {character} scale: ")))
+            new_scale[i] = float(input(f"Enter a new {character} scale: "))
 
     for input_position_dirpath in input_position_dirpaths:
-        with open_ome_zarr(input_position_dirpath, layout="fov", mode="a") as input_dataset:
-            input_dataset.zattrs['old_scale'] = input_dataset.scale[2:]
+        with open_ome_zarr(
+            input_position_dirpath, layout="fov", mode="a"
+        ) as input_dataset:
+            input_dataset.zattrs["old_scale"] = input_dataset.scale[2:]
             transform = [
                 TransformationMeta(
                     type="scale",
