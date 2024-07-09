@@ -1,7 +1,7 @@
 Read PTI TIFF
 =============
 
-.. currentmodule:: iohub.upti
+.. currentmodule:: iohub._deprecated.upti
 
 .. autoclass:: UPTIReader
     :members:

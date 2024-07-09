@@ -1,8 +1,12 @@
 Read MMStack OME-TIFF
 =====================
 
-.. currentmodule:: iohub.multipagetiff
+.. currentmodule:: iohub.mmstack
 
-.. autoclass:: MicromanagerOmeTiffReader
+.. autoclass:: MMStack
+    :members:
+    :inherited-members:
+
+.. autoclass:: MMOmeTiffFOV
     :members:
     :inherited-members:

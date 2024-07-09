@@ -3,6 +3,10 @@ Read NDTiff
 
 .. currentmodule:: iohub.ndtiff
 
-.. autoclass:: NDTiffReader
+.. autoclass:: NDTiffDataset
+    :members:
+    :inherited-members:
+
+.. autoclass:: NDTiffFOV
     :members:
     :inherited-members:
