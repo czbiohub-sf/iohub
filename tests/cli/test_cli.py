@@ -104,3 +104,13 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0, result.output
     assert "Converting" in result.output
+
+
+def test_rename_wells_help():
+    runner = CliRunner()
+    cmd = ["rename-wells"]
+    for option in ("-h", "--help"):
+        cmd.append(option)
+        result = runner.invoke(cli, cmd)
+        assert result.exit_code == 0
+        assert "containing well names" in result.output
