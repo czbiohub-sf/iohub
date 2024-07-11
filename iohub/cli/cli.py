@@ -108,6 +108,10 @@ def convert(input, output, grid_layout, chunks):
     help="Path to the CSV file containing well names.",
 )
 def rename_wells(csvfile, zarrfile):
+    rename_wells_cli(csvfile, zarrfile)
+
+
+def rename_wells_cli(csvfile, zarrfile):
     """Rename wells based on CSV file
 
     The CSV file should have two columns: old_well_path and new_well_path.
@@ -125,10 +129,7 @@ def rename_wells(csvfile, zarrfile):
 
     plate = open_ome_zarr(zarrfile, mode="a")
 
-    modified = {}
-    modified["wells"] = []
-    modified["rows"] = []
-    modified["columns"] = []
+    modified = []
 
     well_paths = [
         plate.metadata.wells[i].path for i in range(len(plate.metadata.wells))

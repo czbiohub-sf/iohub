@@ -1570,8 +1570,6 @@ class Plate(NGFFNode):
         well,
         old_well_path: str,
         new_well_path: str,
-        modified={},
-        single_well=True,
     ):
         """Rename a well.
 
@@ -1589,25 +1587,29 @@ class Plate(NGFFNode):
         old_row, old_column = old_well_path.split("/")
         new_row, new_column = new_well_path.split("/")
 
-        if well.path == old_well_path:
-            well.path = new_well_path  # update well metadata
-            zarr.storage.rename(
-                self.zgroup._store, old_well_path, new_well_path
-            )  # update well paths
+        well_paths = [well.path for well in self.metadata.wells]
 
-        for column in self.metadata.columns:
-            if column.name == old_column and column not in modified["columns"]:
-                column.name = new_column  # update column metadata
-                if not single_well:
-                    modified["columns"].append(column)
+        if old_well_path not in well_paths:
+            raise ValueError(f"Well '{old_well_path}' not found in plate.")
 
-        for row in self.metadata.rows:
-            if row.name == old_row and row not in modified["rows"]:
-                row.name = new_row  # update row metadata
-                if not single_well:
-                    modified["rows"].append(row)
+        else:
+            well = self[old_well_path]
 
-        self.dump_meta()
+            if well.path == old_well_path:
+                well.path = new_well_path  # update well metadata
+                zarr.storage.rename(
+                    self.zgroup._store, old_well_path, new_well_path
+                )  # update well paths
+
+            for column in self.metadata.columns:
+                if column.name == old_column:
+                    column.name = new_column  # update column metadata
+
+            for row in self.metadata.rows:
+                if row.name == old_row:
+                    row.name = new_row  # update row metadata
+
+            self.dump_meta()
 
 
 def open_ome_zarr(
