@@ -131,19 +131,13 @@ def rename_wells_cli(csvfile, zarrfile):
 
     modified = []
 
-    well_paths = [
-        plate.metadata.wells[i].path for i in range(len(plate.metadata.wells))
-    ]
-
     for old_well_path, new_well_path in names:
-        if old_well_path not in well_paths:
-            raise ValueError(
-                f"Old well path '{old_well_path}' not found "
-                f"in the plate metadata."
-            )
         for well in plate.metadata.wells:
-            if well.path == old_well_path and well not in modified["wells"]:
-                plate.rename_well(
-                    well, old_well_path, new_well_path, modified, False
-                )
-                modified["wells"].append(well)
+            if well.path == old_well_path and well not in modified:
+                try:
+                    plate.rename_well(
+                        well, old_well_path, new_well_path, modified, False
+                    )
+                    modified.append(well)
+                except ValueError as e:
+                    click.echo(f"Error: {e}", err=True)
