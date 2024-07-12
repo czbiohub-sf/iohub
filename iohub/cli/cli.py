@@ -96,13 +96,15 @@ def convert(input, output, grid_layout, chunks):
 @click.option(
     "-i",
     "--input",
-    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    "zarrfile",
+    type=click.Path(exists=True, file_okay=True, dir_okay=True),
     required=True,
     help="Path to the input Zarr file.",
 )
 @click.option(
     "-c",
     "--csv",
+    "csvfile",
     type=click.File("r"),
     required=True,
     help="Path to the CSV file containing well names.",
@@ -116,6 +118,7 @@ def rename_wells_cli(csvfile, zarrfile):
 
     The CSV file should have two columns: old_well_path and new_well_path.
     """
+
     names = []
 
     csvreader = csv.reader(csvfile)
@@ -131,13 +134,16 @@ def rename_wells_cli(csvfile, zarrfile):
 
     modified = []
 
-    for old_well_path, new_well_path in names:
+    print(f"names: {names}")
+
+    for name in names:
+        old_well_path, new_well_path = name[0], name[1]
         for well in plate.metadata.wells:
-            if well.path == old_well_path and well not in modified:
+            if str(well.path) == str(old_well_path) and well not in modified:
+                print(f"Renaming {old_well_path} to {new_well_path}...")
                 try:
-                    plate.rename_well(
-                        well, old_well_path, new_well_path, modified, False
-                    )
+                    plate.rename_well(well, old_well_path, new_well_path)
                     modified.append(well)
+                    print(f"Well {old_well_path} renamed to {new_well_path}")
                 except ValueError as e:
                     click.echo(f"Error: {e}", err=True)

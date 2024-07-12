@@ -1579,10 +1579,6 @@ class Plate(NGFFNode):
             Old name of well
         new_well_path : str
             New name of well
-        modified : dict, optional
-            Tracks modified wells
-        single well: bool, optional
-            True: renaming one well, False: renaming multiple wells
         """
         old_row, old_column = old_well_path.split("/")
         new_row, new_column = new_well_path.split("/")
@@ -1592,8 +1588,10 @@ class Plate(NGFFNode):
         if old_well_path not in well_paths:
             raise ValueError(f"Well '{old_well_path}' not found in plate.")
 
-        else:
-            well = self[old_well_path]
+        elif old_well_path in well_paths:
+            well = next(
+                w for w in self.metadata.wells if w.path == old_well_path
+            )
 
             if well.path == old_well_path:
                 well.path = new_well_path  # update well metadata

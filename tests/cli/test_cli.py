@@ -1,17 +1,17 @@
+import csv
 import re
 from unittest.mock import patch
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
 from iohub._version import __version__
 from iohub.cli.cli import cli
-
 from tests.conftest import (
+    hcs_ref,
     mm2gamma_ome_tiffs,
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
-    hcs_ref,
 )
 
 
@@ -114,3 +114,29 @@ def test_rename_wells_help():
         result = runner.invoke(cli, cmd)
         assert result.exit_code == 0
         assert "containing well names" in result.output
+
+
+def test_rename_wells_basic():
+    runner = CliRunner()
+    test_zarr = "/hpc/mydata/joseph.schull/stitched_phase.zarr"
+    test_csv = "/hpc/mydata/joseph.schull/update_well_names.csv"
+    cmd = ["rename-wells", "-i", test_zarr, "-c", test_csv]
+    result = runner.invoke(cli, cmd)
+    print(result.output)
+    assert result.exit_code == 0
+
+
+def test_rename_wells_completion():
+    runner = CliRunner()
+    test_zarr = "/hpc/mydata/joseph.schull/stitched_phase.zarr"
+    test_csv = "/hpc/mydata/joseph.schull/update_well_names.csv"
+    cmd = ["rename-wells", "-i", test_zarr, "-c", test_csv]
+    result = runner.invoke(cli, cmd)
+    with open(test_csv, mode="r") as infile:
+        reader = csv.reader(infile)
+        names = list(reader)
+    for oldname, newname in names:
+        expected_message = f"Well {oldname} renamed to {newname}"
+        assert (
+            expected_message in result.output
+        ), f"Missing expected message: {expected_message}"
