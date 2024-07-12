@@ -136,8 +136,7 @@ def rename_wells_cli(csvfile, zarrfile):
 
     print(f"names: {names}")
 
-    for name in names:
-        old_well_path, new_well_path = name[0], name[1]
+    for old_well_path, new_well_path in names:
         for well in plate.metadata.wells:
             if str(well.path) == str(old_well_path) and well not in modified:
                 print(f"Renaming {old_well_path} to {new_well_path}...")

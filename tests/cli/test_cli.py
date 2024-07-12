@@ -122,16 +122,7 @@ def test_rename_wells_basic():
     test_csv = "/hpc/mydata/joseph.schull/update_well_names.csv"
     cmd = ["rename-wells", "-i", test_zarr, "-c", test_csv]
     result = runner.invoke(cli, cmd)
-    print(result.output)
     assert result.exit_code == 0
-
-
-def test_rename_wells_completion():
-    runner = CliRunner()
-    test_zarr = "/hpc/mydata/joseph.schull/stitched_phase.zarr"
-    test_csv = "/hpc/mydata/joseph.schull/update_well_names.csv"
-    cmd = ["rename-wells", "-i", test_zarr, "-c", test_csv]
-    result = runner.invoke(cli, cmd)
     with open(test_csv, mode="r") as infile:
         reader = csv.reader(infile)
         names = list(reader)
