@@ -130,23 +130,28 @@ def rename_wells_cli(csvfile, zarrfile):
             )
         names.append([row[0], row[1]])
 
-    plate = open_ome_zarr(zarrfile, mode="a")
+    with open_ome_zarr(zarrfile, mode="a") as plate:
+        well_paths = [well.path for well in plate.metadata.wells]
+        print(f"Initial well paths: {well_paths}")
 
-    print(
-        f"Initial well paths: {[well.path for well in plate.metadata.wells]}"
-    )
+        modified = []
 
-    modified = []
+        for old_well_path, new_well_path in names:
+            for well in plate.metadata.wells:
+                if (
+                    str(well.path) == str(old_well_path)
+                    and well not in modified
+                ):
+                    print(f"Renaming {old_well_path} to {new_well_path}...")
+                    try:
+                        plate.rename_well(well, old_well_path, new_well_path)
+                        modified.append(well)
+                        print(
+                            f"Well {old_well_path} renamed to {new_well_path}"
+                        )
+                    except ValueError as e:
+                        click.echo(f"Error: {e}", err=True)
 
-    for old_well_path, new_well_path in names:
-        for well in plate.metadata.wells:
-            if str(well.path) == str(old_well_path) and well not in modified:
-                print(f"Renaming {old_well_path} to {new_well_path}...")
-                try:
-                    plate.rename_well(well, old_well_path, new_well_path)
-                    modified.append(well)
-                    print(f"Well {old_well_path} renamed to {new_well_path}")
-                except ValueError as e:
-                    click.echo(f"Error: {e}", err=True)
-
-    print(f"Final well paths: {[well.path for well in plate.metadata.wells]}")
+        print(
+            f"Final well paths: {[well.path for well in plate.metadata.wells]}"
+        )
