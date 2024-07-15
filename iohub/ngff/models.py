@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Data model classes with validation for OME-NGFF metadata.
 Developed against OME-NGFF v0.4 and ome-zarr v0.6
@@ -16,13 +18,13 @@ from pydantic.color import Color, ColorType
 
 
 def unique_validator(
-    data: list[Union[BaseModel, TypedDict]], field: Union[str, list[str]]
+    data: list[Union[BaseModel, WindowDict]], field: Union[str, list[str]]
 ):
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
     ----------
-    data : list[Union[BaseModel, TypedDict]]
+    data : list[Union[BaseModel, WindowDict]]
         list of pydantic models or typed dictionaries
     field : Union[str, list[str]]
         field(s) of the dataclass that must be unique
