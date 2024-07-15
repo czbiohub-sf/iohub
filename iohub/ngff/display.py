@@ -3,7 +3,7 @@
 import numpy as np
 from PIL.ImageColor import colormap
 
-from iohub.ngff_meta import ChannelMeta, WindowDict
+from iohub.ngff.ngff_meta import ChannelMeta, WindowDict
 
 """ Dictionary with key works and most popular fluorescent probes """
 CHANNEL_COLORS = {

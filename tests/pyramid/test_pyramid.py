@@ -6,7 +6,7 @@ from ome_zarr.io import parse_url
 from ome_zarr.reader import Multiscales, Reader
 
 from iohub.ngff import Position, _pad_shape, open_ome_zarr
-from iohub.ngff_meta import TransformationMeta
+from iohub.ngff.ngff_meta import TransformationMeta
 
 
 def _mock_fov(

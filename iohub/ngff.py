@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from zarr.util import normalize_storage_path
 
 from iohub.ngff.display import channel_display_settings
-from iohub.ngff_meta import (
+from iohub.ngff.ngff_meta import (
     TO_DICT_SETTINGS,
     AcquisitionMeta,
     AxisMeta,
