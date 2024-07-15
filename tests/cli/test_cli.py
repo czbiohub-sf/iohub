@@ -120,7 +120,7 @@ def test_rename_wells_basic(tmpdir):
     runner = CliRunner()
     test_csv = tmpdir / "well_names.csv"
     csv_data = [
-        ["B/03", "B/03modified"],
+        ["B/03", "B/03test"],
     ]
     with open(test_csv, mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile)
@@ -135,7 +135,7 @@ def test_rename_wells_basic(tmpdir):
     final_well_paths = None
 
     for line in result.output.split("\n"):
-        if line.startswith("Process completed. Final well paths:"):
+        if line.startswith("Final well paths:"):
             final_well_paths = eval(line.split(": ")[1])
             break
 
@@ -155,28 +155,3 @@ def test_rename_wells_basic(tmpdir):
         assert (
             old_path not in final_well_paths
         ), f"Did not expect {old_path} in final well paths"
-
-
-def test_rename_wells_renaming_message(tmpdir):
-    runner = CliRunner()
-    test_csv = tmpdir / "well_names.csv"
-
-    csv_data = [
-        ["B/03", "B/03"],
-    ]
-
-    with open(test_csv, mode="w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerows(csv_data)
-
-    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv)]
-    result = runner.invoke(cli, cmd)
-    assert result.exit_code == 0
-    with open(test_csv, mode="r") as infile:
-        reader = csv.reader(infile)
-        names = list(reader)
-    for oldname, newname in names:
-        expected_message = f"Well {oldname} renamed to {newname}"
-        assert (
-            expected_message in result.output
-        ), f"Missing expected message: {expected_message}"

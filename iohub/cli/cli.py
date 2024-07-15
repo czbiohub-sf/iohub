@@ -149,7 +149,4 @@ def rename_wells_cli(csvfile, zarrfile):
                 except ValueError as e:
                     click.echo(f"Error: {e}", err=True)
 
-    print(
-        f"Process completed"
-        f"Final well paths: {[well.path for well in plate.metadata.wells]}"
-    )
+    print(f"Final well paths: {[well.path for well in plate.metadata.wells]}")
