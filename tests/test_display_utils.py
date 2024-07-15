@@ -1,4 +1,4 @@
-from iohub.display_utils import channel_display_settings
+from iohub.ngff.display import channel_display_settings
 
 
 def test_channel_display_settings():
