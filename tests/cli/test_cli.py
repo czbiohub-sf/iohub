@@ -116,11 +116,60 @@ def test_rename_wells_help():
         assert "containing well names" in result.output
 
 
-def test_rename_wells_basic():
+def test_rename_wells_basic(tmpdir):
     runner = CliRunner()
-    test_zarr = "/hpc/mydata/joseph.schull/stitched_phase.zarr"
-    test_csv = "/hpc/mydata/joseph.schull/update_well_names.csv"
-    cmd = ["rename-wells", "-i", test_zarr, "-c", test_csv]
+    test_csv = tmpdir / "well_names.csv"
+    csv_data = [
+        ["B/03", "B/03modified"],
+    ]
+    with open(test_csv, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data)
+
+    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv)]
+    result = runner.invoke(cli, cmd)
+
+    print(result.output)
+    assert result.exit_code == 0
+
+    final_well_paths = None
+
+    for line in result.output.split("\n"):
+        if line.startswith("Process completed. Final well paths:"):
+            final_well_paths = eval(line.split(": ")[1])
+            break
+
+    assert (
+        final_well_paths is not None
+    ), "Final well paths not found in the output"
+
+    new_well_paths = [row[1] for row in csv_data]
+    old_well_paths = [row[0] for row in csv_data]
+
+    for new_path in new_well_paths:
+        assert (
+            new_path in final_well_paths
+        ), f"Expected {new_path} in final well paths"
+
+    for old_path in old_well_paths:
+        assert (
+            old_path not in final_well_paths
+        ), f"Did not expect {old_path} in final well paths"
+
+
+def test_rename_wells_renaming_message(tmpdir):
+    runner = CliRunner()
+    test_csv = tmpdir / "well_names.csv"
+
+    csv_data = [
+        ["B/03", "B/03"],
+    ]
+
+    with open(test_csv, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data)
+
+    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv)]
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0
     with open(test_csv, mode="r") as infile:

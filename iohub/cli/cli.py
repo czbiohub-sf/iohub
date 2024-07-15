@@ -132,9 +132,11 @@ def rename_wells_cli(csvfile, zarrfile):
 
     plate = open_ome_zarr(zarrfile, mode="a")
 
-    modified = []
+    print(
+        f"Initial well paths: {[well.path for well in plate.metadata.wells]}"
+    )
 
-    print(f"names: {names}")
+    modified = []
 
     for old_well_path, new_well_path in names:
         for well in plate.metadata.wells:
@@ -146,3 +148,8 @@ def rename_wells_cli(csvfile, zarrfile):
                     print(f"Well {old_well_path} renamed to {new_well_path}")
                 except ValueError as e:
                     click.echo(f"Error: {e}", err=True)
+
+    print(
+        f"Process completed"
+        f"Final well paths: {[well.path for well in plate.metadata.wells]}"
+    )
