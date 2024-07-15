@@ -20,7 +20,7 @@ from ome_zarr.reader import Reader
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import (
+from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
     Plate,
     TransformationMeta,
