@@ -116,7 +116,7 @@ def test_rename_wells_help():
         assert "containing well names" in result.output
 
 
-def test_rename_wells_basic(tmpdir):
+def test_rename_wells(tmpdir):
     runner = CliRunner()
     test_csv = tmpdir / "well_names.csv"
     csv_data = [
@@ -155,3 +155,15 @@ def test_rename_wells_basic(tmpdir):
         assert (
             old_path not in final_well_paths
         ), f"Did not expect {old_path} in final well paths"
+    
+    test_csv_2 = tmpdir / "well_names_2.csv"
+    csv_data = [
+        ["B/03test", "B/03"],
+    ]
+    with open(test_csv_2, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data)
+
+    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv_2)]
+    result = runner.invoke(cli, cmd)
+    print(result.output)
