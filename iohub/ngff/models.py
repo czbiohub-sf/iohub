@@ -14,9 +14,12 @@ from typing import Annotated, Any, Literal, Optional, Union
 
 import pandas as pd
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Field,
+    NonNegativeInt,
+    PositiveInt,
     field_validator,
     model_validator,
 )
@@ -27,16 +30,21 @@ from typing_extensions import Self, TypedDict
 
 
 def unique_validator(
-    data: list[Union[BaseModel, WindowDict]], field: Union[str, list[str]]
-):
+    data: list[BaseModel | WindowDict], field: str | list[str]
+) -> list[BaseModel | WindowDict]:
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
     ----------
-    data : list[Union[BaseModel, WindowDict]]
+    data : list[BaseModel | TypedDict]
         list of pydantic models or typed dictionaries
-    field : Union[str, list[str]]
+    field : str | list[str]
         field(s) of the dataclass that must be unique
+
+    Returns
+    -------
+    list[BaseModel | TypedDict]
+        the data passed in if all values are unique
 
     Raises
     ------
@@ -50,9 +58,10 @@ def unique_validator(
     for key in fields:
         if not df[key].is_unique:
             raise ValueError(f"'{key}' must be unique!")
+    return data
 
 
-def alpha_numeric_validator(data: str):
+def alpha_numeric_validator(data: str) -> str:
     """Called by validators to ensure that strings are alpha-numeric.
 
     Parameters
@@ -65,10 +74,11 @@ def alpha_numeric_validator(data: str):
     ValueError
         raised if the string contains characters other than [a-zA-z0-9]
     """
-    if not (data.isalnum() or data.isnumeric()):
+    if not data.isalnum():
         raise ValueError(
             f"The path name must be alphanumerical! Got: '{data}'."
         )
+    return data
 
 
 TO_DICT_SETTINGS = dict(exclude_none=True, by_alias=True)
@@ -331,29 +341,19 @@ class AcquisitionMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
     # MUST
-    id: int
+    id: NonNegativeInt
     # SHOULD
     name: str | None = None
     # SHOULD
-    maximum_field_count: int | None = Field(
+    maximum_field_count: PositiveInt | None = Field(
         alias="maximumfieldcount", default=None
     )
     # MAY
     description: str | None = None
     # MAY
-    start_time: int | None = Field(alias="starttime", default=None)
+    start_time: NonNegativeInt | None = Field(alias="starttime", default=None)
     # MAY
-    end_time: int | None = Field(alias="endtime", default=None)
-
-    @field_validator("id", "maximum_field_count", "start_time", "end_time")
-    @classmethod
-    def geq_zero(cls, v):
-        # MUST
-        if v < 0:
-            raise ValueError(
-                "The integer value must be equal or greater to zero!"
-            )
-        return v
+    end_time: NonNegativeInt | None = Field(alias="endtime", default=None)
 
     @field_validator("end_time")
     @classmethod
@@ -372,14 +372,7 @@ class PlateAxisMeta(MetaBase):
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
     # MUST
-    name: str
-
-    @field_validator("name")
-    @classmethod
-    def alpha_numeric(cls, v: str):
-        # MUST
-        alpha_numeric_validator(v)
-        return v
+    name: Annotated[str, AfterValidator(alpha_numeric_validator)]
 
 
 class WellIndexMeta(MetaBase):
@@ -387,8 +380,8 @@ class WellIndexMeta(MetaBase):
     https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
 
     path: str
-    row_index: int = Field(alias="rowIndex")
-    column_index: int = Field(alias="columnIndex")
+    row_index: NonNegativeInt = Field(alias="rowIndex")
+    column_index: NonNegativeInt = Field(alias="columnIndex")
 
     @field_validator("path")
     @classmethod
@@ -399,14 +392,6 @@ class WellIndexMeta(MetaBase):
             raise ValueError(
                 f"The well path '{v}' is not in the form of 'row/column'!"
             )
-        return v
-
-    @field_validator("row_index", "column_index")
-    @classmethod
-    def geq_zero(cls, v: int):
-        # MUST
-        if v < 0:
-            raise ValueError("Well position indices must not be negative!")
         return v
 
 
@@ -425,7 +410,7 @@ class PlateMeta(VersionMeta):
     # MUST
     wells: list[WellIndexMeta]
     # SHOULD
-    field_count: int | None = None
+    field_count: PositiveInt | None = None
 
     @field_validator("acquisitions")
     @classmethod
@@ -448,30 +433,15 @@ class PlateMeta(VersionMeta):
         unique_validator(v, "path")
         return v
 
-    @field_validator("field_count")
-    @classmethod
-    def positive(cls, v):
-        # MUST
-        if v <= 0:
-            raise ValueError("Field count must be a positive integer!")
-        return v
-
 
 class ImageMeta(MetaBase):
     """Image metadata field under an HCS well group.
     https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
 
     # MUST if `PlateMeta.acquisitions` contains multiple acquisitions
-    acquisition: int | None
+    acquisition: int | None = None
     # MUST
-    path: str
-
-    @field_validator("path")
-    @classmethod
-    def alpha_numeric(cls, v):
-        # MUST
-        alpha_numeric_validator(v)
-        return v
+    path: Annotated[str, AfterValidator(alpha_numeric_validator)]
 
 
 class WellGroupMeta(VersionMeta):
