@@ -26,9 +26,11 @@ def create_empty_hcs_zarr(
     max_chunk_size_bytes=500e6,
 ) -> None:
     """
-    If the plate does not exist, create an empty zarr plate.
-    If the plate exists, append positions and channels if they are not
+    This function creates a new HCS Plate in OME-Zarr format if the plate does not exist.
+
+    If the plate exists, appends positions and channels if they are not
     already in the plate.
+
     Parameters
     ----------
     store_path : Path
@@ -42,9 +44,6 @@ def create_empty_hcs_zarr(
     channel_names : list[str]
         Channel names, will append if not present in metadata.
     dtype : DTypeLike
-
-    Modifying from recOrder
-    https://github.com/mehta-lab/recOrder/blob/d31ad910abf84c65ba927e34561f916651cbb3e8/recOrder/cli/utils.py#L12
     """
     MAX_CHUNK_SIZE = max_chunk_size_bytes  # in bytes
     bytes_per_pixel = np.dtype(dtype).itemsize
@@ -93,32 +92,18 @@ def create_empty_hcs_zarr(
             position.append_channel(channel_name, resize_arrays=True)
 
 
-def get_output_paths(
-    input_paths: list[Path], output_zarr_path: Path
-) -> list[Path]:
-    """Generates a mirrored output path list given an input list of positions"""
-    list_output_path = []
-    for path in input_paths:
-        # Select the Row/Column/FOV parts of input path
-        path_strings = Path(path).parts[-3:]
-        # Append the same Row/Column/FOV to the output zarr path
-        list_output_path.append(Path(output_zarr_path, *path_strings))
-    return list_output_path
-
-
-def apply_transform_to_zyx_and_save_v2(
+def apply_transform_to_zyx_and_save(
     func,
     position: Position,
     output_path: Path,
     input_channel_indices: list[int],
     output_channel_indices: list[int],
-    t_idx: int,
+    t_idx_in: int,
     t_idx_out: int,
-    c_idx: int = None,
     **kwargs,
 ) -> None:
     """
-    Load a zyx array from a Position object, apply a transformation to CZYX or ZYX and save the result to file
+    Load a CZYX array from a Position object, apply a transformation to CZYX.
 
     Parameters
     ----------
@@ -136,12 +121,10 @@ def apply_transform_to_zyx_and_save_v2(
         The channel indices to write to.
         If empty list, write to all channels.
         Must match input_channel_indices if not empty
-    t_idx : int
+    t_idx_in : int
         The time index to process
     t_idx_out : int
         The time index to write to
-    c_idx : int
-        The channel index to process. Default is None
     kwargs : dict
         Additional arguments to pass to the CZYX function
     """
@@ -156,56 +139,37 @@ def apply_transform_to_zyx_and_save_v2(
             int(x) for x in output_channel_indices if x.isdigit()
         ]
 
-    # Check if t_idx should be added to the func kwargs
+    # Check if t_idx_in should be added to the func kwargs
     # This is needed when a different processing is needed for each time point, for example during stabilization
     all_func_params = inspect.signature(func).parameters.keys()
-    if "t_idx" in all_func_params:
-        kwargs["t_idx"] = t_idx
+    if "t_idx_in" in all_func_params:
+        kwargs["t_idx_in"] = t_idx_in
 
-    # Process CZYX vs ZYX
-    if input_channel_indices is not None and len(input_channel_indices) > 0:
-        click.echo(f"Processing t={t_idx}")
-
-        czyx_data = position.data.oindex[t_idx, input_channel_indices]
-        if not _check_nan_n_zeros(czyx_data):
-            transformed_czyx = func(czyx_data, **kwargs)
-            # Write to file
-            with open_ome_zarr(output_path, mode="r+") as output_dataset:
-                output_dataset[0].oindex[
-                    t_idx_out, output_channel_indices
-                ] = transformed_czyx
-            click.echo(f"Finished Writing.. t={t_idx}")
-        else:
-            click.echo(f"Skipping t={t_idx} due to all zeros or nans")
+    # Process CZYX given with the given indeces
+    # if input_channel_indices is not None and len(input_channel_indices) > 0:
+    click.echo(f"Processing t={t_idx_in} and channels {input_channel_indices}")
+    czyx_data = position.data.oindex[t_idx_in, input_channel_indices]
+    if not _check_nan_n_zeros(czyx_data):
+        transformed_czyx = func(czyx_data, **kwargs)
+        # Write to file
+        with open_ome_zarr(output_path, mode="r+") as output_dataset:
+            output_dataset[0].oindex[
+                t_idx_out, output_channel_indices
+            ] = transformed_czyx
+        click.echo(
+            f"Finished Writing.. t={t_idx_in} and channel output={output_channel_indices}"
+        )
     else:
-        click.echo(f"Processing c={c_idx}, t={t_idx}")
-
-        czyx_data = position.data.oindex[t_idx, c_idx : c_idx + 1]
-        # Checking if nans or zeros and skip processing
-        if not _check_nan_n_zeros(czyx_data):
-            # Apply transformation
-            transformed_czyx = func(czyx_data, **kwargs)
-
-            # Write to file
-            with open_ome_zarr(output_path, mode="r+") as output_dataset:
-                output_dataset[0][
-                    t_idx_out, c_idx : c_idx + 1
-                ] = transformed_czyx
-
-            click.echo(f"Finished Writing.. c={c_idx}, t={t_idx}")
-        else:
-            click.echo(
-                f"Skipping c={c_idx}, t={t_idx} due to all zeros or nans"
-            )
+        click.echo(f"Skipping t={t_idx_in} due to all zeros or nans")
 
 
 # TODO: modify how we get the time and channesl like recOrder (isinstance(input, list) or instance(input,int) or all)
-def process_single_position_v2(
+def process_single_position(
     func,
     input_data_path: Path,
     output_path: Path,
-    time_indices: list = [0],
-    time_indices_out: list = [0],
+    time_indices_in: list = "all",
+    time_indices_out: list = [],
     input_channel_idx: list = [],
     output_channel_idx: list = [],
     num_processes: int = mp.cpu_count(),
@@ -222,12 +186,13 @@ def process_single_position_v2(
         The path to input position
     output_path : Path
         The path to output OME-Zarr Store
-    time_indices : list
+    time_indices_in : list
         The time indices to process.
         Must match time_indices_out if not "all"
     time_indices_out : list
         The time indices to write to.
-        Must match time_indices if not "all"
+        Must match time_indices_in if not empty.
+        Typically used for stabilization, which needs a per timepoint processing
     input_channel_idx : list
         The channel indices to process.
         If empty list, process all channels.
@@ -241,6 +206,12 @@ def process_single_position_v2(
     kwargs : dict
         Additional arguments to pass to the CZYX function
 
+    Usage:
+    ------
+    Multiprocessing over T and C:
+    - input_channel_idx and output_channel_idx should be empty.
+    Multiprocessing over T only:
+    - input_channel_idx and output_channel_idx should be provided.
     """
     # Function to be applied
     click.echo(f"Function to be applied: \t{func}")
@@ -255,18 +226,19 @@ def process_single_position_v2(
     click.echo(f" Input data tree: {stdout_buffer.getvalue()}")
 
     # Find time indices
-    if time_indices == "all":
-        time_indices = range(input_dataset.data.shape[0])
-        time_indices_out = time_indices
-    elif isinstance(time_indices, list):
-        time_indices_out = range(len(time_indices))
-
-    # Check for invalid times
-    time_ubound = input_dataset.data.shape[0] - 1
-    if np.max(time_indices) > time_ubound:
-        raise ValueError(
-            f"time_indices = {time_indices} includes a time index beyond the maximum index of the dataset = {time_ubound}"
-        )
+    if time_indices_in == "all":
+        time_indices_in = range(input_dataset.data.shape[0])
+        time_indices_out = time_indices_in
+    elif isinstance(time_indices_in, list):
+        # Check for invalid times
+        time_ubound = input_dataset.data.shape[0] - 1
+        if np.max(time_indices_in) > time_ubound:
+            raise ValueError(
+                f"time_indices_in = {time_indices_in} includes a time index beyond the maximum index of the dataset = {time_ubound}"
+            )
+        # Handle the case when time_indices out is not provided. It defaults to the t_indices_in
+        if len(time_indices_out) == 0:
+            time_indices_out = range(len(time_indices_in))
 
     # Check the arguments for the function
     all_func_params = inspect.signature(func).parameters.keys()
@@ -296,31 +268,28 @@ def process_single_position_v2(
         # If C is not empty, use itertools.product with both ranges
         _, C, _, _, _ = input_dataset.data.shape
         iterable = [
-            (time_idx, time_idx_out, c)
+            ([c], [c], time_idx, time_idx_out)
             for (time_idx, time_idx_out), c in itertools.product(
-                zip(time_indices, time_indices_out), range(C)
+                zip(time_indices_in, time_indices_out), range(C)
             )
         ]
         partial_apply_transform_to_zyx_and_save = partial(
-            apply_transform_to_zyx_and_save_v2,
+            apply_transform_to_zyx_and_save,
             func,
             input_dataset,
             output_path / Path(*input_data_path.parts[-3:]),
-            input_channel_idx,
-            output_channel_idx,
             **func_args,
         )
     else:
-        # If C is empty, use only the range for time_indices
-        iterable = list(zip(time_indices, time_indices_out))
+        # If C is empty, use only the range for time_indices_in
+        iterable = list(zip(time_indices_in, time_indices_out))
         partial_apply_transform_to_zyx_and_save = partial(
-            apply_transform_to_zyx_and_save_v2,
+            apply_transform_to_zyx_and_save,
             func,
             input_dataset,
             output_path / Path(*input_data_path.parts[-3:]),
             input_channel_idx,
             output_channel_idx,
-            c_idx=0,
             **func_args,
         )
 
