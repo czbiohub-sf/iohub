@@ -44,7 +44,7 @@ def unique_validator(
     Returns
     -------
     list[BaseModel | TypedDict]
-        the data passed in if all values are unique
+        valid input data
 
     Raises
     ------
@@ -68,6 +68,11 @@ def alpha_numeric_validator(data: str) -> str:
     ----------
     data : str
         string to check
+
+    Returns
+    -------
+    str
+        valid input data
 
     Raises
     ------
