@@ -19,6 +19,9 @@ from iohub.ngff.models import (
     TO_DICT_SETTINGS,
     AcquisitionMeta,
     AxisMeta,
+    TimeAxisMeta,
+    ChannelAxisMeta,
+    SpaceAxisMeta,
     DatasetMeta,
     ImageMeta,
     ImagesMeta,
@@ -86,12 +89,9 @@ class NGFFNode:
 
     _MEMBER_TYPE = None
     _DEFAULT_AXES = [
-        AxisMeta(name="T", type="time", unit="second"),
-        AxisMeta(name="C", type="channel"),
-        *[
-            AxisMeta(name=i, type="space", unit="micrometer")
-            for i in ("Z", "Y", "X")
-        ],
+        TimeAxisMeta(name="T", unit="second"),
+        ChannelAxisMeta(name="C"),
+        *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("Z", "Y", "X")],
     ]
 
     def __init__(
@@ -544,7 +544,7 @@ class Position(NGFFNode):
 
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
-        self.zattrs.update(**self.metadata.dict(**TO_DICT_SETTINGS))
+        self.zattrs.update(**self.metadata.model_dump(**TO_DICT_SETTINGS))
 
     @property
     def _storage_options(self):
@@ -677,8 +677,8 @@ class Position(NGFFNode):
         name: str,
         shape: tuple[int],
         dtype: DTypeLike,
-        chunks: tuple[int] = None,
-        transform: list[TransformationMeta] = None,
+        chunks: tuple[int] | None = None,
+        transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
         """Create a new zero-filled image array in the position.
@@ -859,7 +859,7 @@ class Position(NGFFNode):
                         f"Cannot infer channel axis for shape {shape}."
                     )
                 img.resize(shape)
-        if "omero" in self.metadata.dict().keys():
+        if "omero" in self.metadata.model_dump().keys():
             self.metadata.omero.channels.append(
                 channel_display_settings(chan_name)
             )
@@ -1115,7 +1115,9 @@ class Well(NGFFNode):
 
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
-        self.zattrs.update({"well": self.metadata.dict(**TO_DICT_SETTINGS)})
+        self.zattrs.update(
+            {"well": self.metadata.model_dump(**TO_DICT_SETTINGS)}
+        )
 
     def __getitem__(self, key: str):
         """Get a position member of the well.
@@ -1380,7 +1382,9 @@ class Plate(NGFFNode):
         """
         if field_count:
             self.metadata.field_count = len(list(self.positions()))
-        self.zattrs.update({"plate": self.metadata.dict(**TO_DICT_SETTINGS)})
+        self.zattrs.update(
+            {"plate": self.metadata.model_dump(**TO_DICT_SETTINGS)}
+        )
 
     def _auto_idx(
         self,
