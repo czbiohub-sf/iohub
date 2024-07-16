@@ -30,20 +30,20 @@ from typing_extensions import Self, TypedDict
 
 
 def unique_validator(
-    data: list[BaseModel | WindowDict], field: str | list[str]
-) -> list[BaseModel | WindowDict]:
+    data: list[BaseModel], field: str | list[str]
+) -> list[BaseModel]:
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
     ----------
-    data : list[BaseModel | TypedDict]
+    data : list[BaseModel]
         list of pydantic models or typed dictionaries
     field : str | list[str]
         field(s) of the dataclass that must be unique
 
     Returns
     -------
-    list[BaseModel | TypedDict]
+    list[BaseModel]
         valid input data
 
     Raises
@@ -53,8 +53,8 @@ def unique_validator(
     """
     fields = [field] if isinstance(field, str) else field
     if not isinstance(data[0], dict):
-        data = [d.model_dump() for d in data]
-    df = pd.DataFrame(data)
+        params = [d.model_dump() for d in data]
+    df = pd.DataFrame(params)
     for key in fields:
         if not df[key].is_unique:
             raise ValueError(f"'{key}' must be unique!")
@@ -211,7 +211,7 @@ class DatasetMeta(MetaBase):
     path: str
     # MUST
     coordinate_transformations: list[TransformationMeta] = Field(
-        alias="coordinateTransformations"
+        alias=str("coordinateTransformations")
     )
 
 
@@ -233,7 +233,7 @@ class MultiScaleMeta(VersionMeta):
     name: str | None = None
     # MAY
     coordinate_transformations: list[TransformationMeta] | None = Field(
-        alias="coordinateTransformations", default=None
+        alias=str("coordinateTransformations"), default=None
     )
     # SHOULD, describes the downscaling method (e.g. 'gaussian')
     type: str | None = None
@@ -269,8 +269,8 @@ class ChannelMeta(MetaBase):
     color: ColorType = "FFFFFF"
     family: str = "linear"
     inverted: bool = False
-    label: str = None
-    window: WindowDict = None
+    label: str | None = None
+    window: WindowDict | None = None
 
 
 class RDefsMeta(MetaBase):
@@ -356,20 +356,20 @@ class AcquisitionMeta(MetaBase):
     # MAY
     description: str | None = None
     # MAY
-    start_time: NonNegativeInt | None = Field(alias="starttime", default=None)
+    start_time: NonNegativeInt | None = Field(
+        alias=str("starttime"), default=None
+    )
     # MAY
-    end_time: NonNegativeInt | None = Field(alias="endtime", default=None)
+    end_time: NonNegativeInt | None = Field(alias=str("endtime"), default=None)
 
-    @field_validator("end_time")
-    @classmethod
-    def end_after_start(cls, v: int, values: dict):
-        # CUSTOM
-        if st := values.get("start_time"):
-            if st > v:
+    @model_validator(mode="after")
+    def end_after_start(self) -> Self:
+        if self.start_time is not None and self.end_time is not None:
+            if self.start_time > self.end_time:
                 raise ValueError(
-                    f"Start timestamp {st} is larger than end timestamp {v}."
+                    "The acquisition end time must be after the start time!"
                 )
-        return v
+        return self
 
 
 class PlateAxisMeta(MetaBase):

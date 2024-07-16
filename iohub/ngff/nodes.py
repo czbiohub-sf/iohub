@@ -5,7 +5,7 @@ import logging
 import math
 import os
 from copy import deepcopy
-from typing import TYPE_CHECKING, Generator, Literal, Sequence, Union
+from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
 
 import numpy as np
 import zarr
@@ -59,10 +59,8 @@ def _open_store(
         )
     if version != "0.4":
         _logger.warning(
-            "\n".join(
-                "IOHub is only tested against OME-NGFF v0.4.",
-                f"Requested version {version} may not work properly.",
-            )
+            "IOHub is only tested against OME-NGFF v0.4. "
+            f"Requested version {version} may not work properly."
         )
         dimension_separator = None
     else:
@@ -87,7 +85,7 @@ def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
-    _MEMBER_TYPE = None
+    _MEMBER_TYPE: Type[NGFFNode]
     _DEFAULT_AXES = [
         TimeAxisMeta(name="T", unit="second"),
         ChannelAxisMeta(name="C"),
@@ -98,8 +96,8 @@ class NGFFNode:
         self,
         group: zarr.Group,
         parse_meta: bool = True,
-        channel_names: list[str] = None,
-        axes: list[AxisMeta] = None,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
@@ -240,7 +238,7 @@ class NGFFNode:
         """
         return not self.group_keys()
 
-    def print_tree(self, level: int = None):
+    def print_tree(self, level: int | None = None):
         """Print hierarchy of the node to stdout.
 
         Parameters
@@ -375,8 +373,8 @@ class TiledImageArray(ImageArray):
         self,
         row: int,
         column: int,
-        pre_dims: tuple[Union[int, slice, None]] = None,
-    ):
+        pre_dims: tuple[int | slice, ...] | None = None,
+    ) -> NDArray:
         """Get a tile as an up-to-5D in-RAM NumPy array.
 
         Parameters
@@ -385,7 +383,7 @@ class TiledImageArray(ImageArray):
             Row index.
         column : int
             Column index.
-        pre_dims : tuple[Union[int, slice, None]], optional
+        pre_dims : tuple[int | slice, ...], optional
             Indices or slices for previous dimensions than rows and columns
             with matching shape, e.g. (t, c, z) for 5D arrays,
             by default None (select all).
@@ -402,8 +400,8 @@ class TiledImageArray(ImageArray):
         data: ArrayLike,
         row: int,
         column: int,
-        pre_dims: tuple[Union[int, slice, None]] = None,
-    ):
+        pre_dims: tuple[int | slice, ...] | None = None,
+    ) -> None:
         """Write a tile in the Zarr store.
 
         Parameters
@@ -414,7 +412,7 @@ class TiledImageArray(ImageArray):
             Row index.
         column : int
             Column index.
-        pre_dims : tuple[Union[int, slice, None]], optional
+        pre_dims : tuple[int | slice, ...], optional
             Indices or slices for previous dimensions than rows and columns
             with matching shape, e.g. (t, c, z) for 5D arrays,
             by default None (select all).
@@ -426,8 +424,8 @@ class TiledImageArray(ImageArray):
         self,
         row: int,
         column: int,
-        pre_dims: tuple[Union[int, slice, None]] = None,
-    ):
+        pre_dims: tuple[int | slice, ...] | None = None,
+    ) -> tuple[slice, ...]:
         """Get the slices for a tile in the underlying array.
 
         Parameters
@@ -436,14 +434,14 @@ class TiledImageArray(ImageArray):
             Row index.
         column : int
             Column index.
-        pre_dims : tuple[Union[int, slice, None]], optional
+        pre_dims :  tuple[int | slice, ...], optional
             Indices or slices for previous dimensions than rows and columns
             with matching shape, e.g. (t, c, z) for 5D arrays,
             by default None (select all).
 
         Returns
         -------
-        tuple[slice]
+        tuple[slice, ...]
             Tuple of slices for all the dimensions of the array.
         """
         self._check_rc(row, column)
@@ -464,9 +462,11 @@ class TiledImageArray(ImageArray):
                     f"got type {type(pre_dims)}."
                 )
             for i, sel in enumerate(pre_dims):
+                if isinstance(sel, int):
+                    sel = slice(sel)
                 if sel is not None:
                     pad[i] = sel
-        return tuple(pad) + (r_slice, c_slice)
+        return tuple((pad + [r_slice, c_slice]))
 
     @staticmethod
     def _check_rc(row: int, column: int):
@@ -511,8 +511,8 @@ class Position(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
-        channel_names: list[str] = None,
-        axes: list[AxisMeta] = None,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
@@ -592,13 +592,13 @@ class Position(NGFFNode):
                 f"in the group of: {self.array_keys()}"
             )
 
-    def __getitem__(self, key: Union[int, str]):
+    def __getitem__(self, key: int | str) -> ImageArray:
         """Get an image array member of the position.
         E.g. Raw-coordinates image, a multi-scale level, or labels
 
         Parameters
         ----------
-        key : Union[int, str]
+        key : int| str
             Name or path to the image array.
             Integer key is converted to string (name).
 
@@ -633,8 +633,8 @@ class Position(NGFFNode):
         self,
         name: str,
         data: NDArray,
-        chunks: tuple[int] = None,
-        transform: list[TransformationMeta] = None,
+        chunks: tuple[int] | None = None,
+        transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
         """Create a new image array in the position.
@@ -757,8 +757,8 @@ class Position(NGFFNode):
     def _create_image_meta(
         self,
         name: str,
-        transform: list[TransformationMeta] = None,
-        extra_meta: dict = None,
+        transform: list[TransformationMeta] | None = None,
+        extra_meta: dict | None = None,
     ):
         if not transform:
             transform = [TransformationMeta(type="identity")]
@@ -792,7 +792,7 @@ class Position(NGFFNode):
         self,
         id: int,
         name: str,
-        clims: list[tuple[float, float, float, float]] = None,
+        clims: list[tuple[float, float, float, float]] | None = None,
     ):
         if not clims:
             clims = [None] * len(self.channel_names)
@@ -974,7 +974,7 @@ class Position(NGFFNode):
 
     def set_transform(
         self,
-        image: Union[str, Literal["*"]],
+        image: str | Literal["*"],
         transform: list[TransformationMeta],
     ):
         """Set the coordinate transformations metadata
@@ -982,7 +982,7 @@ class Position(NGFFNode):
 
         Parameters
         ----------
-        image : Union[str, Literal["*"]]
+        image : str | Literal["*"]
             Name of one image array (e.g. "0") to transform,
             or "*" for the whole FOV
         transform : list[TransformationMeta]
@@ -1019,7 +1019,7 @@ class TiledPosition(Position):
         grid_shape: tuple[int, int],
         tile_shape: tuple[int],
         dtype: DTypeLike,
-        transform: list[TransformationMeta] = None,
+        transform: list[TransformationMeta] | None = None,
         chunk_dims: int = 2,
     ):
         """Make a tiled image array filled with zeros.
@@ -1093,8 +1093,8 @@ class Well(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
-        channel_names: list[str] = None,
-        axes: list[AxisMeta] = None,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
@@ -1197,8 +1197,8 @@ class Row(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
-        channel_names: list[str] = None,
-        axes: list[AxisMeta] = None,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
@@ -1322,10 +1322,10 @@ class Plate(NGFFNode):
         self,
         group: zarr.Group,
         parse_meta: bool = True,
-        channel_names: list[str] = None,
-        axes: list[AxisMeta] = None,
-        name: str = None,
-        acquisitions: list[AcquisitionMeta] = None,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
+        name: str | None = None,
+        acquisitions: list[AcquisitionMeta] | None = None,
         version: Literal["0.1", "0.4"] = "0.4",
         overwriting_creation: bool = False,
     ):
@@ -1388,8 +1388,8 @@ class Plate(NGFFNode):
 
     def _auto_idx(
         self,
-        name: "str",
-        index: Union[int, None],
+        name: str,
+        index: int | None,
         axis_name: Literal["row", "column"],
     ):
         if index is not None:
@@ -1426,8 +1426,8 @@ class Plate(NGFFNode):
         self,
         row_name: str,
         col_name: str,
-        row_index: int = None,
-        col_index: int = None,
+        row_index: int | None = None,
+        col_index: int | None = None,
     ):
         """Creates a new well group in the plate.
         The new well will have empty group metadata,
@@ -1532,7 +1532,7 @@ class Plate(NGFFNode):
             )
         return well.create_position(pos_name, acquisition=acq_index)
 
-    def rows(self):
+    def rows(self) -> Generator[tuple[str, Row], None, None]:
         """Returns a generator that iterate over the name and value
         of all the rows in the plate.
 
@@ -1574,14 +1574,12 @@ def open_ome_zarr(
     store_path: StrOrBytesPath,
     layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
-    channel_names: list[str] = None,
-    axes: list[AxisMeta] = None,
+    channel_names: list[str] | None = None,
+    axes: list[AxisMeta] | None = None,
     version: Literal["0.1", "0.4"] = "0.4",
-    synchronizer: Union[
-        zarr.ThreadSynchronizer, zarr.ProcessSynchronizer
-    ] = None,
+    synchronizer: zarr.ThreadSynchronizer | zarr.ProcessSynchronizer = None,
     **kwargs,
-):
+) -> Plate | Position | TiledPosition:
     """Convenience method to open OME-Zarr stores.
 
     Parameters
