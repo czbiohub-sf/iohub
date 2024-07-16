@@ -10,7 +10,7 @@ about 'camelCase' inconsistency.
 """
 
 import re
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional
 
 import pandas as pd
 from pydantic import (
