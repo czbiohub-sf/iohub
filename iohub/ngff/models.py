@@ -199,7 +199,8 @@ class TransformationMeta(MetaBase):
             )
         elif self.translation and self.scale:
             raise ValueError(
-                "'translation' and 'scale' cannot be provided in the same 'TransformationMeta'"
+                "'translation' and 'scale' cannot be provided "
+                f"in the same `{type(self).__name__}`!"
             )
         return self
 
