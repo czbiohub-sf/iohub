@@ -1,17 +1,17 @@
+import csv
 import re
 from unittest.mock import patch
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
 from iohub._version import __version__
 from iohub.cli.cli import cli
-
 from tests.conftest import (
+    hcs_ref,
     mm2gamma_ome_tiffs,
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
-    hcs_ref,
 )
 
 
@@ -104,3 +104,66 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0, result.output
     assert "Converting" in result.output
+
+
+def test_rename_wells_help():
+    runner = CliRunner()
+    cmd = ["rename-wells"]
+    for option in ("-h", "--help"):
+        cmd.append(option)
+        result = runner.invoke(cli, cmd)
+        assert result.exit_code == 0
+        assert "containing well names" in result.output
+
+
+def test_rename_wells(tmpdir):
+    runner = CliRunner()
+    test_csv = tmpdir / "well_names.csv"
+    csv_data = [
+        ["B/03", "B/03test"],
+    ]
+    with open(test_csv, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data)
+
+    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv)]
+    result = runner.invoke(cli, cmd)
+
+    print(result.output)
+    assert result.exit_code == 0
+
+    final_well_paths = None
+
+    for line in result.output.split("\n"):
+        if line.startswith("Final well paths:"):
+            final_well_paths = eval(line.split(": ")[1])
+            break
+
+    assert (
+        final_well_paths is not None
+    ), "Final well paths not found in the output"
+
+    new_well_paths = [row[1] for row in csv_data]
+    old_well_paths = [row[0] for row in csv_data]
+
+    for new_path in new_well_paths:
+        assert (
+            new_path in final_well_paths
+        ), f"Expected {new_path} in final well paths"
+
+    for old_path in old_well_paths:
+        assert (
+            old_path not in final_well_paths
+        ), f"Did not expect {old_path} in final well paths"
+    
+    test_csv_2 = tmpdir / "well_names_2.csv"
+    csv_data = [
+        ["B/03test", "B/03"],
+    ]
+    with open(test_csv_2, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data)
+
+    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv_2)]
+    result = runner.invoke(cli, cmd)
+    print(result.output)
