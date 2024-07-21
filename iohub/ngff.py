@@ -1,4 +1,4 @@
-c# TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
+# TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
 import logging
@@ -1595,7 +1595,7 @@ class Plate(NGFFNode):
 
             if well.path == old_well_path:
                 well.path = new_well_path  # update well metadata
-                well.row_index = new_row  
+                well.row_index = new_row
                 well.column_index = new_column
                 zarr.storage.rename(
                     self.zgroup._store, old_well_path, new_well_path
