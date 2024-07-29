@@ -5,8 +5,12 @@ import pytest
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Multiscales, Reader
 
-from iohub.ngff import Position, _pad_shape, open_ome_zarr
-from iohub.ngff_meta import TransformationMeta
+from iohub.ngff.nodes import (
+    Position,
+    TransformationMeta,
+    _pad_shape,
+    open_ome_zarr,
+)
 
 
 def _mock_fov(
