@@ -20,7 +20,7 @@ from ome_zarr.reader import Reader
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import (
+from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
     Plate,
     TransformationMeta,
@@ -366,7 +366,7 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
         ext_reader = Reader(parse_url(dataset.zgroup.store.path))
         node = list(ext_reader())[0]
         assert node.metadata["coordinateTransformations"][0] == [
-            translate.dict(**TO_DICT_SETTINGS) for translate in transform
+            translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
 
 
@@ -399,7 +399,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
         # read data with plain zarr
         group = zarr.open(store_path)
         assert group.attrs["multiscales"][0]["coordinateTransformations"] == [
-            translate.dict(**TO_DICT_SETTINGS) for translate in transform
+            translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
 
 

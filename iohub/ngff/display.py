@@ -1,9 +1,9 @@
-""" Utility functions for displaying data """
+"""OME-Zarr display settings (OMERO metadata)"""
 
 import numpy as np
 from PIL.ImageColor import colormap
 
-from iohub.ngff_meta import ChannelMeta, WindowDict
+from iohub.ngff.models import ChannelMeta, WindowDict
 
 """ Dictionary with key works and most popular fluorescent probes """
 CHANNEL_COLORS = {
@@ -25,8 +25,10 @@ CHANNEL_COLORS = {
     # emission around 440 - 460 nmm
     "blue": ["Blue", "DAPI", "BFP", "Hoechst"],
     "red": ["Red"],
-    "yellow": ["Yellow", "Cy3"],  # Emission around 540-570 nm
-    "orange": ["Orange", "Cy5", "Y5"],  # emission around 650-680 nm
+    # Emission around 540-570 nm
+    "yellow": ["Yellow", "Cy3"],
+    # emission around 650-680 nm
+    "orange": ["Orange", "Cy5", "Y5"],
 }
 
 
@@ -49,12 +51,12 @@ def color_to_hex(color: str) -> str:
 
 def channel_display_settings(
     chan_name: str,
-    clim: tuple[float, float, float, float] = None,
+    clim: tuple[float, float, float, float] | None = None,
     first_chan: bool = False,
 ):
-    """This will create a dictionary used for OME-zarr metadata.
-    Allows custom contrast limits and channel.
-    names for display. Defaults everything to grayscale.
+    """This will create a dictionary used for OME-Zarr metadata.
+    Allows custom contrast limits and channel names for display.
+    Defaults everything to grayscale.
 
     Parameters
     ----------
@@ -85,7 +87,7 @@ def channel_display_settings(
         "S3": (-1.0, 1.0, -10.0, -10.0),
         "Other": (0, U16_FMAX, 0.0, U16_FMAX),
     }
-    if not clim:
+    if clim is None:
         if chan_name in channel_settings.keys():
             clim = channel_settings[chan_name]
         else:

@@ -1,17 +1,16 @@
 import re
 from unittest.mock import patch
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
 from iohub._version import __version__
 from iohub.cli.cli import cli
-
 from tests.conftest import (
+    hcs_ref,
     mm2gamma_ome_tiffs,
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
-    hcs_ref,
 )
 
 

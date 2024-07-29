@@ -10,7 +10,8 @@ from tqdm.contrib.itertools import product
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 from iohub._version import version as iohub_version
-from iohub.ngff import Position, TransformationMeta, open_ome_zarr
+from iohub.ngff.models import TransformationMeta
+from iohub.ngff.nodes import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset, read_images
 
 __all__ = ["TIFFConverter"]
