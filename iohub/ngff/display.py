@@ -1,4 +1,4 @@
-""" Utility functions for displaying data """
+"""OME-Zarr display settings (OMERO metadata)"""
 
 import numpy as np
 from PIL.ImageColor import colormap
