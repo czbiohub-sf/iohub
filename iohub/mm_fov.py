@@ -135,7 +135,8 @@ class MicroManagerFOVMapping(BaseFOVMapping):
 
                 # Look for "'Pos-1-000_000', 'Pos-2-000_001', ... "
                 # and split into ('1', '000_000'), ...
-                # New format following https://github.com/micro-manager/micro-manager/pull/1897
+                # New format following
+                # https://github.com/micro-manager/micro-manager/pull/1897
                 labels = [
                     label[0].split("Pos-")[1].split("-") for label in labels
                 ]
@@ -150,8 +151,8 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                 labels = [pos.get("Label") for pos in self.stage_positions]
                 raise ValueError(
                     "HCS position labels are in the format of "
-                    "'A1-Site_0', 'H12-Site_1', or '1-Pos000_000' , or 'Pos-1-000_000' "
-                    f"Got labels {labels}"
+                    "'A1-Site_0', 'H12-Site_1', or '1-Pos000_000', "
+                    f"or 'Pos-1-000_000'. Got labels {labels}"
                 )
 
     @property
