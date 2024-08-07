@@ -77,7 +77,7 @@ def test_pyramid(tmp_path: Path, ndim: int) -> None:
             .scale
         )
         assert np.all(level_scale[:-3] == 1)
-        assert np.allclose(scale * level_scale[-3:], 2**level)
+        assert np.allclose(level_scale[-3:] / scale, 2**level)
 
         assert fov.metadata.multiscales[0].datasets[level].path == str(level)
 
