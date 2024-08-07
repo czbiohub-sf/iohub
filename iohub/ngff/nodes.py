@@ -946,7 +946,7 @@ class Position(NGFFNode):
             for tr in transforms:
                 if tr.type == "scale":
                     for i in range(len(tr.scale))[-3:]:
-                        tr.scale[i] /= factor
+                        tr.scale[i] *= factor
 
             self.create_zeros(
                 name=str(level),
