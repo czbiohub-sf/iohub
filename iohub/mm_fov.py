@@ -133,14 +133,6 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                     pos["Label"].split("-Pos") for pos in self.stage_positions
                 ]
 
-                # Look for "'Pos-1-000_000', 'Pos-2-000_001', ... "
-                # and split into ('1', '000_000'), ...
-                # New format following
-                # https://github.com/micro-manager/micro-manager/pull/1897
-                labels = [
-                    label[0].split("Pos-")[1].split("-") for label in labels
-                ]
-
                 # remove underscore from FOV name, i.e. '000_000'
                 # collect all wells in row '0' so output is
                 # ('0', '1', '000000')
@@ -148,12 +140,26 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                     ("0", col, fov.replace("_", "")) for col, fov in labels
                 ]
             except Exception:
-                labels = [pos.get("Label") for pos in self.stage_positions]
-                raise ValueError(
-                    "HCS position labels are in the format of "
-                    "'A1-Site_0', 'H12-Site_1', or '1-Pos000_000', "
-                    f"or 'Pos-1-000_000'. Got labels {labels}"
-                )
+                try:
+                    # Look for "'Pos-1-000_000', 'Pos-2-000_001', ... "
+                    # and split into ('1', '000_000'), ...
+                    # New format following
+                    # https://github.com/micro-manager/micro-manager/pull/1897
+                    labels = [
+                        pos["Label"].split("Pos-")[1].split("-")
+                        for pos in self.stage_positions
+                    ]
+                    return [
+                        ("0", col, fov.replace("_", "")) for col, fov in labels
+                    ]
+
+                except Exception:
+                    labels = [pos.get("Label") for pos in self.stage_positions]
+                    raise ValueError(
+                        "HCS position labels are in the format of "
+                        "'A1-Site_0', 'H12-Site_1', or '1-Pos000_000', "
+                        f"or 'Pos-1-000_000'. Got labels {labels}"
+                    )
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
