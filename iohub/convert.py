@@ -103,6 +103,7 @@ class TIFFConverter:
         grid_layout: int = False,
         chunks: tuple[int] | Literal["XY", "XYZ"] = None,
         hcs_plate: bool = None,
+        t_max: int = None,
     ):
         _logger.debug("Checking output.")
         output_dir = Path(output_dir)
@@ -124,7 +125,7 @@ class TIFFConverter:
         _logger.debug("Getting dataset summary information.")
         self.coord_map = dict()
         self.p = len(self.reader)
-        self.t = self.reader.frames
+        self.t = self.reader.frames if not t_max else t_max
         self.c = self.reader.channels
         self.z = self.reader.slices
         self.y = self.reader.height
@@ -388,7 +389,7 @@ class TIFFConverter:
                 ncols=80,
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
-                to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
+                to_zarr(fov.xdata.data[:self.t].rechunk(self.chunks), zarr_img)
                 self._convert_image_plane_metadata(fov, zarr_img.path)
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()

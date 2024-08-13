@@ -78,12 +78,21 @@ def info(files, verbose):
     help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
     "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
 )
-def convert(input, output, grid_layout, chunks):
+@click.option(
+    "--t_max",
+    required=False,
+    type=int,
+)
+def convert(input, output, grid_layout, chunks, t_max):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
         output_dir=output,
         grid_layout=grid_layout,
         chunks=chunks,
+        t_max=t_max,
     )
     converter()
+
+if __name__ == "__main__":
+    convert()
