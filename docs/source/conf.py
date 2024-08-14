@@ -124,7 +124,15 @@ html_theme_options = {
         "json_url": json_url,
         "version_match": version_match,
     },
-    "navbar_end": ["theme-switcher", "version-switcher", "navbar-icon-links"],
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/czbiohub-sf/iohub",
+            "icon": "fa-brands fa-square-github",
+            "type": "fontawesome",
+        }
+    ],
+    "navbar_end": ["theme-switcher", "navbar-icon-links", "version-switcher"],
 }
 
 # Add any paths that contain custom themes here, relative to this directory.

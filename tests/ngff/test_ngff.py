@@ -20,7 +20,7 @@ from ome_zarr.reader import Reader
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
-from iohub.ngff import (
+from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
     Plate,
     TransformationMeta,
@@ -28,6 +28,7 @@ from iohub.ngff import (
     _pad_shape,
     open_ome_zarr,
 )
+from tests.conftest import hcs_ref
 
 short_text_st = st.text(min_size=1, max_size=16)
 t_dim_st = st.integers(1, 4)
@@ -199,7 +200,7 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
         # round-trip test with the offical reader implementation
         ext_reader = Reader(parse_url(dataset.zgroup.store.path))
         node = list(ext_reader())[0]
-        assert node.metadata["name"] == channel_names
+        assert node.metadata["channel_names"] == channel_names
         assert node.specs[0].datasets == [arr_name]
         assert node.data[0].shape == random_5d.shape
         assert node.data[0].dtype == random_5d.dtype
@@ -365,7 +366,7 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
         ext_reader = Reader(parse_url(dataset.zgroup.store.path))
         node = list(ext_reader())[0]
         assert node.metadata["coordinateTransformations"][0] == [
-            translate.dict(**TO_DICT_SETTINGS) for translate in transform
+            translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
 
 
@@ -398,7 +399,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
         # read data with plain zarr
         group = zarr.open(store_path)
         assert group.attrs["multiscales"][0]["coordinateTransformations"] == [
-            translate.dict(**TO_DICT_SETTINGS) for translate in transform
+            translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
 
 
@@ -421,6 +422,7 @@ def test_create_tiled(channel_names):
     grid_shape=tiles_rc_st,
     arr_name=short_alpha_numeric,
 )
+@settings(suppress_health_check=[HealthCheck.too_slow])
 def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
     """Test `iohub.ngff.TiledPosition.make_tiles()` and  `...get_tile()`"""
     with TemporaryDirectory() as temp_dir:
@@ -549,10 +551,10 @@ def _temp_copy(src: StrPath):
 
 
 @given(wrong_channel_name=channel_names_st)
-def test_get_channel_index(setup_test_data, setup_hcs_ref, wrong_channel_name):
+def test_get_channel_index(wrong_channel_name):
     """Test `iohub.ngff.NGFFNode.get_channel_axis()`"""
     assume(wrong_channel_name != "DAPI")
-    with open_ome_zarr(setup_hcs_ref, layout="hcs", mode="r+") as dataset:
+    with open_ome_zarr(hcs_ref, layout="hcs", mode="r+") as dataset:
         assert dataset.get_channel_index("DAPI") == 0
         with pytest.raises(ValueError):
             _ = dataset.get_channel_index(wrong_channel_name)
@@ -562,12 +564,10 @@ def test_get_channel_index(setup_test_data, setup_hcs_ref, wrong_channel_name):
     row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
 )
 @settings(max_examples=16, deadline=2000)
-def test_modify_hcs_ref(
-    setup_test_data, setup_hcs_ref, row: str, col: str, pos: str
-):
+def test_modify_hcs_ref(row: str, col: str, pos: str):
     """Test `iohub.ngff.open_ome_zarr()`"""
     assume((row.lower() != "b"))
-    with _temp_copy(setup_hcs_ref) as store_path:
+    with _temp_copy(hcs_ref) as store_path:
         with open_ome_zarr(store_path, layout="hcs", mode="r+") as dataset:
             assert dataset.axes[0].name == "c"
             assert dataset.channel_names == ["DAPI"]
@@ -633,11 +633,11 @@ def test_position_scale(channels_and_random_5d):
         assert dataset.scale == scale
 
 
-def test_combine_fovs_to_hcs(setup_test_data, setup_hcs_ref):
+def test_combine_fovs_to_hcs():
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
     for path in fov_paths:
-        with open_ome_zarr(setup_hcs_ref) as hcs_store:
+        with open_ome_zarr(hcs_ref) as hcs_store:
             fovs[path] = hcs_store["B/03/0"]
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "combined.zarr")

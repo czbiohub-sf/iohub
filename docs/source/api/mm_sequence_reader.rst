@@ -1,7 +1,7 @@
 Read MM TIFF sequence
 =====================
 
-.. currentmodule:: iohub.singlepagetiff
+.. currentmodule:: iohub._deprecated.singlepagetiff
 
 .. autoclass:: MicromanagerSequenceReader
     :members:

@@ -9,7 +9,9 @@ from typing import Literal
 import numpy as np
 import zarr
 
-from iohub.reader_base import ReaderBase
+from iohub._deprecated.reader_base import ReaderBase
+
+_logger = logging.getLogger(__name__)
 
 
 class ZarrReader(ReaderBase):
@@ -29,7 +31,7 @@ class ZarrReader(ReaderBase):
     ):
         super().__init__()
 
-        logging.warning(
+        _logger.warning(
             DeprecationWarning(
                 "`iohub.zarrfile.ZarrReader` is deprecated "
                 "and will be removed in the future. "
@@ -93,7 +95,7 @@ class ZarrReader(ReaderBase):
         try:
             self._set_mm_meta()
         except TypeError:
-            self.mm_meta = dict()
+            self.micromanager_metadata = {}
 
         self._generate_hcs_meta()
 
@@ -186,37 +188,37 @@ class ZarrReader(ReaderBase):
         -------
 
         """
-        self.mm_meta = self.root.attrs.get("Summary")
-        mm_version = self.mm_meta["MicroManagerVersion"]
+        self._mm_meta = self.root.attrs.get("Summary")
+        mm_version = self._mm_meta["MicroManagerVersion"]
 
         if mm_version != "pycromanager":
             if "beta" in mm_version:
-                if self.mm_meta["Positions"] > 1:
+                if self._mm_meta["Positions"] > 1:
                     self.stage_positions = []
 
-                    for p in range(len(self.mm_meta["StagePositions"])):
+                    for p in range(len(self._mm_meta["StagePositions"])):
                         pos = self._simplify_stage_position_beta(
-                            self.mm_meta["StagePositions"][p]
+                            self._mm_meta["StagePositions"][p]
                         )
                         self.stage_positions.append(pos)
 
             # elif mm_version == '1.4.22':
-            #     for ch in self.mm_meta['ChNames']:
+            #     for ch in self._mm_meta['ChNames']:
             #         self.channel_names.append(ch)
             else:
-                if self.mm_meta["Positions"] > 1:
+                if self._mm_meta["Positions"] > 1:
                     self.stage_positions = []
 
-                    for p in range(self.mm_meta["Positions"]):
+                    for p in range(self._mm_meta["Positions"]):
                         pos = self._simplify_stage_position(
-                            self.mm_meta["StagePositions"][p]
+                            self._mm_meta["StagePositions"][p]
                         )
                         self.stage_positions.append(pos)
 
-                # for ch in self.mm_meta['ChNames']:
+                # for ch in self._mm_meta['ChNames']:
                 #     self.channel_names.append(ch)
 
-        self.z_step_size = self.mm_meta["z-step_um"]
+        self.z_step_size = self._mm_meta["z-step_um"]
 
     def _get_channel_names(self):
         well = self.hcs_meta["plate"]["wells"][0]["path"]
