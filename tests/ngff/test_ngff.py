@@ -261,11 +261,12 @@ def test_position_data(channels_and_random_5d, arr_name):
 )
 def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data` to tensortore"""
+    channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
         assert_array_almost_equal(dataset.data.numpy(), random_5d)
     with pytest.raises(KeyError):
         with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
-            _ = dataset.data.tensorstore()
+            dataset.data.tensorstore()
 
 
 @given(
