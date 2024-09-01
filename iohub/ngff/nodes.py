@@ -9,13 +9,13 @@ import logging
 import math
 import os
 from copy import deepcopy
+from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
 
 import numpy as np
 import zarr
 from numcodecs import Blosc
 from numpy.typing import ArrayLike, DTypeLike, NDArray
-from pathlib import Path
 from pydantic import ValidationError
 from zarr.util import normalize_storage_path
 
@@ -346,7 +346,8 @@ class ImageArray(zarr.Array):
 
     def tensorstore(self):
         import tensorstore as ts
-        metadata={
+
+        metadata = {
             "dtype": self.dtype.str,
             "shape": self.shape,
             "chunks": self.chunks,
@@ -355,7 +356,7 @@ class ImageArray(zarr.Array):
             "driver": "zarr",
             "kvstore": {
                 "driver": "file",
-                "path": str((Path(self._store.path)/self.path).resolve()),
+                "path": str((Path(self._store.path) / self.path).resolve()),
             },
             "metadata": metadata,
         }
