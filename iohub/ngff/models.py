@@ -17,6 +17,7 @@ from pydantic import (
     AfterValidator,
     BaseModel,
     ConfigDict,
+    Discriminator,
     Field,
     NonNegativeInt,
     PositiveInt,
@@ -168,13 +169,11 @@ class TimeAxisMeta(NamedAxisMeta):
     )
 
 
-class NonstandardAxisMeta(NamedAxisMeta):
-    type: str | None
-    unit: str | None
-
-
 """https://ngff.openmicroscopy.org/0.4/index.html#axes-md"""
-AxisMeta = TimeAxisMeta | ChannelAxisMeta | SpaceAxisMeta | NonstandardAxisMeta
+AxisMeta = Annotated[
+    TimeAxisMeta | ChannelAxisMeta | SpaceAxisMeta,
+    Discriminator("type"),
+]
 
 
 class TransformationMeta(MetaBase):
@@ -227,7 +226,7 @@ class MultiScaleMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
 
     # MUST
-    axes: list[AxisMeta] = Field(..., discriminator="type")
+    axes: list[AxisMeta]
     # MUST
     datasets: list[DatasetMeta]
     # SHOULD
