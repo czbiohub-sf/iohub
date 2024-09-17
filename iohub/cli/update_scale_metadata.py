@@ -15,8 +15,9 @@ def update_scale_metadata(
             input_position_dirpath, layout="fov", mode="a"
         ) as input_dataset:
             print(
-                f"Changing {input_position_dirpath.name} scale from "
-                f"{input_dataset.scale[2:]} to {z_scale, y_scale, x_scale}."
+                f"Updating {input_position_dirpath} scale from "
+                f"{tuple(input_dataset.scale[2:])} to "
+                f"{z_scale, y_scale, x_scale}."
             )
             input_dataset.zattrs["old_scale"] = input_dataset.scale[2:]
             transform = [
