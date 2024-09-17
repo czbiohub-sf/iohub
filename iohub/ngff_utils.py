@@ -26,20 +26,26 @@ def create_empty_plate(
     max_chunk_size_bytes=500e6,
 ) -> None:
     """
-    Create a new HCS Plate in OME-Zarr format if the plate does not exist. If the plate exists, append positions and channels if they are not already in the plate.
+    Create a new HCS Plate in OME-Zarr format if the plate does not exist.
+    If the plate exists, append positions and channels
+    if they are not already in the plate.
 
     Parameters
     ----------
     store_path : Path
         Path to the HCS plate.
     position_keys : list[Tuple[str]]
-        Position keys to append if not present in the plate, e.g., [("A", "1", "0"), ("A", "1", "1")].
+        Position keys to append if not present in the plate,
+        e.g., [("A", "1", "0"), ("A", "1", "1")].
     channel_names : list[str]
-        List of channel names. If the store exists, append if not present in metadata.
+        List of channel names. If the store exists,
+        append if not present in metadata.
     shape : Tuple[int]
         TCZYX shape of the plate.
     chunks : Tuple[int], optional
-        Chunk size for the plate TCZYX. If None, the chunk size is calculated based on the shape to be <500MB. Defaults to None.
+        Chunk size for the plate TCZYX. If None,
+        the chunk size is calculated based on the shape to be <500MB.
+        Defaults to None.
     scale : Tuple[float], optional
         Scale of the plate TCZYX. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
@@ -69,8 +75,10 @@ def create_empty_plate(
 
     Notes
     -----
-    - If `chunks` is not provided, the function calculates an appropriate chunk size to keep the chunks under the specified `max_chunk_size_bytes`.
-    - The function ensures that positions and channels are appended to an existing plate if they are not already present.
+    - If `chunks` is not provided, the function calculates an appropriate
+    chunk size to keep the chunks under the specified `max_chunk_size_bytes`.
+    - The function ensures that positions and channels are appended to an
+    existing plate if they are not already present.
     """
     bytes_per_pixel = np.dtype(dtype).itemsize
 
@@ -127,12 +135,14 @@ def apply_transform_to_zyx_and_save(
     **kwargs,
 ) -> None:
     """
-    Load a CZYX array from a Position object, apply a transformation, and save the result.
+    Load a CZYX array from a Position object,
+    apply a transformation, and save the result.
 
     Parameters
     ----------
     func : Callable
-        The function to be applied to the data. Should take a CZYX array and return a transformed CZYX array.
+        The function to be applied to the data.
+        Should take a CZYX array and return a transformed CZYX array.
     position : Position
         The position object to read from.
     output_store_path : Path
@@ -152,7 +162,10 @@ def apply_transform_to_zyx_and_save(
     time_indices_out : int
         The time index to write to.
     kwargs : dict, optional
-        Additional arguments to pass to the function. A dictionary with key "extra_metadata" can be passed to be stored at a FOV level, e.g., kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
+        Additional arguments to pass to the function.
+        A dictionary with key "extra_metadata" can be passed to
+        be stored at a FOV level, e.g.,
+        kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
 
     Examples
     --------
@@ -180,8 +193,10 @@ def apply_transform_to_zyx_and_save(
 
     Notes
     -----
-    - If channel_indices_in or channel_indices_out contain nested lists, the indices should be integers.
-    - Ensure that the lengths of channel_indices_in and channel_indices_out match if they are provided.
+    - If channel_indices_in or channel_indices_out
+    contain nested lists, the indices should be integers.
+    - Ensure that the lengths of channel_indices_in and
+    channel_indices_out match if they are provided.
     """
 
     # TODO: temporary fix to slumkit issue
@@ -195,7 +210,8 @@ def apply_transform_to_zyx_and_save(
         ]
 
     # Check if time_indices_in should be added to the func kwargs
-    # This is needed when a different processing is needed for each time point, for example during stabilization
+    # This is needed when a different processing is needed for each time point,
+    # for example during stabilization
     all_func_params = inspect.signature(func).parameters.keys()
     if "time_indices_in" in all_func_params:
         kwargs["time_indices_in"] = time_indices_in
@@ -214,13 +230,15 @@ def apply_transform_to_zyx_and_save(
                 time_indices_out, channel_indices_out
             ] = transformed_czyx
         click.echo(
-            f"Finished Writing.. t={time_indices_in} and channel output={channel_indices_out}"
+            f"Finished Writing.. t={time_indices_in} and \
+            channel output={channel_indices_out}"
         )
     else:
         click.echo(f"Skipping t={time_indices_in} due to all zeros or nans")
 
 
-# TODO: modify how we get the time and channesl like recOrder (isinstance(input, list) or instance(input,int) or all)
+# TODO: modify how we get the time and channesl like recOrder
+# (isinstance(input, list) or instance(input,int) or all)
 def process_single_position(
     func,
     input_position_path: Path,
@@ -233,12 +251,15 @@ def process_single_position(
     **kwargs,
 ) -> None:
     """
-    Apply function to data in an `iohub` `Position`, parallelizing over time and channel indices, and save result in an output Zarr store.
+    Apply function to data in an `iohub` `Position`,
+    parallelizing over time and channel indices,
+    and save result in an output Zarr store.
 
     Parameters
     ----------
     func :CZYX -> CZYX Callable
-        The function to be applied to the data. Should take a CZYX array and return a transformed CZYX array.
+        The function to be applied to the data.
+        Should take a CZYX array and return a transformed CZYX array.
     input_position_path : Path
         The path to the input Position (e.g., input_position_path.zarr/0/0/0).
     output_store_path : Path
@@ -251,21 +272,30 @@ def process_single_position(
         If "all", time_indices_out should also be "all". Defaults to "all".
     time_indices_out : list[int], optional
         The time indices to write to. Must match time_indices_in if not empty.
-        Typically used for stabilization, which needs per timepoint processing. Defaults to an empty list.
+        Typically used for stabilization, which needs per timepoint processing.
+        Defaults to an empty list.
     channel_indices_in : Union[list[slice], list[list[int]]], optional
         The channel indices to process. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
         - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
-        If empty, process all channels. Must match channel_indices_out if not empty. Defaults to an empty list.
+        If empty, process all channels.
+        Must match channel_indices_out if not empty.
+        Defaults to an empty list.
     channel_indices_out : Union[list[slice], list[list[int]]], optional
         The channel indices to write to. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
         - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
-        If empty, write to all channels. Must match channel_indices_in if not empty. Defaults to an empty list.
+        If empty, write to all channels.
+        Must match channel_indices_in if not empty.
+        Defaults to an empty list.
     num_processes : int, optional
         Number of simultaneous processes per position. Defaults to 1.
     kwargs : dict, optional
-        Additional arguments to pass to the function. A dictionary with key "extra_metadata" can be passed to be stored at a FOV level, e.g., kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
+        Additional arguments to pass to the function.
+        A dictionary with key "extra_metadata"
+        can be passed to be stored at a FOV level,
+        e.g.,
+        kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
 
     Examples
     --------
@@ -291,8 +321,10 @@ def process_single_position(
 
     Notes
     -----
-    - Multiprocessing over T and C: channel_indices_in and channel_indices_out should be empty.
-    - Multiprocessing over T only: channel_indices_in and channel_indices_out should be provided.
+    - Multiprocessing over T and C:
+    channel_indices_in and channel_indices_out should be empty.
+    - Multiprocessing over T only:
+    channel_indices_in and channel_indices_out should be provided.
     """
     # Function to be applied
     click.echo(f"Function to be applied: \t{func}")
@@ -315,9 +347,12 @@ def process_single_position(
         time_ubound = input_dataset.data.shape[0] - 1
         if np.max(time_indices_in) > time_ubound:
             raise ValueError(
-                f"time_indices_in = {time_indices_in} includes a time index beyond the maximum index of the dataset = {time_ubound}"
+                f"time_indices_in = {time_indices_in} includes \
+                a time index beyond the maximum index of \
+                the dataset = {time_ubound}"
             )
-        # Handle the case when time_indices out is not provided. It defaults to the t_indices_in
+        # Handle the case when time_indices out is not provided.
+        # It defaults to the t_indices_in
         if len(time_indices_out) == 0:
             time_indices_out = range(len(time_indices_in))
 
@@ -386,7 +421,8 @@ def _is_nested(lst):
     """
     Check if the list is nested or not.
 
-    NOTE: this function was created for a bug in slumkit that nested channel_indices_in into a list of lists
+    NOTE: this function was created for a bug in slumkit that nested
+    channel_indices_in into a list of lists
     TODO: check if this is still an issue in slumkit
     """
     return any(isinstance(i, list) for i in lst) or any(
