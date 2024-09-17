@@ -99,21 +99,21 @@ def convert(input, output, grid_layout, chunks):
 @click.option(
     "--z-scale",
     "-z",
-    required=False,
+    required=True,
     type=float,
     help="New z scale",
 )
 @click.option(
     "--y-scale",
     "-y",
-    required=False,
+    required=True,
     type=float,
     help="New y scale",
 )
 @click.option(
     "--x-scale",
     "-x",
-    required=False,
+    required=True,
     type=float,
     help="New x scale",
 )
