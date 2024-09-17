@@ -122,8 +122,6 @@ def test_cli_update_scale_metadata():
             "-i",
             str(position_path),
             "-z",
-            0.5,
-            "-z",
             random_z,
             "-y",
             0.5,
