@@ -4,11 +4,11 @@ import click
 
 from iohub._version import __version__
 from iohub.cli.parsing import input_position_dirpaths
-from iohub.convert import TIFFConverter
-from iohub.reader import print_info
-from iohub.update_scale_metadata import (
+from iohub.cli.update_scale_metadata import (
     update_scale_metadata as _update_scale_metadata,
 )
+from iohub.convert import TIFFConverter
+from iohub.reader import print_info
 
 VERSION = __version__
 
@@ -97,11 +97,11 @@ def convert(input, output, grid_layout, chunks):
 @click.help_option("-h", "--help")
 @input_position_dirpaths()
 @click.option(
-    "--x-scale",
-    "-x",
+    "--z-scale",
+    "-z",
     required=False,
     type=float,
-    help="New x scale",
+    help="New z scale",
 )
 @click.option(
     "--y-scale",
@@ -111,14 +111,17 @@ def convert(input, output, grid_layout, chunks):
     help="New y scale",
 )
 @click.option(
-    "--z-scale",
-    "-z",
+    "--x-scale",
+    "-x",
     required=False,
     type=float,
-    help="New z scale",
+    help="New x scale",
 )
 def update_scale_metadata(input_position_dirpaths, z_scale, y_scale, x_scale):
-    """Update scale metadata in OME-Zarr datasets"""
+    """Update scale metadata in OME-Zarr datasets.
+
+    >> iohub update-scale-metatdata -i input.zarr/*/*/* -z 1.0 -y 0.5 -x 0.5
+    """
     _update_scale_metadata(
         input_position_dirpaths,
         z_scale=z_scale,
