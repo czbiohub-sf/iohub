@@ -1,9 +1,11 @@
+import random
 import re
 from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
+from iohub import open_ome_zarr
 from iohub._version import __version__
 from iohub.cli.cli import cli
 from tests.conftest import (
@@ -103,3 +105,35 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0, result.output
     assert "Converting" in result.output
+
+
+def test_cli_update_scale_metadata():
+    position_path = hcs_ref / "B" / "03" / "0"
+    with open_ome_zarr(position_path, layout="fov", mode="a") as input_dataset:
+        old_scale = input_dataset.scale
+
+    random_z = random.uniform(0, 1)
+
+    runner = CliRunner()
+    result_pos = runner.invoke(
+        cli,
+        [
+            "update-scale-metadata",
+            "-i",
+            str(position_path),
+            "-z",
+            0.5,
+            "-z",
+            random_z,
+            "-y",
+            0.5,
+            "-x",
+            0.5,
+        ],
+    )
+    assert result_pos.exit_code == 0
+    assert "Updating" in result_pos.output
+
+    with open_ome_zarr(position_path, layout="fov") as output_dataset:
+        assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
+        assert output_dataset.scale != old_scale
