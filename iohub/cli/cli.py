@@ -1,9 +1,9 @@
 import pathlib
 
 import click
-from mantis.cli.parsing import input_position_dirpaths
 
 from iohub._version import __version__
+from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
 from iohub.update_scale_metadata import (
