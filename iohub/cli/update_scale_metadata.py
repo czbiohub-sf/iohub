@@ -16,14 +16,15 @@ def update_scale_metadata(
         ) as input_dataset:
             print(
                 f"Updating {input_position_dirpath} scale from "
-                f"{tuple(input_dataset.scale[2:])} to "
+                f"{tuple(input_dataset.scale[-3:])} to "
                 f"{z_scale, y_scale, x_scale}."
             )
             input_dataset.zattrs["old_scale"] = input_dataset.scale[2:]
             transform = [
                 TransformationMeta(
                     type="scale",
-                    scale=(1, 1, z_scale, y_scale, x_scale),
+                    scale=(len(input_dataset.scale) - 3) * (1,)
+                    + (z_scale, y_scale, x_scale),
                 )
             ]
             input_dataset.set_transform("0", transform=transform)
