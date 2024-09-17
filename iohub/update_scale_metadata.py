@@ -1,7 +1,7 @@
 from typing import List
 
 from iohub import open_ome_zarr
-from iohub.ngff_meta import TransformationMeta
+from iohub.ngff.models import TransformationMeta
 
 
 def update_scale_metadata(
