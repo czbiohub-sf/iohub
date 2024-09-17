@@ -111,10 +111,7 @@ def create_empty_plate(
 
     # Check if channel_names are already in the store, if not append them
     for channel_name in channel_names:
-        # Read channel names directly from metadata to avoid race conditions
-        metadata_channel_names = [
-            channel.label for channel in position.metadata.omero.channels
-        ]
+        metadata_channel_names = position.channel_names
         if channel_name not in metadata_channel_names:
             position.append_channel(channel_name, resize_arrays=True)
 
@@ -123,10 +120,10 @@ def apply_transform_to_zyx_and_save(
     func,
     position: Position,
     output_store_path: Path,
-    input_channel_indices: Union[list[slice], list[list[int]]],
-    output_channel_indices: Union[list[slice], list[list[int]]],
-    t_idx_in: int,
-    t_idx_out: int,
+    channel_indices_in: Union[list[slice], list[list[int]]],
+    channel_indices_out: Union[list[slice], list[list[int]]],
+    time_indices_in: int,
+    time_indices_out: int,
     **kwargs,
 ) -> None:
     """
@@ -140,85 +137,87 @@ def apply_transform_to_zyx_and_save(
         The position object to read from.
     output_store_path : Path
         The path to output OME-Zarr Store.
-    input_channel_indices : Union[list[slice], list[list[int]]]
+    channel_indices_in : Union[list[slice], list[list[int]]]
         The channel indices to process. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
         - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
         If empty list, process all channels.
-    output_channel_indices : Union[list[slice], list[list[int]]]
+    channel_indices_out : Union[list[slice], list[list[int]]]
         The channel indices to write to. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
         - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
         If empty list, write to all channels.
-    t_idx_in : int
+    time_indices_in : int
         The time index to process.
-    t_idx_out : int
+    time_indices_out : int
         The time index to write to.
     kwargs : dict, optional
         Additional arguments to pass to the function. A dictionary with key "extra_metadata" can be passed to be stored at a FOV level, e.g., kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
 
     Examples
     --------
-    Using slices for input_channel_indices:
+    Using slices for channel_indices_in:
     apply_transform_to_zyx_and_save(
         func=some_function,
         position=some_position,
         output_store_path=Path("/path/to/output"),
-        input_channel_indices=[slice(0, 2), slice(2, 4)],
-        output_channel_indices=[[0], [1]],
-        t_idx_in=0,
-        t_idx_out=0,
+        channel_indices_in=[slice(0, 2), slice(2, 4)],
+        channel_indices_out=[[0], [1]],
+        time_indices_in=0,
+        time_indices_out=0,
     )
 
-    Using list of lists for input_channel_indices:
+    Using list of lists for channel_indices_in:
     apply_transform_to_zyx_and_save(
         func=some_function,
         position=some_position,
         output_store_path=Path("/path/to/output"),
-        input_channel_indices=[[0, 1], [2, 3]],
-        output_channel_indices=[[0], [1]],
-        t_idx_in=0,
-        t_idx_out=0,
+        channel_indices_in=[[0, 1], [2, 3]],
+        channel_indices_out=[[0], [1]],
+        time_indices_in=0,
+        time_indices_out=0,
     )
 
     Notes
     -----
-    - If input_channel_indices or output_channel_indices contain nested lists, the indices should be integers.
-    - Ensure that the lengths of input_channel_indices and output_channel_indices match if they are provided.
+    - If channel_indices_in or channel_indices_out contain nested lists, the indices should be integers.
+    - Ensure that the lengths of channel_indices_in and channel_indices_out match if they are provided.
     """
 
     # TODO: temporary fix to slumkit issue
-    if _is_nested(input_channel_indices):
-        input_channel_indices = [
-            int(x) for x in input_channel_indices if x.isdigit()
+    if _is_nested(channel_indices_in):
+        channel_indices_in = [
+            int(x) for x in channel_indices_in if x.isdigit()
         ]
-    if _is_nested(output_channel_indices):
-        output_channel_indices = [
-            int(x) for x in output_channel_indices if x.isdigit()
+    if _is_nested(channel_indices_out):
+        channel_indices_out = [
+            int(x) for x in channel_indices_out if x.isdigit()
         ]
 
-    # Check if t_idx_in should be added to the func kwargs
+    # Check if time_indices_in should be added to the func kwargs
     # This is needed when a different processing is needed for each time point, for example during stabilization
     all_func_params = inspect.signature(func).parameters.keys()
-    if "t_idx_in" in all_func_params:
-        kwargs["t_idx_in"] = t_idx_in
+    if "time_indices_in" in all_func_params:
+        kwargs["time_indices_in"] = time_indices_in
 
     # Process CZYX given with the given indeces
-    # if input_channel_indices is not None and len(input_channel_indices) > 0:
-    click.echo(f"Processing t={t_idx_in} and channels {input_channel_indices}")
-    czyx_data = position.data.oindex[t_idx_in, input_channel_indices]
+    # if channel_indices_in is not None and len(channel_indices_in) > 0:
+    click.echo(
+        f"Processing t={time_indices_in} and channels {channel_indices_in}"
+    )
+    czyx_data = position.data.oindex[time_indices_in, channel_indices_in]
     if not _check_nan_n_zeros(czyx_data):
         transformed_czyx = func(czyx_data, **kwargs)
         # Write to file
         with open_ome_zarr(output_store_path, mode="r+") as output_dataset:
             output_dataset[0].oindex[
-                t_idx_out, output_channel_indices
+                time_indices_out, channel_indices_out
             ] = transformed_czyx
         click.echo(
-            f"Finished Writing.. t={t_idx_in} and channel output={output_channel_indices}"
+            f"Finished Writing.. t={time_indices_in} and channel output={channel_indices_out}"
         )
     else:
-        click.echo(f"Skipping t={t_idx_in} due to all zeros or nans")
+        click.echo(f"Skipping t={time_indices_in} due to all zeros or nans")
 
 
 # TODO: modify how we get the time and channesl like recOrder (isinstance(input, list) or instance(input,int) or all)
@@ -226,10 +225,10 @@ def process_single_position(
     func,
     input_position_path: Path,
     output_store_path: Path,
+    channel_indices_in: Union[list[slice], list[list[int]]] = [],
+    channel_indices_out: Union[list[slice], list[list[int]]] = [],
     time_indices_in: Union[list[Union[int, slice]], int] = "all",
     time_indices_out: list[int] = [],
-    input_channel_idx: Union[list[slice], list[list[int]]] = [],
-    output_channel_idx: Union[list[slice], list[list[int]]] = [],
     num_processes: int = 1,
     **kwargs,
 ) -> None:
@@ -253,16 +252,16 @@ def process_single_position(
     time_indices_out : list[int], optional
         The time indices to write to. Must match time_indices_in if not empty.
         Typically used for stabilization, which needs per timepoint processing. Defaults to an empty list.
-    input_channel_idx : Union[list[slice], list[list[int]]], optional
+    channel_indices_in : Union[list[slice], list[list[int]]], optional
         The channel indices to process. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
         - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
-        If empty, process all channels. Must match output_channel_idx if not empty. Defaults to an empty list.
-    output_channel_idx : Union[list[slice], list[list[int]]], optional
+        If empty, process all channels. Must match channel_indices_out if not empty. Defaults to an empty list.
+    channel_indices_out : Union[list[slice], list[list[int]]], optional
         The channel indices to write to. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
         - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
-        If empty, write to all channels. Must match input_channel_idx if not empty. Defaults to an empty list.
+        If empty, write to all channels. Must match channel_indices_in if not empty. Defaults to an empty list.
     num_processes : int, optional
         Number of simultaneous processes per position. Defaults to 1.
     kwargs : dict, optional
@@ -270,30 +269,30 @@ def process_single_position(
 
     Examples
     --------
-    Using slices for input_channel_idx:
+    Using slices for channel_indices_in:
     process_single_position(
         func=some_function,
         input_position_path=Path("/path/to/input"),
         output_store_path=Path("/path/to/output"),
         time_indices_in=[slice(1, 2), slice(2, 3)],
-        input_channel_idx=[slice(0, 2), slice(2, 4)],
-        output_channel_idx=[[0], [1]],
+        channel_indices_in=[slice(0, 2), slice(2, 4)],
+        channel_indices_out=[[0], [1]],
     )
 
-    Using list of lists for input_channel_idx:
+    Using list of lists for channel_indices_in:
     process_single_position(
         func=some_function,
         input_position_path=Path("/path/to/input"),
         output_store_path=Path("/path/to/output"),
         time_indices_in=[slice(1, 2), slice(2, 3)],
-        input_channel_idx=[[0, 1], [2, 3]],
-        output_channel_idx=[[0], [1]],
+        channel_indices_in=[[0, 1], [2, 3]],
+        channel_indices_out=[[0], [1]],
     )
 
     Notes
     -----
-    - Multiprocessing over T and C: input_channel_idx and output_channel_idx should be empty.
-    - Multiprocessing over T only: input_channel_idx and output_channel_idx should be provided.
+    - Multiprocessing over T and C: channel_indices_in and channel_indices_out should be empty.
+    - Multiprocessing over T only: channel_indices_in and channel_indices_out should be provided.
     """
     # Function to be applied
     click.echo(f"Function to be applied: \t{func}")
@@ -346,7 +345,7 @@ def process_single_position(
     # Loop through (T, C), deskewing and writing as we go
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
 
-    if input_channel_idx is None or len(input_channel_idx) == 0:
+    if channel_indices_in is None or len(channel_indices_in) == 0:
         # If C is not empty, use itertools.product with both ranges
         _, C, _, _, _ = input_dataset.data.shape
         iterable = [
@@ -370,8 +369,8 @@ def process_single_position(
             func,
             input_dataset,
             output_store_path / Path(*input_position_path.parts[-3:]),
-            input_channel_idx,
-            output_channel_idx,
+            channel_indices_in,
+            channel_indices_out,
             **func_args,
         )
 
@@ -387,7 +386,7 @@ def _is_nested(lst):
     """
     Check if the list is nested or not.
 
-    NOTE: this function was created for a bug in slumkit that nested input_channel_indices into a list of lists
+    NOTE: this function was created for a bug in slumkit that nested channel_indices_in into a list of lists
     TODO: check if this is still an issue in slumkit
     """
     return any(isinstance(i, list) for i in lst) or any(
