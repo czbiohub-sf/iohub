@@ -33,7 +33,7 @@ def input_position_dirpaths() -> Callable:
             required=True,
             callback=_validate_and_process_paths,
             help=(
-                "List of paths to input po"
+                "List of paths to input positions, "
                 "each with the same TCZYX shape. "
                 "Supports wildcards e.g. 'input.zarr/*/*/*'."
             ),
