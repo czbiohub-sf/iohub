@@ -16,7 +16,7 @@ from iohub._deprecated.zarrfile import ZarrReader
 from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
-from iohub.ngff import NGFFNode, Plate, Position, open_ome_zarr
+from iohub.ngff.nodes import NGFFNode, Plate, Position, open_ome_zarr
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
