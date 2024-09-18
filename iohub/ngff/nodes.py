@@ -980,26 +980,28 @@ class Position(NGFFNode):
     def axis_names(self) -> list[str]:
         """
         Helper function for axis names of the highest resolution scale.
-        """
-        return [axis.name for axis in self.metadata.multiscales[0].axes]
 
-    def get_axis_index(
-        self, axis_name: Literal["T", "C", "Z", "Y", "X"]
-    ) -> int:
+        Returns lowercase axis names.
+        """
+        return [
+            axis.name.lower() for axis in self.metadata.multiscales[0].axes
+        ]
+
+    def get_axis_index(self, axis_name: str) -> int:
         """
         Get the index of a given axis.
 
         Parameters
         ----------
         name : str
-            Name of the axis.
+            Name of the axis. Case insensitive.
 
         Returns
         -------
         int
             Index of the axis.
         """
-        return self.axis_names.index(axis_name)
+        return self.axis_names.index(axis_name.lower())
 
     def set_transform(
         self,
@@ -1035,7 +1037,7 @@ class Position(NGFFNode):
     def set_scale(
         self,
         image: str | Literal["*"],
-        axis_name: Literal["T", "C", "Z", "Y", "X"],
+        axis_name: str,
         new_scale: float,
     ):
         """Set the scale for a named axis.
@@ -1046,7 +1048,7 @@ class Position(NGFFNode):
         image : str | Literal[
             Name of one image array (e.g. "0") to transform,
             or "*" for the whole FOV
-        axis_name : Literal["T", "C", "Z", "Y", "X"]
+        axis_name : str
             Name of the axis to set.
         new_scale : float
             Value of the new scale.

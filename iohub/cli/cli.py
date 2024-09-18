@@ -142,7 +142,7 @@ def set_scale(
             input_position_dirpath, layout="fov", mode="a"
         ) as dataset:
             for name, value in zip(
-                ["T", "Z", "Y", "X"], [t_scale, z_scale, y_scale, x_scale]
+                ["t", "z", "y", "x"], [t_scale, z_scale, y_scale, x_scale]
             ):
                 if value is None:
                     continue
