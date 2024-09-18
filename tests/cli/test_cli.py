@@ -1,5 +1,6 @@
 import random
 import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -14,6 +15,8 @@ from tests.conftest import (
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
 )
+
+from ..ngff.test_ngff import _temp_copy
 
 
 def pytest_generate_tests(metafunc):
@@ -107,31 +110,36 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     assert "Converting" in result.output
 
 
-def test_cli_update_scale_metadata():
-    position_path = hcs_ref / "B" / "03" / "0"
-    with open_ome_zarr(position_path, layout="fov", mode="a") as input_dataset:
-        old_scale = input_dataset.scale
+def test_cli_set_scale():
+    with _temp_copy(hcs_ref) as store_path:
+        store_path = Path(store_path)
+        position_path = Path(store_path) / "B" / "03" / "0"
 
-    random_z = random.uniform(0, 1)
+        with open_ome_zarr(
+            position_path, layout="fov", mode="r+"
+        ) as input_dataset:
+            old_scale = input_dataset.scale
 
-    runner = CliRunner()
-    result_pos = runner.invoke(
-        cli,
-        [
-            "update-scale-metadata",
-            "-i",
-            str(position_path),
-            "-z",
-            random_z,
-            "-y",
-            0.5,
-            "-x",
-            0.5,
-        ],
-    )
-    assert result_pos.exit_code == 0
-    assert "Updating" in result_pos.output
+        random_z = random.uniform(0, 1)
 
-    with open_ome_zarr(position_path, layout="fov") as output_dataset:
-        assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
-        assert output_dataset.scale != old_scale
+        runner = CliRunner()
+        result_pos = runner.invoke(
+            cli,
+            [
+                "set-scale",
+                "-i",
+                position_path,
+                "-z",
+                random_z,
+                "-y",
+                0.5,
+                "-x",
+                0.5,
+            ],
+        )
+        assert result_pos.exit_code == 0
+        assert "Updating" in result_pos.output
+
+        with open_ome_zarr(position_path, layout="fov") as output_dataset:
+            assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
+            assert output_dataset.scale != old_scale
