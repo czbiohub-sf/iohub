@@ -1032,6 +1032,45 @@ class Position(NGFFNode):
             raise ValueError(f"Key {image} not recognized.")
         self.dump_meta()
 
+    def set_scale(
+        self,
+        image: str | Literal["*"],
+        axis_name: Literal["T", "C", "Z", "Y", "X"],
+        new_scale: float,
+    ):
+        """Set the scale for a named axis.
+        Either one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal[
+            Name of one image array (e.g. "0") to transform,
+            or "*" for the whole FOV
+        axis_name : Literal["T", "C", "Z", "Y", "X"]
+            Name of the axis to set.
+        new_scale : float
+            Value of the new scale.
+        """
+        if len(self.metadata.multiscales) > 1:
+            raise NotImplementedError(
+                "Cannot set scale for multi-resolution images."
+            )
+
+        if new_scale <= 0:
+            raise ValueError("New scale must be positive.")
+
+        axis_index = self.get_axis_index(axis_name)
+        self.zattrs["iohub:old_{axis_name}"] = self.scale[axis_index]
+
+        # Update scale while preserving existing transforms
+        current_transforms = (
+            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        )
+        for transform in current_transforms:
+            if transform.type == "scale":
+                transform.scale[axis_index] = new_scale
+                self.set_transform(image, current_transforms)
+
 
 class TiledPosition(Position):
     """Variant of the NGFF position node
