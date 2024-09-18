@@ -403,6 +403,36 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
         ]
 
 
+@given(
+    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
+)
+def test_set_scale(ch_shape_dtype):
+    channel_names, shape, dtype = ch_shape_dtype
+    transform = [
+        TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5)),
+        TransformationMeta(type="scale", scale=(5, 4, 3, 2, 1)),
+    ]
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        with open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
+        ) as dataset:
+            dataset.create_zeros(name="0", shape=shape, dtype=dtype)
+            dataset.set_transform(image="0", transform=transform)
+            dataset.set_scale(image="0", axis_name="z", new_scale=10.0)
+            assert dataset.scale[-3] == 10.0
+            assert (
+                dataset.metadata.multiscales[0]
+                .datasets[0]
+                .coordinate_transformations[0]
+                .translation[-1]
+                == 5
+            )
+
+            with pytest.raises(ValueError):
+                dataset.set_scale(image="0", axis_name="z", new_scale=-1.0)
+
+
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_create_tiled(channel_names):
