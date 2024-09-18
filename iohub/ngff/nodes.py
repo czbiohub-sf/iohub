@@ -976,6 +976,31 @@ class Position(NGFFNode):
                 scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
         return scale
 
+    @property
+    def axis_names(self) -> list[str]:
+        """
+        Helper function for axis names of the highest resolution scale.
+        """
+        return [axis.name for axis in self.metadata.multiscales[0].axes]
+
+    def get_axis_index(
+        self, axis_name: Literal["T", "C", "Z", "Y", "X"]
+    ) -> int:
+        """
+        Get the index of a given axis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the axis.
+
+        Returns
+        -------
+        int
+            Index of the axis.
+        """
+        return self.axis_names.index(axis_name)
+
     def set_transform(
         self,
         image: str | Literal["*"],
