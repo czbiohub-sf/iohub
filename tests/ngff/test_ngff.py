@@ -560,6 +560,22 @@ def test_get_channel_index(wrong_channel_name):
             _ = dataset.get_channel_index(wrong_channel_name)
 
 
+def test_get_axis_index():
+    with open_ome_zarr(hcs_ref, layout="hcs", mode="r+") as dataset:
+        position = dataset["B/03/0"]
+
+        assert position.axis_names == ["c", "z", "y", "x"]
+
+        assert position.get_axis_index("z") == 1
+        assert position.get_axis_index("Z") == 1
+
+        with pytest.raises(ValueError):
+            _ = position.get_axis_index("t")
+
+        with pytest.raises(ValueError):
+            _ = position.get_axis_index("DOG")
+
+
 @given(
     row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
 )
