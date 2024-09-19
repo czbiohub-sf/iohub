@@ -3,7 +3,6 @@ import zarr
 
 from iohub._deprecated.zarrfile import ZarrReader
 from iohub.reader import read_images
-
 from tests.conftest import mm2gamma_zarr_v01
 
 
