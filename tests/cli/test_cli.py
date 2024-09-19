@@ -128,7 +128,8 @@ def test_cli_set_scale():
             [
                 "set-scale",
                 "-i",
-                position_path,
+                str(position_path),
+                str(position_path),
                 "-z",
                 random_z,
                 "-y",
