@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
+from iohub import open_ome_zarr
 from iohub._version import __version__
 from iohub.cli.cli import cli
 from tests.conftest import (
@@ -13,6 +14,8 @@ from tests.conftest import (
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
 )
+
+from ..ngff.test_ngff import _temp_copy
 
 
 def pytest_generate_tests(metafunc):
@@ -106,64 +109,66 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     assert "Converting" in result.output
 
 
-def test_rename_wells_help():
+def test_cli_rename_wells_help():
     runner = CliRunner()
     cmd = ["rename-wells"]
     for option in ("-h", "--help"):
         cmd.append(option)
         result = runner.invoke(cli, cmd)
         assert result.exit_code == 0
-        assert "containing well names" in result.output
+        assert ">> iohub rename-wells" in result.output
 
 
-def test_rename_wells(tmpdir):
-    runner = CliRunner()
-    test_csv = tmpdir / "well_names.csv"
-    csv_data = [
-        ["B/03", "B/03test"],
-    ]
-    with open(test_csv, mode="w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerows(csv_data)
+def test_cli_rename_wells(tmpdir):
+    with _temp_copy(hcs_ref) as store_path:
+        runner = CliRunner()
+        test_csv = tmpdir / "well_names.csv"
+        csv_data = [
+            ["B/03", "D/4"],
+        ]
+        with open(test_csv, mode="w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerows(csv_data)
 
-    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv)]
-    result = runner.invoke(cli, cmd)
+        cmd = ["rename-wells", "-i", str(store_path), "-c", str(test_csv)]
+        result = runner.invoke(cli, cmd)
 
-    print(result.output)
-    assert result.exit_code == 0
+        assert result.exit_code == 0
+        assert "Renaming" in result.output
 
-    final_well_paths = None
+        with open_ome_zarr(store_path, mode="r") as plate:
+            well_names = [well[0] for well in plate.wells()]
+            assert "D/4" in well_names
+            assert "B/03" not in well_names
+            assert len(plate.metadata.wells) == 1
+            assert len(plate.metadata.rows) == 1
+            assert len(plate.metadata.columns) == 1
+            assert plate.metadata.wells[0].path == "D/4"
+            assert plate.metadata.rows[0].name == "D"
+            assert plate.metadata.columns[0].name == "4"
 
-    for line in result.output.split("\n"):
-        if line.startswith("Final well paths:"):
-            final_well_paths = eval(line.split(": ")[1])
-            break
+        # Test round trip
+        test_csv_2 = tmpdir / "well_names_2.csv"
+        csv_data = [
+            ["D/4", "B/03"],
+        ]
+        with open(test_csv_2, mode="w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerows(csv_data)
 
-    assert (
-        final_well_paths is not None
-    ), "Final well paths not found in the output"
+        cmd = ["rename-wells", "-i", store_path, "-c", str(test_csv_2)]
+        result = runner.invoke(cli, cmd)
 
-    new_well_paths = [row[1] for row in csv_data]
-    old_well_paths = [row[0] for row in csv_data]
+        with open_ome_zarr(store_path, mode="r") as plate:
+            well_names = [well[0] for well in plate.wells()]
+            assert "D/4" not in well_names
+            assert "B/03" in well_names
+            assert len(plate.metadata.wells) == 1
+            assert len(plate.metadata.rows) == 1
+            assert len(plate.metadata.columns) == 1
+            assert plate.metadata.wells[0].path == "B/03"
+            assert plate.metadata.rows[0].name == "B"
+            assert plate.metadata.columns[0].name == "03"
+        
 
-    for new_path in new_well_paths:
-        assert (
-            new_path in final_well_paths
-        ), f"Expected {new_path} in final well paths"
 
-    for old_path in old_well_paths:
-        assert (
-            old_path not in final_well_paths
-        ), f"Did not expect {old_path} in final well paths"
-    
-    test_csv_2 = tmpdir / "well_names_2.csv"
-    csv_data = [
-        ["B/03test", "B/03"],
-    ]
-    with open(test_csv_2, mode="w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerows(csv_data)
-
-    cmd = ["rename-wells", "-i", hcs_ref, "-c", str(test_csv_2)]
-    result = runner.invoke(cli, cmd)
-    print(result.output)
