@@ -107,20 +107,22 @@ def convert(input, output, grid_layout, chunks):
     "csvfile",
     type=click.File("r"),
     required=True,
-    help="Path to the CSV file containing well names.",
+    help="Path to the CSV file containing old and new well names.",
 )
-def rename_wells(csvfile, zarrfile):
-    rename_wells_cli(csvfile, zarrfile)
+def rename_wells(zarrfile, csvfile):
+    """Rename wells in an plate.
 
+    >> iohub rename-wells -i plate.zarr -c names.csv
 
-def rename_wells_cli(csvfile, zarrfile):
-    """Rename wells based on CSV file
-
-    The CSV file should have two columns: old_well_path and new_well_path.
+    The CSV file must have two columns with old and new names in the form:
+    ```
+    A/1,B/2
+    A/2,B/2
+    ```
     """
 
-    names = []
-
+    # read and check csv
+    name_pair_list = []
     csvreader = csv.reader(csvfile)
     for row in csvreader:
         if len(row) != 2:
@@ -128,30 +130,13 @@ def rename_wells_cli(csvfile, zarrfile):
                 f"Invalid row format: {row}."
                 f"Each row must have two columns."
             )
-        names.append([row[0], row[1]])
+        name_pair_list.append([row[0], row[1]])
 
+    # rename each well while catching errors
     with open_ome_zarr(zarrfile, mode="a") as plate:
-        well_paths = [well.path for well in plate.metadata.wells]
-        print(f"Initial well paths: {well_paths}")
-
-        modified = []
-
-        for old_well_path, new_well_path in names:
-            for well in plate.metadata.wells:
-                if (
-                    str(well.path) == str(old_well_path)
-                    and well not in modified
-                ):
-                    print(f"Renaming {old_well_path} to {new_well_path}...")
-                    try:
-                        plate.rename_well(well, old_well_path, new_well_path)
-                        modified.append(well)
-                        print(
-                            f"Well {old_well_path} renamed to {new_well_path}"
-                        )
-                    except ValueError as e:
-                        click.echo(f"Error: {e}", err=True)
-
-        print(
-            f"Final well paths: {[well.path for well in plate.metadata.wells]}"
-        )
+        for old, new in name_pair_list:
+            print(f"Renaming {old} to {new}")
+            try:
+                plate.rename_well(old, new)
+            except ValueError as e:
+                print(f"Error renaming {old} to {new}: {e}")
