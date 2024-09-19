@@ -1575,49 +1575,51 @@ class Plate(NGFFNode):
 
     def rename_well(
         self,
-        well,
-        old_well_path: str,
-        new_well_path: str,
+        old: str,
+        new: str,
     ):
-        """Rename a well.
+        """Rename a well. 
 
         Parameters
         ----------
-        old_well_path : str
-            Old name of well
-        new_well_path : str
-            New name of well
+        old : str
+            Old name of well, e.g. "A/1"
+        new : str
+            New name of well, e.g. "B/2"
         """
-        old_row, old_column = old_well_path.split("/")
-        new_row, new_column = new_well_path.split("/")
 
-        well_paths = [well.path for well in self.metadata.wells]
+        old_row, old_column = old.split("/")
+        new_row, new_column = new.split("/")
+        
+        # raises ValueError if old well does not exist
+        # or if new well already exists
+        self.zgroup.move(old, new)
 
-        if old_well_path not in well_paths:
-            raise ValueError(f"Well '{old_well_path}' not found in plate.")
+        # update well metadata
+        old_well_index = [well_name.path for well_name in self.metadata.wells].index(old)
+        self.metadata.wells[old_well_index].path = new
+        new_well_names = [well.path for well in self.metadata.wells]
 
-        elif old_well_path in well_paths:
-            well = next(
-                w for w in self.metadata.wells if w.path == old_well_path
-            )
+        # update row/col metadata
+        # check for new row/col        
+        if new_row not in [row.name for row in self.metadata.rows]:
+            self.metadata.rows.append(PlateAxisMeta(name=new_row))
+        if new_column not in [col.name for col in self.metadata.columns]:
+            self.metadata.columns.append(PlateAxisMeta(name=new_column))
 
-            if well.path == old_well_path:
-                well.path = new_well_path  # update well metadata
-                well.row_index = new_row
-                well.column_index = new_column
-                zarr.storage.rename(
-                    self.zgroup._store, old_well_path, new_well_path
-                )  # update well paths
+        # check for empty row/col
+        if old_row not in [well.split("/")[0] for well in new_well_names]:
+            # delete empty row from zarr
+            del self.zgroup[old_row] 
+            self.metadata.rows = [
+                row for row in self.metadata.rows if row.name != old_row
+            ]
+        if old_column not in [well.split("/")[1] for well in new_well_names]:
+            self.metadata.columns = [
+                col for col in self.metadata.columns if col.name != old_column
+            ]
 
-            for column in self.metadata.columns:
-                if column.name == old_column:
-                    column.name = new_column  # update column metadata
-
-            for row in self.metadata.rows:
-                if row.name == old_row:
-                    row.name = new_row  # update row metadata
-
-            self.dump_meta()
+        self.dump_meta()
 
 
 def open_ome_zarr(
