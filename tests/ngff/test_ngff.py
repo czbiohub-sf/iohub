@@ -182,9 +182,14 @@ def _temp_ome_zarr(
         dataset.close()
         temp_dir.cleanup()
 
+
 @contextmanager
 def _temp_ome_zarr_plate(
-    image_5d: NDArray, channel_names: list[str], arr_name: str, position_list: list[tuple[str, str, str]], **kwargs   
+    image_5d: NDArray,
+    channel_names: list[str],
+    arr_name: str,
+    position_list: list[tuple[str, str, str]],
+    **kwargs,
 ):
     """Helper function to generate a temporary OME-Zarr store.
 
@@ -208,7 +213,9 @@ def _temp_ome_zarr_plate(
             channel_names=channel_names,
         )
         for position in position_list:
-            pos = dataset.create_position(position[0], position[1], position[2])
+            pos = dataset.create_position(
+                position[0], position[1], position[2]
+            )
             pos.create_image(arr_name, image_5d, **kwargs)
         yield dataset
     finally:
@@ -323,6 +330,7 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
         assert new_channel in dataset.channel_names
         assert dataset.metadata.omero.channels[0].label == new_channel
 
+
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
@@ -332,7 +340,9 @@ def test_rename_well(channels_and_random_5d, arr_name):
     channel_names, random_5d = channels_and_random_5d
 
     position_list = [["A", "1", "0"], ["C", "4", "0"]]
-    with _temp_ome_zarr_plate(random_5d, channel_names, arr_name, position_list) as dataset:
+    with _temp_ome_zarr_plate(
+        random_5d, channel_names, arr_name, position_list
+    ) as dataset:
         assert dataset.zgroup["A/1"]
         with pytest.raises(KeyError):
             dataset.zgroup["B/2"]

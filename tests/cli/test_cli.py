@@ -169,6 +169,3 @@ def test_cli_rename_wells(tmpdir):
             assert plate.metadata.wells[0].path == "B/03"
             assert plate.metadata.rows[0].name == "B"
             assert plate.metadata.columns[0].name == "03"
-        
-
-

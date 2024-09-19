@@ -1578,7 +1578,7 @@ class Plate(NGFFNode):
         old: str,
         new: str,
     ):
-        """Rename a well. 
+        """Rename a well.
 
         Parameters
         ----------
@@ -1590,18 +1590,20 @@ class Plate(NGFFNode):
 
         old_row, old_column = old.split("/")
         new_row, new_column = new.split("/")
-        
+
         # raises ValueError if old well does not exist
         # or if new well already exists
         self.zgroup.move(old, new)
 
         # update well metadata
-        old_well_index = [well_name.path for well_name in self.metadata.wells].index(old)
+        old_well_index = [
+            well_name.path for well_name in self.metadata.wells
+        ].index(old)
         self.metadata.wells[old_well_index].path = new
         new_well_names = [well.path for well in self.metadata.wells]
 
         # update row/col metadata
-        # check for new row/col        
+        # check for new row/col
         if new_row not in [row.name for row in self.metadata.rows]:
             self.metadata.rows.append(PlateAxisMeta(name=new_row))
         if new_column not in [col.name for col in self.metadata.columns]:
@@ -1610,7 +1612,7 @@ class Plate(NGFFNode):
         # check for empty row/col
         if old_row not in [well.split("/")[0] for well in new_well_names]:
             # delete empty row from zarr
-            del self.zgroup[old_row] 
+            del self.zgroup[old_row]
             self.metadata.rows = [
                 row for row in self.metadata.rows if row.name != old_row
             ]
