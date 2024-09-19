@@ -1069,7 +1069,7 @@ class Position(NGFFNode):
             self.metadata.multiscales[0].datasets[0].coordinate_transformations
         )
         if current_transforms is None:
-            return
+            current_transforms = [TransformationMeta(type="scale")]
 
         for transform in current_transforms:
             if transform.type == "scale":
