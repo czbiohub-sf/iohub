@@ -20,7 +20,7 @@ def create_empty_plate(
     chunks: Tuple[int] = None,
     scale: Tuple[float] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
-    max_chunk_size_bytes=500e6,
+    max_chunk_size_bytes: float = 500e6,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
