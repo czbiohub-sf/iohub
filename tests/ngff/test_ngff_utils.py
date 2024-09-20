@@ -5,12 +5,11 @@ from tempfile import TemporaryDirectory
 import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from numpy.typing import DTypeLike
 
 from iohub.ngff import open_ome_zarr
-from iohub.ngff_utils import (
+from iohub.ngff.utils import (
     apply_transform_to_zyx_and_save,
-    create_empty_hcs_zarr,
+    create_empty_plate,
     process_single_position,
 )
 
@@ -69,7 +68,7 @@ def test_create_empty_hcs_zarr(
 ):
     with TemporaryDirectory() as temp_dir:
         output_zarr = Path(temp_dir) / "output.zarr"
-        create_empty_hcs_zarr(
+        create_empty_plate(
             store_path,
             output_zarr / position_keys_st,
             channel_names,
@@ -80,8 +79,8 @@ def test_create_empty_hcs_zarr(
         )
         assert os.path.isdir(output_zarr)
         with open_ome_zarr(store_path) as dataset:
-            assert dataset.attrs["channel_names"] == channel_names
-            position = dataset[*position_keys_st[0]]
+            assert dataset.zattrs["channel_names"] == channel_names
+            position = dataset[position_keys_st[0]]
             assert shape_st == position.data.shape
             assert position.chunks == chunks
             assert position.scale == scale
@@ -101,7 +100,7 @@ def test_create_empty_hcs_zarr(
 def test_apply_transform_to_zyx_and_save(channel_indices, t_idx, shape, dtype):
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "test.zarr"
-        create_empty_hcs_zarr(
+        create_empty_plate(
             store_path,
             [("A", "1", "0")],
             ["Channel1", "Channel2"],
@@ -157,14 +156,14 @@ def test_process_single_position(
     with TemporaryDirectory() as temp_dir:
         input_path = Path(temp_dir) / "input.zarr"
         output_path = Path(temp_dir) / "output.zarr"
-        create_empty_hcs_zarr(
+        create_empty_plate(
             input_path,
             [("A", "1", "0")],
             ["Channel1", "Channel2"],
             shape,
             dtype=dtype,
         )
-        create_empty_hcs_zarr(
+        create_empty_plate(
             output_path,
             [("A", "1", "0")],
             ["Channel1", "Channel2"],
