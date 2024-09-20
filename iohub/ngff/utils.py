@@ -117,15 +117,15 @@ def create_empty_plate(
             position.append_channel(channel_name, resize_arrays=True)
 
 
-def apply_transform_to_zyx_and_save(
+def apply_transform_to_czyx_and_save(
     func: Callable,
     position_key: str,
     input_store_path: Path,
     output_store_path: Path,
-    input_channel_indices: Union[list[slice], list[list[int]]],
-    output_channel_indices: Union[list[slice], list[list[int]]],
-    input_time_indices: int,
-    output_time_indices: int,
+    input_channel_indices: Union[list[int], slice],
+    output_channel_indices: Union[list[int], slice],
+    input_time_index: int,
+    output_time_index: int,
     **kwargs,
 ) -> None:
     """
@@ -143,25 +143,20 @@ def apply_transform_to_zyx_and_save(
         The path to input OME-Zarr Store.
     output_store_path : Path
         The path to output OME-Zarr Store.
-    input_channel_indices : Union[list[slice], list[list[int]]]
+    input_channel_indices : Union[list[int], slice]
         The channel indices to process. Acceptable values:
-        - A list of slices: [slice(0, 2), slice(2, 4), ...].
-        - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
-        If empty list, process all channels.
-    output_channel_indices : Union[list[slice], list[list[int]]]
+        - Slices: slice(0, 2).
+        - A list of integers: [0, 1, 2, 3, 4].
+    output_channel_indices : Union[list[int], slice]
         The channel indices to write to. Acceptable values:
-        - A list of slices: [slice(0, 2), slice(2, 4), ...].
-        - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
-        If empty list, write to all channels.
-    input_time_indices : int
+        - Slices: slice(0, 2).
+        - A list of integers: [0, 1, 2, 3, 4].
+    input_time_index : int
         The time index to process.
-    output_time_indices : int
+    output_time_index : int
         The time index to write to.
     kwargs : dict, optional
         Additional arguments to pass to the function.
-        A dictionary with key "extra_metadata" can be passed to
-        be stored at a FOV level, e.g.,
-        kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
 
     Examples
     --------
@@ -170,29 +165,23 @@ def apply_transform_to_zyx_and_save(
         func=some_function,
         position=some_position,
         output_store_path=Path("/path/to/output"),
-        input_channel_indices=[slice(0, 2), slice(2, 4)],
-        output_channel_indices=[[0], [1]],
-        input_time_indices=0,
-        output_time_indices=0,
+        input_channel_indices=slice(0, 2),
+        output_channel_indices=[0],
+        input_time_index=0,
+        output_time_index=0,
     )
 
-    Using list of lists for input_channel_indices:
+    Using list for input_channel_indices:
     apply_transform_to_zyx_and_save(
         func=some_function,
         position=some_position,
         output_store_path=Path("/path/to/output"),
-        input_channel_indices=[[0, 1], [2, 3]],
-        output_channel_indices=[[0], [1]],
-        input_time_indices=0,
-        output_time_indices=0,
+        input_channel_indices=[0, 1, 2, 3, 4],
+        output_channel_indices=[0, 1, 2],
+        input_time_index=0,
+        output_time_index=0,
     )
 
-    Notes
-    -----
-    - If input_channel_indices or output_channel_indices
-    contain nested lists, the indices should be integers.
-    - Ensure that the lengths of input_channel_indices and
-    output_channel_indices match if they are provided.
     """
 
     # TODO: temporary fix to slumkit issue
@@ -209,18 +198,18 @@ def apply_transform_to_zyx_and_save(
     # This is needed when a different processing is needed for each time point,
     # for example during stabilization
     all_func_params = inspect.signature(func).parameters.keys()
-    if "input_time_indices" in all_func_params:
-        kwargs["input_time_indices"] = input_time_indices
+    if "input_time_index" in all_func_params:
+        kwargs["input_time_index"] = input_time_index
 
     # Process CZYX given with the given indices
     # if input_channel_indices is not None and len(input_channel_indices) > 0:
     click.echo(
-        f"""Processing t={input_time_indices}
+        f"""Processing t={input_time_index}
         and channels {input_channel_indices}"""
     )
     input_dataset = open_ome_zarr(input_store_path / position_key)
     czyx_data = input_dataset.data.oindex[
-        input_time_indices, input_channel_indices
+        input_time_index, input_channel_indices
     ]
     if not _check_nan_n_zeros(czyx_data):
         transformed_czyx = func(czyx_data, **kwargs)
@@ -229,18 +218,16 @@ def apply_transform_to_zyx_and_save(
             output_store_path / position_key, mode="r+"
         ) as output_dataset:
             output_dataset[0].oindex[
-                output_time_indices, output_channel_indices
+                output_time_index, output_channel_indices
             ] = transformed_czyx
         click.echo(
-            f"Finished Writing.. t={input_time_indices} and \
+            f"Finished Writing.. t={input_time_index} and \
             channel output={output_channel_indices}"
         )
     else:
-        click.echo(f"Skipping t={input_time_indices} due to all zeros or nans")
+        click.echo(f"Skipping t={input_time_index} due to all zeros or nans")
 
 
-# TODO: modify how we get the time and channels like recOrder
-# (isinstance(input, list) or instance(input,int) or all)
 def process_single_position(
     func: Callable,
     position_key: str,
@@ -374,7 +361,7 @@ def process_single_position(
         zip(input_time_indices, output_time_indices),
     )
     partial_apply_transform_to_zyx_and_save = partial(
-        apply_transform_to_zyx_and_save,
+        apply_transform_to_czyx_and_save,
         func,
         position_key,
         input_store_path,

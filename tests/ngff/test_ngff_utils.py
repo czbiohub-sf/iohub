@@ -8,7 +8,7 @@ from hypothesis import strategies as st
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
-    apply_transform_to_zyx_and_save,
+    apply_transform_to_czyx_and_save,
     create_empty_plate,
     process_single_position,
 )
@@ -112,7 +112,7 @@ def test_apply_transform_to_zyx_and_save(channel_indices, t_idx, shape, dtype):
             return data * 2
 
         position = open_ome_zarr(store_path)["A/1/0"]
-        apply_transform_to_zyx_and_save(
+        apply_transform_to_czyx_and_save(
             dummy_transform,
             position,
             store_path,
