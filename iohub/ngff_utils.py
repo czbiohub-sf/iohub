@@ -43,11 +43,11 @@ def create_empty_plate(
     shape : Tuple[int]
         TCZYX shape of the plate.
     chunks : Tuple[int], optional
-        Chunk size for the plate TCZYX. If None,
-        the chunk size is calculated based on the shape to be <500MB.
+        TCZYX chunk size of the plate. If None, the chunk size is calculated
+        based on the shape to be less than max_chunk_size_bytes.
         Defaults to None.
     scale : Tuple[float], optional
-        Scale of the plate TCZYX. Defaults to (1, 1, 1, 1, 1).
+        TCZYX scale of the plate. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
         Data type of the plate. Defaults to np.float32.
     max_chunk_size_bytes : float, optional
@@ -80,19 +80,14 @@ def create_empty_plate(
     - The function ensures that positions and channels are appended to an
     existing plate if they are not already present.
     """
-    bytes_per_pixel = np.dtype(dtype).itemsize
 
     # Limiting the chunking to 500MB
     if chunks is None:
-        chunk_zyx_shape = list(shape[-3:])
-        # XY image is larger than MAX_CHUNK_SIZE
-        while (
-            chunk_zyx_shape[-3] > 1
-            and np.prod(chunk_zyx_shape) * bytes_per_pixel
-            > max_chunk_size_bytes
-        ):
-            chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2).astype(int)
-        chunk_zyx_shape = tuple(chunk_zyx_shape)
+        chunk_zyx_shape = _calculate_zyx_chunk_size(
+            shape,
+            np.dtype(dtype).itemsize,
+            max_chunk_size_bytes,
+        )
 
         chunks = 2 * (1,) + chunk_zyx_shape
 
@@ -456,3 +451,22 @@ def _check_nan_n_zeros(input_array):
 
     # Return false
     return False
+
+
+def _calculate_zyx_chunk_size(shape, bytes_per_pixel, max_chunk_size_bytes):
+    """
+    Calculate the chunk size for ZYX dimensions based on the shape,
+    bytes per pixel of data, and desired max chunk size.
+    """
+    
+    chunk_zyx_shape = list(shape[-3:])
+
+    # while XY image is larger than MAX_CHUNK_SIZE
+    while (
+        chunk_zyx_shape[-3] > 1
+        and np.prod(chunk_zyx_shape) * bytes_per_pixel
+        > max_chunk_size_bytes
+    ):
+        chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2).astype(int)
+    chunk_zyx_shape = tuple(chunk_zyx_shape)
+    return chunk_zyx_shape
