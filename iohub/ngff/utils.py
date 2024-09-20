@@ -1,4 +1,5 @@
 import inspect
+import itertools
 import multiprocessing as mp
 from functools import partial
 from pathlib import Path
@@ -277,14 +278,14 @@ def process_single_position(
     input_channel_indices : Union[list[slice], list[list[int]]], optional
         The channel indices to process. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
-        - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
+        - A list of lists of integers: [[0, 1, 2, 3, 4]].
         If empty, process all channels.
         Must match output_channel_indices if not empty.
         Defaults to an empty list.
     output_channel_indices : Union[list[slice], list[list[int]]], optional
         The channel indices to write to. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
-        - A list of lists of integers: [[0], [1], [2, 3, 4], ...].
+        - A list of lists of integers: [[0, 1, 2, 3, 4]].
         If empty, write to all channels.
         Must match input_channel_indices if not empty.
         Defaults to an empty list.
@@ -362,60 +363,23 @@ def process_single_position(
             the dataset = {time_ubound}"""
         )
 
-    # Check the arguments for the function
-    all_func_params = inspect.signature(func).parameters.keys()
-    # Extract the relevant kwargs for the function 'func'
-    func_args = {}
-    non_func_args = {}
-
-    for k, v in kwargs.items():
-        if k in all_func_params:
-            func_args[k] = v
-        else:
-            non_func_args[k] = v
-
-    # Write the settings into the metadata if existing
-    if "extra_metadata" in non_func_args:
-        # For each dictionary in the nest
-        with open_ome_zarr(output_store_path, mode="r+") as output_dataset:
-            for params_metadata_keys in kwargs["extra_metadata"].keys():
-                output_dataset.zattrs["extra_metadata"] = non_func_args[
-                    "extra_metadata"
-                ]
+    # Write extra metadata to the output store
+    extra_metadata = kwargs.pop("extra_metadata", None)
+    with open_ome_zarr(output_store_path, mode="r+") as output_dataset:
+        output_dataset.zattrs["extra_metadata"] = extra_metadata
 
     # Loop through (T, C), applying transform and writing as we go
-    click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
-
-    # if input_channel_indices is None or len(input_channel_indices) == 0:
-    #     # If C is not empty, use itertools.product with both ranges
-    #     iterable = [
-    #         ([c], [c], time_idx, time_idx_out)
-    #         for (time_idx, time_idx_out), c in itertools.product(
-    #             zip(input_time_indices, output_time_indices),
-    #             range(input_data_shape[1]),
-    #         )
-    #     ]
-    #     partial_apply_transform_to_zyx_and_save = partial(
-    #         apply_transform_to_zyx_and_save,
-    #         func,
-    #         position_key,
-    #         input_store_path,
-    #         output_store_path,
-    #         **func_args,
-    #     )
-    # else:
-
-    # TODO make sure the iterable is correct
-    iterable = list(zip(input_time_indices, output_time_indices))
+    iterable = itertools.product(
+        zip(input_channel_indices, output_channel_indices),
+        zip(input_time_indices, output_time_indices),
+    )
     partial_apply_transform_to_zyx_and_save = partial(
         apply_transform_to_zyx_and_save,
         func,
         position_key,
         input_store_path,
         output_store_path,
-        input_channel_indices,
-        output_channel_indices,
-        **func_args,
+        **kwargs,
     )
 
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
