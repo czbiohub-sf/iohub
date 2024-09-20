@@ -355,7 +355,7 @@ def process_single_position(
         zip(input_channel_indices, output_channel_indices),
         zip(input_time_indices, output_time_indices),
     )
-    flat_iterable = ((a[0], a[1], b[0], b[1]) for a, b in iterable)
+    flat_iterable = ((*c, *t) for c, t in iterable)
 
     partial_apply_transform_to_czyx_and_save = partial(
         apply_transform_to_czyx_and_save,
