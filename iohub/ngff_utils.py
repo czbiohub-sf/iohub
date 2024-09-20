@@ -1,11 +1,9 @@
-import contextlib
 import inspect
-import io
 import itertools
 import multiprocessing as mp
 from functools import partial
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 import click
 import numpy as np
@@ -120,8 +118,9 @@ def create_empty_plate(
 
 
 def apply_transform_to_zyx_and_save(
-    func,
-    position: Position,
+    func: Callable,
+    position_key: str,
+    input_store_path: Path,
     output_store_path: Path,
     channel_indices_in: Union[list[slice], list[list[int]]],
     channel_indices_out: Union[list[slice], list[list[int]]],
@@ -138,8 +137,10 @@ def apply_transform_to_zyx_and_save(
     func : Callable
         The function to be applied to the data.
         Should take a CZYX array and return a transformed CZYX array.
-    position : Position
-        The position object to read from.
+    position_key : str
+        The label of the position to process, e.g. "A/1/0".
+    input_store_path : Path
+        The path to input OME-Zarr Store.
     output_store_path : Path
         The path to output OME-Zarr Store.
     channel_indices_in : Union[list[slice], list[list[int]]]
@@ -216,11 +217,12 @@ def apply_transform_to_zyx_and_save(
     click.echo(
         f"Processing t={time_indices_in} and channels {channel_indices_in}"
     )
-    czyx_data = position.data.oindex[time_indices_in, channel_indices_in]
+    input_dataset = open_ome_zarr(input_store_path / position_key)
+    czyx_data = input_dataset.data.oindex[time_indices_in, channel_indices_in]
     if not _check_nan_n_zeros(czyx_data):
         transformed_czyx = func(czyx_data, **kwargs)
         # Write to file
-        with open_ome_zarr(output_store_path, mode="r+") as output_dataset:
+        with open_ome_zarr(output_store_path / position_key, mode="r+") as output_dataset:
             output_dataset[0].oindex[
                 time_indices_out, channel_indices_out
             ] = transformed_czyx
@@ -235,8 +237,9 @@ def apply_transform_to_zyx_and_save(
 # TODO: modify how we get the time and channesl like recOrder
 # (isinstance(input, list) or instance(input,int) or all)
 def process_single_position(
-    func,
-    input_position_path: Path,
+    func: Callable,
+    position_key: str,
+    input_store_path: Path,
     output_store_path: Path,
     channel_indices_in: Union[list[slice], list[list[int]]] = [],
     channel_indices_out: Union[list[slice], list[list[int]]] = [],
@@ -255,8 +258,10 @@ def process_single_position(
     func :CZYX -> CZYX Callable
         The function to be applied to the data.
         Should take a CZYX array and return a transformed CZYX array.
+    position_key : str
+        The label of the position to process, e.g. "A/1/0".
     input_position_path : Path
-        The path to the input Position (e.g., input_position_path.zarr/0/0/0).
+        The path to the input OME-Zarr store (e.g., input_store_path.zarr).
     output_store_path : Path
         The path to the output OME-Zarr store (e.g., output_store_path.zarr).
     time_indices_in : Union[list[Union[int, slice]], int], optional
@@ -323,23 +328,20 @@ def process_single_position(
     """
     # Function to be applied
     click.echo(f"Function to be applied: \t{func}")
+    click.echo(f"Input data path:\t{input_store_path}")
+    click.echo(f"Output data path:\t{output_store_path}")
 
     # Get the reader and writer
-    click.echo(f"Input data path:\t{input_position_path}")
-    click.echo(f"Output data path:\t{str(output_store_path)}")
-    input_dataset = open_ome_zarr(str(input_position_path))
-    stdout_buffer = io.StringIO()
-    with contextlib.redirect_stdout(stdout_buffer):
-        input_dataset.print_tree()
-    click.echo(f" Input data tree: {stdout_buffer.getvalue()}")
+    with open_ome_zarr(input_store_path / position_key) as input_dataset:
+        input_data_shape = input_dataset.data.shape
 
     # Find time indices
     if time_indices_in == "all":
-        time_indices_in = range(input_dataset.data.shape[0])
+        time_indices_in = range(input_data_shape[0])
         time_indices_out = time_indices_in
     elif isinstance(time_indices_in, list):
         # Check for invalid times
-        time_ubound = input_dataset.data.shape[0] - 1
+        time_ubound = input_data_shape[0] - 1
         if np.max(time_indices_in) > time_ubound:
             raise ValueError(
                 f"time_indices_in = {time_indices_in} includes \
@@ -372,23 +374,23 @@ def process_single_position(
                     "extra_metadata"
                 ]
 
-    # Loop through (T, C), deskewing and writing as we go
+    # Loop through (T, C), applying transform and writing as we go
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
 
     if channel_indices_in is None or len(channel_indices_in) == 0:
         # If C is not empty, use itertools.product with both ranges
-        _, C, _, _, _ = input_dataset.data.shape
         iterable = [
             ([c], [c], time_idx, time_idx_out)
             for (time_idx, time_idx_out), c in itertools.product(
-                zip(time_indices_in, time_indices_out), range(C)
+                zip(time_indices_in, time_indices_out), range(input_data_shape[1])
             )
         ]
         partial_apply_transform_to_zyx_and_save = partial(
             apply_transform_to_zyx_and_save,
             func,
-            input_dataset,
-            output_store_path / Path(*input_position_path.parts[-3:]),
+            position_key,
+            input_store_path,
+            output_store_path,
             **func_args,
         )
     else:
@@ -397,8 +399,9 @@ def process_single_position(
         partial_apply_transform_to_zyx_and_save = partial(
             apply_transform_to_zyx_and_save,
             func,
-            input_dataset,
-            output_store_path / Path(*input_position_path.parts[-3:]),
+            position_key,
+            input_store_path,
+            output_store_path,
             channel_indices_in,
             channel_indices_out,
             **func_args,
@@ -458,7 +461,7 @@ def _calculate_zyx_chunk_size(shape, bytes_per_pixel, max_chunk_size_bytes):
     Calculate the chunk size for ZYX dimensions based on the shape,
     bytes per pixel of data, and desired max chunk size.
     """
-    
+
     chunk_zyx_shape = list(shape[-3:])
 
     # while XY image is larger than MAX_CHUNK_SIZE
