@@ -9,7 +9,7 @@ import click
 import numpy as np
 from numpy.typing import DTypeLike
 
-from iohub.ngff import Position, open_ome_zarr
+from iohub.ngff import open_ome_zarr
 from iohub.ngff_meta import TransformationMeta
 
 
@@ -222,7 +222,9 @@ def apply_transform_to_zyx_and_save(
     if not _check_nan_n_zeros(czyx_data):
         transformed_czyx = func(czyx_data, **kwargs)
         # Write to file
-        with open_ome_zarr(output_store_path / position_key, mode="r+") as output_dataset:
+        with open_ome_zarr(
+            output_store_path / position_key, mode="r+"
+        ) as output_dataset:
             output_dataset[0].oindex[
                 time_indices_out, channel_indices_out
             ] = transformed_czyx
@@ -382,7 +384,8 @@ def process_single_position(
         iterable = [
             ([c], [c], time_idx, time_idx_out)
             for (time_idx, time_idx_out), c in itertools.product(
-                zip(time_indices_in, time_indices_out), range(input_data_shape[1])
+                zip(time_indices_in, time_indices_out),
+                range(input_data_shape[1]),
             )
         ]
         partial_apply_transform_to_zyx_and_save = partial(
@@ -467,8 +470,7 @@ def _calculate_zyx_chunk_size(shape, bytes_per_pixel, max_chunk_size_bytes):
     # while XY image is larger than MAX_CHUNK_SIZE
     while (
         chunk_zyx_shape[-3] > 1
-        and np.prod(chunk_zyx_shape) * bytes_per_pixel
-        > max_chunk_size_bytes
+        and np.prod(chunk_zyx_shape) * bytes_per_pixel > max_chunk_size_bytes
     ):
         chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2).astype(int)
     chunk_zyx_shape = tuple(chunk_zyx_shape)
