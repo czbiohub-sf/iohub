@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import DTypeLike
 
 from iohub.ngff import open_ome_zarr
-from iohub.ngff_meta import TransformationMeta
+from iohub.ngff.nodes import TransformationMeta
 
 
 def create_empty_plate(
