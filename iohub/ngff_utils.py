@@ -269,15 +269,12 @@ def process_single_position(
         The path to the input OME-Zarr store (e.g., input_store_path.zarr).
     output_store_path : Path
         The path to the output OME-Zarr store (e.g., output_store_path.zarr).
-    input_time_indices : Union[list[Union[int, slice]], int], optional
-        The time indices to process. Acceptable values:
-        - A list of slices: [slice(0, 2), slice(2, 4), ...].
-        - A single integer: 0, 1, ...
+    input_time_indices : list[int], optional
         If not provided, all timepoints will be processed.
     output_time_indices : list[int], optional
         The time indices to write to. Must match length of input_time_indices.
         Typically used for stabilization, which needs per timepoint processing.
-        Defaults to an empty list.
+        If not provided, input_time_indices will be used.
     input_channel_indices : Union[list[slice], list[list[int]]], optional
         The channel indices to process. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
@@ -308,7 +305,7 @@ def process_single_position(
         func=some_function,
         input_position_path=Path("/path/to/input"),
         output_store_path=Path("/path/to/output"),
-        input_time_indices=[slice(1, 2), slice(2, 3)],
+        input_time_indices=[0],
         input_channel_indices=[slice(0, 2), slice(2, 4)],
         output_channel_indices=[[0], [1]],
     )
@@ -318,7 +315,7 @@ def process_single_position(
         func=some_function,
         input_position_path=Path("/path/to/input"),
         output_store_path=Path("/path/to/output"),
-        input_time_indices=[slice(1, 2), slice(2, 3)],
+        input_time_indices=[1, 2],
         input_channel_indices=[[0, 1], [2, 3]],
         output_channel_indices=[[0], [1]],
     )
