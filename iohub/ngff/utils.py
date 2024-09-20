@@ -211,7 +211,7 @@ def apply_transform_to_zyx_and_save(
     if "input_time_indices" in all_func_params:
         kwargs["input_time_indices"] = input_time_indices
 
-    # Process CZYX given with the given indeces
+    # Process CZYX given with the given indices
     # if input_channel_indices is not None and len(input_channel_indices) > 0:
     click.echo(
         f"""Processing t={input_time_indices}
@@ -238,7 +238,7 @@ def apply_transform_to_zyx_and_save(
         click.echo(f"Skipping t={input_time_indices} due to all zeros or nans")
 
 
-# TODO: modify how we get the time and channesl like recOrder
+# TODO: modify how we get the time and channels like recOrder
 # (isinstance(input, list) or instance(input,int) or all)
 def process_single_position(
     func: Callable,
@@ -259,7 +259,7 @@ def process_single_position(
 
     Parameters
     ----------
-    func :CZYX -> CZYX Callable
+    func : CZYX -> CZYX Callable
         The function to be applied to the data.
         Should take a CZYX array and return a transformed CZYX array.
     position_key : str
