@@ -1,5 +1,4 @@
 import inspect
-import itertools
 import multiprocessing as mp
 from functools import partial
 from pathlib import Path
@@ -246,8 +245,8 @@ def process_single_position(
     position_key: str,
     input_store_path: Path,
     output_store_path: Path,
-    input_channel_indices: Union[list[slice], list[list[int]]] = [],
-    output_channel_indices: Union[list[slice], list[list[int]]] = [],
+    input_channel_indices: Union[list[slice], list[list[int]]] = None,
+    output_channel_indices: Union[list[slice], list[list[int]]] = None,
     input_time_indices: list[int] = None,
     output_time_indices: list[int] = None,
     num_processes: int = 1,
@@ -332,7 +331,7 @@ def process_single_position(
     click.echo(f"Input data path:\t{input_store_path}")
     click.echo(f"Output data path:\t{output_store_path}")
 
-    # Get the reader and writer
+    # Get the reader
     with open_ome_zarr(input_store_path / position_key) as input_dataset:
         input_data_shape = input_dataset.data.shape
 
@@ -340,10 +339,19 @@ def process_single_position(
     if input_time_indices is None:
         input_time_indices = list(range(input_data_shape[0]))
         output_time_indices = input_time_indices
-
     assert input_time_indices is list, "input_time_indices must be a list"
     if output_time_indices is None:
         output_time_indices = input_time_indices
+
+    # Process channel indices
+    if input_channel_indices is None:
+        input_channel_indices = [[c] for c in range(input_data_shape[1])]
+        output_channel_indices = input_channel_indices
+    assert (
+        input_channel_indices is list
+    ), "input_channel_indices must be a list"
+    if output_channel_indices is None:
+        output_channel_indices = input_channel_indices
 
     # Check for invalid times
     time_ubound = input_data_shape[0] - 1
@@ -378,36 +386,37 @@ def process_single_position(
     # Loop through (T, C), applying transform and writing as we go
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
 
-    if input_channel_indices is None or len(input_channel_indices) == 0:
-        # If C is not empty, use itertools.product with both ranges
-        iterable = [
-            ([c], [c], time_idx, time_idx_out)
-            for (time_idx, time_idx_out), c in itertools.product(
-                zip(input_time_indices, output_time_indices),
-                range(input_data_shape[1]),
-            )
-        ]
-        partial_apply_transform_to_zyx_and_save = partial(
-            apply_transform_to_zyx_and_save,
-            func,
-            position_key,
-            input_store_path,
-            output_store_path,
-            **func_args,
-        )
-    else:
-        # If C is empty, use only the range for input_time_indices
-        iterable = list(zip(input_time_indices, output_time_indices))
-        partial_apply_transform_to_zyx_and_save = partial(
-            apply_transform_to_zyx_and_save,
-            func,
-            position_key,
-            input_store_path,
-            output_store_path,
-            input_channel_indices,
-            output_channel_indices,
-            **func_args,
-        )
+    # if input_channel_indices is None or len(input_channel_indices) == 0:
+    #     # If C is not empty, use itertools.product with both ranges
+    #     iterable = [
+    #         ([c], [c], time_idx, time_idx_out)
+    #         for (time_idx, time_idx_out), c in itertools.product(
+    #             zip(input_time_indices, output_time_indices),
+    #             range(input_data_shape[1]),
+    #         )
+    #     ]
+    #     partial_apply_transform_to_zyx_and_save = partial(
+    #         apply_transform_to_zyx_and_save,
+    #         func,
+    #         position_key,
+    #         input_store_path,
+    #         output_store_path,
+    #         **func_args,
+    #     )
+    # else:
+
+    # TODO make sure the iterable is correct
+    iterable = list(zip(input_time_indices, output_time_indices))
+    partial_apply_transform_to_zyx_and_save = partial(
+        apply_transform_to_zyx_and_save,
+        func,
+        position_key,
+        input_store_path,
+        output_store_path,
+        input_channel_indices,
+        output_channel_indices,
+        **func_args,
+    )
 
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
     with mp.Pool(num_processes) as p:
