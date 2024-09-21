@@ -110,11 +110,11 @@ def create_empty_plate(
         else:
             position = output_plate[position_key_string]
 
-    # Check if channel_names are already in the store, if not append them
-    for channel_name in channel_names:
-        metadata_channel_names = position.channel_names
-        if channel_name not in metadata_channel_names:
-            position.append_channel(channel_name, resize_arrays=True)
+        # Check if channel_names are already in the store, if not append them
+        for channel_name in channel_names:
+            metadata_channel_names = position.channel_names
+            if channel_name not in metadata_channel_names:
+                position.append_channel(channel_name, resize_arrays=True)
 
 
 def apply_transform_to_czyx_and_save(
