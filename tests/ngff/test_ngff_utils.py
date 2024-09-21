@@ -343,6 +343,52 @@ def verify_transformation(
                 )
 
 
+@given(plate_setup=plate_setup())
+@settings(max_examples=5)
+def test_create_empty_plate(plate_setup):
+    position_keys, channel_names, shape, chunks, scale, dtype = plate_setup
+
+    with TemporaryDirectory() as temp_dir:
+        store_path = Path(temp_dir) / "test.zarr"
+
+        # Call the function under test
+        create_empty_plate(
+            store_path=store_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            chunks=chunks,
+            scale=scale,
+            dtype=dtype,
+        )
+
+        # Verify the store was created
+        assert store_path.exists()
+
+        # Open the store and verify its contents
+        with open_ome_zarr(store_path) as dataset:
+            # Verify channel names
+            assert dataset.channel_names == channel_names
+
+            # Verify positions
+            for position_key_tuple in position_keys:
+                position_path = "/".join(position_key_tuple)
+                position = dataset[position_path]
+
+                # Check shape
+                assert position.data.shape == shape
+
+                # Check chunks if provided
+                if chunks is not None:
+                    assert position.data.chunks == chunks
+                else:
+                    assert position.data.chunks == (1, 1) + tuple(shape[-3:])
+
+                # Check dtype
+                assert position.data.dtype == dtype
+                assert position.scale == scale
+
+
 @given(
     setup=process_single_position_setup(),
     constant=st.integers(min_value=1, max_value=5),
