@@ -476,7 +476,7 @@ def test_create_empty_plate(plate_setup, extra_channels):
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),
 )
-@settings(max_examples=1, deadline=1200)
+@settings(max_examples=3, deadline=1200)
 def test_apply_transform_to_zyx_and_save(setup, constant):
     (
         position_keys,
@@ -522,17 +522,17 @@ def test_apply_transform_to_zyx_and_save(setup, constant):
                     **kwargs,
                 )
 
-        # Verify the transformation
-        verify_transformation(
-            input_store_path,
-            output_store_path,
-            position_key_tuple,
-            shape,
-            time_indices,
-            channel_indices,
-            dummy_transform,
-            **kwargs,
-        )
+            # Verify the transformation
+            verify_transformation(
+                input_store_path,
+                output_store_path,
+                position_key_tuple,
+                shape,
+                time_indices,
+                channel_indices,
+                dummy_transform,
+                **kwargs,
+            )
 
 
 @given(
@@ -566,35 +566,32 @@ def test_process_single_position(setup, constant, num_processes):
         populate_store(input_store_path, position_keys, shape, dtype)
 
         # Choose a single position to process (e.g., the first one)
-        position_key_tuple = position_keys[0]
-        input_position_path = Path(input_store_path) / Path(
-            *position_key_tuple
-        )
-        output_position_path = Path(output_store_path) / Path(
-            *position_key_tuple
-        )
+        for position_key_tuple in position_keys:
+            input_position_path = input_store_path / Path(*position_key_tuple)
+            output_position_path = output_store_path / Path(
+                *position_key_tuple
+            )
+            kwargs = {"constant": constant, "extra_metadata": {"temp": 10}}
 
-        kwargs = {"constant": constant, "extra_metadata": {"temp": 10}}
+            # Apply the transformation using process_single_position
+            process_single_position(
+                func=dummy_transform,
+                input_position_path=input_position_path,
+                output_position_path=output_position_path,
+                input_channel_indices=channel_indices,
+                output_channel_indices=channel_indices,
+                input_time_indices=time_indices,
+                output_time_indices=time_indices,
+                num_processes=num_processes,
+                **kwargs,
+            )
 
-        # Apply the transformation using process_single_position
-        process_single_position(
-            func=dummy_transform,
-            input_position_path=input_position_path,
-            output_position_path=output_position_path,
-            input_channel_indices=channel_indices,
-            output_channel_indices=channel_indices,
-            input_time_indices=time_indices,
-            output_time_indices=time_indices,
-            num_processes=num_processes,
-            **kwargs,
-        )
-
-        # Verify the transformation
-        verify_transformation(
-            input_store_path,
-            output_store_path,
-            position_key_tuple,
-            shape,
-            dummy_transform,
-            **kwargs,
-        )
+            # Verify the transformation
+            verify_transformation(
+                input_store_path,
+                output_store_path,
+                position_key_tuple,
+                shape,
+                dummy_transform,
+                **kwargs,
+            )
