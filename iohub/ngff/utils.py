@@ -184,14 +184,14 @@ def apply_transform_to_czyx_and_save(
     """
 
     # TODO: temporary fix to slumkit issue
-    if _is_nested(input_channel_indices):
-        input_channel_indices = [
-            int(x) for x in input_channel_indices if x.isdigit()
-        ]
-    if _is_nested(output_channel_indices):
-        output_channel_indices = [
-            int(x) for x in output_channel_indices if x.isdigit()
-        ]
+    # if _is_nested(input_channel_indices):
+    #     input_channel_indices = [
+    #         int(x) for x in input_channel_indices if x.isdigit()
+    #     ]
+    # if _is_nested(output_channel_indices):
+    #     output_channel_indices = [
+    #         int(x) for x in output_channel_indices if x.isdigit()
+    #     ]
 
     # Check if input_time_indices should be added to the func kwargs
     # This is needed when a different processing is needed for each time point,
