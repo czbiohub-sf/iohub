@@ -1,3 +1,4 @@
+import itertools
 import string
 from contextlib import contextmanager
 from pathlib import Path
@@ -170,7 +171,7 @@ def plate_setup(draw):
     )
 
     # Generate number of channels
-    num_channels = draw(st.integers(min_value=1, max_value=5))
+    num_channels = draw(st.integers(min_value=1, max_value=3))
 
     # Generate channel names based on the number of channels
     channel_names = [f"Channel_{i}" for i in range(num_channels)]
@@ -189,9 +190,9 @@ def plate_setup(draw):
         st.one_of(
             st.none(),
             st.tuples(
-                st.integers(min_value=1, max_value=min(5, T)),  # T
-                st.integers(min_value=1, max_value=min(5, num_channels)),  # C
-                st.integers(min_value=1, max_value=min(5, Z)),  # Z
+                st.integers(min_value=1, max_value=min(3, T)),  # T
+                st.integers(min_value=1, max_value=min(3, num_channels)),  # C
+                st.integers(min_value=1, max_value=min(3, Z)),  # Z
                 st.integers(min_value=1, max_value=min(5, Y)),  # Y
                 st.integers(min_value=1, max_value=min(5, X)),  # X
             ),
@@ -308,21 +309,35 @@ def process_single_position_setup(draw):
     # Define a helper strategy to generate channel indices based on C
     channel_indices_strategy = st.one_of(
         st.none(),
-        # st.lists(st.slices(size=C + 1), min_size=1, max_size=min(3, C)),
-        # st.lists(
-        #     st.lists(st.integers(min_value=0, max_value=C - 1)),
-        #     min_size=1,
-        #     max_size=min(3, C),
-        # ),
+        st.lists(
+            st.builds(
+                slice,
+                st.integers(min_value=0, max_value=0),
+                st.integers(min_value=1, max_value=C),
+                st.just(1),
+            ),
+            min_size=1,
+            max_size=min(3, C),
+        ),
+        st.lists(
+            st.lists(
+                st.integers(min_value=0, max_value=C - 1),
+                min_size=1,
+                max_size=C,
+                # ensure each inner list has one element),
+            ),
+            min_size=1,
+            max_size=min(3, C),
+        ),
     )
 
     time_indices_strategy = st.one_of(
         st.none(),
-        # st.lists(
-        #     st.integers(min_value=0, max_value=T - 1),
-        #     min_size=1,
-        #     max_size=min(3, T),
-        # ),
+        st.lists(
+            st.integers(min_value=0, max_value=T - 1),
+            min_size=1,
+            max_size=min(3, T),
+        ),
     )
 
     # Generate input and output channel indices based on C
@@ -388,8 +403,18 @@ def verify_transformation(
         input_position = input_dataset[position_key_tuple]
         output_position = output_dataset[position_key_tuple]
 
+        # Extract extra metadata if provided
+        extra_metadata = kwargs.pop("extra_metadata", None)
+
+        # Check if extra_metadata is provided
+        if extra_metadata is not None:
+            assert output_position.zattrs["extra_metadata"] == extra_metadata
+
+        # Check the transformation for each time point and channel
         input_data = input_position.data.oindex[time_indices, channel_indices]
-        output_data = output_position.data
+        output_data = output_position.data.oindex[
+            time_indices, channel_indices
+        ]
         expected_data = transform_func(input_data, **kwargs)
 
         np.testing.assert_array_almost_equal(
@@ -473,7 +498,7 @@ def test_create_empty_plate(plate_setup, extra_channels):
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),
 )
-@settings(max_examples=3, deadline=1200)
+@settings(max_examples=5, deadline=1200)
 def test_apply_transform_to_zyx_and_save(setup, constant):
     (
         position_keys,
@@ -534,11 +559,11 @@ def test_apply_transform_to_zyx_and_save(setup, constant):
 
 @given(
     setup=process_single_position_setup(),
-    # constant=st.integers(min_value=1, max_value=5),
-    # num_processes=st.integers(min_value=1, max_value=4),
+    constant=st.integers(min_value=1, max_value=3),
+    num_processes=st.integers(min_value=1, max_value=3),
 )
-@settings(max_examples=3, deadline=1200)
-def test_process_single_position(setup):
+@settings(max_examples=3, deadline=2000)
+def test_process_single_position(setup, constant, num_processes):
     # def test_process_single_position(setup, constant, num_processes):
     (
         position_keys,
@@ -550,10 +575,6 @@ def test_process_single_position(setup):
         channel_indices,
         time_indices,
     ) = setup
-
-    # DEBUG
-    num_processes = 1
-    constant = 1
 
     # Use the enhanced context manager to get both input and output store paths
     with _temp_ome_zarr_stores(
@@ -588,15 +609,24 @@ def test_process_single_position(setup):
                 **kwargs,
             )
 
+            # Handle None for process_single_position_setup
+            if time_indices is None:
+                time_indices = list(range(shape[0]))
+            if channel_indices is None:
+                channel_indices = [[c] for c in range(shape[1])]
+
+            print("time_indices", time_indices)
+            print("channel_indices", channel_indices)
             # Verify the transformation
-            # DEBUG: skip
-            # verify_transformation(
-            #     input_store_path,
-            #     output_store_path,
-            #     position_key_tuple,
-            #     shape,
-            #     time_indices,
-            #     channel_indices,
-            #     dummy_transform,
-            #     **kwargs,
-            # )
+            iterable = itertools.product(time_indices, channel_indices)
+            for t_idx, chan_idx in iterable:
+                verify_transformation(
+                    input_store_path,
+                    output_store_path,
+                    position_key_tuple,
+                    shape,
+                    t_idx,
+                    chan_idx,
+                    dummy_transform,
+                    **kwargs,
+                )

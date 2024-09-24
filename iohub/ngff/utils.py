@@ -1,5 +1,6 @@
 import inspect
 import itertools
+import multiprocessing as mp
 from functools import partial
 from pathlib import Path
 from typing import Callable, Tuple, Union
@@ -364,17 +365,15 @@ def process_single_position(
         **kwargs,
     )
 
-    # DEBUG: Run without multiprocessing
-    # click.echo(f"\nStarting multiprocess pool with
-    # {num_processes} processes")
-    # with mp.Pool(num_processes) as p:
-    #     p.starmap(
-    #         partial_apply_transform_to_czyx_and_save,
-    #         flat_iterable,
-    #     )
-    for args in flat_iterable:
-        print(args)
-        partial_apply_transform_to_czyx_and_save(*args)
+    click.echo(
+        f"\nStarting multiprocess pool with\
+    {num_processes} processes"
+    )
+    with mp.Pool(num_processes) as p:
+        p.starmap(
+            partial_apply_transform_to_czyx_and_save,
+            flat_iterable,
+        )
 
 
 def _is_nested(lst):
