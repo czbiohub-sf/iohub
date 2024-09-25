@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Callable
+from typing import Callable, List
 
 import click
 from natsort import natsorted
@@ -8,7 +8,7 @@ from iohub.ngff import Plate, open_ome_zarr
 
 
 def _validate_and_process_paths(
-    ctx: click.Context, opt: click.Option, value: str
+    ctx: click.Context, opt: click.Option, value: List[str]
 ) -> list[Path]:
     # Sort and validate the input paths,
     # expanding plates into lists of positions
