@@ -1,8 +1,9 @@
 import click
 import numpy as np
+from click.testing import CliRunner
 
 from iohub import open_ome_zarr
-from iohub.cli.parsing import _validate_and_process_paths
+from iohub.cli.parsing import OptionEatAll, _validate_and_process_paths
 
 
 def test_validate_and_process_paths(tmpdir):
@@ -40,3 +41,22 @@ def test_validate_and_process_paths(tmpdir):
         [str(plate_path / "A" / "1" / "0"), str(plate_path / "B" / "2" / "0")],
     )
     assert len(processed) == 2
+
+
+def test_option_eat_all():
+    @click.command()
+    @click.option(
+        "--test", cls=OptionEatAll
+    )  # tests will fail w/o OptionEatAll
+    def foo(test):
+        print(test)
+
+    runner = CliRunner()
+    result = runner.invoke(foo, ["--test", "a", "b", "c"])
+    assert "('a', 'b', 'c')" in result.output
+    assert "Error" not in result.output
+
+    result = runner.invoke(foo, ["--test", "a"])
+    assert "a" in result.output
+    assert "b" not in result.output
+    assert "Error" not in result.output
