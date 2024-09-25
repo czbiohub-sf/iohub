@@ -215,11 +215,13 @@ def apply_transform_to_czyx_and_save(
                 output_time_index, output_channel_indices
             ] = transformed_czyx
         click.echo(
-            f"Finished Writing.. t={input_time_index} and \
-            channel output={output_channel_indices}"
+            f"Finished t={input_time_index}, c={output_channel_indices}"
         )
     else:
-        click.echo(f"Skipping t={input_time_index} due to all zeros or nans")
+        click.echo(
+            f"Skipping t={input_time_index}, c={output_channel_indices}"
+            "due to all zeros or nans"
+        )
 
 
 def process_single_position(
