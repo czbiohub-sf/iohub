@@ -976,6 +976,33 @@ class Position(NGFFNode):
                 scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
         return scale
 
+    @property
+    def axis_names(self) -> list[str]:
+        """
+        Helper function for axis names of the highest resolution scale.
+
+        Returns lowercase axis names.
+        """
+        return [
+            axis.name.lower() for axis in self.metadata.multiscales[0].axes
+        ]
+
+    def get_axis_index(self, axis_name: str) -> int:
+        """
+        Get the index of a given axis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the axis. Case insensitive.
+
+        Returns
+        -------
+        int
+            Index of the axis.
+        """
+        return self.axis_names.index(axis_name.lower())
+
     def set_transform(
         self,
         image: str | Literal["*"],
@@ -1006,6 +1033,59 @@ class Position(NGFFNode):
         else:
             raise ValueError(f"Key {image} not recognized.")
         self.dump_meta()
+
+    def set_scale(
+        self,
+        image: str | Literal["*"],
+        axis_name: str,
+        new_scale: float,
+    ):
+        """Set the scale for a named axis.
+        Either one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal[
+            Name of one image array (e.g. "0") to transform,
+            or "*" for the whole FOV
+        axis_name : str
+            Name of the axis to set.
+        new_scale : float
+            Value of the new scale.
+        """
+        if len(self.metadata.multiscales) > 1:
+            raise NotImplementedError(
+                "Cannot set scale for multi-resolution images."
+            )
+
+        if new_scale <= 0:
+            raise ValueError("New scale must be positive.")
+
+        axis_index = self.get_axis_index(axis_name)
+
+        # Append old scale to metadata
+        iohub_dict = {}
+        if "iohub" in self.zattrs:
+            iohub_dict = self.zattrs["iohub"]
+        iohub_dict.update({f"prior_{axis_name}_scale": self.scale[axis_index]})
+        self.zattrs["iohub"] = iohub_dict
+
+        # Update scale while preserving existing transforms
+        transforms = (
+            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        )
+        # Replace default identity transform with scale
+        if len(transforms) == 1 and transforms[0].type == "identity":
+            transforms = [TransformationMeta(type="scale", scale=[1] * 5)]
+        # Add scale transform if not present
+        if not any([transform.type == "scale" for transform in transforms]):
+            transforms.append(TransformationMeta(type="scale", scale=[1] * 5))
+
+        for transform in transforms:
+            if transform.type == "scale":
+                transform.scale[axis_index] = new_scale
+
+        self.set_transform(image, transforms)
 
 
 class TiledPosition(Position):
