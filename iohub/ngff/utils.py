@@ -369,19 +369,6 @@ def process_single_position(
         )
 
 
-def _is_nested(lst):
-    """
-    Check if the list is nested or not.
-
-    NOTE: this function was created for a bug in slumkit that nested
-    input_channel_indices into a list of lists
-    TODO: check if this is still an issue in slumkit
-    """
-    return any(isinstance(i, list) for i in lst) or any(
-        isinstance(i, str) for i in lst
-    )
-
-
 def _check_nan_n_zeros(input_array):
     """
     Checks if any of the channels are all zeros or nans and returns true
