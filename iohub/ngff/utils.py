@@ -3,11 +3,11 @@ import itertools
 import multiprocessing as mp
 from functools import partial
 from pathlib import Path
-from typing import Callable, Tuple, Union
+from typing import Any, Callable, Tuple, Union
 
 import click
 import numpy as np
-from numpy.typing import DTypeLike
+from numpy.typing import DTypeLike, NDArray
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.nodes import TransformationMeta
@@ -118,7 +118,7 @@ def create_empty_plate(
 
 
 def apply_transform_to_czyx_and_save(
-    func: Callable,
+    func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
     output_position_path: Path,
     input_channel_indices: Union[list[int], slice],
@@ -133,9 +133,10 @@ def apply_transform_to_czyx_and_save(
 
     Parameters
     ----------
-    func : Callable
+    func : Callable[[NDArray, Any], NDArray]
         The function to be applied to the data.
-        Should take a CZYX array and return a transformed CZYX array.
+        func must take the CZYX NDArray as the first argument and return
+        a CZXY NDArray. Additional arguments are passed through **kwargs.
     input_position_path : Path
         The path to input OME-Zarr position store
         (e.g., input_store_path.zarr/A/1/0).
@@ -225,7 +226,7 @@ def apply_transform_to_czyx_and_save(
 
 
 def process_single_position(
-    func: Callable,
+    func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
     output_position_path: Path,
     input_channel_indices: Union[list[slice], list[list[int]]] = None,
@@ -242,9 +243,10 @@ def process_single_position(
 
     Parameters
     ----------
-    func : CZYX -> CZYX Callable
+    func : Callable[[NDArray, Any], NDArray]
         The function to be applied to the data.
-        Should take a CZYX array and return a transformed CZYX array.
+        func must take the CZYX NDArray as the first argument and return
+        a CZXY NDArray. Additional arguments are passed through **kwargs.
     input_position_path : Path
         The path to the input OME-Zarr position store
         (e.g., input_store_path.zarr/A/1/0).
