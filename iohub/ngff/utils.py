@@ -128,7 +128,7 @@ def apply_transform_to_czyx_and_save(
     **kwargs,
 ) -> None:
     """
-    Load a CZYX array from a Position object,
+    Load a CZYX array from a position store,
     apply a transformation, and save the result.
 
     Parameters
@@ -236,9 +236,9 @@ def process_single_position(
     **kwargs,
 ) -> None:
     """
-    Apply function to data in an `iohub` `Position`,
+    Apply function to data in an `iohub` position store,
     parallelizing over time and channel indices,
-    and save result in an output Zarr store.
+    and save result in an output position store.
 
     Parameters
     ----------
