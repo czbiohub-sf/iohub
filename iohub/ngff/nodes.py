@@ -1064,11 +1064,10 @@ class Position(NGFFNode):
         axis_index = self.get_axis_index(axis_name)
 
         # Append old scale to metadata
-        if "iohub" not in self.zattrs:
-            iohub_dict = {}
-        else:
+        iohub_dict = {}
+        if "iohub" in self.zattrs:
             iohub_dict = self.zattrs["iohub"]
-        iohub_dict.update({f"old_{axis_name}": self.scale[axis_index]})
+        iohub_dict.update({f"prior_{axis_name}_scale": self.scale[axis_index]})
         self.zattrs["iohub"] = iohub_dict
 
         # Update scale while preserving existing transforms

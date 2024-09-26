@@ -432,7 +432,7 @@ def test_set_scale(ch_shape_dtype):
             with pytest.raises(ValueError):
                 dataset.set_scale(image="0", axis_name="z", new_scale=-1.0)
 
-            assert dataset.zattrs["iohub"]["old_z"] == 3.0
+            assert dataset.zattrs["iohub"]["prior_z_scale"] == 3.0
 
 
 @given(channel_names=channel_names_st)
