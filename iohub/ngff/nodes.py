@@ -1062,7 +1062,14 @@ class Position(NGFFNode):
             raise ValueError("New scale must be positive.")
 
         axis_index = self.get_axis_index(axis_name)
-        self.zattrs["iohub"] = {f"old_{axis_name}": self.scale[axis_index]}
+
+        # Append old scale to metadata
+        if "iohub" not in self.zattrs:
+            iohub_dict = {}
+        else:
+            iohub_dict = self.zattrs["iohub"]
+        iohub_dict.update({f"old_{axis_name}": self.scale[axis_index]})
+        self.zattrs["iohub"] = iohub_dict
 
         # Update scale while preserving existing transforms
         transforms = (
