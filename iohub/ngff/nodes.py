@@ -1065,16 +1065,21 @@ class Position(NGFFNode):
         self.zattrs["iohub"] = {f"old_{axis_name}": self.scale[axis_index]}
 
         # Update scale while preserving existing transforms
-        current_transforms = (
+        transforms = (
             self.metadata.multiscales[0].datasets[0].coordinate_transformations
         )
-        if current_transforms is None:
-            current_transforms = [TransformationMeta(type="scale")]
+        # Replace default identity transform with scale
+        if len(transforms) == 1 and transforms[0].type == "identity":
+            transforms = [TransformationMeta(type="scale", scale=[1] * 5)]
+        # Add scale transform if not present
+        if not any([transform.type == "scale" for transform in transforms]):
+            transforms.append(TransformationMeta(type="scale", scale=[1] * 5))
 
-        for transform in current_transforms:
+        for transform in transforms:
             if transform.type == "scale":
                 transform.scale[axis_index] = new_scale
-                self.set_transform(image, current_transforms)
+
+        self.set_transform(image, transforms)
 
 
 class TiledPosition(Position):
