@@ -129,7 +129,6 @@ def test_cli_set_scale():
                 "set-scale",
                 "-i",
                 str(position_path),
-                str(position_path),
                 "-z",
                 random_z,
                 "-y",
@@ -144,6 +143,9 @@ def test_cli_set_scale():
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
             assert output_dataset.scale != old_scale
+            assert output_dataset.zattrs["iohub"]["old_x"] == old_scale[-1]
+            assert output_dataset.zattrs["iohub"]["old_y"] == old_scale[-2]
+            assert output_dataset.zattrs["iohub"]["old_z"] == old_scale[-3]
 
         # Test plate-expands-into-positions behavior
         runner = CliRunner()
@@ -159,3 +161,4 @@ def test_cli_set_scale():
         )
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert output_dataset.scale[-1] == 0.1
+            assert output_dataset.zattrs["iohub"]["old_x"] == 0.5
