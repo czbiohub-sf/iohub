@@ -262,11 +262,15 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 print("Zarr hierarchy:")
                 reader.print_tree()
                 positions = list(reader.positions())
+                total_GB = len(positions) * (positions[0][1][0].nbytes) / 1e9
                 msgs.append(f"Positions:\t\t {len(positions)}")
                 msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
+                msgs.append(f"Store Size [GB]:\t\t {total_GB:.2f}")
         else:
+            total_GB = reader["0"].nbytes / 1e9
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
             msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
+            msgs.append(f"Size [GB]:\t\t {total_GB:.2f}")
         if verbose:
             msgs.extend(
                 [
