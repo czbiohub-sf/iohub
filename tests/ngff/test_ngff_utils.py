@@ -303,6 +303,9 @@ def process_single_position_setup(draw):
     position_keys, channel_names, shape, chunks, scale, dtype = draw(
         plate_setup()
     )
+    # NOTE: Chunking along T,C =1,1
+    if chunks is not None:
+        chunks = (1, 1) + chunks[2:]
 
     T, C = shape[:2]
 
