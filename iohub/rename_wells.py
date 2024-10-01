@@ -45,7 +45,7 @@ def rename_wells(zarr_store_path: str | Path, csv_file_path: str | Path):
                     f"Invalid row format: {row}."
                     f"Each row must have two columns."
                 )
-            name_pair_list.append([row[0], row[1]])
+            name_pair_list.append([row[0].strip(), row[1].strip()])
 
     # rename each well while catching errors
     with open_ome_zarr(zarr_store_path, mode="a") as plate:
