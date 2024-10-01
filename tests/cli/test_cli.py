@@ -1,11 +1,9 @@
-import csv
 import re
 from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
-from iohub import open_ome_zarr
 from iohub._version import __version__
 from iohub.cli.cli import cli
 from tests.conftest import (
@@ -119,53 +117,17 @@ def test_cli_rename_wells_help():
         assert ">> iohub rename-wells" in result.output
 
 
-def test_cli_rename_wells(tmpdir):
+def test_cli_rename_wells(csv_data_file_1):
     with _temp_copy(hcs_ref) as store_path:
         runner = CliRunner()
-        test_csv = tmpdir / "well_names.csv"
-        csv_data = [
-            ["B/03", "D/4"],
+        cmd = [
+            "rename-wells",
+            "-i",
+            str(store_path),
+            "-c",
+            str(csv_data_file_1),
         ]
-        with open(test_csv, mode="w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerows(csv_data)
-
-        cmd = ["rename-wells", "-i", str(store_path), "-c", str(test_csv)]
         result = runner.invoke(cli, cmd)
 
         assert result.exit_code == 0
         assert "Renaming" in result.output
-
-        with open_ome_zarr(store_path, mode="r") as plate:
-            well_names = [well[0] for well in plate.wells()]
-            assert "D/4" in well_names
-            assert "B/03" not in well_names
-            assert len(plate.metadata.wells) == 1
-            assert len(plate.metadata.rows) == 1
-            assert len(plate.metadata.columns) == 1
-            assert plate.metadata.wells[0].path == "D/4"
-            assert plate.metadata.rows[0].name == "D"
-            assert plate.metadata.columns[0].name == "4"
-
-        # Test round trip
-        test_csv_2 = tmpdir / "well_names_2.csv"
-        csv_data = [
-            ["D/4", "B/03"],
-        ]
-        with open(test_csv_2, mode="w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerows(csv_data)
-
-        cmd = ["rename-wells", "-i", store_path, "-c", str(test_csv_2)]
-        result = runner.invoke(cli, cmd)
-
-        with open_ome_zarr(store_path, mode="r") as plate:
-            well_names = [well[0] for well in plate.wells()]
-            assert "D/4" not in well_names
-            assert "B/03" in well_names
-            assert len(plate.metadata.wells) == 1
-            assert len(plate.metadata.rows) == 1
-            assert len(plate.metadata.columns) == 1
-            assert plate.metadata.wells[0].path == "B/03"
-            assert plate.metadata.rows[0].name == "B"
-            assert plate.metadata.columns[0].name == "03"

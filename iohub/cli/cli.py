@@ -1,12 +1,11 @@
-import csv
 import pathlib
 
 import click
 
 from iohub._version import __version__
 from iohub.convert import TIFFConverter
-from iohub.ngff import open_ome_zarr
 from iohub.reader import print_info
+from iohub.rename_wells import rename_wells
 
 VERSION = __version__
 
@@ -91,7 +90,7 @@ def convert(input, output, grid_layout, chunks):
     converter()
 
 
-@cli.command()
+@cli.command(name="rename-wells")
 @click.help_option("-h", "--help")
 @click.option(
     "-i",
@@ -105,11 +104,11 @@ def convert(input, output, grid_layout, chunks):
     "-c",
     "--csv",
     "csvfile",
-    type=click.File("r"),
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
     required=True,
     help="Path to the CSV file containing old and new well names.",
 )
-def rename_wells(zarrfile, csvfile):
+def rename_wells_command(zarrfile, csvfile):
     """Rename wells in an plate.
 
     >> iohub rename-wells -i plate.zarr -c names.csv
@@ -120,23 +119,4 @@ def rename_wells(zarrfile, csvfile):
     A/2,B/2
     ```
     """
-
-    # read and check csv
-    name_pair_list = []
-    csvreader = csv.reader(csvfile)
-    for row in csvreader:
-        if len(row) != 2:
-            raise ValueError(
-                f"Invalid row format: {row}."
-                f"Each row must have two columns."
-            )
-        name_pair_list.append([row[0], row[1]])
-
-    # rename each well while catching errors
-    with open_ome_zarr(zarrfile, mode="a") as plate:
-        for old, new in name_pair_list:
-            print(f"Renaming {old} to {new}")
-            try:
-                plate.rename_well(old, new)
-            except ValueError as e:
-                print(f"Error renaming {old} to {new}: {e}")
+    rename_wells(zarrfile, csvfile)
