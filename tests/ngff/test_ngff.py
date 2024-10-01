@@ -681,6 +681,7 @@ def test_position_scale(channels_and_random_5d):
         assert dataset.scale == scale
 
 
+@pytest.mark.skip(reason="https://github.com/czbiohub-sf/iohub/issues/255")
 def test_combine_fovs_to_hcs():
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
