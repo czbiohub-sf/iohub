@@ -684,14 +684,14 @@ def test_position_scale(channels_and_random_5d):
 def test_combine_fovs_to_hcs():
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
-    for path in fov_paths:
-        with open_ome_zarr(hcs_ref) as hcs_store:
+    with open_ome_zarr(hcs_ref) as hcs_store:
+        for path in fov_paths:
             fovs[path] = hcs_store["B/03/0"]
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "combined.zarr")
-        combined_plate = Plate.from_positions(store_path, fovs)
+        Plate.from_positions(store_path, fovs).close()
         # read data with an external reader
-        ext_reader = Reader(parse_url(combined_plate.zgroup.store.path))
+        ext_reader = Reader(parse_url(store_path))
         node = list(ext_reader())[0]
         plate_meta = node.metadata["metadata"]["plate"]
         assert len(plate_meta["rows"]) == 3
