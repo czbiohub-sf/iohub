@@ -2,7 +2,9 @@ import pathlib
 
 import click
 
+from iohub import open_ome_zarr
 from iohub._version import __version__
+from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
@@ -88,6 +90,69 @@ def convert(input, output, grid_layout, chunks):
         chunks=chunks,
     )
     converter()
+
+
+@cli.command()
+@click.help_option("-h", "--help")
+@input_position_dirpaths()
+@click.option(
+    "--t-scale",
+    "-t",
+    required=False,
+    type=float,
+    help="New t scale",
+)
+@click.option(
+    "--z-scale",
+    "-z",
+    required=False,
+    type=float,
+    help="New z scale",
+)
+@click.option(
+    "--y-scale",
+    "-y",
+    required=False,
+    type=float,
+    help="New y scale",
+)
+@click.option(
+    "--x-scale",
+    "-x",
+    required=False,
+    type=float,
+    help="New x scale",
+)
+def set_scale(
+    input_position_dirpaths,
+    t_scale=None,
+    z_scale=None,
+    y_scale=None,
+    x_scale=None,
+):
+    """Update scale metadata in OME-Zarr datasets.
+
+    >> iohub set-scale -i input.zarr/*/*/* -t 1.0 -z 1.0 -y 0.5 -x 0.5
+
+    Supports setting a single axis at a time:
+
+    >> iohub set-scale -i input.zarr/*/*/* -z 2.0
+    """
+    for input_position_dirpath in input_position_dirpaths:
+        with open_ome_zarr(
+            input_position_dirpath, layout="fov", mode="r+"
+        ) as dataset:
+            for name, value in zip(
+                ["t", "z", "y", "x"], [t_scale, z_scale, y_scale, x_scale]
+            ):
+                if value is None:
+                    continue
+                old_value = dataset.scale[dataset.get_axis_index(name)]
+                print(
+                    f"Updating {input_position_dirpath} {name} scale from "
+                    f"{old_value} to {value}."
+                )
+                dataset.set_scale("0", name, value)
 
 
 @cli.command(name="rename-wells")
