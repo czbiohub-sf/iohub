@@ -193,7 +193,7 @@ class NGFFNode:
 
     def __contains__(self, key):
         key = normalize_storage_path(key)
-        return key in self._member_names
+        return key.lower() in [name.lower() for name in self._member_names]
 
     def __iter__(self):
         yield from self._member_names
