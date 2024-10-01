@@ -377,6 +377,12 @@ def test_rename_well(channels_and_random_5d, arr_name):
         with pytest.raises(ValueError):
             dataset.rename_well("Q/1", "Q/2")
 
+        # invalid well names
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", " A/1")
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", "A/?")
+
 
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
