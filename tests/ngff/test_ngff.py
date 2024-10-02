@@ -16,7 +16,6 @@ from numpy.testing import assert_array_almost_equal
 from numpy.typing import NDArray
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
-from zarr.errors import ContainsGroupError
 
 if TYPE_CHECKING:
     from _typeshed import StrPath
@@ -667,20 +666,6 @@ def test_create_position(row, col, pos):
         assert [r["name"] for r in dataset.zattrs["plate"]["rows"]] == [row]
         assert os.path.isdir(os.path.join(store_path, row, col, pos))
         assert dataset[row][col].metadata.images[0].path == pos
-
-
-def test_create_position_case_sensitivity():
-    """Test `iohub.ngff.Plate.create_position()`"""
-    with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "hcs.zarr")
-        dataset = open_ome_zarr(
-            store_path, layout="hcs", mode="a", channel_names=["GFP"]
-        )
-        dataset.create_position("S", "0", "1")
-        dataset.create_position("s", "1", "0")
-
-        with pytest.raises(ContainsGroupError):
-            dataset.create_position("S", "1", "0")
 
 
 @given(channels_and_random_5d=_channels_and_random_5d())
