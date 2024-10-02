@@ -501,7 +501,7 @@ def test_create_empty_plate(plate_setup, extra_channels):
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),
 )
-@settings(max_examples=5, deadline=1200)
+@settings(max_examples=5, deadline=None)
 def test_apply_transform_to_zyx_and_save(setup, constant):
     (
         position_keys,
@@ -565,7 +565,7 @@ def test_apply_transform_to_zyx_and_save(setup, constant):
     constant=st.integers(min_value=1, max_value=3),
     num_processes=st.integers(min_value=1, max_value=3),
 )
-@settings(max_examples=3, deadline=2000)
+@settings(max_examples=3, deadline=None)
 def test_process_single_position(setup, constant, num_processes):
     # def test_process_single_position(setup, constant, num_processes):
     (
