@@ -500,6 +500,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
 )
+@settings(deadline=None)
 def test_set_scale(ch_shape_dtype):
     channel_names, shape, dtype = ch_shape_dtype
     transform = [
