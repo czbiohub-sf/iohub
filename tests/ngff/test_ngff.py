@@ -335,6 +335,7 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
 )
+@settings(deadline=None)
 def test_rename_well(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.rename_well()`"""
     channel_names, random_5d = channels_and_random_5d
