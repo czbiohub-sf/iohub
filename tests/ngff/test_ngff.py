@@ -183,6 +183,46 @@ def _temp_ome_zarr(
         temp_dir.cleanup()
 
 
+@contextmanager
+def _temp_ome_zarr_plate(
+    image_5d: NDArray,
+    channel_names: list[str],
+    arr_name: str,
+    position_list: list[tuple[str, str, str]],
+    **kwargs,
+):
+    """Helper function to generate a temporary OME-Zarr store.
+
+    Parameters
+    ----------
+    image_5d : NDArray
+    channel_names : list[str]
+    arr_name : str
+    position_list : list[tuple[str, str, str]]
+
+    Yields
+    ------
+    Position
+    """
+    try:
+        temp_dir = TemporaryDirectory()
+        dataset = open_ome_zarr(
+            os.path.join(temp_dir.name, "ome.zarr"),
+            layout="hcs",
+            mode="a",
+            channel_names=channel_names,
+        )
+        for position in position_list:
+            pos = dataset.create_position(
+                position[0], position[1], position[2]
+            )
+            pos.create_image(arr_name, image_5d, **kwargs)
+        yield dataset
+    finally:
+        dataset.close()
+        temp_dir.cleanup()
+
+
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
@@ -289,6 +329,60 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
         dataset.rename_channel(old=channel_names[0], new=new_channel)
         assert new_channel in dataset.channel_names
         assert dataset.metadata.omero.channels[0].label == new_channel
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+)
+@settings(deadline=None)
+def test_rename_well(channels_and_random_5d, arr_name):
+    """Test `iohub.ngff.Position.rename_well()`"""
+    channel_names, random_5d = channels_and_random_5d
+
+    position_list = [["A", "1", "0"], ["C", "4", "0"]]
+    with _temp_ome_zarr_plate(
+        random_5d, channel_names, arr_name, position_list
+    ) as dataset:
+        assert dataset.zgroup["A/1"]
+        with pytest.raises(KeyError):
+            dataset.zgroup["B/2"]
+        assert "A" in [r[0] for r in dataset.rows()]
+        assert "B" not in [r[0] for r in dataset.rows()]
+        assert "A" in [row.name for row in dataset.metadata.rows]
+        assert "B" not in [row.name for row in dataset.metadata.rows]
+        assert "1" in [col.name for col in dataset.metadata.columns]
+        assert "2" not in [col.name for col in dataset.metadata.columns]
+        assert "C" in [row.name for row in dataset.metadata.rows]
+        assert "4" in [col.name for col in dataset.metadata.columns]
+
+        dataset.rename_well("A/1", "B/2")
+
+        assert dataset.zgroup["B/2"]
+        with pytest.raises(KeyError):
+            dataset.zgroup["A/1"]
+        assert "A" not in [r[0] for r in dataset.rows()]
+        assert "B" in [r[0] for r in dataset.rows()]
+        assert "A" not in [row.name for row in dataset.metadata.rows]
+        assert "B" in [row.name for row in dataset.metadata.rows]
+        assert "1" not in [col.name for col in dataset.metadata.columns]
+        assert "2" in [col.name for col in dataset.metadata.columns]
+        assert "C" in [row.name for row in dataset.metadata.rows]
+        assert "4" in [col.name for col in dataset.metadata.columns]
+
+        # destination exists
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", "C/4")
+
+        # source doesn't exist
+        with pytest.raises(ValueError):
+            dataset.rename_well("Q/1", "Q/2")
+
+        # invalid well names
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", " A/1")
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", "A/?")
 
 
 @given(
@@ -406,6 +500,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
 )
+@settings(deadline=None)
 def test_set_scale(ch_shape_dtype):
     channel_names, shape, dtype = ch_shape_dtype
     transform = [

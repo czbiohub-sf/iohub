@@ -7,6 +7,7 @@ from iohub._version import __version__
 from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
+from iohub.rename_wells import rename_wells
 
 VERSION = __version__
 
@@ -152,3 +153,35 @@ def set_scale(
                     f"{old_value} to {value}."
                 )
                 dataset.set_scale("0", name, value)
+
+
+@cli.command(name="rename-wells")
+@click.help_option("-h", "--help")
+@click.option(
+    "-i",
+    "--input",
+    "zarrfile",
+    type=click.Path(exists=True, file_okay=True, dir_okay=True),
+    required=True,
+    help="Path to the input Zarr file.",
+)
+@click.option(
+    "-c",
+    "--csv",
+    "csvfile",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False),
+    required=True,
+    help="Path to the CSV file containing old and new well names.",
+)
+def rename_wells_command(zarrfile, csvfile):
+    """Rename wells in an plate.
+
+    >> iohub rename-wells -i plate.zarr -c names.csv
+
+    The CSV file must have two columns with old and new names in the form:
+    ```
+    A/1,B/2
+    A/2,B/2
+    ```
+    """
+    rename_wells(zarrfile, csvfile)

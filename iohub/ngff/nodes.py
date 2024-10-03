@@ -1653,6 +1653,61 @@ class Plate(NGFFNode):
             for _, position in well.positions():
                 yield position.zgroup.path, position
 
+    def rename_well(
+        self,
+        old: str,
+        new: str,
+    ):
+        """Rename a well.
+
+        Parameters
+        ----------
+        old : str
+            Old name of well, e.g. "A/1"
+        new : str
+            New name of well, e.g. "B/2"
+        """
+
+        # normalize inputs
+        old = normalize_storage_path(old)
+        new = normalize_storage_path(new)
+        old_row, old_column = old.split("/")
+        new_row, new_column = new.split("/")
+        new_row_meta = PlateAxisMeta(name=new_row)
+        new_col_meta = PlateAxisMeta(name=new_column)
+
+        # raises ValueError if old well does not exist
+        # or if new well already exists
+        self.zgroup.move(old, new)
+
+        # update well metadata
+        old_well_index = [
+            well_name.path for well_name in self.metadata.wells
+        ].index(old)
+        self.metadata.wells[old_well_index].path = new
+        new_well_names = [well.path for well in self.metadata.wells]
+
+        # update row/col metadata
+        # check for new row/col
+        if new_row not in [row.name for row in self.metadata.rows]:
+            self.metadata.rows.append(new_row_meta)
+        if new_column not in [col.name for col in self.metadata.columns]:
+            self.metadata.columns.append(new_col_meta)
+
+        # check for empty row/col
+        if old_row not in [well.split("/")[0] for well in new_well_names]:
+            # delete empty row from zarr
+            del self.zgroup[old_row]
+            self.metadata.rows = [
+                row for row in self.metadata.rows if row.name != old_row
+            ]
+        if old_column not in [well.split("/")[1] for well in new_well_names]:
+            self.metadata.columns = [
+                col for col in self.metadata.columns if col.name != old_column
+            ]
+
+        self.dump_meta()
+
 
 def open_ome_zarr(
     store_path: StrOrBytesPath,

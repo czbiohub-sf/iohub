@@ -171,3 +171,29 @@ def test_cli_set_scale():
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert output_dataset.scale[-1] == 0.1
             assert output_dataset.zattrs["iohub"]["prior_x_scale"] == 0.5
+
+
+def test_cli_rename_wells_help():
+    runner = CliRunner()
+    cmd = ["rename-wells"]
+    for option in ("-h", "--help"):
+        cmd.append(option)
+        result = runner.invoke(cli, cmd)
+        assert result.exit_code == 0
+        assert ">> iohub rename-wells" in result.output
+
+
+def test_cli_rename_wells(csv_data_file_1):
+    with _temp_copy(hcs_ref) as store_path:
+        runner = CliRunner()
+        cmd = [
+            "rename-wells",
+            "-i",
+            str(store_path),
+            "-c",
+            str(csv_data_file_1),
+        ]
+        result = runner.invoke(cli, cmd)
+
+        assert result.exit_code == 0
+        assert "Renaming" in result.output
