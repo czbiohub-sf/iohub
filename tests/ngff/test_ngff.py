@@ -183,6 +183,46 @@ def _temp_ome_zarr(
         temp_dir.cleanup()
 
 
+@contextmanager
+def _temp_ome_zarr_plate(
+    image_5d: NDArray,
+    channel_names: list[str],
+    arr_name: str,
+    position_list: list[tuple[str, str, str]],
+    **kwargs,
+):
+    """Helper function to generate a temporary OME-Zarr store.
+
+    Parameters
+    ----------
+    image_5d : NDArray
+    channel_names : list[str]
+    arr_name : str
+    position_list : list[tuple[str, str, str]]
+
+    Yields
+    ------
+    Position
+    """
+    try:
+        temp_dir = TemporaryDirectory()
+        dataset = open_ome_zarr(
+            os.path.join(temp_dir.name, "ome.zarr"),
+            layout="hcs",
+            mode="a",
+            channel_names=channel_names,
+        )
+        for position in position_list:
+            pos = dataset.create_position(
+                position[0], position[1], position[2]
+            )
+            pos.create_image(arr_name, image_5d, **kwargs)
+        yield dataset
+    finally:
+        dataset.close()
+        temp_dir.cleanup()
+
+
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
@@ -295,6 +335,60 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
 )
+@settings(deadline=None)
+def test_rename_well(channels_and_random_5d, arr_name):
+    """Test `iohub.ngff.Position.rename_well()`"""
+    channel_names, random_5d = channels_and_random_5d
+
+    position_list = [["A", "1", "0"], ["C", "4", "0"]]
+    with _temp_ome_zarr_plate(
+        random_5d, channel_names, arr_name, position_list
+    ) as dataset:
+        assert dataset.zgroup["A/1"]
+        with pytest.raises(KeyError):
+            dataset.zgroup["B/2"]
+        assert "A" in [r[0] for r in dataset.rows()]
+        assert "B" not in [r[0] for r in dataset.rows()]
+        assert "A" in [row.name for row in dataset.metadata.rows]
+        assert "B" not in [row.name for row in dataset.metadata.rows]
+        assert "1" in [col.name for col in dataset.metadata.columns]
+        assert "2" not in [col.name for col in dataset.metadata.columns]
+        assert "C" in [row.name for row in dataset.metadata.rows]
+        assert "4" in [col.name for col in dataset.metadata.columns]
+
+        dataset.rename_well("A/1", "B/2")
+
+        assert dataset.zgroup["B/2"]
+        with pytest.raises(KeyError):
+            dataset.zgroup["A/1"]
+        assert "A" not in [r[0] for r in dataset.rows()]
+        assert "B" in [r[0] for r in dataset.rows()]
+        assert "A" not in [row.name for row in dataset.metadata.rows]
+        assert "B" in [row.name for row in dataset.metadata.rows]
+        assert "1" not in [col.name for col in dataset.metadata.columns]
+        assert "2" in [col.name for col in dataset.metadata.columns]
+        assert "C" in [row.name for row in dataset.metadata.rows]
+        assert "4" in [col.name for col in dataset.metadata.columns]
+
+        # destination exists
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", "C/4")
+
+        # source doesn't exist
+        with pytest.raises(ValueError):
+            dataset.rename_well("Q/1", "Q/2")
+
+        # invalid well names
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", " A/1")
+        with pytest.raises(ValueError):
+            dataset.rename_well("B/2", "A/?")
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+)
 @settings(
     max_examples=16,
     deadline=2000,
@@ -401,6 +495,39 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
         assert group.attrs["multiscales"][0]["coordinateTransformations"] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
+
+
+@given(
+    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
+)
+@settings(deadline=None)
+def test_set_scale(ch_shape_dtype):
+    channel_names, shape, dtype = ch_shape_dtype
+    transform = [
+        TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5)),
+        TransformationMeta(type="scale", scale=(5, 4, 3, 2, 1)),
+    ]
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        with open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
+        ) as dataset:
+            dataset.create_zeros(name="0", shape=shape, dtype=dtype)
+            dataset.set_transform(image="0", transform=transform)
+            dataset.set_scale(image="0", axis_name="z", new_scale=10.0)
+            assert dataset.scale[-3] == 10.0
+            assert (
+                dataset.metadata.multiscales[0]
+                .datasets[0]
+                .coordinate_transformations[0]
+                .translation[-1]
+                == 5
+            )
+
+            with pytest.raises(ValueError):
+                dataset.set_scale(image="0", axis_name="z", new_scale=-1.0)
+
+            assert dataset.zattrs["iohub"]["prior_z_scale"] == 3.0
 
 
 @given(channel_names=channel_names_st)
@@ -560,6 +687,22 @@ def test_get_channel_index(wrong_channel_name):
             _ = dataset.get_channel_index(wrong_channel_name)
 
 
+def test_get_axis_index():
+    with open_ome_zarr(hcs_ref, layout="hcs", mode="r+") as dataset:
+        position = dataset["B/03/0"]
+
+        assert position.axis_names == ["c", "z", "y", "x"]
+
+        assert position.get_axis_index("z") == 1
+        assert position.get_axis_index("Z") == 1
+
+        with pytest.raises(ValueError):
+            _ = position.get_axis_index("t")
+
+        with pytest.raises(ValueError):
+            _ = position.get_axis_index("DOG")
+
+
 @given(
     row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
 )
@@ -633,17 +776,18 @@ def test_position_scale(channels_and_random_5d):
         assert dataset.scale == scale
 
 
+@pytest.mark.skip(reason="https://github.com/czbiohub-sf/iohub/issues/255")
 def test_combine_fovs_to_hcs():
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
-    for path in fov_paths:
-        with open_ome_zarr(hcs_ref) as hcs_store:
+    with open_ome_zarr(hcs_ref) as hcs_store:
+        for path in fov_paths:
             fovs[path] = hcs_store["B/03/0"]
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "combined.zarr")
-        combined_plate = Plate.from_positions(store_path, fovs)
+        Plate.from_positions(store_path, fovs).close()
         # read data with an external reader
-        ext_reader = Reader(parse_url(combined_plate.zgroup.store.path))
+        ext_reader = Reader(parse_url(store_path))
         node = list(ext_reader())[0]
         plate_meta = node.metadata["metadata"]["plate"]
         assert len(plate_meta["rows"]) == 3

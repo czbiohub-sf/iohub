@@ -193,7 +193,7 @@ class NGFFNode:
 
     def __contains__(self, key):
         key = normalize_storage_path(key)
-        return key in self._member_names
+        return key.lower() in [name.lower() for name in self._member_names]
 
     def __iter__(self):
         yield from self._member_names
@@ -946,7 +946,7 @@ class Position(NGFFNode):
             for tr in transforms:
                 if tr.type == "scale":
                     for i in range(len(tr.scale))[-3:]:
-                        tr.scale[i] /= factor
+                        tr.scale[i] *= factor
 
             self.create_zeros(
                 name=str(level),
@@ -975,6 +975,33 @@ class Position(NGFFNode):
                     )
                 scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
         return scale
+
+    @property
+    def axis_names(self) -> list[str]:
+        """
+        Helper function for axis names of the highest resolution scale.
+
+        Returns lowercase axis names.
+        """
+        return [
+            axis.name.lower() for axis in self.metadata.multiscales[0].axes
+        ]
+
+    def get_axis_index(self, axis_name: str) -> int:
+        """
+        Get the index of a given axis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the axis. Case insensitive.
+
+        Returns
+        -------
+        int
+            Index of the axis.
+        """
+        return self.axis_names.index(axis_name.lower())
 
     def set_transform(
         self,
@@ -1006,6 +1033,59 @@ class Position(NGFFNode):
         else:
             raise ValueError(f"Key {image} not recognized.")
         self.dump_meta()
+
+    def set_scale(
+        self,
+        image: str | Literal["*"],
+        axis_name: str,
+        new_scale: float,
+    ):
+        """Set the scale for a named axis.
+        Either one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal[
+            Name of one image array (e.g. "0") to transform,
+            or "*" for the whole FOV
+        axis_name : str
+            Name of the axis to set.
+        new_scale : float
+            Value of the new scale.
+        """
+        if len(self.metadata.multiscales) > 1:
+            raise NotImplementedError(
+                "Cannot set scale for multi-resolution images."
+            )
+
+        if new_scale <= 0:
+            raise ValueError("New scale must be positive.")
+
+        axis_index = self.get_axis_index(axis_name)
+
+        # Append old scale to metadata
+        iohub_dict = {}
+        if "iohub" in self.zattrs:
+            iohub_dict = self.zattrs["iohub"]
+        iohub_dict.update({f"prior_{axis_name}_scale": self.scale[axis_index]})
+        self.zattrs["iohub"] = iohub_dict
+
+        # Update scale while preserving existing transforms
+        transforms = (
+            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        )
+        # Replace default identity transform with scale
+        if len(transforms) == 1 and transforms[0].type == "identity":
+            transforms = [TransformationMeta(type="scale", scale=[1] * 5)]
+        # Add scale transform if not present
+        if not any([transform.type == "scale" for transform in transforms]):
+            transforms.append(TransformationMeta(type="scale", scale=[1] * 5))
+
+        for transform in transforms:
+            if transform.type == "scale":
+                transform.scale[axis_index] = new_scale
+
+        self.set_transform(image, transforms)
 
 
 class TiledPosition(Position):
@@ -1572,6 +1652,61 @@ class Plate(NGFFNode):
         for _, well in self.wells():
             for _, position in well.positions():
                 yield position.zgroup.path, position
+
+    def rename_well(
+        self,
+        old: str,
+        new: str,
+    ):
+        """Rename a well.
+
+        Parameters
+        ----------
+        old : str
+            Old name of well, e.g. "A/1"
+        new : str
+            New name of well, e.g. "B/2"
+        """
+
+        # normalize inputs
+        old = normalize_storage_path(old)
+        new = normalize_storage_path(new)
+        old_row, old_column = old.split("/")
+        new_row, new_column = new.split("/")
+        new_row_meta = PlateAxisMeta(name=new_row)
+        new_col_meta = PlateAxisMeta(name=new_column)
+
+        # raises ValueError if old well does not exist
+        # or if new well already exists
+        self.zgroup.move(old, new)
+
+        # update well metadata
+        old_well_index = [
+            well_name.path for well_name in self.metadata.wells
+        ].index(old)
+        self.metadata.wells[old_well_index].path = new
+        new_well_names = [well.path for well in self.metadata.wells]
+
+        # update row/col metadata
+        # check for new row/col
+        if new_row not in [row.name for row in self.metadata.rows]:
+            self.metadata.rows.append(new_row_meta)
+        if new_column not in [col.name for col in self.metadata.columns]:
+            self.metadata.columns.append(new_col_meta)
+
+        # check for empty row/col
+        if old_row not in [well.split("/")[0] for well in new_well_names]:
+            # delete empty row from zarr
+            del self.zgroup[old_row]
+            self.metadata.rows = [
+                row for row in self.metadata.rows if row.name != old_row
+            ]
+        if old_column not in [well.split("/")[1] for well in new_well_names]:
+            self.metadata.columns = [
+                col for col in self.metadata.columns if col.name != old_column
+            ]
+
+        self.dump_meta()
 
 
 def open_ome_zarr(

@@ -1,7 +1,9 @@
+import csv
 import shutil
 from pathlib import Path
 
 import fsspec
+import pytest
 from wget import download
 
 
@@ -100,3 +102,27 @@ ndtiff_v2_ptcz = (
 
 
 ndtiff_v3_labeled_positions = test_datasets / "ndtiff_v3_labeled_positions"
+
+
+@pytest.fixture
+def csv_data_file_1(tmpdir):
+    test_csv_1 = tmpdir / "well_names_1.csv"
+    csv_data_1 = [
+        ["B/03", "D/4"],
+    ]
+    with open(test_csv_1, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data_1)
+    return test_csv_1
+
+
+@pytest.fixture
+def csv_data_file_2(tmpdir):
+    test_csv_2 = tmpdir / "well_names_2.csv"
+    csv_data_2 = [
+        ["D/4", "B/03"],
+    ]
+    with open(test_csv_2, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data_2)
+    return test_csv_2

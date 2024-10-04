@@ -1,9 +1,12 @@
+import random
 import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
 
+from iohub import open_ome_zarr
 from iohub._version import __version__
 from iohub.cli.cli import cli
 from tests.conftest import (
@@ -12,6 +15,8 @@ from tests.conftest import (
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
 )
+
+from ..ngff.test_ngff import _temp_copy
 
 
 def pytest_generate_tests(metafunc):
@@ -103,3 +108,92 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0, result.output
     assert "Converting" in result.output
+
+
+def test_cli_set_scale():
+    with _temp_copy(hcs_ref) as store_path:
+        store_path = Path(store_path)
+        position_path = Path(store_path) / "B" / "03" / "0"
+
+        with open_ome_zarr(
+            position_path, layout="fov", mode="r+"
+        ) as input_dataset:
+            old_scale = input_dataset.scale
+
+        random_z = random.uniform(0, 1)
+
+        runner = CliRunner()
+        result_pos = runner.invoke(
+            cli,
+            [
+                "set-scale",
+                "-i",
+                str(position_path),
+                "-z",
+                random_z,
+                "-y",
+                0.5,
+                "-x",
+                0.5,
+            ],
+        )
+        assert result_pos.exit_code == 0
+        assert "Updating" in result_pos.output
+
+        with open_ome_zarr(position_path, layout="fov") as output_dataset:
+            assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
+            assert output_dataset.scale != old_scale
+            assert (
+                output_dataset.zattrs["iohub"]["prior_x_scale"]
+                == old_scale[-1]
+            )
+            assert (
+                output_dataset.zattrs["iohub"]["prior_y_scale"]
+                == old_scale[-2]
+            )
+            assert (
+                output_dataset.zattrs["iohub"]["prior_z_scale"]
+                == old_scale[-3]
+            )
+
+        # Test plate-expands-into-positions behavior
+        runner = CliRunner()
+        result_pos = runner.invoke(
+            cli,
+            [
+                "set-scale",
+                "-i",
+                str(store_path),
+                "-x",
+                0.1,
+            ],
+        )
+        with open_ome_zarr(position_path, layout="fov") as output_dataset:
+            assert output_dataset.scale[-1] == 0.1
+            assert output_dataset.zattrs["iohub"]["prior_x_scale"] == 0.5
+
+
+def test_cli_rename_wells_help():
+    runner = CliRunner()
+    cmd = ["rename-wells"]
+    for option in ("-h", "--help"):
+        cmd.append(option)
+        result = runner.invoke(cli, cmd)
+        assert result.exit_code == 0
+        assert ">> iohub rename-wells" in result.output
+
+
+def test_cli_rename_wells(csv_data_file_1):
+    with _temp_copy(hcs_ref) as store_path:
+        runner = CliRunner()
+        cmd = [
+            "rename-wells",
+            "-i",
+            str(store_path),
+            "-c",
+            str(csv_data_file_1),
+        ]
+        result = runner.invoke(cli, cmd)
+
+        assert result.exit_code == 0
+        assert "Renaming" in result.output
