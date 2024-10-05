@@ -122,25 +122,32 @@ class MicroManagerFOVMapping(BaseFOVMapping):
         if not self.stage_positions:
             raise ValueError("Stage position metadata not available.")
 
-        # See https://chatgpt.com/share/e/67009155-d960-8008-bd64-aa3117b142b6
+        try:
+            labels = [pos["Label"] for pos in self.stage_positions]
+        except KeyError:
+            raise ValueError("Stage positions do not have labels.")
+
+        # See https://chatgpt.com/share/e/670097cc-2854-8008-bd33-b54cad7c99b9
         pattern = re.compile(
-            r"([A-Za-z])?(\d+)-(?:Site_(\d+)|Pos(?:-)?(\d+)[-_](\d+))"
+            r"([A-Z])(\d+)-Site_(\d+)|"
+            r"Pos-(\d+)-(\d+)_(\d+)|"
+            r"(\d+)-Pos(\d+)_(\d+)"
         )
-        labels = [pos.get("Label") for pos in self.stage_positions]
         row_col_fov = []
         for label in labels:
-            if label:
-                match = re.match(pattern, label)
-                if match:
-                    row = match.group(1) if match.group(1) else "0"
-                    col = match.group(2)
-                    fov = (
-                        match.group(3)
-                        if match.group(3)
-                        else f"{match.group(4)}{match.group(5)}"
+            if (match := re.match(pattern, label)) is not None:
+                if match.group(1):  # "A1-Site_0" case
+                    row_col_fov.append(
+                        (match.group(1), match.group(2), match.group(3))
                     )
-
-                    row_col_fov.append((row, col, fov))
+                elif match.group(4):  # "Pos-5-000_005" case
+                    row_col_fov.append(
+                        ("0", match.group(4), match.group(5) + match.group(6))
+                    )
+                else:  # "1-Pos000_000" case
+                    row_col_fov.append(
+                        ("0", match.group(7), match.group(8) + match.group(9))
+                    )
 
         if not row_col_fov:
             raise ValueError(
