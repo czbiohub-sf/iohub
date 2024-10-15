@@ -262,20 +262,34 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 print("Zarr hierarchy:")
                 reader.print_tree()
                 positions = list(reader.positions())
-                total_GB_uncompressed = (
-                    len(positions) * (positions[0][1][0].nbytes) / 1e9
+                total_bytes_uncompressed = len(positions) * (
+                    positions[0][1][0].nbytes
+                )
+                total_bytes_compressed = len(positions) * (
+                    positions[0][1][0].nbytes_stored
                 )
                 msgs.append(f"Positions:\t\t {len(positions)}")
                 msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
                 msgs.append(
-                    f"Uncompressed size [GB]:\t\t {total_GB_uncompressed:.2f}"
+                    f"No. bytes:\t\t {total_bytes_compressed:.2f} "
+                    f"[{sizeof_fmt(total_bytes_compressed)}]"
+                )
+                msgs.append(
+                    f"No. bytes stored:\t {total_bytes_uncompressed:.2f} "
+                    f"[{sizeof_fmt(total_bytes_uncompressed)}]"
                 )
         else:
-            total_GB_uncompressed = reader["0"].nbytes / 1e9
+            total_bytes_uncompressed = reader["0"].nbytes
+            total_bytes_compressed = reader["0"].nbytes_stored
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
             msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
             msgs.append(
-                f"Uncompressed size [GB]:\t\t {total_GB_uncompressed:.2f}"
+                f"No. bytes:\t\t {total_bytes_compressed:.2f} "
+                f"[{sizeof_fmt(total_bytes_compressed)}]"
+            )
+            msgs.append(
+                f"No. bytes stored:\t {total_bytes_uncompressed:.2f} "
+                f"[{sizeof_fmt(total_bytes_uncompressed)}]"
             )
         if verbose:
             msgs.extend(
@@ -290,3 +304,16 @@ def print_info(path: StrOrBytesPath, verbose=False):
             reader.print_tree()
         print("\n".join(msgs))
         reader.close()
+
+
+def sizeof_fmt(num) -> str:
+    """
+    Human readable file size
+    Borrowing form:
+    https://web.archive.org/web/20111010015624/
+    http://blogmag.net/blog/read/38/Print_human_readable_file_size
+    """
+    for x in ["bytes", "KB", "MB", "GB", "TB"]:
+        if num < 1024.0:
+            return "%3.1f%s" % (num, x)
+        num /= 1024.0
