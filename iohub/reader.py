@@ -271,12 +271,12 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 msgs.append(f"Positions:\t\t {len(positions)}")
                 msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
                 msgs.append(
-                    f"No. bytes:\t\t {total_bytes_compressed:.2f} "
-                    f"[{sizeof_fmt(total_bytes_compressed)}]"
+                    f"No. bytes:\t\t {total_bytes_uncompressed:.2f} "
+                    f"[{sizeof_fmt(total_bytes_uncompressed)}]"
                 )
                 msgs.append(
-                    f"No. bytes stored:\t {total_bytes_uncompressed:.2f} "
-                    f"[{sizeof_fmt(total_bytes_uncompressed)}]"
+                    f"No. bytes stored:\t {total_bytes_compressed:.2f} "
+                    f"[{sizeof_fmt(total_bytes_compressed)}]"
                 )
         else:
             total_bytes_uncompressed = reader["0"].nbytes
@@ -284,12 +284,12 @@ def print_info(path: StrOrBytesPath, verbose=False):
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
             msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
             msgs.append(
-                f"No. bytes:\t\t {total_bytes_compressed:.2f} "
-                f"[{sizeof_fmt(total_bytes_compressed)}]"
+                f"No. bytes:\t\t {total_bytes_uncompressed:.2f} "
+                f"[{sizeof_fmt(total_bytes_uncompressed)}]"
             )
             msgs.append(
-                f"No. bytes stored:\t {total_bytes_uncompressed:.2f} "
-                f"[{sizeof_fmt(total_bytes_uncompressed)}]"
+                f"No. bytes stored:\t {total_bytes_compressed:.2f} "
+                f"[{sizeof_fmt(total_bytes_compressed)}]"
             )
         if verbose:
             msgs.extend(
