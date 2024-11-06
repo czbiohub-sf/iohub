@@ -90,11 +90,13 @@ def test_cli_info_ome_zarr(verbose):
     assert result.exit_code == 0
     assert re.search(r"Wells:\s+1", result.output)
     assert ("Chunk size" in result.output) == bool(verbose)
+    assert ("No. bytes decompressed" in result.output) == bool(verbose)
     # Test on single position
     result_pos = runner.invoke(cli, ["info", str(hcs_ref / "B" / "03" / "0")])
     assert "Channel names" in result_pos.output
     assert "scale (um)" in result_pos.output
     assert "Chunk size" in result_pos.output
+    assert "84.4 MiB" in result_pos.output
 
 
 @pytest.mark.parametrize("grid_layout", ["-g", None])
