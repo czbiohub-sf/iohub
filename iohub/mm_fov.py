@@ -144,7 +144,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                     row_col_fov.append(
                         ("0", match.group(4), match.group(5) + match.group(6))
                     )
-                else:  # "1-Pos000_000" case
+                elif match.group(7):  # "1-Pos000_000" case
                     row_col_fov.append(
                         ("0", match.group(7), match.group(8) + match.group(9))
                     )
