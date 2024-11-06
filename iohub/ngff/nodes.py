@@ -1391,7 +1391,7 @@ class Plate(NGFFNode):
                     f"Duplicate name '{name}' after path normalization."
                 )
             row, col, fov = name.split("/")
-            _ = plate.create_position(row, col, fov)
+            dst_pos = plate.create_position(row, col, fov)
             # overwrite position group
             _ = zarr.copy_store(
                 src_pos.zgroup.store,
@@ -1400,6 +1400,9 @@ class Plate(NGFFNode):
                 dest_path=name,
                 if_exists="replace",
             )
+            dst_pos._parse_meta()
+            dst_pos.metadata.omero.name = fov
+            dst_pos.dump_meta()
         return plate
 
     def __init__(
