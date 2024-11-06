@@ -3,7 +3,7 @@ import pytest
 from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
-from iohub.reader import read_images
+from iohub.reader import read_images, sizeof_fmt
 from tests.conftest import (
     mm2gamma_ome_tiffs,
     mm2gamma_singlepage_tiffs,
@@ -36,3 +36,11 @@ def test_detect_ndtiff(data_path):
 def test_detect_single_page_tiff(data_path):
     reader = read_images(data_path)
     assert isinstance(reader, MicromanagerSequenceReader)
+
+
+@pytest.mark.parametrize(
+    "num_bytes,expected",
+    [(3, "3 B"), (2.234 * 2**20, "2.2 MiB"), (3.456 * 2**40, "3.5 TiB")],
+)
+def test_sizeof_fmt(num_bytes, expected):
+    assert sizeof_fmt(num_bytes) == expected
