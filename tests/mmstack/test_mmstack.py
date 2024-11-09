@@ -68,6 +68,8 @@ def test_mmstack_metadata(ome_tiff):
         assert isinstance(mmstack.micromanager_metadata, dict)
         assert mmstack.micromanager_metadata["Summary"]
         assert mmstack.micromanager_summary
+        if mmstack.stage_positions:
+            assert "DefaultXYStage" in mmstack.stage_positions[0]
 
 
 def test_fov_axes_names(ome_tiff):
