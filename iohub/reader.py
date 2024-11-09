@@ -262,11 +262,23 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 print("Zarr hierarchy:")
                 reader.print_tree()
                 positions = list(reader.positions())
+                total_bytes_uncompressed = sum(
+                    p["0"].nbytes for _, p in positions
+                )
                 msgs.append(f"Positions:\t\t {len(positions)}")
                 msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
+                msgs.append(
+                    f"No. bytes decompressed:\t\t {total_bytes_uncompressed} "
+                    f"[{sizeof_fmt(total_bytes_uncompressed)}]"
+                )
         else:
+            total_bytes_uncompressed = reader["0"].nbytes
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
             msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
+            msgs.append(
+                f"No. bytes decompressed:\t\t {total_bytes_uncompressed} "
+                f"[{sizeof_fmt(total_bytes_uncompressed)}]"
+            )
         if verbose:
             msgs.extend(
                 [
@@ -280,3 +292,18 @@ def print_info(path: StrOrBytesPath, verbose=False):
             reader.print_tree()
         print("\n".join(msgs))
         reader.close()
+
+
+def sizeof_fmt(num: int) -> str:
+    """
+    Human readable file size
+    Adapted form:
+    https://web.archive.org/web/20111010015624/
+    http://blogmag.net/blog/read/38/Print_human_readable_file_size
+    """
+    if num < 1024:
+        return f"{num} B"
+    for x in ["KiB", "MiB", "GiB", "TiB"]:
+        num /= 1024
+        if num < 1024:
+            return f"{num:.1f} {x}"
