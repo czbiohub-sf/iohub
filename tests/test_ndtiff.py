@@ -32,6 +32,8 @@ def test_dataset_metadata(ndtiff_dataset):
         assert isinstance(dataset.micromanager_metadata, dict)
         assert dataset.micromanager_metadata["Summary"]
         assert isinstance(dataset.micromanager_summary, dict)
+        if dataset.stage_positions:
+            assert "DefaultXYStage" in dataset.stage_positions[0]
 
 
 @pytest.mark.parametrize("ndtiff_v2", ndtiff_v2_datasets)

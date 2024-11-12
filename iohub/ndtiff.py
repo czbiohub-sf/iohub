@@ -167,7 +167,9 @@ class NDTiffDataset(MicroManagerFOVMapping):
                         "YPosition_um_Intended",
                     ]
                 ):
-                    position_metadata[img_metadata["Core-XYStage"]] = (
+                    xy_stage = img_metadata["Core-XYStage"]
+                    position_metadata["DefaultXYStage"] = xy_stage
+                    position_metadata[xy_stage] = (
                         img_metadata["XPosition_um_Intended"],
                         img_metadata["YPosition_um_Intended"],
                     )
