@@ -311,6 +311,9 @@ class ImageArray(zarr.Array):
     """Container object for image stored as a zarr array (up to 5D)"""
 
     def __init__(self, zarray: zarr.Array = None, **kwargs):
+        """Keyword arguments are passed to the zarr.Array constructor.
+        If a zarr.Array is provided, the constructor will use its attributes.
+        """
         if zarray is not None:
             kwargs.update(
                 {
