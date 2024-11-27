@@ -312,7 +312,8 @@ class ImageArray(zarr.Array):
 
     def __init__(self, zarray: zarr.Array = None, **kwargs):
         """Keyword arguments are passed to the zarr.Array constructor.
-        If a zarr.Array is provided, the constructor will use its attributes.
+        If a zarr.Array is provided, the constructor will use its attributes
+        to initialize the ImageArray.
         """
         if zarray is not None:
             kwargs.update(
