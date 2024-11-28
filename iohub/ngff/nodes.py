@@ -341,7 +341,7 @@ class ImageArray(zarr.Array):
         return self[:]
 
     def dask(self):
-        """Return the image as a dask array"""
+        """Return as a dask array"""
         import dask.array as da
 
         return da.from_zarr(self.store.path, component=self.path)
