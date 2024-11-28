@@ -283,6 +283,10 @@ def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
         assert_array_almost_equal(dataset.data.dask().compute(), random_5d)
+    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+        assert_array_almost_equal(
+            dataset[arr_name].dask().compute(), random_5d
+        )
 
 
 @given(
