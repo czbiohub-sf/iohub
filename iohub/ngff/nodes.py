@@ -340,7 +340,7 @@ class ImageArray(zarr.Array):
         `self.numpy()` is equivalent to `self[:]`."""
         return self[:]
 
-    def dask(self):
+    def dask_array(self):
         """Return as a dask array"""
         import dask.array as da
 
