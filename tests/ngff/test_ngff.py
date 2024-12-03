@@ -276,6 +276,27 @@ def test_create_zeros(ch_shape_dtype, arr_name):
 )
 @settings(
     max_examples=16,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
+    """Test `iohub.ngff.Position.data` to dask"""
+    channel_names, random_5d = channels_and_random_5d
+    with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
+        assert_array_almost_equal(
+            dataset.data.dask_array().compute(), random_5d
+        )
+    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+        assert_array_almost_equal(
+            dataset[arr_name].dask_array().compute(), random_5d
+        )
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+)
+@settings(
+    max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )

@@ -340,6 +340,13 @@ class ImageArray(zarr.Array):
         `self.numpy()` is equivalent to `self[:]`."""
         return self[:]
 
+    def dask_array(self):
+        """Return as a dask array"""
+        import dask.array as da
+
+        # Note: Designed to work with zarr DirectoryStore
+        return da.from_zarr(self.store.path, component=self.path)
+
     def downscale(self):
         raise NotImplementedError
 
