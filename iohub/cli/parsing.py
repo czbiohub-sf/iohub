@@ -41,6 +41,43 @@ def input_position_dirpaths() -> Callable:
 
     return decorator
 
+def target_position_dirpaths() -> Callable:
+    def decorator(f: Callable) -> Callable:
+        return click.option(
+            "--target-position-dirpaths",
+            "-t",
+            cls=OptionEatAll,
+            type=tuple,
+            required=True,
+            callback=_validate_and_process_paths,
+            help=(
+                "List of paths to input positions, "
+                "each with the same TCZYX shape. "
+                "Supports wildcards e.g. 'target.zarr/*/*/*'."
+            ),
+        )(f)
+
+    return decorator
+
+
+def source_position_dirpaths() -> Callable:
+    def decorator(f: Callable) -> Callable:
+        return click.option(
+            "--source-position-dirpaths",
+            "-s",
+            cls=OptionEatAll,
+            type=tuple,
+            required=True,
+            callback=_validate_and_process_paths,
+            help=(
+                "List of paths to input positions, "
+                "each with the same TCZYX shape. "
+                "Supports wildcards e.g. 'source.zarr/B/1/000000'."
+            ),
+        )(f)
+
+    return decorator
+
 
 # Copied directly from https://stackoverflow.com/a/48394004
 # Enables `-i ./input.zarr/*/*/*`

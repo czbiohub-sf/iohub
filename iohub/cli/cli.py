@@ -4,7 +4,7 @@ import click
 
 from iohub import open_ome_zarr
 from iohub._version import __version__
-from iohub.cli.parsing import input_position_dirpaths
+from iohub.cli.parsing import input_position_dirpaths, target_position_dirpaths, source_position_dirpaths
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
@@ -153,8 +153,35 @@ def set_scale(
                     f"{old_value} to {value}."
                 )
                 dataset.set_scale("0", name, value)
+@cli.command()
+@click.help_option("-h", "--help")
+@source_position_dirpaths()
+@target_position_dirpaths()
+
+def set_scale_from_position(
+    source_position_dirpaths,
+    target_position_dirpaths,
+):
+    """Update scale metadata in OME-Zarr datasets from other dataset.
+
+    >> iohub set-scale-from-position -s source.zarr/B/1/000000 -t target.zarr/*/*/*
+
+    """
+    dataset = open_ome_zarr(source_position_dirpaths[0])
+    print(dataset.scale)
+    t_scale,_, z_scale, y_scale, x_scale = dataset.scale
+    
 
 
+    # Call `set_scale` for the target position directories
+    set_scale.callback(
+        input_position_dirpaths=target_position_dirpaths,
+        t_scale=t_scale,
+        z_scale=z_scale,
+        y_scale=y_scale,
+        x_scale=x_scale,
+    )
+    
 @cli.command(name="rename-wells")
 @click.help_option("-h", "--help")
 @click.option(
