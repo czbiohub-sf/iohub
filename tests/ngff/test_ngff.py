@@ -491,25 +491,39 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
         (
             [TransformationMeta(type="identity")],
             TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
-            TransformationMeta(type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)),
+            TransformationMeta(
+                type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
+            ),
         ),
         (
             [TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0))],
             TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)),
-            TransformationMeta(type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)),
+            TransformationMeta(
+                type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
+            ),
         ),
         (
-            [TransformationMeta(type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0))],
+            [
+                TransformationMeta(
+                    type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)
+                )
+            ],
             TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
-            TransformationMeta(type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)),
+            TransformationMeta(
+                type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)
+            ),
         ),
         (
             [
                 TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
-                TransformationMeta(type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)),
+                TransformationMeta(
+                    type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
+                ),
             ],
             TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
-            TransformationMeta(type="translation", translation=(2.0, 2.0, 2.0, 2.0, 2.0)),
+            TransformationMeta(
+                type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
+            ),
         ),
     ],
 )
@@ -531,7 +545,10 @@ def test_get_transform_image(transforms, ch_shape_dtype, arr_name):
                 0
             ].coordinate_transformations == [TransformationMeta(type="identity")]
             dataset.set_transform(image=arr_name, transform=transform)
-            scale, translate = dataset.get_transforms(image=arr_name)
+            scale, translate = (
+                dataset.get_effective_scale(image=arr_name),
+                dataset.get_effective_translation(image=arr_name),
+            )
             assert scale == expected_scale
             assert translate == expected_translate
 

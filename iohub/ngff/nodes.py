@@ -1010,20 +1010,22 @@ class Position(NGFFNode):
         """
         return self.axis_names.index(axis_name.lower())
 
-    def get_transforms(
+    def get_effective_scale(
         self,
         image: str | Literal["*"],
-    ) -> tuple[TransformationMeta, TransformationMeta]:
-        """Get the total coordinate scale and translation metadata
+    ) -> TransformationMeta:
+        """Get the total coordinate scale metadata
         for one image array or the whole FOV.
 
         Parameters
         ----------
         image : str | Literal["*"]
-            Name of one image array (e.g. "0") to transform,
+            Name of one image array (e.g. "0") to query,
             or "*" for the whole FOV
         """
-        transforms: list[TransformationMeta] = self.metadata.multiscales[0].coordinate_transformations
+        transforms: list[TransformationMeta] = [t for t in self.metadata.multiscales[
+            0
+        ].coordinate_transformations]
         if image != "*" and image in self:
             for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
                 if dataset_meta.path == image:
@@ -1035,17 +1037,48 @@ class Position(NGFFNode):
         elif image != "*":
             raise ValueError(f"Key {image} not recognized.")
 
-        full_scale = np.array([1]*len(self.axes), dtype=float)
-        full_translation = np.array([0]*len(self.axes), dtype=float)
+        full_scale = np.ones(len(self.axes), dtype=float)
         for transform in transforms:
             if transform.type == "scale":
                 full_scale *= np.array(transform.scale)
-            elif transform.type == "translation":
-                full_translation += full_scale * np.array(transform.translation)
+
+        return TransformationMeta(type="scale", scale=tuple(full_scale))
+
+    def get_effective_translation(
+        self,
+        image: str | Literal["*"],
+    ) -> TransformationMeta:
+        """Get the total coordinate translation metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+        """
+        transforms: list[TransformationMeta] = [
+            t for t in self.metadata.multiscales[0].coordinate_transformations
+        ]
+        if image != "*" and image in self:
+            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
+                if dataset_meta.path == image:
+                    transforms.extend(
+                        self.metadata.multiscales[0]
+                        .datasets[i]
+                        .coordinate_transformations
+                    )
+        elif image != "*":
+            raise ValueError(f"Key {image} not recognized.")
+
+        full_translation = np.zeros(len(self.axes), dtype=float)
+        for transform in transforms:
+            if transform.type == "translation":
+                full_translation += np.array(transform.translation)
 
         return TransformationMeta(
-            type="scale", scale=tuple(full_scale)
-        ), TransformationMeta(type="translation", translation=tuple(full_translation))
+            type="translation", translation=tuple(full_translation)
+        )
 
     def set_transform(
         self,
