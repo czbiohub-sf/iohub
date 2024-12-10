@@ -496,7 +496,11 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
             ),
         ),
         (
-            [TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0))],
+            [
+                TransformationMeta(
+                    type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)
+                )
+            ],
             TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)),
             TransformationMeta(
                 type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
@@ -515,7 +519,9 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
         ),
         (
             [
-                TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
+                TransformationMeta(
+                    type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)
+                ),
                 TransformationMeta(
                     type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
                 ),
@@ -543,7 +549,9 @@ def test_get_transform_image(transforms, ch_shape_dtype, arr_name):
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
             assert dataset.metadata.multiscales[0].datasets[
                 0
-            ].coordinate_transformations == [TransformationMeta(type="identity")]
+            ].coordinate_transformations == [
+                TransformationMeta(type="identity")
+            ]
             dataset.set_transform(image=arr_name, transform=transform)
             scale, translate = (
                 dataset.get_effective_scale(image=arr_name),

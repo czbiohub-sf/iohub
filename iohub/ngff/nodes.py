@@ -1023,11 +1023,13 @@ class Position(NGFFNode):
             Name of one image array (e.g. "0") to query,
             or "*" for the whole FOV
         """
-        transforms: list[TransformationMeta] = [t for t in self.metadata.multiscales[
-            0
-        ].coordinate_transformations]
+        transforms: list[TransformationMeta] = [
+            t for t in self.metadata.multiscales[0].coordinate_transformations
+        ]
         if image != "*" and image in self:
-            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
+            for i, dataset_meta in enumerate(
+                self.metadata.multiscales[0].datasets
+            ):
                 if dataset_meta.path == image:
                     transforms.extend(
                         self.metadata.multiscales[0]
@@ -1061,7 +1063,9 @@ class Position(NGFFNode):
             t for t in self.metadata.multiscales[0].coordinate_transformations
         ]
         if image != "*" and image in self:
-            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
+            for i, dataset_meta in enumerate(
+                self.metadata.multiscales[0].datasets
+            ):
                 if dataset_meta.path == image:
                     transforms.extend(
                         self.metadata.multiscales[0]
