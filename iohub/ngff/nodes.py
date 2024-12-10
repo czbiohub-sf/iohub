@@ -58,7 +58,9 @@ def _open_store(
     synchronizer=None,
 ):
     if not os.path.isdir(store_path) and mode in ("r", "r+"):
-        raise FileNotFoundError(f"Dataset directory not found at {store_path}.")
+        raise FileNotFoundError(
+            f"Dataset directory not found at {store_path}."
+        )
     if version != "0.4":
         _logger.warning(
             "IOHub is only tested against OME-NGFF v0.4. "
@@ -68,10 +70,14 @@ def _open_store(
     else:
         dimension_separator = "/"
     try:
-        store = zarr.DirectoryStore(store_path, dimension_separator=dimension_separator)
+        store = zarr.DirectoryStore(
+            store_path, dimension_separator=dimension_separator
+        )
         root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
     except Exception as e:
-        raise RuntimeError(f"Cannot open Zarr root group at {store_path}") from e
+        raise RuntimeError(
+            f"Cannot open Zarr root group at {store_path}"
+        ) from e
     return root
 
 
@@ -102,7 +108,9 @@ class NGFFNode:
         if channel_names:
             self._channel_names = channel_names
         elif not parse_meta:
-            raise ValueError("Channel names need to be provided or in metadata.")
+            raise ValueError(
+                "Channel names need to be provided or in metadata."
+            )
         if axes:
             self.axes = axes
         self._group = group
@@ -533,8 +541,12 @@ class Position(NGFFNode):
         omero = self.zattrs.get("omero")
         if multiscales and omero:
             try:
-                self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
-                self._channel_names = [c.label for c in self.metadata.omero.channels]
+                self.metadata = ImagesMeta(
+                    multiscales=multiscales, omero=omero
+                )
+                self._channel_names = [
+                    c.label for c in self.metadata.omero.channels
+                ]
                 self.axes = self.metadata.multiscales[0].axes
             except ValidationError:
                 self._warn_invalid_meta()
@@ -548,7 +560,9 @@ class Position(NGFFNode):
     @property
     def _storage_options(self):
         return {
-            "compressor": Blosc(cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE),
+            "compressor": Blosc(
+                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+            ),
             "overwrite": self._overwrite,
         }
 
@@ -585,7 +599,8 @@ class Position(NGFFNode):
             return self["0"]
         except KeyError:
             raise KeyError(
-                "There is no array named '0' " f"in the group of: {self.array_keys()}"
+                "There is no array named '0' "
+                f"in the group of: {self.array_keys()}"
             )
 
     def __getitem__(self, key: int | str) -> ImageArray:
@@ -609,7 +624,9 @@ class Position(NGFFNode):
         """Write an up-to-5D image with default settings."""
         key = normalize_storage_path(key)
         if not isinstance(value, np.ndarray):
-            raise TypeError(f"Value must be a NumPy array. Got type {type(value)}.")
+            raise TypeError(
+                f"Value must be a NumPy array. Got type {type(value)}."
+            )
         self.create_image(key, value)
 
     def images(self) -> Generator[tuple[str, ImageArray]]:
@@ -659,7 +676,9 @@ class Position(NGFFNode):
         if check_shape:
             self._check_shape(data.shape)
         img_arr = ImageArray(
-            self._group.array(name, data, chunks=chunks, **self._storage_options)
+            self._group.array(
+                name, data, chunks=chunks, **self._storage_options
+            )
         )
         self._create_image_meta(img_arr.basename, transform=transform)
         return img_arr
@@ -742,7 +761,8 @@ class Position(NGFFNode):
                 _logger.warning(msg)
         else:
             _logger.info(
-                "Dataset channel axis is not set. " "Skipping channel shape check."
+                "Dataset channel axis is not set. "
+                "Skipping channel shape check."
             )
 
     def _create_image_meta(
@@ -753,7 +773,9 @@ class Position(NGFFNode):
     ):
         if not transform:
             transform = [TransformationMeta(type="identity")]
-        dataset_meta = DatasetMeta(path=name, coordinate_transformations=transform)
+        dataset_meta = DatasetMeta(
+            path=name, coordinate_transformations=transform
+        )
         if not hasattr(self, "metadata"):
             self.metadata = ImagesMeta(
                 multiscales=[
@@ -762,13 +784,18 @@ class Position(NGFFNode):
                         axes=self.axes,
                         datasets=[dataset_meta],
                         name=name,
-                        coordinateTransformations=[TransformationMeta(type="identity")],
+                        coordinateTransformations=[
+                            TransformationMeta(type="identity")
+                        ],
                         metadata=extra_meta,
                     )
                 ],
                 omero=self._omero_meta(id=0, name=self._group.basename),
             )
-        elif dataset_meta.path not in self.metadata.multiscales[0].get_dataset_paths():
+        elif (
+            dataset_meta.path
+            not in self.metadata.multiscales[0].get_dataset_paths()
+        ):
             self.metadata.multiscales[0].datasets.append(dataset_meta)
         self.dump_meta()
 
@@ -781,11 +808,15 @@ class Position(NGFFNode):
         if not clims:
             clims = [None] * len(self.channel_names)
         channels = []
-        for i, (channel_name, clim) in enumerate(zip(self.channel_names, clims)):
+        for i, (channel_name, clim) in enumerate(
+            zip(self.channel_names, clims)
+        ):
             if i == 0:
                 first_chan = True
             channels.append(
-                channel_display_settings(channel_name, clim=clim, first_chan=first_chan)
+                channel_display_settings(
+                    channel_name, clim=clim, first_chan=first_chan
+                )
             )
         omero_meta = OMEROMeta(
             version=self.version,
@@ -805,7 +836,8 @@ class Position(NGFFNode):
     def _get_channel_axis(self):
         if (ch_ax := self._find_axis("channel")) is None:
             raise KeyError(
-                "Axis 'channel' does not exist. " "Please update `self.axes` first."
+                "Axis 'channel' does not exist. "
+                "Please update `self.axes` first."
             )
         else:
             return ch_ax
@@ -834,10 +866,14 @@ class Position(NGFFNode):
                 elif ch_ax == len(shape):
                     shape = _pad_shape(tuple(shape), target=len(shape) + 1)
                 else:
-                    raise IndexError(f"Cannot infer channel axis for shape {shape}.")
+                    raise IndexError(
+                        f"Cannot infer channel axis for shape {shape}."
+                    )
                 img.resize(shape)
         if "omero" in self.metadata.model_dump().keys():
-            self.metadata.omero.channels.append(channel_display_settings(chan_name))
+            self.metadata.omero.channels.append(
+                channel_display_settings(chan_name)
+            )
             self.dump_meta()
 
     def rename_channel(self, old: str, new: str):
@@ -901,12 +937,18 @@ class Position(NGFFNode):
         for level in range(1, levels):
             factor = 2**level
 
-            shape = array.shape[:-3] + _scale_integers(array.shape[-3:], factor)
+            shape = array.shape[:-3] + _scale_integers(
+                array.shape[-3:], factor
+            )
 
-            chunks = _pad_shape(_scale_integers(array.chunks, factor), len(shape))
+            chunks = _pad_shape(
+                _scale_integers(array.chunks, factor), len(shape)
+            )
 
             transforms = deepcopy(
-                self.metadata.multiscales[0].datasets[0].coordinate_transformations
+                self.metadata.multiscales[0]
+                .datasets[0]
+                .coordinate_transformations
             )
             for tr in transforms:
                 if tr.type == "scale":
@@ -928,7 +970,9 @@ class Position(NGFFNode):
         highest resolution scale.
         """
         scale = [1] * self.data.ndim
-        transforms = self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        transforms = (
+            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        )
         for trans in transforms:
             if trans.type == "scale":
                 if len(trans.scale) != len(scale):
@@ -946,7 +990,9 @@ class Position(NGFFNode):
 
         Returns lowercase axis names.
         """
-        return [axis.name.lower() for axis in self.metadata.multiscales[0].axes]
+        return [
+            axis.name.lower() for axis in self.metadata.multiscales[0].axes
+        ]
 
     def get_axis_index(self, axis_name: str) -> int:
         """
@@ -1021,7 +1067,9 @@ class Position(NGFFNode):
         if image == "*":
             self.metadata.multiscales[0].coordinate_transformations = transform
         elif image in self:
-            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
+            for i, dataset_meta in enumerate(
+                self.metadata.multiscales[0].datasets
+            ):
                 if dataset_meta.path == image:
                     self.metadata.multiscales[0].datasets[i] = DatasetMeta(
                         path=image, coordinate_transformations=transform
@@ -1050,7 +1098,9 @@ class Position(NGFFNode):
             Value of the new scale.
         """
         if len(self.metadata.multiscales) > 1:
-            raise NotImplementedError("Cannot set scale for multi-resolution images.")
+            raise NotImplementedError(
+                "Cannot set scale for multi-resolution images."
+            )
 
         if new_scale <= 0:
             raise ValueError("New scale must be positive.")
@@ -1065,7 +1115,9 @@ class Position(NGFFNode):
         self.zattrs["iohub"] = iohub_dict
 
         # Update scale while preserving existing transforms
-        transforms = self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        transforms = (
+            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        )
         # Replace default identity transform with scale
         if len(transforms) == 1 and transforms[0].type == "identity":
             transforms = [TransformationMeta(type="scale", scale=[1] * 5)]
@@ -1191,7 +1243,9 @@ class Well(NGFFNode):
 
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
-        self.zattrs.update({"well": self.metadata.model_dump(**TO_DICT_SETTINGS)})
+        self.zattrs.update(
+            {"well": self.metadata.model_dump(**TO_DICT_SETTINGS)}
+        )
 
     def __getitem__(self, key: str):
         """Get a position member of the well.
@@ -1372,7 +1426,8 @@ class Plate(NGFFNode):
         for name, src_pos in positions.items():
             if not isinstance(src_pos, Position):
                 raise TypeError(
-                    f"Expected item type {type(Position)}, " f"got {type(src_pos)}"
+                    f"Expected item type {type(Position)}, "
+                    f"got {type(src_pos)}"
                 )
             name = normalize_storage_path(name)
             if name in plate.zgroup:
@@ -1455,7 +1510,9 @@ class Plate(NGFFNode):
         """
         if field_count:
             self.metadata.field_count = len(list(self.positions()))
-        self.zattrs.update({"plate": self.metadata.model_dump(**TO_DICT_SETTINGS)})
+        self.zattrs.update(
+            {"plate": self.metadata.model_dump(**TO_DICT_SETTINGS)}
+        )
 
     def _auto_idx(
         self,
@@ -1543,7 +1600,9 @@ class Plate(NGFFNode):
             self.metadata.wells.append(well_index_meta)
         # create new row if needed
         if row_name not in self:
-            row_grp = self.zgroup.create_group(row_meta.name, overwrite=self._overwrite)
+            row_grp = self.zgroup.create_group(
+                row_meta.name, overwrite=self._overwrite
+            )
             if row_meta not in self.metadata.rows:
                 self.metadata.rows.append(row_meta)
         else:
@@ -1666,9 +1725,9 @@ class Plate(NGFFNode):
         self.zgroup.move(old, new)
 
         # update well metadata
-        old_well_index = [well_name.path for well_name in self.metadata.wells].index(
-            old
-        )
+        old_well_index = [
+            well_name.path for well_name in self.metadata.wells
+        ].index(old)
         self.metadata.wells[old_well_index].path = new
         new_well_names = [well.path for well in self.metadata.wells]
 
