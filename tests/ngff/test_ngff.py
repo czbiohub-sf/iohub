@@ -37,16 +37,10 @@ z_dim_st = st.integers(1, 4)
 y_dim_st = st.integers(1, 32)
 x_dim_st = st.integers(1, 32)
 channel_names_st = c_dim_st.flatmap(
-    (
-        lambda c_dim: st.lists(
-            short_text_st, min_size=c_dim, max_size=c_dim, unique=True
-        )
-    )
+    (lambda c_dim: st.lists(short_text_st, min_size=c_dim, max_size=c_dim, unique=True))
 )
 short_alpha_numeric = st.text(
-    alphabet=list(
-        string.ascii_lowercase + string.ascii_uppercase + string.digits
-    ),
+    alphabet=list(string.ascii_lowercase + string.ascii_uppercase + string.digits),
     min_size=1,
     max_size=16,
 )
@@ -90,9 +84,7 @@ def _channels_and_random_5d_shape_and_dtype(draw):
 
 @st.composite
 def _channels_and_random_5d(draw):
-    channel_names, shape, dtype = draw(
-        _channels_and_random_5d_shape_and_dtype()
-    )
+    channel_names, shape, dtype = draw(_channels_and_random_5d_shape_and_dtype())
     random_5d = draw(npst.arrays(dtype, shape=shape))
     return channel_names, random_5d
 
@@ -213,9 +205,7 @@ def _temp_ome_zarr_plate(
             channel_names=channel_names,
         )
         for position in position_list:
-            pos = dataset.create_position(
-                position[0], position[1], position[2]
-            )
+            pos = dataset.create_position(position[0], position[1], position[2])
             pos.create_image(arr_name, image_5d, **kwargs)
         yield dataset
     finally:
@@ -282,13 +272,9 @@ def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data` to dask"""
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
-        assert_array_almost_equal(
-            dataset.data.dask_array().compute(), random_5d
-        )
+        assert_array_almost_equal(dataset.data.dask_array().compute(), random_5d)
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
-        assert_array_almost_equal(
-            dataset[arr_name].dask_array().compute(), random_5d
-        )
+        assert_array_almost_equal(dataset[arr_name].dask_array().compute(), random_5d)
 
 
 @given(
@@ -324,9 +310,7 @@ def test_append_channel(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.append_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
-        random_5d[:, :-1], channel_names[:-1], arr_name
-    ) as dataset:
+    with _temp_ome_zarr(random_5d[:, :-1], channel_names[:-1], arr_name) as dataset:
         dataset.append_channel(channel_names[-1], resize_arrays=True)
         dataset[arr_name][:, -1] = random_5d[:, -1]
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
@@ -419,16 +403,10 @@ def test_update_channel(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.update_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
-        random_5d[:, :-1], channel_names[:-1], arr_name
-    ) as dataset:
+    with _temp_ome_zarr(random_5d[:, :-1], channel_names[:-1], arr_name) as dataset:
         for i, ch in enumerate(dataset.channel_names):
-            dataset.update_channel(
-                chan_name=ch, target=arr_name, data=random_5d[:, -1]
-            )
-            assert_array_almost_equal(
-                dataset[arr_name][:, i], random_5d[:, -1]
-            )
+            dataset.update_channel(chan_name=ch, target=arr_name, data=random_5d[:, -1])
+            assert_array_almost_equal(dataset[arr_name][:, i], random_5d[:, -1])
 
 
 @given(
@@ -467,14 +445,10 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
             assert dataset.metadata.multiscales[0].datasets[
                 0
-            ].coordinate_transformations == [
-                TransformationMeta(type="identity")
-            ]
+            ].coordinate_transformations == [TransformationMeta(type="identity")]
             dataset.set_transform(image=arr_name, transform=transform)
             assert (
-                dataset.metadata.multiscales[0]
-                .datasets[0]
-                .coordinate_transformations
+                dataset.metadata.multiscales[0].datasets[0].coordinate_transformations
                 == transform
             )
         # read data with an external reader
@@ -483,6 +457,57 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
         assert node.metadata["coordinateTransformations"][0] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
+
+
+@pytest.mark.parametrize(
+    "transforms",
+    [
+        (
+            [TransformationMeta(type="identity")],
+            TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
+            TransformationMeta(type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)),
+        ),
+        (
+            [TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0))],
+            TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)),
+            TransformationMeta(type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)),
+        ),
+        (
+            [TransformationMeta(type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0))],
+            TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
+            TransformationMeta(type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)),
+        ),
+        (
+            [
+                TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
+                TransformationMeta(type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)),
+            ],
+            TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
+            TransformationMeta(type="translation", translation=(2.0, 2.0, 2.0, 2.0, 2.0)),
+        ),
+    ],
+)
+@given(
+    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
+    arr_name=short_alpha_numeric,
+)
+def test_get_transform_image(transforms, ch_shape_dtype, arr_name):
+    """Test `iohub.ngff.Position.set_transform()`"""
+    transform, expected_scale, expected_translate = transforms
+    channel_names, shape, dtype = ch_shape_dtype
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        with open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
+        ) as dataset:
+            dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
+            assert dataset.metadata.multiscales[0].datasets[
+                0
+            ].coordinate_transformations == [TransformationMeta(type="identity")]
+            dataset.set_transform(image=arr_name, transform=transform)
+            scale, translate = dataset.get_transforms(image=arr_name)
+            assert scale == expected_scale
+            assert translate == expected_translate
 
 
 @given(
@@ -501,15 +526,12 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
             store_path, layout="fov", mode="w-", channel_names=channel_names
         ) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-            assert dataset.metadata.multiscales[
-                0
-            ].coordinate_transformations == [
+            assert dataset.metadata.multiscales[0].coordinate_transformations == [
                 TransformationMeta(type="identity")
             ]
             dataset.set_transform(image="*", transform=transform)
             assert (
-                dataset.metadata.multiscales[0].coordinate_transformations
-                == transform
+                dataset.metadata.multiscales[0].coordinate_transformations == transform
             )
         # read data with plain zarr
         group = zarr.open(store_path)
@@ -593,9 +615,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
                 grid_shape[-2] * random_5d.shape[-2],
                 grid_shape[-1] * random_5d.shape[-1],
             )
-            assert tiles.tile_shape == _pad_shape(
-                random_5d.shape[-2:], target=5
-            )
+            assert tiles.tile_shape == _pad_shape(random_5d.shape[-2:], target=5)
             assert tiles.dtype == random_5d.dtype
             for args in ((1.01, 1), (0, 0, 0)):
                 with pytest.raises(TypeError):
@@ -724,9 +744,7 @@ def test_get_axis_index():
             _ = position.get_axis_index("DOG")
 
 
-@given(
-    row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
-)
+@given(row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric)
 @settings(max_examples=16, deadline=2000)
 def test_modify_hcs_ref(row: str, col: str, pos: str):
     """Test `iohub.ngff.open_ome_zarr()`"""
@@ -759,17 +777,11 @@ def test_create_well(row_names: list[str], col_names: list[str]):
         for row_name in row_names:
             for col_name in col_names:
                 dataset.create_well(row_name, col_name)
-        assert [
-            c["name"] for c in dataset.zattrs["plate"]["columns"]
-        ] == col_names
-        assert [
-            r["name"] for r in dataset.zattrs["plate"]["rows"]
-        ] == row_names
+        assert [c["name"] for c in dataset.zattrs["plate"]["columns"]] == col_names
+        assert [r["name"] for r in dataset.zattrs["plate"]["rows"]] == row_names
 
 
-@given(
-    row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
-)
+@given(row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric)
 def test_create_position(row, col, pos):
     """Test `iohub.ngff.Plate.create_position()`"""
     with TemporaryDirectory() as temp_dir:
@@ -790,9 +802,7 @@ def test_position_scale(channels_and_random_5d):
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
     transform = [TransformationMeta(type="scale", scale=scale)]
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", transform=transform
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", transform=transform) as dataset:
         # round-trip test with the offical reader implementation
         assert dataset.scale == scale
 
