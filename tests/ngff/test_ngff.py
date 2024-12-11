@@ -512,24 +512,16 @@ input_transformations = [
     ),
 ]
 target_scales = [
-    TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
-    TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)),
-    TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
-    TransformationMeta(type="scale", scale=(4.0, 4.0, 4.0, 4.0, 4.0)),
+    (1.0, 1.0, 1.0, 1.0, 1.0),
+    (1.0, 2.0, 3.0, 4.0, 5.0),
+    (1.0, 1.0, 1.0, 1.0, 1.0),
+    (4.0, 4.0, 4.0, 4.0, 4.0),
 ]
 target_translations = [
-    TransformationMeta(
-        type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
-    ),
-    TransformationMeta(
-        type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
-    ),
-    TransformationMeta(
-        type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)
-    ),
-    TransformationMeta(
-        type="translation", translation=(2.0, 2.0, 2.0, 2.0, 2.0)
-    ),
+    (0.0, 0.0, 0.0, 0.0, 0.0),
+    (0.0, 0.0, 0.0, 0.0, 0.0),
+    (1.0, 2.0, 3.0, 4.0, 5.0),
+    (2.0, 2.0, 2.0, 2.0, 2.0),
 ]
 
 
