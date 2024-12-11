@@ -537,7 +537,7 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
 )
-def test_get_transform_image(transforms, ch_shape_dtype, arr_name):
+def test_get_effective_transforms_image(transforms, ch_shape_dtype, arr_name):
     """Test `iohub.ngff.Position.set_transform()`"""
     transform, expected_scale, expected_translate = transforms
     channel_names, shape, dtype = ch_shape_dtype
