@@ -1060,7 +1060,7 @@ class Position(NGFFNode):
             if transform.type == "scale":
                 full_scale *= np.array(transform.scale)
 
-        return list(full_scale)
+        return [float(x) for x in full_scale]
 
     def get_effective_translation(
         self,
@@ -1087,7 +1087,7 @@ class Position(NGFFNode):
             if transform.type == "translation":
                 full_translation += np.array(transform.translation)
 
-        return list(full_translation)
+        return [float(x) for x in full_translation]
 
     def set_transform(
         self,
