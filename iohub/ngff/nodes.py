@@ -969,7 +969,9 @@ class Position(NGFFNode):
         Helper function for scale transform metadata of
         highest resolution scale.
         """
-        return self.get_effective_scale("*").scale
+        return self.get_effective_scale(
+            self.metadata.multiscales[0].datasets[0].path
+        ).scale
 
     @property
     def axis_names(self) -> list[str]:
