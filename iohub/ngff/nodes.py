@@ -1010,11 +1010,10 @@ class Position(NGFFNode):
         """
         return self.axis_names.index(axis_name.lower())
 
-    def get_effective_scale(
-        self,
-        image: str | Literal["*"],
-    ) -> TransformationMeta:
-        """Get the total coordinate scale metadata
+    def _get_all_transforms(
+        self, image: str | Literal["*"]
+    ) -> list[TransformationMeta]:
+        """Get all transforms metadata
         for one image array or the whole FOV.
 
         Parameters
@@ -1022,6 +1021,11 @@ class Position(NGFFNode):
         image : str | Literal["*"]
             Name of one image array (e.g. "0") to query,
             or "*" for the whole FOV
+
+        Returns
+        -------
+        list[TransformationMeta]
+            All transforms applicable to this image or FOV.
         """
         transforms: list[TransformationMeta] = [
             t for t in self.metadata.multiscales[0].coordinate_transformations
@@ -1038,6 +1042,28 @@ class Position(NGFFNode):
                     )
         elif image != "*":
             raise ValueError(f"Key {image} not recognized.")
+        return transforms
+
+    def get_effective_scale(
+        self,
+        image: str | Literal["*"],
+    ) -> TransformationMeta:
+        """Get the effective coordinate scale metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        TransformationMeta
+            A single TransformationMeta object with the total
+            scale factor for the image or FOV.
+        """
+        transforms = self._get_all_transforms(image)
 
         full_scale = np.ones(len(self.axes), dtype=float)
         for transform in transforms:
@@ -1050,7 +1076,7 @@ class Position(NGFFNode):
         self,
         image: str | Literal["*"],
     ) -> TransformationMeta:
-        """Get the total coordinate translation metadata
+        """Get the effective coordinate translation metadata
         for one image array or the whole FOV.
 
         Parameters
@@ -1058,23 +1084,14 @@ class Position(NGFFNode):
         image : str | Literal["*"]
             Name of one image array (e.g. "0") to query,
             or "*" for the whole FOV
-        """
-        transforms: list[TransformationMeta] = [
-            t for t in self.metadata.multiscales[0].coordinate_transformations
-        ]
-        if image != "*" and image in self:
-            for i, dataset_meta in enumerate(
-                self.metadata.multiscales[0].datasets
-            ):
-                if dataset_meta.path == image:
-                    transforms.extend(
-                        self.metadata.multiscales[0]
-                        .datasets[i]
-                        .coordinate_transformations
-                    )
-        elif image != "*":
-            raise ValueError(f"Key {image} not recognized.")
 
+        Returns
+        -------
+        TransformationMeta
+            A single TransformationMeta object with the total
+            translation vector for the image or FOV.
+        """
+        transforms = self._get_all_transforms(image)
         full_translation = np.zeros(len(self.axes), dtype=float)
         for transform in transforms:
             if transform.type == "translation":
