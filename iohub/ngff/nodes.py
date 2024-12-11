@@ -969,19 +969,7 @@ class Position(NGFFNode):
         Helper function for scale transform metadata of
         highest resolution scale.
         """
-        scale = [1] * self.data.ndim
-        transforms = (
-            self.metadata.multiscales[0].datasets[0].coordinate_transformations
-        )
-        for trans in transforms:
-            if trans.type == "scale":
-                if len(trans.scale) != len(scale):
-                    raise RuntimeError(
-                        f"Length of scale transformation {len(trans.scale)} "
-                        f"does not match data dimension {len(scale)}."
-                    )
-                scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
-        return scale
+        return self.get_effective_scale("*").scale
 
     @property
     def axis_names(self) -> list[str]:
