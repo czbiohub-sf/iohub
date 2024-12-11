@@ -485,61 +485,68 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
         ]
 
 
-@pytest.mark.parametrize(
-    "transforms",
-    [
-        (
-            [TransformationMeta(type="identity")],
-            TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
-            TransformationMeta(
-                type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
-            ),
-        ),
-        (
-            [
-                TransformationMeta(
-                    type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)
-                )
-            ],
-            TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)),
-            TransformationMeta(
-                type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
-            ),
-        ),
-        (
-            [
-                TransformationMeta(
-                    type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)
-                )
-            ],
-            TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
+input_transformations = [
+    ([TransformationMeta(type="identity")], []),
+    ([TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0))], []),
+    (
+        [
             TransformationMeta(
                 type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)
-            ),
-        ),
-        (
-            [
-                TransformationMeta(
-                    type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)
-                ),
-                TransformationMeta(
-                    type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
-                ),
-            ],
+            )
+        ],
+        [],
+    ),
+    (
+        [
             TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
             TransformationMeta(
                 type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
             ),
-        ),
+        ],
+        [
+            TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
+            TransformationMeta(
+                type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
+            ),
+        ],
+    ),
+]
+target_scales = [
+    TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
+    TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0)),
+    TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)),
+    TransformationMeta(type="scale", scale=(4.0, 4.0, 4.0, 4.0, 4.0)),
+]
+target_translations = [
+    TransformationMeta(
+        type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
+    ),
+    TransformationMeta(
+        type="translation", translation=(0.0, 0.0, 0.0, 0.0, 0.0)
+    ),
+    TransformationMeta(
+        type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)
+    ),
+    TransformationMeta(
+        type="translation", translation=(2.0, 2.0, 2.0, 2.0, 2.0)
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "transforms",
+    [
+        (saved, target)
+        for saved, target in zip(input_transformations, target_scales)
     ],
 )
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
 )
-def test_get_effective_transforms_image(transforms, ch_shape_dtype, arr_name):
+def test_get_effective_scale_image(transforms, ch_shape_dtype, arr_name):
     """Test `iohub.ngff.Position.set_transform()`"""
-    transform, expected_scale, expected_translate = transforms
+    (fov_transform, img_transform), expected_scale = transforms
     channel_names, shape, dtype = ch_shape_dtype
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
@@ -547,18 +554,37 @@ def test_get_effective_transforms_image(transforms, ch_shape_dtype, arr_name):
             store_path, layout="fov", mode="w-", channel_names=channel_names
         ) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-            assert dataset.metadata.multiscales[0].datasets[
-                0
-            ].coordinate_transformations == [
-                TransformationMeta(type="identity")
-            ]
-            dataset.set_transform(image=arr_name, transform=transform)
-            scale, translate = (
-                dataset.get_effective_scale(image=arr_name),
-                dataset.get_effective_translation(image=arr_name),
-            )
+            dataset.set_transform(image="*", transform=fov_transform)
+            dataset.set_transform(image=arr_name, transform=img_transform)
+            scale = dataset.get_effective_scale(image=arr_name)
             assert scale == expected_scale
-            assert translate == expected_translate
+
+
+@pytest.mark.parametrize(
+    "transforms",
+    [
+        (saved, target)
+        for saved, target in zip(input_transformations, target_translations)
+    ],
+)
+@given(
+    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
+    arr_name=short_alpha_numeric,
+)
+def test_get_effective_translation_image(transforms, ch_shape_dtype, arr_name):
+    """Test `iohub.ngff.Position.set_transform()`"""
+    (fov_transform, img_transform), expected_translation = transforms
+    channel_names, shape, dtype = ch_shape_dtype
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        with open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names
+        ) as dataset:
+            dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
+            dataset.set_transform(image="*", transform=fov_transform)
+            dataset.set_transform(image=arr_name, transform=img_transform)
+            translation = dataset.get_effective_translation(image=arr_name)
+            assert translation == expected_translation
 
 
 @given(
