@@ -969,19 +969,9 @@ class Position(NGFFNode):
         Helper function for scale transform metadata of
         highest resolution scale.
         """
-        scale = [1] * self.data.ndim
-        transforms = (
-            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        return self.get_effective_scale(
+            self.metadata.multiscales[0].datasets[0].path
         )
-        for trans in transforms:
-            if trans.type == "scale":
-                if len(trans.scale) != len(scale):
-                    raise RuntimeError(
-                        f"Length of scale transformation {len(trans.scale)} "
-                        f"does not match data dimension {len(scale)}."
-                    )
-                scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
-        return scale
 
     @property
     def axis_names(self) -> list[str]:
@@ -1009,6 +999,103 @@ class Position(NGFFNode):
             Index of the axis.
         """
         return self.axis_names.index(axis_name.lower())
+
+    def _get_all_transforms(
+        self, image: str | Literal["*"]
+    ) -> list[TransformationMeta]:
+        """Get all transforms metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[TransformationMeta]
+            All transforms applicable to this image or FOV.
+        """
+        transforms: list[TransformationMeta] = (
+            [
+                t
+                for t in self.metadata.multiscales[
+                    0
+                ].coordinate_transformations
+            ]
+            if self.metadata.multiscales[0].coordinate_transformations
+            is not None
+            else []
+        )
+        if image != "*" and image in self:
+            for i, dataset_meta in enumerate(
+                self.metadata.multiscales[0].datasets
+            ):
+                if dataset_meta.path == image:
+                    transforms.extend(
+                        self.metadata.multiscales[0]
+                        .datasets[i]
+                        .coordinate_transformations
+                    )
+        elif image != "*":
+            raise ValueError(f"Key {image} not recognized.")
+        return transforms
+
+    def get_effective_scale(
+        self,
+        image: str | Literal["*"],
+    ) -> list[float]:
+        """Get the effective coordinate scale metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[float]
+            A list of floats representing the total scale
+            for the image or FOV for each axis.
+        """
+        transforms = self._get_all_transforms(image)
+
+        full_scale = np.ones(len(self.axes), dtype=float)
+        for transform in transforms:
+            if transform.type == "scale":
+                full_scale *= np.array(transform.scale)
+
+        return [float(x) for x in full_scale]
+
+    def get_effective_translation(
+        self,
+        image: str | Literal["*"],
+    ) -> TransformationMeta:
+        """Get the effective coordinate translation metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[float]
+            A list of floats representing the total translation
+            for the image or FOV for each axis.
+        """
+        transforms = self._get_all_transforms(image)
+        full_translation = np.zeros(len(self.axes), dtype=float)
+        for transform in transforms:
+            if transform.type == "translation":
+                full_translation += np.array(transform.translation)
+
+        return [float(x) for x in full_translation]
 
     def set_transform(
         self,
