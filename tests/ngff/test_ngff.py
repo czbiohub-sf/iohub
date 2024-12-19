@@ -537,7 +537,7 @@ target_translations = [
     arr_name=short_alpha_numeric,
 )
 def test_get_effective_scale_image(transforms, ch_shape_dtype, arr_name):
-    """Test `iohub.ngff.Position.set_transform()`"""
+    """Test `iohub.ngff.Position.get_effective_scale()`"""
     (fov_transform, img_transform), expected_scale = transforms
     channel_names, shape, dtype = ch_shape_dtype
     with TemporaryDirectory() as temp_dir:
@@ -564,7 +564,7 @@ def test_get_effective_scale_image(transforms, ch_shape_dtype, arr_name):
     arr_name=short_alpha_numeric,
 )
 def test_get_effective_translation_image(transforms, ch_shape_dtype, arr_name):
-    """Test `iohub.ngff.Position.set_transform()`"""
+    """Test `iohub.ngff.Position.get_effective_translation()`"""
     (fov_transform, img_transform), expected_translation = transforms
     channel_names, shape, dtype = ch_shape_dtype
     with TemporaryDirectory() as temp_dir:
