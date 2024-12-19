@@ -1017,9 +1017,17 @@ class Position(NGFFNode):
         list[TransformationMeta]
             All transforms applicable to this image or FOV.
         """
-        transforms: list[TransformationMeta] = [
-            t for t in self.metadata.multiscales[0].coordinate_transformations
-        ]
+        transforms: list[TransformationMeta] = (
+            [
+                t
+                for t in self.metadata.multiscales[
+                    0
+                ].coordinate_transformations
+            ]
+            if self.metadata.multiscales[0].coordinate_transformations
+            is not None
+            else []
+        )
         if image != "*" and image in self:
             for i, dataset_meta in enumerate(
                 self.metadata.multiscales[0].datasets
