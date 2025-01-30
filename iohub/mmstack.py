@@ -238,7 +238,7 @@ class MMStack(MicroManagerFOVMapping):
                 self.channel_names.append(ch)
 
         else:
-            if self._mm_meta["Summary"].get("Positions", []) > 1:
+            if self._mm_meta["Summary"].get("Positions", 1) > 1:
                 self._stage_positions = []
 
                 for p in range(self._mm_meta["Summary"]["Positions"]):
