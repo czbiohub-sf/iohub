@@ -219,7 +219,7 @@ class MMStack(MicroManagerFOVMapping):
         # acquisition script on the Dragonfly miroscope
         elif (
             mm_version == "2.0.1 20220920"
-            and self._mm_meta["Summary"]["Prefix"] == "raw_data"
+            and self._mm_meta["Summary"].get("Prefix", None) == "raw_data"
         ):
             files = natsorted(self.root.glob("*.ome.tif"))
             self.positions = len(files)  # not all positions are saved
