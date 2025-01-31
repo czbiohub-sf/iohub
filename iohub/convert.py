@@ -107,7 +107,7 @@ class TIFFConverter:
     ):
         _logger.debug("Checking output.")
         output_dir = Path(output_dir)
-        if "zarr" in output_dir.suffixes:
+        if ".zarr" not in output_dir.suffixes:
             raise ValueError("Please specify .zarr at the end of your output")
         self.output_dir = output_dir
         _logger.info("Initializing data.")

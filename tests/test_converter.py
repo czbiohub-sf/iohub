@@ -62,6 +62,13 @@ def _check_chunks(
             assert False
 
 
+def test_converter_inputs(mm2gamma_ome_tiff, tmpdir):
+    # Test that output directory needs to end with ".zarr"
+    output = tmpdir / "converted"
+    with pytest.raises(ValueError):
+        _ = TIFFConverter(mm2gamma_ome_tiff, output)
+
+
 def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     output = tmpdir / "converted.zarr"
