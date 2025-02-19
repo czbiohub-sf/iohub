@@ -134,7 +134,7 @@ class SpaceAxisMeta(NamedAxisMeta):
             "zettameter",
         ]
         | None
-    )
+    ) = None
 
 
 class TimeAxisMeta(NamedAxisMeta):
