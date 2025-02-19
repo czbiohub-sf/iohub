@@ -166,7 +166,7 @@ class TimeAxisMeta(NamedAxisMeta):
             "zettasecond",
         ]
         | None
-    )
+    ) = None
 
 
 """https://ngff.openmicroscopy.org/0.4/index.html#axes-md"""
