@@ -287,7 +287,7 @@ class RDefsMeta(MetaBase):
 class OMEROMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#omero-md"""
 
-    id: int
+    id: int | None = None
     name: str | None = None
     channels: list[ChannelMeta] | None = None
     rdefs: RDefsMeta | None = None
