@@ -33,7 +33,7 @@ build:
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
 
 publish:
-	sphinx-multiversion source build/html
+	sphinx-multiversion source build/html -D plot_gallery=0
 	cp gh-pages-redirect.html build/html/index.html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
