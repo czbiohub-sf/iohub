@@ -8,7 +8,9 @@ import os
 import sys
 
 import importlib_metadata
+from sphinx_polyversion import load_globals
 
+load_globals(globals())
 # -- General configuration ----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
