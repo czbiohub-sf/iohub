@@ -8,8 +8,10 @@ from __future__ import annotations
 import logging
 import math
 import os
+import shutil
 from copy import deepcopy
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type, Tuple
+from pathlib import Path
 
 import numpy as np
 import zarr.codecs
@@ -20,6 +22,8 @@ from pydantic import ValidationError
 from zarr.core.group import normalize_path
 from zarr.core.sync import sync
 import zarr.core.array as zarr_array
+import zarr.storage._common as common
+import zarr.api.asynchronous as async_api
 
 from iohub.ngff.display import channel_display_settings
 from iohub.ngff.models import (
@@ -48,7 +52,7 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
-def _pad_shape(shape: tuple[int], target: int = 5):
+def _pad_shape(shape: tuple[int, ...], target: int = 5):
     """Pad shape tuple to a target length."""
     pad = target - len(shape)
     return (1,) * pad + shape
@@ -166,7 +170,7 @@ class NGFFNode:
         return len(self._member_names)
 
     def __getitem__(self, key):
-        key = normalize_path(key)
+        key = normalize_path(str(key))
         znode = self.zgroup.get(key)
         if not znode:
             raise KeyError(key)
@@ -174,8 +178,8 @@ class NGFFNode:
         item_type = self._MEMBER_TYPE
         for _ in range(levels):
             item_type = item_type._MEMBER_TYPE
-        if issubclass(item_type, zarr.Array):
-            return item_type(znode)
+        if issubclass(item_type, ImageArray):
+            return item_type.from_zarr_array(znode)
         else:
             return item_type(group=znode, parse_meta=True, **self._child_attrs)
 
@@ -307,43 +311,32 @@ class NGFFNode:
 class ImageArray(zarr.Array):
     """Container object for image stored as a zarr array (up to 5D)"""
 
-    def __init__(self, zarray: zarr.Array):
-        # TODO (aliddell): we need to check the format before we
-        # create the array
-        async_array = sync(
-            zarr_array.AsyncArray._create(
-                store=zarray.store,
-                shape=zarray.shape,
-                dtype=zarray.dtype,
-                zarr_format=zarray.metadata.zarr_format,
-                attributes=zarray.attrs.asdict(),
-                fill_value=zarray.fill_value,
-                chunk_shape=zarray.metadata.chunk_grid.chunk_shape,
-                chunk_key_encoding=zarray.metadata.chunk_key_encoding,
-                # TODO (aliddell): pick up here
-                path=zarray._path,
-                read_only=zarray._read_only,
-                chunk_store=zarray._chunk_store,
-                synchronizer=zarray._synchronizer,
-                cache_metadata=zarray._cache_metadata,
-                cache_attrs=zarray._attrs.cache,
-                partial_decompress=zarray._partial_decompress,
-                write_empty_chunks=zarray._write_empty_chunks,
-                zarr_version=zarray._version,
-                meta_array=zarray._meta_array
-            )
-        )
-        super().__init__(async_array)
-        self._get_dims()
+    @classmethod
+    def from_zarr_array(cls, zarray: zarr.Array):
+        return cls(zarray._async_array)
 
-    def _get_dims(self):
-        (
-            self.frames,
-            self.channels,
-            self.slices,
-            self.height,
-            self.width,
-        ) = _pad_shape(self.shape, target=5)
+    @property
+    def frames(self):
+        return self._get_dim(0)
+
+    @property
+    def channels(self):
+        return self._get_dim(1)
+
+    @property
+    def slices(self):
+        return self._get_dim(2)
+
+    @property
+    def height(self):
+        return self._get_dim(3)
+
+    @property
+    def width(self):
+        return self._get_dim(4)
+
+    def _get_dim(self, idx):
+        return _pad_shape(self.shape, target=5)[idx]
 
     def numpy(self):
         """Return the whole image as an in-RAM NumPy array.
@@ -355,7 +348,7 @@ class ImageArray(zarr.Array):
         import dask.array as da
 
         # Note: Designed to work with zarr DirectoryStore
-        return da.from_zarr(self.store.path, component=self.path)
+        return da.from_zarr(self.store.root, component=self.path)
 
     def downscale(self):
         raise NotImplementedError
@@ -366,9 +359,6 @@ class ImageArray(zarr.Array):
 
 class TiledImageArray(ImageArray):
     """Container object for tiled image stored as a zarr array (up to 5D)."""
-
-    def __init__(self, zarray: zarr.Array):
-        super().__init__(zarray)
 
     @property
     def rows(self):
@@ -680,7 +670,7 @@ class Position(NGFFNode):
             chunks = self._default_chunks(data.shape, 3)
         if check_shape:
             self._check_shape(data.shape)
-        img_arr = ImageArray(
+        img_arr = ImageArray.from_zarr_array(
             self._group.create_array(
                 name=name, shape=data.shape, dtype=data.dtype, chunks=chunks, overwrite=self._overwrite,
                 **self._create_compressor_options(chunks),
@@ -734,7 +724,7 @@ class Position(NGFFNode):
 
         if check_shape:
             self._check_shape(shape)
-        img_arr = ImageArray(
+        img_arr = ImageArray.from_zarr_array(
             self._group.zeros(
                 name=name,
                 shape=shape,
@@ -1227,7 +1217,7 @@ class TiledPosition(Position):
             self,
             name: str,
             grid_shape: tuple[int, int],
-            tile_shape: tuple[int],
+            tile_shape: tuple[int, ...],
             dtype: DTypeLike,
             transform: list[TransformationMeta] | None = None,
             chunk_dims: int = 2,
@@ -1256,9 +1246,9 @@ class TiledPosition(Position):
         -------
         TiledImageArray
         """
-        xy_shape = tuple(np.array(grid_shape) * np.array(tile_shape[-2:]))
+        xy_shape = tuple(int(i) for i in np.array(grid_shape) * np.array(tile_shape[-2:]))
         chunks = self._default_chunks(shape=tile_shape, last_data_dims=chunk_dims)
-        tiles = TiledImageArray(
+        tiles = TiledImageArray.from_zarr_array(
             self._group.zeros(
                 name=name,
                 shape=tile_shape[:-2] + xy_shape,
@@ -1805,7 +1795,42 @@ class Plate(NGFFNode):
 
         # raises ValueError if old well does not exist
         # or if new well already exists
-        self.zgroup.move(old, new)
+        if old not in self.zgroup:
+            raise ValueError(f"Well '{old}' does not exist.")
+        if new in self.zgroup:
+            raise ValueError(f"Well '{new}' already exists.")
+
+        zarr_format = self.zgroup.metadata.zarr_format
+        store_path = Path(
+            str(self.zgroup.store_path).replace("file:", ""))  # zarr-python prepends file: for some reason
+        assert store_path.is_dir()
+
+        old_path = store_path / old
+        assert old_path.is_dir()
+
+        del self._group
+        new_path = store_path / new
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        assert new_path.parent.is_dir()
+
+        shutil.move(str(old_path), str(new_path))
+
+        # remove old group path
+        while old_path.parent != store_path:
+            old_path = old_path.parent
+        shutil.rmtree(str(old_path))
+
+        # reload group
+        self.__init__(zarr.Group.open(store=store_path, zarr_format=zarr_format),
+                      parse_meta=True,
+                      channel_names=self._channel_names,
+                      axes=self.axes,
+                      name=self._name,
+                      acquisitions=self._acquisitions,
+                      version=self.version,
+                      overwriting_creation=False)
+
+        # self.zgroup.move(old, new) # Not Implemented
 
         # update well metadata
         old_well_index = [
