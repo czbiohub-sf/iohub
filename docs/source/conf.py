@@ -35,7 +35,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx_copybutton",
     "numpydoc",
-    "sphinx_multiversion",
+    "sphinx_polyversion",
     "sphinx_sitemap",
     "sphinx_gallery.gen_gallery",
 ]
@@ -53,9 +53,9 @@ numpydoc_show_class_members = True
 # templates_path = ["_templates"]
 
 # Disabling generation of docs on different branches to use tags only
-smv_tag_whitelist = r"^v\d+\.\d+\.\d+$"
-smv_branch_whitelist = r"^main$"
-smv_latest_version = r"^main$"
+# smv_tag_whitelist = r"^v\d+\.\d+\.\d+$"
+# smv_branch_whitelist = r"^main$"
+# smv_latest_version = r"^main$"
 
 # The suffix of source filenames.
 source_suffix = ".rst"
