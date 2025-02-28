@@ -1,9 +1,16 @@
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 
 from sphinx_polyversion import apply_overrides
 from sphinx_polyversion.driver import DefaultDriver
-from sphinx_polyversion.git import Git, GitRef, GitRefType, file_predicate
+from sphinx_polyversion.git import (
+    Git,
+    GitRef,
+    GitRefType,
+    closest_tag,
+    file_predicate,
+)
 from sphinx_polyversion.pyvenv import Pip, VenvWrapper
 from sphinx_polyversion.sphinx import SphinxBuilder
 
@@ -21,10 +28,10 @@ OUTPUT_DIR = "docs/build"
 SOURCE_DIR = "docs/"
 
 #: Arguments to pass to `pip install`
-PIP_ARGS = ["."]
+PIP_ARGS = [".[doc]"]
 
 #: Arguments to pass to `sphinx-build`
-SPHINX_ARGS = []
+SPHINX_ARGS = ["-D", "plot_gallery=0"]
 
 #: Mock data used for building local version
 MOCK_DATA = {
@@ -46,6 +53,19 @@ MOCK_DATA = {
     ),
 }
 
+ENVIRONMENT = {
+    "v0.1.0": Pip.factory(
+        venv=Path(".venv"),
+        args=PIP_ARGS,
+        creator=VenvWrapper(),
+    ),
+    "main": Pip.factory(
+        venv=Path(".venv"),
+        args=PIP_ARGS,
+        creator=VenvWrapper(),
+    ),
+}
+
 #: Whether to build using only local files and mock data
 MOCK = False
 
@@ -60,18 +80,15 @@ DefaultDriver(
     root,
     OUTPUT_DIR,
     vcs=Git(
-        branch_regex=r"polyversion",
-        tag_regex=r"",
+        branch_regex=BRANCH_REGEX,
+        tag_regex=TAG_REGEX,
         buffer_size=1 * 10**9,  # 1 GB
         predicate=file_predicate([src]),  # exclude refs without source dir
     ),
     builder=SphinxBuilder(src / "source", args=SPHINX_ARGS),
-    env=Pip.factory(
-        venv=Path(".venv"),
-        args=PIP_ARGS,
-        creator=VenvWrapper(),
-    ),
+    env=ENVIRONMENT,
     # template_dir=root / src / "templates",
     static_dir=root / src / "source" / "_static",
     mock=MOCK_DATA,
+    selector=partial(closest_tag, root),
 ).run()
