@@ -30,9 +30,6 @@ SOURCE_DIR = "docs/"
 #: Arguments to pass to `pip install`
 PIP_ARGS = [".[doc]"]
 
-#: Arguments to pass to `sphinx-build`
-SPHINX_ARGS = ["-D", "plot_gallery=0"]
-
 #: Mock data used for building local version
 MOCK_DATA = {
     "revisions": [
@@ -53,6 +50,16 @@ MOCK_DATA = {
     ),
 }
 
+#: Whether to build using only local files and mock data
+MOCK = False
+
+# Load overrides read from commandline to global scope
+apply_overrides(globals())
+# Determine repository root directory
+root = Git.root(Path(__file__).parent)
+
+# Setup driver and run it
+src = Path(SOURCE_DIR)
 ENVIRONMENT = {
     "v0.1.0": Pip.factory(
         venv=Path(".venv"),
@@ -66,16 +73,11 @@ ENVIRONMENT = {
     ),
 }
 
-#: Whether to build using only local files and mock data
-MOCK = False
+BUILDER = {
+    "v0.1.0": SphinxBuilder(src / "source", args=["-D", "plot_gallery=0"]),
+    "main": SphinxBuilder(src / "source", args=[]),
+}
 
-# Load overrides read from commandline to global scope
-apply_overrides(globals())
-# Determine repository root directory
-root = Git.root(Path(__file__).parent)
-
-# Setup driver and run it
-src = Path(SOURCE_DIR)
 DefaultDriver(
     root,
     OUTPUT_DIR,
@@ -85,7 +87,7 @@ DefaultDriver(
         buffer_size=1 * 10**9,  # 1 GB
         predicate=file_predicate([src]),  # exclude refs without source dir
     ),
-    builder=SphinxBuilder(src / "source", args=SPHINX_ARGS),
+    builder=BUILDER,
     env=ENVIRONMENT,
     # template_dir=root / src / "templates",
     static_dir=root / src / "source" / "_static",
