@@ -24,7 +24,7 @@ class MicroManagerFOV(BaseFOV):
     def __eq__(self, other: BaseFOV) -> bool:
         if not isinstance(other, type(self)):
             return False
-        return (self.position == other.position) and (
+        return (self._position == other._position) and (
             self.root.absolute() == other.root.absolute()
         )
 
