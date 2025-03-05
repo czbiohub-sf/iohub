@@ -101,3 +101,11 @@ def test_fov_equal(ome_tiff):
         assert fov1 == fov2
     ref1.close()
     ref2.close()
+
+
+def test_fov_not_equal(ome_tiff):
+    with MMStack(ome_tiff) as mmstack:
+        if len(mmstack) < 2:
+            # pass
+            return
+        assert mmstack["0"] != mmstack["1"]
