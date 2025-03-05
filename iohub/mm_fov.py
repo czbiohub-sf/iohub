@@ -21,6 +21,13 @@ class MicroManagerFOV(BaseFOV):
             f"Data:\n"
         ) + self.xdata.__repr__()
 
+    def __eq__(self, other: BaseFOV) -> bool:
+        if not isinstance(other, type(self)):
+            return False
+        return (self.position == other.position) and (
+            self.root.absolute() == other.root.absolute()
+        )
+
     @property
     def parent(self) -> MicroManagerFOVMapping:
         return self._parent
