@@ -2,7 +2,6 @@ import csv
 import shutil
 from pathlib import Path
 
-import fsspec
 import pytest
 from wget import download
 
@@ -23,23 +22,17 @@ def download_data():
     # https://github.com/ome/ngff/issues/140#issuecomment-1309972511
     ome_hcs_url = "https://zenodo.org/record/8091756/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"  # noqa
 
+    ndtiff_url = (
+        "https://zenodo.org/records/7065552/files/NDTiff_test_data.zip"
+    )
+
     # download files to temp folder
     if not any(test_data.iterdir()):
         print("Downloading test files...")
-        for url in (custom_url, ome_hcs_url):
+        for url in (custom_url, ome_hcs_url, ndtiff_url):
             output = test_data / Path(url).name
             download(url, out=str(output))
             shutil.unpack_archive(output, extract_dir=test_data)
-        ghfs = fsspec.filesystem(
-            "github", org="micro-manager", repo="NDTiffStorage"
-        )
-        v3_lp = test_data / "ndtiff_v3_labeled_positions"
-        Path.mkdir(v3_lp)
-        ghfs.get(
-            ghfs.ls("test_data/v3/labeled_positions_1"),
-            str(v3_lp),
-            recursive=True,
-        )
     return test_data
 
 
@@ -101,7 +94,9 @@ ndtiff_v2_ptcz = (
 )
 
 
-ndtiff_v3_labeled_positions = test_datasets / "ndtiff_v3_labeled_positions"
+ndtiff_v3_labeled_positions = (
+    test_datasets / "NDTiff_test_data" / "v3" / "labeled_positions_1"
+)
 
 
 @pytest.fixture
