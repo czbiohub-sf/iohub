@@ -37,6 +37,7 @@ from iohub.ngff.models import (
     TransformationMeta,
     WellGroupMeta,
     WellIndexMeta,
+    WindowDict,
 )
 
 if TYPE_CHECKING:
@@ -1180,6 +1181,20 @@ class Position(NGFFNode):
                 transform.scale[axis_index] = new_scale
 
         self.set_transform(image, transforms)
+
+    def set_contrast_limits(self, channel_name: str, window: WindowDict):
+        """Set the contrast limits for a channel.
+
+        Parameters
+        ----------
+        channel_name : str
+            Name of the channel to set
+        window : WindowDict
+            Contrast limit (min, max, start, end)
+        """
+        channel_index = self.get_channel_index(channel_name)
+        self.metadata.omero.channels[channel_index].window = window
+        self.dump_meta()
 
 
 class TiledPosition(Position):
