@@ -5,11 +5,11 @@ Node object and convenience functions for the OME-NGFF (OME-Zarr) Hierarchy.
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-from pathlib import Path
 import logging
 import math
 import os
 from copy import deepcopy
+from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
 
 import numpy as np
