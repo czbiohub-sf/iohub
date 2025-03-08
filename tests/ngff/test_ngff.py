@@ -646,22 +646,19 @@ def test_set_scale(ch_shape_dtype):
             assert dataset.zattrs["iohub"]["prior_z_scale"] == 3.0
 
 
-@given(
-    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
-)
-@settings(max_examples=16, deadline=2000)
-def test_set_contrast_limits(ch_shape_dtype):
+@given(channel_names=channel_names_st)
+@settings(max_examples=16)
+def test_set_contrast_limits(channel_names):
     """Test `iohub.ngff.Position.set_contrast_limits()`"""
-    channel_names, shape, dtype = ch_shape_dtype
-    # Skip if no channels or only one channel
-    assume(len(channel_names) > 1)
-
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
         dataset = open_ome_zarr(
             store_path, layout="fov", mode="a", channel_names=channel_names
         )
-        dataset.create_zeros("data", shape, dtype)
+        # Create a simple small array - exact shape/dtype doesn't matter
+        dataset.create_zeros(
+            "data", shape=(1, len(channel_names), 1, 4, 4), dtype=float
+        )
 
         # Store the initial window settings for all channels
         initial_windows = {}
@@ -678,30 +675,17 @@ def test_set_contrast_limits(ch_shape_dtype):
         # Set contrast limits
         dataset.set_contrast_limits(target_channel, window)
 
-        # Check that he contrast tlimits were set
-        # correctly for the target channel
+        # Check that the contrast limits
+        # were set correctly for the target channel
         channel_index = dataset.get_channel_index(target_channel)
-        assert (
-            dataset.metadata.omero.channels[channel_index].window is not None
-        )
-        assert (
-            dataset.metadata.omero.channels[channel_index].window["start"]
-            == window["start"]
-        )
-        assert (
-            dataset.metadata.omero.channels[channel_index].window["end"]
-            == window["end"]
-        )
-        assert (
-            dataset.metadata.omero.channels[channel_index].window["min"]
-            == window["min"]
-        )
-        assert (
-            dataset.metadata.omero.channels[channel_index].window["max"]
-            == window["max"]
-        )
+        channel_window = dataset.metadata.omero.channels[channel_index].window
+        assert channel_window is not None
+        assert channel_window["start"] == window["start"]
+        assert channel_window["end"] == window["end"]
+        assert channel_window["min"] == window["min"]
+        assert channel_window["max"] == window["max"]
 
-        # Check that other channels were not affected
+        # Check that other channels were not affected (if any exist)
         for ch_name in channel_names[1:]:
             ch_idx = dataset.get_channel_index(ch_name)
             assert (
