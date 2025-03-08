@@ -154,12 +154,13 @@ def test_init_ome_zarr(channel_names):
 
 
 @pytest.mark.parametrize(
-    "basename", ["some.zarr", "random_dir", "napari_ome_zarr"]
+    "basename",
+    ["some.zarr", "other.zarr/0/0/0", "random_dir", "napari_ome_zarr"],
 )
 def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
     """Test `iohub.ngff.open_ome_zarr()`"""
     store_path = tmp_path / basename
-    store_path.mkdir()
+    store_path.mkdir(parents=True)
     some_child_directory = store_path / "some_other_directory"
     some_child_directory.mkdir()
     if ".zarr" not in basename:
