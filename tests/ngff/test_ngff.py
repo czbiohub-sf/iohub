@@ -124,10 +124,11 @@ def test_open_store_create_existing():
     """Test `iohub.ngff._open_store()"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "new.zarr")
-        g = zarr.open_group(store_path, mode="w")
+        g = zarr.open_group(store_path, mode="w-")
         g.store.close()
         with pytest.raises(RuntimeError):
             _ = _open_store(store_path, mode="w-", version="0.4")
+        assert _open_store(store_path, mode="w", version="0.4") is not None
 
 
 def test_open_store_read_nonexist():
@@ -150,6 +151,35 @@ def test_init_ome_zarr(channel_names):
         )
         assert os.path.isdir(store_path)
         assert dataset.channel_names == channel_names
+
+
+@pytest.mark.parametrize(
+    "basename",
+    ["some.zarr", "other.zarr/0/0/0", "random_dir", "napari_ome_zarr"],
+)
+def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
+    """Test `iohub.ngff.open_ome_zarr()`"""
+    store_path = tmp_path / basename
+    store_path.mkdir(parents=True)
+    some_child_directory = store_path / "some_other_directory"
+    some_child_directory.mkdir()
+    if ".zarr" not in basename:
+        with pytest.raises(ValueError):
+            _ = open_ome_zarr(
+                store_path, layout="fov", mode="w", channel_names=["channel"]
+            )
+        assert some_child_directory.exists()
+    assert (
+        open_ome_zarr(
+            store_path,
+            layout="fov",
+            mode="w",
+            channel_names=["channel"],
+            disable_path_checking=True,
+        )
+        is not None
+    )
+    assert not some_child_directory.exists()
 
 
 @contextmanager
