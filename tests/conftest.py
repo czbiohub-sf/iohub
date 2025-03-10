@@ -13,7 +13,7 @@ def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
         "github",
         org="micro-manager",
         repo="NDTiffStorage",
-        user=os.environ.get("GITHUB_USER"),
+        user=os.environ.get("GITHUB_ACTOR"),
         token=os.environ.get("GITHUB_TOKEN"),
     )
     v3_lp = test_data / "ndtiff_v3_labeled_positions"
