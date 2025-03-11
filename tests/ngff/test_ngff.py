@@ -266,6 +266,7 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.__setitem__()`"""
     from ome_zarr.io import parse_url
     from ome_zarr.reader import Reader
+
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
@@ -296,7 +297,10 @@ def test_create_zeros(ch_shape_dtype, arr_name):
             store_path, layout="fov", mode="w-", channel_names=channel_names
         )
         dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-        assert os.listdir(os.path.join(store_path, arr_name)) == [".zarray", ".zattrs"]
+        assert os.listdir(os.path.join(store_path, arr_name)) == [
+            ".zarray",
+            ".zattrs",
+        ]
         assert not dataset[arr_name][:].any()
         assert dataset[arr_name].shape == shape
         assert dataset[arr_name].dtype == dtype

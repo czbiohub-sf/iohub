@@ -60,9 +60,9 @@ def _pad_shape(shape: tuple[int, ...], target: int = 5):
 
 
 def _open_store(
-        store_path: StrOrBytesPath,
-        mode: Literal["r", "r+", "a", "w", "w-"],
-        version: Literal["0.1", "0.4", "0.5"],
+    store_path: StrOrBytesPath,
+    mode: Literal["r", "r+", "a", "w", "w-"],
+    version: Literal["0.1", "0.4", "0.5"],
 ):
     if not os.path.isdir(store_path) and mode in ("r", "r+"):
         raise FileNotFoundError(
@@ -75,7 +75,9 @@ def _open_store(
         )
     try:
         store = zarr.storage.LocalStore(store_path)
-        root = zarr.open_group(store, mode=mode, zarr_format=(3 if version == "0.5" else 2))
+        root = zarr.open_group(
+            store, mode=mode, zarr_format=(3 if version == "0.5" else 2)
+        )
     except Exception as e:
         raise RuntimeError(
             f"Cannot open Zarr root group at {store_path}"
@@ -99,13 +101,13 @@ class NGFFNode:
     ]
 
     def __init__(
-            self,
-            group: zarr.Group,
-            parse_meta: bool = True,
-            channel_names: list[str] | None = None,
-            axes: list[AxisMeta] | None = None,
-            version: Literal["0.1", "0.4", "0.5"] = "0.4",
-            overwriting_creation: bool = False,
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        overwriting_creation: bool = False,
     ):
         if channel_names:
             self._channel_names = channel_names
@@ -382,10 +384,10 @@ class TiledImageArray(ImageArray):
         return self.chunks
 
     def get_tile(
-            self,
-            row: int,
-            column: int,
-            pre_dims: tuple[int | slice, ...] | None = None,
+        self,
+        row: int,
+        column: int,
+        pre_dims: tuple[int | slice, ...] | None = None,
     ) -> NDArray:
         """Get a tile as an up-to-5D in-RAM NumPy array.
 
@@ -408,11 +410,11 @@ class TiledImageArray(ImageArray):
         return self[self.get_tile_slice(row, column, pre_dims=pre_dims)]
 
     def write_tile(
-            self,
-            data: ArrayLike,
-            row: int,
-            column: int,
-            pre_dims: tuple[int | slice, ...] | None = None,
+        self,
+        data: ArrayLike,
+        row: int,
+        column: int,
+        pre_dims: tuple[int | slice, ...] | None = None,
     ) -> None:
         """Write a tile in the Zarr store.
 
@@ -433,10 +435,10 @@ class TiledImageArray(ImageArray):
         self[self.get_tile_slice(row, column, pre_dims=pre_dims)] = data
 
     def get_tile_slice(
-            self,
-            row: int,
-            column: int,
-            pre_dims: tuple[int | slice, ...] | None = None,
+        self,
+        row: int,
+        column: int,
+        pre_dims: tuple[int | slice, ...] | None = None,
     ) -> tuple[slice, ...]:
         """Get the slices for a tile in the underlying array.
 
@@ -520,13 +522,13 @@ class Position(NGFFNode):
     _MEMBER_TYPE = ImageArray
 
     def __init__(
-            self,
-            group: zarr.Group,
-            parse_meta: bool = True,
-            channel_names: list[str] | None = None,
-            axes: list[AxisMeta] | None = None,
-            version: Literal["0.1", "0.4", "0.5"] = "0.4",
-            overwriting_creation: bool = False,
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        overwriting_creation: bool = False,
     ):
         super().__init__(
             group=group,
@@ -637,12 +639,12 @@ class Position(NGFFNode):
         yield from self.iteritems()
 
     def create_image(
-            self,
-            name: str,
-            data: NDArray,
-            chunks: tuple[int] | None = None,
-            transform: list[TransformationMeta] | None = None,
-            check_shape: bool = True,
+        self,
+        name: str,
+        data: NDArray,
+        chunks: tuple[int] | None = None,
+        transform: list[TransformationMeta] | None = None,
+        check_shape: bool = True,
     ):
         """Create a new image array in the position.
 
@@ -673,7 +675,11 @@ class Position(NGFFNode):
             self._check_shape(data.shape)
         img_arr = ImageArray.from_zarr_array(
             self._group.create_array(
-                name=name, shape=data.shape, dtype=data.dtype, chunks=chunks, overwrite=self._overwrite,
+                name=name,
+                shape=data.shape,
+                dtype=data.dtype,
+                chunks=chunks,
+                overwrite=self._overwrite,
                 **self._create_compressor_options(chunks),
             )
         )
@@ -682,13 +688,13 @@ class Position(NGFFNode):
         return img_arr
 
     def create_zeros(
-            self,
-            name: str,
-            shape: tuple[int],
-            dtype: DTypeLike,
-            chunks: tuple[int] | None = None,
-            transform: list[TransformationMeta] | None = None,
-            check_shape: bool = True,
+        self,
+        name: str,
+        shape: tuple[int],
+        dtype: DTypeLike,
+        chunks: tuple[int] | None = None,
+        transform: list[TransformationMeta] | None = None,
+        check_shape: bool = True,
     ):
         """Create a new zero-filled image array in the position.
         Under default zarr-python settings of lazy writing,
@@ -741,7 +747,7 @@ class Position(NGFFNode):
 
     @staticmethod
     def _default_chunks(shape, last_data_dims: int):
-        chunks = shape[-min(last_data_dims, len(shape)):]
+        chunks = shape[-min(last_data_dims, len(shape)) :]
         return _pad_shape(chunks, target=len(shape))
 
     def _check_shape(self, data_shape: tuple[int]):
@@ -775,9 +781,11 @@ class Position(NGFFNode):
                         codecs=[
                             zarr.codecs.BytesCodec(),
                             zarr.codecs.BloscCodec(
-                                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                            )
-                        ]
+                                cname="zstd",
+                                clevel=1,
+                                shuffle=Blosc.BITSHUFFLE,
+                            ),
+                        ],
                     )
                 ],
             }
@@ -789,10 +797,10 @@ class Position(NGFFNode):
             }
 
     def _create_image_meta(
-            self,
-            name: str,
-            transform: list[TransformationMeta] | None = None,
-            extra_meta: dict | None = None,
+        self,
+        name: str,
+        transform: list[TransformationMeta] | None = None,
+        extra_meta: dict | None = None,
     ):
         if not transform:
             transform = [TransformationMeta(type="identity")]
@@ -816,23 +824,23 @@ class Position(NGFFNode):
                 omero=self._omero_meta(id=0, name=self._group.basename),
             )
         elif (
-                dataset_meta.path
-                not in self.metadata.multiscales[0].get_dataset_paths()
+            dataset_meta.path
+            not in self.metadata.multiscales[0].get_dataset_paths()
         ):
             self.metadata.multiscales[0].datasets.append(dataset_meta)
         self.dump_meta()
 
     def _omero_meta(
-            self,
-            id: int,
-            name: str,
-            clims: list[tuple[float, float, float, float]] | None = None,
+        self,
+        id: int,
+        name: str,
+        clims: list[tuple[float, float, float, float]] | None = None,
     ):
         if not clims:
             clims = [None] * len(self.channel_names)
         channels = []
         for i, (channel_name, clim) in enumerate(
-                zip(self.channel_names, clims)
+            zip(self.channel_names, clims)
         ):
             if i == 0:
                 first_chan = True
@@ -958,7 +966,7 @@ class Position(NGFFNode):
         """
         array = self.data
         for level in range(1, levels):
-            factor = 2 ** level
+            factor = 2**level
 
             shape = array.shape[:-3] + _scale_integers(
                 array.shape[-3:], factor
@@ -1024,7 +1032,7 @@ class Position(NGFFNode):
         return self.axis_names.index(axis_name.lower())
 
     def _get_all_transforms(
-            self, image: str | Literal["*"]
+        self, image: str | Literal["*"]
     ) -> list[TransformationMeta]:
         """Get all transforms metadata
         for one image array or the whole FOV.
@@ -1044,16 +1052,16 @@ class Position(NGFFNode):
             [
                 t
                 for t in self.metadata.multiscales[
-                0
-            ].coordinate_transformations
+                    0
+                ].coordinate_transformations
             ]
             if self.metadata.multiscales[0].coordinate_transformations
-               is not None
+            is not None
             else []
         )
         if image != "*" and image in self:
             for i, dataset_meta in enumerate(
-                    self.metadata.multiscales[0].datasets
+                self.metadata.multiscales[0].datasets
             ):
                 if dataset_meta.path == image:
                     transforms.extend(
@@ -1066,8 +1074,8 @@ class Position(NGFFNode):
         return transforms
 
     def get_effective_scale(
-            self,
-            image: str | Literal["*"],
+        self,
+        image: str | Literal["*"],
     ) -> list[float]:
         """Get the effective coordinate scale metadata
         for one image array or the whole FOV.
@@ -1094,8 +1102,8 @@ class Position(NGFFNode):
         return [float(x) for x in full_scale]
 
     def get_effective_translation(
-            self,
-            image: str | Literal["*"],
+        self,
+        image: str | Literal["*"],
     ) -> TransformationMeta:
         """Get the effective coordinate translation metadata
         for one image array or the whole FOV.
@@ -1121,9 +1129,9 @@ class Position(NGFFNode):
         return [float(x) for x in full_translation]
 
     def set_transform(
-            self,
-            image: str | Literal["*"],
-            transform: list[TransformationMeta],
+        self,
+        image: str | Literal["*"],
+        transform: list[TransformationMeta],
     ):
         """Set the coordinate transformations metadata
         for one image array or the whole FOV.
@@ -1141,7 +1149,7 @@ class Position(NGFFNode):
             self.metadata.multiscales[0].coordinate_transformations = transform
         elif image in self:
             for i, dataset_meta in enumerate(
-                    self.metadata.multiscales[0].datasets
+                self.metadata.multiscales[0].datasets
             ):
                 if dataset_meta.path == image:
                     self.metadata.multiscales[0].datasets[i] = DatasetMeta(
@@ -1152,10 +1160,10 @@ class Position(NGFFNode):
         self.dump_meta()
 
     def set_scale(
-            self,
-            image: str | Literal["*"],
-            axis_name: str,
-            new_scale: float,
+        self,
+        image: str | Literal["*"],
+        axis_name: str,
+        new_scale: float,
     ):
         """Set the scale for a named axis.
         Either one image array or the whole FOV.
@@ -1229,13 +1237,13 @@ class TiledPosition(Position):
     _MEMBER_TYPE = TiledImageArray
 
     def make_tiles(
-            self,
-            name: str,
-            grid_shape: tuple[int, int],
-            tile_shape: tuple[int, ...],
-            dtype: DTypeLike,
-            transform: list[TransformationMeta] | None = None,
-            chunk_dims: int = 2,
+        self,
+        name: str,
+        grid_shape: tuple[int, int],
+        tile_shape: tuple[int, ...],
+        dtype: DTypeLike,
+        transform: list[TransformationMeta] | None = None,
+        chunk_dims: int = 2,
     ):
         """Make a tiled image array filled with zeros.
         Chunk size is inferred from tile shape.
@@ -1261,8 +1269,12 @@ class TiledPosition(Position):
         -------
         TiledImageArray
         """
-        xy_shape = tuple(int(i) for i in np.array(grid_shape) * np.array(tile_shape[-2:]))
-        chunks = self._default_chunks(shape=tile_shape, last_data_dims=chunk_dims)
+        xy_shape = tuple(
+            int(i) for i in np.array(grid_shape) * np.array(tile_shape[-2:])
+        )
+        chunks = self._default_chunks(
+            shape=tile_shape, last_data_dims=chunk_dims
+        )
         tiles = TiledImageArray.from_zarr_array(
             self._group.zeros(
                 name=name,
@@ -1306,13 +1318,13 @@ class Well(NGFFNode):
     _MEMBER_TYPE = Position
 
     def __init__(
-            self,
-            group: zarr.Group,
-            parse_meta: bool = True,
-            channel_names: list[str] | None = None,
-            axes: list[AxisMeta] | None = None,
-            version: Literal["0.1", "0.4", "0.5"] = "0.4",
-            overwriting_creation: bool = False,
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        overwriting_creation: bool = False,
     ):
         super().__init__(
             group=group,
@@ -1410,13 +1422,13 @@ class Row(NGFFNode):
     _MEMBER_TYPE = Well
 
     def __init__(
-            self,
-            group: zarr.Group,
-            parse_meta: bool = True,
-            channel_names: list[str] | None = None,
-            axes: list[AxisMeta] | None = None,
-            version: Literal["0.1", "0.4", "0.5"] = "0.4",
-            overwriting_creation: bool = False,
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        overwriting_creation: bool = False,
     ):
         super().__init__(
             group=group,
@@ -1463,9 +1475,9 @@ class Plate(NGFFNode):
 
     @classmethod
     def from_positions(
-            cls,
-            store_path: StrOrBytesPath,
-            positions: dict[str, Position],
+        cls,
+        store_path: StrOrBytesPath,
+        positions: dict[str, Position],
     ) -> Plate:
         """Create a new HCS store from existing OME-Zarr stores
         by copying images and metadata from a dictionary of positions.
@@ -1535,15 +1547,15 @@ class Plate(NGFFNode):
         return plate
 
     def __init__(
-            self,
-            group: zarr.Group,
-            parse_meta: bool = True,
-            channel_names: list[str] | None = None,
-            axes: list[AxisMeta] | None = None,
-            name: str | None = None,
-            acquisitions: list[AcquisitionMeta] | None = None,
-            version: Literal["0.1", "0.4", "0.5"] = "0.4",
-            overwriting_creation: bool = False,
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
+        name: str | None = None,
+        acquisitions: list[AcquisitionMeta] | None = None,
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        overwriting_creation: bool = False,
     ):
         super().__init__(
             group=group,
@@ -1603,10 +1615,10 @@ class Plate(NGFFNode):
         )
 
     def _auto_idx(
-            self,
-            name: str,
-            index: int | None,
-            axis_name: Literal["row", "column"],
+        self,
+        name: str,
+        index: int | None,
+        axis_name: Literal["row", "column"],
     ):
         if index is not None:
             return index
@@ -1623,10 +1635,10 @@ class Plate(NGFFNode):
             return max(all_indices) + 1
 
     def _build_meta(
-            self,
-            first_row_meta: PlateAxisMeta,
-            first_col_meta: PlateAxisMeta,
-            first_well_meta: WellIndexMeta,
+        self,
+        first_row_meta: PlateAxisMeta,
+        first_col_meta: PlateAxisMeta,
+        first_well_meta: WellIndexMeta,
     ):
         """Initiate metadata attribute."""
         self.metadata = PlateMeta(
@@ -1639,11 +1651,11 @@ class Plate(NGFFNode):
         )
 
     def create_well(
-            self,
-            row_name: str,
-            col_name: str,
-            row_index: int | None = None,
-            col_index: int | None = None,
+        self,
+        row_name: str,
+        col_name: str,
+        row_index: int | None = None,
+        col_index: int | None = None,
     ):
         """Creates a new well group in the plate.
         The new well will have empty group metadata,
@@ -1703,13 +1715,13 @@ class Plate(NGFFNode):
         return Well(group=well_grp, parse_meta=False, **self._child_attrs)
 
     def create_position(
-            self,
-            row_name: str,
-            col_name: str,
-            pos_name: str,
-            row_index: int = None,
-            col_index: int = None,
-            acq_index: int = 0,
+        self,
+        row_name: str,
+        col_name: str,
+        pos_name: str,
+        row_index: int = None,
+        col_index: int = None,
+        acq_index: int = 0,
     ):
         """Creates a new position group in the plate.
         The new position will have empty group metadata,
@@ -1786,9 +1798,9 @@ class Plate(NGFFNode):
                 yield position.zgroup.path, position
 
     def rename_well(
-            self,
-            old: str,
-            new: str,
+        self,
+        old: str,
+        new: str,
     ):
         """Rename a well.
 
@@ -1817,7 +1829,8 @@ class Plate(NGFFNode):
 
         zarr_format = self.zgroup.metadata.zarr_format
         store_path = Path(
-            str(self.zgroup.store_path).replace("file:", ""))  # zarr-python prepends file: for some reason
+            str(self.zgroup.store_path).replace("file:", "")
+        )  # zarr-python prepends file: for some reason
         assert store_path.is_dir()
 
         old_path = store_path / old
@@ -1836,14 +1849,16 @@ class Plate(NGFFNode):
         shutil.rmtree(str(old_path))
 
         # reload group
-        self.__init__(zarr.Group.open(store=store_path, zarr_format=zarr_format),
-                      parse_meta=True,
-                      channel_names=self._channel_names,
-                      axes=self.axes,
-                      name=self._name,
-                      acquisitions=self._acquisitions,
-                      version=self.version,
-                      overwriting_creation=False)
+        self.__init__(
+            zarr.Group.open(store=store_path, zarr_format=zarr_format),
+            parse_meta=True,
+            channel_names=self._channel_names,
+            axes=self.axes,
+            name=self._name,
+            acquisitions=self._acquisitions,
+            version=self.version,
+            overwriting_creation=False,
+        )
 
         # self.zgroup.move(old, new) # Not Implemented
 
