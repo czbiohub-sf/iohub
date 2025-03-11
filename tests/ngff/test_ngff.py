@@ -123,10 +123,11 @@ def test_open_store_create_existing():
     """Test `iohub.ngff._open_store()"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "new.zarr")
-        g = zarr.open_group(store_path, mode="w")
+        g = zarr.open_group(store_path, mode="w-")
         g.store.close()
         with pytest.raises(RuntimeError):
             _ = _open_store(store_path, mode="w-", version="0.4")
+        assert _open_store(store_path, mode="w", version="0.4") is not None
 
 
 def test_open_store_read_nonexist():
@@ -149,6 +150,35 @@ def test_init_ome_zarr(channel_names):
         )
         assert os.path.isdir(store_path)
         assert dataset.channel_names == channel_names
+
+
+@pytest.mark.parametrize(
+    "basename",
+    ["some.zarr", "other.zarr/0/0/0", "random_dir", "napari_ome_zarr"],
+)
+def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
+    """Test `iohub.ngff.open_ome_zarr()`"""
+    store_path = tmp_path / basename
+    store_path.mkdir(parents=True)
+    some_child_directory = store_path / "some_other_directory"
+    some_child_directory.mkdir()
+    if ".zarr" not in basename:
+        with pytest.raises(ValueError):
+            _ = open_ome_zarr(
+                store_path, layout="fov", mode="w", channel_names=["channel"]
+            )
+        assert some_child_directory.exists()
+    assert (
+        open_ome_zarr(
+            store_path,
+            layout="fov",
+            mode="w",
+            channel_names=["channel"],
+            disable_path_checking=True,
+        )
+        is not None
+    )
+    assert not some_child_directory.exists()
 
 
 @contextmanager
@@ -624,6 +654,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
 )
 @settings(deadline=None)
 def test_set_scale(ch_shape_dtype):
+    """Test `iohub.ngff.Position.set_scale()`"""
     channel_names, shape, dtype = ch_shape_dtype
     transform = [
         TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5)),
@@ -650,6 +681,54 @@ def test_set_scale(ch_shape_dtype):
                 dataset.set_scale(image="0", axis_name="z", new_scale=-1.0)
 
             assert dataset.zattrs["iohub"]["prior_z_scale"] == 3.0
+
+
+@given(channel_names=channel_names_st)
+@settings(max_examples=16)
+def test_set_contrast_limits(channel_names):
+    """Test `iohub.ngff.Position.set_contrast_limits()`"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        dataset = open_ome_zarr(
+            store_path, layout="fov", mode="a", channel_names=channel_names
+        )
+        # Create a simple small array - exact shape/dtype doesn't matter
+        dataset.create_zeros(
+            "data", shape=(1, len(channel_names), 1, 4, 4), dtype=float
+        )
+
+        # Store the initial window settings for all channels
+        initial_windows = {}
+        for ch_name in channel_names:
+            ch_idx = dataset.get_channel_index(ch_name)
+            initial_windows[ch_name] = dataset.metadata.omero.channels[
+                ch_idx
+            ].window
+
+        # Test setting contrast limits for the first channel only
+        target_channel = channel_names[0]
+        window = {"start": 10.0, "end": 100.0, "min": 0.0, "max": 255.0}
+
+        # Set contrast limits
+        dataset.set_contrast_limits(target_channel, window)
+
+        # Check that the contrast limits
+        # were set correctly for the target channel
+        channel_index = dataset.get_channel_index(target_channel)
+        channel_window = dataset.metadata.omero.channels[channel_index].window
+        assert channel_window is not None
+        assert channel_window["start"] == window["start"]
+        assert channel_window["end"] == window["end"]
+        assert channel_window["min"] == window["min"]
+        assert channel_window["max"] == window["max"]
+
+        # Check that other channels were not affected (if any exist)
+        for ch_name in channel_names[1:]:
+            ch_idx = dataset.get_channel_index(ch_name)
+            assert (
+                dataset.metadata.omero.channels[ch_idx].window
+                == initial_windows[ch_name]
+            )
 
 
 @given(channel_names=channel_names_st)

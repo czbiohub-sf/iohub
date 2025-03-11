@@ -92,3 +92,20 @@ def test_fov_getitem(ome_tiff):
         for ch in fov.channel_names:
             assert img.sel(T=0, Z=0, C=ch, Y=0, X=0) >= 0
     mmstack.close()
+
+
+def test_fov_equal(ome_tiff):
+    ref1 = MMStack(ome_tiff)
+    ref2 = MMStack(ome_tiff)
+    for (_, fov1), (_, fov2) in zip(ref1, ref2):
+        assert fov1 == fov2
+    ref1.close()
+    ref2.close()
+
+
+def test_fov_not_equal(ome_tiff):
+    with MMStack(ome_tiff) as mmstack:
+        if len(mmstack) < 2:
+            # pass
+            return
+        assert mmstack["0"] != mmstack["1"]
