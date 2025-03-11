@@ -187,12 +187,12 @@ class NGFFNode:
 
     def __delitem__(self, key):
         """.. Warning: this does NOT clean up metadata!"""
-        key = normalize_path(key)
+        key = normalize_path(str(key))
         if key in self._member_names:
             del self[key]
 
     def __contains__(self, key):
-        key = normalize_path(key)
+        key = normalize_path(str(key))
         return key.lower() in [name.lower() for name in self._member_names]
 
     def __iter__(self):
@@ -616,7 +616,7 @@ class Position(NGFFNode):
 
     def __setitem__(self, key, value: NDArray):
         """Write an up-to-5D image with default settings."""
-        key = normalize_path(key)
+        key = normalize_path(str(key))
         if not isinstance(value, np.ndarray):
             raise TypeError(
                 f"Value must be a NumPy array. Got type {type(value)}."
