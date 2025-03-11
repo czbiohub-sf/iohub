@@ -20,10 +20,6 @@ from numcodecs import Blosc
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 from zarr.core.group import normalize_path
-from zarr.core.sync import sync
-import zarr.core.array as zarr_array
-import zarr.storage._common as common
-import zarr.api.asynchronous as async_api
 
 from iohub.ngff.display import channel_display_settings
 from iohub.ngff.models import (
