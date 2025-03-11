@@ -17,7 +17,7 @@ def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
         "github",
         org="micro-manager",
         repo="NDTiffStorage",
-        user=user,
+        username=user,
         token=token,
     )
     v3_lp = test_data / "ndtiff_v3_labeled_positions"
