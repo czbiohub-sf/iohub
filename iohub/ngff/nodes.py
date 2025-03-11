@@ -1816,6 +1816,8 @@ class Plate(NGFFNode):
         new_row_meta = PlateAxisMeta(name=new_row)
         new_col_meta = PlateAxisMeta(name=new_column)
 
+        # self.zgroup.move(old, new) # Not Implemented
+
         # raises ValueError if old well does not exist
         # or if new well already exists
         if old not in self.zgroup:
@@ -1823,7 +1825,6 @@ class Plate(NGFFNode):
         if new in self.zgroup:
             raise ValueError(f"Well '{new}' already exists.")
 
-        zarr_format = self.zgroup.metadata.zarr_format
         store_path = Path(
             str(self.zgroup.store_path).replace("file:", "")
         )  # zarr-python prepends file: for some reason
@@ -1832,31 +1833,17 @@ class Plate(NGFFNode):
         old_path = store_path / old
         assert old_path.is_dir()
 
-        del self._group
         new_path = store_path / new
-        new_path.parent.mkdir(parents=True, exist_ok=True)
-        assert new_path.parent.is_dir()
+        assert not new_path.parent.is_dir()
 
-        shutil.move(str(old_path), str(new_path))
+        shutil.move(
+            str(old_path.parent), str(new_path.parent)
+        )  # rename row path
+        shutil.move(
+            str(new_path.parent / old_column), str(new_path)
+        )  # rename column path
 
-        # remove old group path
-        while old_path.parent != store_path:
-            old_path = old_path.parent
-        shutil.rmtree(str(old_path))
-
-        # reload group
-        self.__init__(
-            zarr.Group.open(store=store_path, zarr_format=zarr_format),
-            parse_meta=True,
-            channel_names=self._channel_names,
-            axes=self.axes,
-            name=self._name,
-            acquisitions=self._acquisitions,
-            version=self.version,
-            overwriting_creation=False,
-        )
-
-        # self.zgroup.move(old, new) # Not Implemented
+        assert new in self.zgroup
 
         # update well metadata
         old_well_index = [
