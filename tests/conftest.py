@@ -9,12 +9,16 @@ from wget import download
 
 
 def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
+    user = os.environ.get("GITHUB_ACTOR")
+    token = os.environ.get("GITHUB_TOKEN")
+    if not user:
+        raise ValueError(f"Incomplete GitHub credentials: {user=}")
     ghfs = fsspec.filesystem(
         "github",
         org="micro-manager",
         repo="NDTiffStorage",
-        user=os.environ.get("GITHUB_ACTOR"),
-        token=os.environ.get("GITHUB_TOKEN"),
+        user=user,
+        token=token,
     )
     v3_lp = test_data / "ndtiff_v3_labeled_positions"
     Path.mkdir(v3_lp)
