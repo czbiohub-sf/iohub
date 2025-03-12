@@ -76,7 +76,7 @@ and Python with an environment management tool
 If you use Conda, set up an environment with:
 
 ```sh
-conda create -n iohub-dev python=3.10
+conda create -n iohub-dev python=3.11
 conda activate iohub-dev
 ```
 
