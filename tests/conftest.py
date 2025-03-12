@@ -1,3 +1,4 @@
+import os
 import csv
 import shutil
 from pathlib import Path
@@ -5,6 +6,23 @@ from pathlib import Path
 import fsspec
 import pytest
 from wget import download
+
+
+def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
+    ghfs = fsspec.filesystem(
+        "github",
+        org="micro-manager",
+        repo="NDTiffStorage",
+        username=os.environ.get("GITHUB_ACTOR"),
+        token=os.environ.get("GITHUB_TOKEN"),
+    )
+    v3_lp = test_data / "ndtiff_v3_labeled_positions"
+    Path.mkdir(v3_lp)
+    ghfs.get(
+        ghfs.ls("test_data/v3/labeled_positions_1"),
+        str(v3_lp),
+        recursive=True,
+    )
 
 
 def download_data():
@@ -30,16 +48,7 @@ def download_data():
             output = test_data / Path(url).name
             download(url, out=str(output))
             shutil.unpack_archive(output, extract_dir=test_data)
-        ghfs = fsspec.filesystem(
-            "github", org="micro-manager", repo="NDTiffStorage"
-        )
-        v3_lp = test_data / "ndtiff_v3_labeled_positions"
-        Path.mkdir(v3_lp)
-        ghfs.get(
-            ghfs.ls("test_data/v3/labeled_positions_1"),
-            str(v3_lp),
-            recursive=True,
-        )
+        _download_ndtiff_v3_labeled_positions(test_data)
     return test_data
 
 
