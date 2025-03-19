@@ -984,6 +984,4 @@ def test_combine_fovs_to_hcs():
         with open_ome_zarr(store_path, layout="hcs", mode="r") as dataset:
             for fov_path in fov_paths:
                 assert dataset[fov_path].channel_names == channel_names
-                assert_array_almost_equal(
-                    dataset[fov_path]["0"].numpy(), array
-                )
+                assert_array_equal(dataset[fov_path]["0"].numpy(), array)
