@@ -966,7 +966,6 @@ def test_position_scale(channels_and_random_5d):
     with _temp_ome_zarr(
         random_5d, channel_names, "0", transform=transform
     ) as dataset:
-        # round-trip test with the offical reader implementation
         assert dataset.scale == scale
 
 
