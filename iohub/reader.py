@@ -25,7 +25,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _find_ngff_version_in_zarr_group(group: zarr.Group):
-    for key in ["omero", "plate", "well"]:
+    for key in ["multiscales", "plate", "well"]:
         if key in group.attrs:
             return group.attrs[key].get("version")
 
