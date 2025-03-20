@@ -982,6 +982,8 @@ def test_combine_fovs_to_hcs():
         store_path = os.path.join(temp_dir, "combined.zarr")
         Plate.from_positions(store_path, fovs).close()
         with open_ome_zarr(store_path, layout="hcs", mode="r") as dataset:
+            assert len(dataset.metadata.rows) == 3
+            assert len(dataset.metadata.columns) == 2
             for fov_path in fov_paths:
                 assert dataset[fov_path].channel_names == channel_names
                 assert_array_equal(dataset[fov_path]["0"].numpy(), array)
