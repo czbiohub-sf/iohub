@@ -541,15 +541,16 @@ class Position(NGFFNode):
     def _parse_meta(self):
         multiscales = self.zattrs.get("multiscales")
         omero = self.zattrs.get("omero")
-        if multiscales and omero:
+        if multiscales:
             try:
                 self.metadata = ImagesMeta(
                     multiscales=multiscales, omero=omero
                 )
-                self._channel_names = [
-                    c.label for c in self.metadata.omero.channels
-                ]
                 self.axes = self.metadata.multiscales[0].axes
+                if omero:
+                    self._channel_names = [
+                        c.label for c in self.metadata.omero.channels
+                    ]
             except ValidationError:
                 self._warn_invalid_meta()
         else:

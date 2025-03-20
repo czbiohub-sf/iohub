@@ -298,7 +298,7 @@ class ImagesMeta(MetaBase):
     https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
 
     multiscales: list[MultiScaleMeta]
-    omero: OMEROMeta
+    omero: Optional[OMEROMeta] = None
 
 
 class LabelsMeta(MetaBase):
