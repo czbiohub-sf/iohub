@@ -987,3 +987,22 @@ def test_combine_fovs_to_hcs():
             for fov_path in fov_paths:
                 assert dataset[fov_path].channel_names == channel_names
                 assert_array_equal(dataset[fov_path]["0"].numpy(), array)
+
+
+def test_hcs_external_reader(tmp_path):
+    store_path = tmp_path / "hcs.zarr"
+    fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
+    y_size, x_size = (128, 100)
+    with open_ome_zarr(
+        store_path, layout="hcs", mode="a", channel_names=["A", "B"]
+    ) as dataset:
+        for name in fov_name_parts:
+            fov = dataset.create_position(*name)
+            fov.create_zeros("0", shape=(1, 2, 3, y_size, x_size), dtype=int)
+        n_rows = len(dataset.metadata.rows)
+        n_cols = len(dataset.metadata.columns)
+    plate = list(Reader(parse_url(store_path))())[0]
+    assert plate.data[0].shape == (1, 2, 3, y_size * n_rows, x_size * n_cols)
+    assert plate.data[0].dtype == int
+    assert not plate.data[0].any()
+    assert plate.metadata["channel_names"] == ["A", "B"]
