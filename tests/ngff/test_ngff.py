@@ -12,7 +12,7 @@ import hypothesis.strategies as st
 import pytest
 import zarr
 from hypothesis import HealthCheck, assume, given, settings
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal, assert_array_equal
 from numpy.typing import NDArray
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
@@ -966,24 +966,43 @@ def test_position_scale(channels_and_random_5d):
     with _temp_ome_zarr(
         random_5d, channel_names, "0", transform=transform
     ) as dataset:
-        # round-trip test with the offical reader implementation
         assert dataset.scale == scale
 
 
-@pytest.mark.skip(reason="https://github.com/czbiohub-sf/iohub/issues/255")
 def test_combine_fovs_to_hcs():
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
     with open_ome_zarr(hcs_ref) as hcs_store:
+        fov = hcs_store["B/03/0"]
+        array = fov[0].numpy()
+        channel_names = fov.channel_names
         for path in fov_paths:
-            fovs[path] = hcs_store["B/03/0"]
+            fovs[path] = fov
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "combined.zarr")
         Plate.from_positions(store_path, fovs).close()
-        # read data with an external reader
-        ext_reader = Reader(parse_url(store_path))
-        node = list(ext_reader())[0]
-        plate_meta = node.metadata["metadata"]["plate"]
-        assert len(plate_meta["rows"]) == 3
-        assert len(plate_meta["columns"]) == 2
-        assert node.data[0].shape == (1, 2, 2160 * 3, 5120 * 2)
+        with open_ome_zarr(store_path, layout="hcs", mode="r") as dataset:
+            assert len(dataset.metadata.rows) == 3
+            assert len(dataset.metadata.columns) == 2
+            for fov_path in fov_paths:
+                assert dataset[fov_path].channel_names == channel_names
+                assert_array_equal(dataset[fov_path]["0"].numpy(), array)
+
+
+def test_hcs_external_reader(tmp_path):
+    store_path = tmp_path / "hcs.zarr"
+    fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
+    y_size, x_size = (128, 100)
+    with open_ome_zarr(
+        store_path, layout="hcs", mode="a", channel_names=["A", "B"]
+    ) as dataset:
+        for name in fov_name_parts:
+            fov = dataset.create_position(*name)
+            fov.create_zeros("0", shape=(1, 2, 3, y_size, x_size), dtype=int)
+        n_rows = len(dataset.metadata.rows)
+        n_cols = len(dataset.metadata.columns)
+    plate = list(Reader(parse_url(store_path))())[0]
+    assert plate.data[0].shape == (1, 2, 3, y_size * n_rows, x_size * n_cols)
+    assert plate.data[0].dtype == int
+    assert not plate.data[0].any()
+    assert plate.metadata["channel_names"] == ["A", "B"]
