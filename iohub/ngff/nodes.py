@@ -538,18 +538,31 @@ class Position(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
 
+    def _set_meta(
+        self, multiscales: MultiScaleMeta | None, omero: OMEROMeta | None
+    ):
+        self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
+        self.axes = self.metadata.multiscales[0].axes
+        if omero is not None:
+            self._channel_names = [
+                c.label for c in self.metadata.omero.channels
+            ]
+        else:
+            _logger.warning(
+                "OMERO metadata not found. "
+                "Using channel indices as channel names."
+            )
+            example_image: ImageArray = self[
+                self.metadata.multiscales[0].datasets[0].path
+            ].channels
+            self._channel_names = list(range(example_image.channels))
+
     def _parse_meta(self):
         multiscales = self.zattrs.get("multiscales")
         omero = self.zattrs.get("omero")
-        if multiscales and omero:
+        if multiscales:
             try:
-                self.metadata = ImagesMeta(
-                    multiscales=multiscales, omero=omero
-                )
-                self._channel_names = [
-                    c.label for c in self.metadata.omero.channels
-                ]
-                self.axes = self.metadata.multiscales[0].axes
+                self._set_meta(multiscales=multiscales, omero=omero)
             except ValidationError:
                 self._warn_invalid_meta()
         else:

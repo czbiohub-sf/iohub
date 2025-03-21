@@ -69,6 +69,15 @@ def test_cli_info_mock(mm2gamma_ome_tiff, verbose):
         assert "Reading" in result.output
 
 
+def test_cli_info_unknown(tmp_path):
+    runner = CliRunner()
+    empty_file = tmp_path / "unknown.txt"
+    empty_file.touch()
+    result = runner.invoke(cli, ["info", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No compatible" in result.output
+
+
 def test_cli_info_ndtiff(ndtiff_dataset, verbose):
     runner = CliRunner()
     cmd = ["info", str(ndtiff_dataset)]
