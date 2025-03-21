@@ -24,14 +24,13 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
-def _find_ngff_version_in_zarr_group(group: zarr.Group):
+def _find_ngff_version_in_zarr_group(group: zarr.Group) -> str | None:
     for key in ["plate", "well"]:
         if key in group.attrs:
             if v := group.attrs[key].get("version"):
                 return v
     if "multiscales" in group.attrs:
         for ms in group.attrs["multiscales"]:
-            print(ms)
             if v := ms.get("version"):
                 return v
     return None
