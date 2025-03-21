@@ -561,7 +561,6 @@ class Position(NGFFNode):
         multiscales = self.zattrs.get("multiscales")
         omero = self.zattrs.get("omero")
         if multiscales:
-        if multiscales:
             try:
                 self._set_meta(multiscales=multiscales, omero=omero)
             except ValidationError:
