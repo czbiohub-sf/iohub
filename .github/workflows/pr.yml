@@ -7,7 +7,6 @@ on:
   pull_request:
     branches:
       - main
-      - unified-api
 
 jobs:
   style:
@@ -98,6 +97,8 @@ jobs:
           pip install ".[dev]"
 
       - name: Test with pytest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pytest -v --cov=./ --cov-report=xml
 

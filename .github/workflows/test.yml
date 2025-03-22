@@ -10,7 +10,7 @@ jobs:
     name: ${{ matrix.platform }} py${{ matrix.python-version }}
     runs-on: ${{ matrix.platform }}
     strategy:
-      max-parallel: 3
+      max-parallel: 2
       matrix:
         platform: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.10", "3.11", "3.12"]
@@ -27,5 +27,7 @@ jobs:
           pip install ".[dev]"
 
       - name: Test with pytest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pytest -v --cov=./iohub --cov-report=xml

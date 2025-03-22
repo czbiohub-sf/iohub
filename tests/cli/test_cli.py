@@ -69,6 +69,15 @@ def test_cli_info_mock(mm2gamma_ome_tiff, verbose):
         assert "Reading" in result.output
 
 
+def test_cli_info_unknown(tmp_path):
+    runner = CliRunner()
+    empty_file = tmp_path / "unknown.txt"
+    empty_file.touch()
+    result = runner.invoke(cli, ["info", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No compatible" in result.output
+
+
 def test_cli_info_ndtiff(ndtiff_dataset, verbose):
     runner = CliRunner()
     cmd = ["info", str(ndtiff_dataset)]
@@ -90,11 +99,13 @@ def test_cli_info_ome_zarr(verbose):
     assert result.exit_code == 0
     assert re.search(r"Wells:\s+1", result.output)
     assert ("Chunk size" in result.output) == bool(verbose)
+    assert ("No. bytes decompressed" in result.output) == bool(verbose)
     # Test on single position
     result_pos = runner.invoke(cli, ["info", str(hcs_ref / "B" / "03" / "0")])
     assert "Channel names" in result_pos.output
     assert "scale (um)" in result_pos.output
     assert "Chunk size" in result_pos.output
+    assert "84.4 MiB" in result_pos.output
 
 
 @pytest.mark.parametrize("grid_layout", ["-g", None])

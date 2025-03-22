@@ -140,19 +140,20 @@ class NDTiffDataset(MicroManagerFOVMapping):
         c_idx = self._ndtiff_channel_names[0]
         img_metadata = self.get_image_metadata(p_idx, 0, c_idx, 0)
 
-        pm_metadata["z-step_um"] = None
-        if "ZPosition_um_Intended" in img_metadata.keys():
+        try:
+            z0 = self.get_image_metadata(p_idx, 0, c_idx, 0)[
+                "ZPosition_um_Intended"
+            ]
+            z1 = self.get_image_metadata(p_idx, 0, c_idx, 1)[
+                "ZPosition_um_Intended"
+            ]
             pm_metadata["z-step_um"] = np.around(
-                abs(
-                    self.get_image_metadata(p_idx, 0, c_idx, 1)[
-                        "ZPosition_um_Intended"
-                    ]
-                    - self.get_image_metadata(p_idx, 0, c_idx, 0)[
-                        "ZPosition_um_Intended"
-                    ]
-                ),
-                decimals=3,
+                abs(z1 - z0), decimals=3
             ).astype(float)
+        # Will raise KeyError if dataset does not have z slices
+        # Will raise ValueError if dataset has only one z slice
+        except (KeyError, ValueError):
+            pm_metadata["z-step_um"] = None
 
         pm_metadata["StagePositions"] = []
         if "position" in self._axes:
@@ -167,7 +168,9 @@ class NDTiffDataset(MicroManagerFOVMapping):
                         "YPosition_um_Intended",
                     ]
                 ):
-                    position_metadata[img_metadata["Core-XYStage"]] = (
+                    xy_stage = img_metadata["Core-XYStage"]
+                    position_metadata["DefaultXYStage"] = xy_stage
+                    position_metadata[xy_stage] = (
                         img_metadata["XPosition_um_Intended"],
                         img_metadata["YPosition_um_Intended"],
                     )

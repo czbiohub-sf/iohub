@@ -38,7 +38,7 @@ def rename_wells(zarr_store_path: str | Path, csv_file_path: str | Path):
 
     # read and check csv
     name_pair_list = []
-    with open(csv_file_path, "r") as csv_file:
+    with open(csv_file_path, mode="r", encoding="utf-8-sig") as csv_file:
         for row in csv.reader(csv_file):
             if len(row) != 2:
                 raise ValueError(

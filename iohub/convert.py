@@ -107,7 +107,7 @@ class TIFFConverter:
     ):
         _logger.debug("Checking output.")
         output_dir = Path(output_dir)
-        if "zarr" in output_dir.suffixes:
+        if ".zarr" not in output_dir.suffixes:
             raise ValueError("Please specify .zarr at the end of your output")
         self.output_dir = output_dir
         _logger.info("Initializing data.")
@@ -200,10 +200,10 @@ class TIFFConverter:
         if not self.reader.stage_positions:
             raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
-            stage_pos = (
-                pos.get("XYStage") or pos.get("XY") or pos.get("XY Stage")
-            )
-            if stage_pos is None:
+            try:
+                xy_stage = pos["DefaultXYStage"]
+                stage_pos = pos[xy_stage]
+            except KeyError:
                 raise ValueError(
                     f"Stage position is not available for position {idx}"
                 )
