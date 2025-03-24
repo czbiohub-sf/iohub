@@ -976,6 +976,7 @@ def test_combine_fovs_to_hcs():
         fov = hcs_store["B/03/0"]
         array = fov[0].numpy()
         channel_names = fov.channel_names
+        old_omero_name = fov.metadata.omero.name
         for path in fov_paths:
             fovs[path] = fov
     with TemporaryDirectory() as temp_dir:
@@ -985,7 +986,11 @@ def test_combine_fovs_to_hcs():
             assert len(dataset.metadata.rows) == 3
             assert len(dataset.metadata.columns) == 2
             for fov_path in fov_paths:
-                assert dataset[fov_path].channel_names == channel_names
+                copied_fov = dataset[fov_path]
+                assert copied_fov.channel_names == channel_names
+                new_omero_name = copied_fov.metadata.omero.name
+                assert new_omero_name != old_omero_name
+                assert new_omero_name == fov_path[-1]
                 assert_array_equal(dataset[fov_path]["0"].numpy(), array)
 
 
