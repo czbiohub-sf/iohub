@@ -63,7 +63,14 @@ src = Path(SOURCE_DIR)
 ENVIRONMENT = {
     "v0.1.0": Pip.factory(
         venv=Path(".venv"),
-        args=PIP_ARGS,
+        args=PIP_ARGS
+        + [
+            "sphinxcontrib-applehelp<=1.0.4",
+            "sphinxcontrib-devhelp<=1.0.2",
+            "sphinxcontrib-htmlhelp<=2.0.1",
+            "sphinxcontrib-qthelp<=1.0.3",
+            "sphinxcontrib-serializinghtml<=1.1.5",
+        ],
         creator=VenvWrapper(),
     ),
     "main": Pip.factory(
