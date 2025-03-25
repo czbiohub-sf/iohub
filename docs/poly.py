@@ -60,30 +60,42 @@ root = Git.root(Path(__file__).parent)
 
 # Setup driver and run it
 src = Path(SOURCE_DIR)
-ENVIRONMENT = {
-    "v0.1.0": Pip.factory(
-        venv=Path(".venv") / "v0.1.0",
-        args=PIP_ARGS
-        + [
-            "sphinxcontrib-applehelp<=1.0.4",
-            "sphinxcontrib-devhelp<=1.0.2",
-            "sphinxcontrib-htmlhelp<=2.0.1",
-            "sphinxcontrib-qthelp<=1.0.3",
-            "sphinxcontrib-serializinghtml<=1.1.5",
-        ],
-        creator=VenvWrapper(),
-    ),
-    "main": Pip.factory(
-        venv=Path(".venv") / "main",
+ENVIRONMENT = (
+    {
+        "v0.1.0": Pip.factory(
+            venv=Path(".venv") / "v0.1.0",
+            args=PIP_ARGS
+            + [
+                "sphinxcontrib-applehelp<=1.0.4",
+                "sphinxcontrib-devhelp<=1.0.2",
+                "sphinxcontrib-htmlhelp<=2.0.1",
+                "sphinxcontrib-qthelp<=1.0.3",
+                "sphinxcontrib-serializinghtml<=1.1.5",
+            ],
+            creator=VenvWrapper(),
+        ),
+        "main": Pip.factory(
+            venv=Path(".venv") / "main",
+            args=PIP_ARGS + ["importlib_metadata"],
+            creator=VenvWrapper(),
+        ),
+    }
+    if not MOCK
+    else Pip.factory(
+        venv=Path(".venv") / "local",
         args=PIP_ARGS + ["importlib_metadata"],
         creator=VenvWrapper(),
-    ),
-}
+    )
+)
 
-BUILDER = {
-    "v0.1.0": SphinxBuilder(src / "source", args=["-D", "plot_gallery=0"]),
-    "main": SphinxBuilder(src / "source", args=[]),
-}
+BUILDER = (
+    {
+        "v0.1.0": SphinxBuilder(src / "source", args=["-D", "plot_gallery=0"]),
+        "main": SphinxBuilder(src / "source", args=[]),
+    }
+    if not MOCK
+    else SphinxBuilder(src / "source", args=[])
+)
 
 DefaultDriver(
     root,
@@ -100,4 +112,4 @@ DefaultDriver(
     static_dir=root / src / "source" / "_static",
     mock=MOCK_DATA,
     selector=partial(closest_tag, root),
-).run()
+).run(MOCK)
