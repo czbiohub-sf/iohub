@@ -44,7 +44,7 @@ jobs:
           make publish -C docs
           touch docs/build/.nojekyll
       - name: Upload build artifacts
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
           path: "./docs/build"
 
