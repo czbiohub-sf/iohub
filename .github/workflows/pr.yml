@@ -120,6 +120,5 @@ jobs:
           pip install ".[doc]"
 
       - name: Test docs build
-        working-directory: ./docs
         run: |
-          make build
+          sphinx-polyversion docs/poly.py -vv
