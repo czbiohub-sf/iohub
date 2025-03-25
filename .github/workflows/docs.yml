@@ -41,7 +41,7 @@ jobs:
       - name: Build the docs
         run: |
           echo $GITHUB_PAGES_URL
-          make publish -C docs
+          make build -C docs
           touch docs/build/.nojekyll
       - name: Upload build artifacts
         uses: actions/upload-pages-artifact@v3
