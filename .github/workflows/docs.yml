@@ -31,6 +31,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ".[doc]"
+          # temporary fix for sphinx-polyversion
+          pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging
       - name: Set environment
         run: |
           REPO_OWNER="${GITHUB_REPOSITORY%%/*}"
@@ -40,7 +42,7 @@ jobs:
         run: |
           echo $GITHUB_PAGES_URL
           make publish -C docs
-          touch docs/build/html/.nojekyll
+          touch docs/build/.nojekyll
       - name: Upload build artifacts
         uses: actions/upload-pages-artifact@v1
         with:
