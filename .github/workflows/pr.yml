@@ -121,4 +121,4 @@ jobs:
 
       - name: Test docs build
         run: |
-          sphinx-polyversion docs/poly.py -vv
+          make build -C docs

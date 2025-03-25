@@ -37,15 +37,14 @@ jobs:
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           echo "GITHUB_PAGES_URL=https://$REPO_OWNER.github.io/$REPO_NAME" >> $GITHUB_ENV
       - name: Build the docs
-        working-directory: ./docs
         run: |
           echo $GITHUB_PAGES_URL
-          make publish
-          touch build/html/.nojekyll
+          make publish -C docs
+          touch docs/build/html/.nojekyll
       - name: Upload build artifacts
         uses: actions/upload-pages-artifact@v1
         with:
-          path: "./docs/build/html"
+          path: "./docs/build"
 
   deploy:
     environment:
