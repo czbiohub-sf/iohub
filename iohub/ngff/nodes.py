@@ -9,6 +9,7 @@ import logging
 import math
 import os
 from copy import deepcopy
+from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
 
 import numpy as np
@@ -37,6 +38,7 @@ from iohub.ngff.models import (
     TransformationMeta,
     WellGroupMeta,
     WellIndexMeta,
+    WindowDict,
 )
 
 if TYPE_CHECKING:
@@ -536,18 +538,31 @@ class Position(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
 
+    def _set_meta(
+        self, multiscales: MultiScaleMeta | None, omero: OMEROMeta | None
+    ):
+        self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
+        self.axes = self.metadata.multiscales[0].axes
+        if omero is not None:
+            self._channel_names = [
+                c.label for c in self.metadata.omero.channels
+            ]
+        else:
+            _logger.warning(
+                "OMERO metadata not found. "
+                "Using channel indices as channel names."
+            )
+            example_image: ImageArray = self[
+                self.metadata.multiscales[0].datasets[0].path
+            ].channels
+            self._channel_names = list(range(example_image.channels))
+
     def _parse_meta(self):
         multiscales = self.zattrs.get("multiscales")
         omero = self.zattrs.get("omero")
-        if multiscales and omero:
+        if multiscales:
             try:
-                self.metadata = ImagesMeta(
-                    multiscales=multiscales, omero=omero
-                )
-                self._channel_names = [
-                    c.label for c in self.metadata.omero.channels
-                ]
-                self.axes = self.metadata.multiscales[0].axes
+                self._set_meta(multiscales=multiscales, omero=omero)
             except ValidationError:
                 self._warn_invalid_meta()
         else:
@@ -1181,6 +1196,20 @@ class Position(NGFFNode):
 
         self.set_transform(image, transforms)
 
+    def set_contrast_limits(self, channel_name: str, window: WindowDict):
+        """Set the contrast limits for a channel.
+
+        Parameters
+        ----------
+        channel_name : str
+            Name of the channel to set
+        window : WindowDict
+            Contrast limit (min, max, start, end)
+        """
+        channel_index = self.get_channel_index(channel_name)
+        self.metadata.omero.channels[channel_index].window = window
+        self.dump_meta()
+
 
 class TiledPosition(Position):
     """Variant of the NGFF position node
@@ -1485,7 +1514,7 @@ class Plate(NGFFNode):
                     f"Duplicate name '{name}' after path normalization."
                 )
             row, col, fov = name.split("/")
-            _ = plate.create_position(row, col, fov)
+            dst_pos = plate.create_position(row, col, fov)
             # overwrite position group
             _ = zarr.copy_store(
                 src_pos.zgroup.store,
@@ -1494,6 +1523,9 @@ class Plate(NGFFNode):
                 dest_path=name,
                 if_exists="replace",
             )
+            dst_pos._parse_meta()
+            dst_pos.metadata.omero.name = fov
+            dst_pos.dump_meta()
         return plate
 
     def __init__(
@@ -1804,20 +1836,21 @@ class Plate(NGFFNode):
 
 
 def open_ome_zarr(
-    store_path: StrOrBytesPath,
+    store_path: StrOrBytesPath | Path,
     layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
     version: Literal["0.1", "0.4"] = "0.4",
     synchronizer: zarr.ThreadSynchronizer | zarr.ProcessSynchronizer = None,
+    disable_path_checking: bool = False,
     **kwargs,
 ) -> Plate | Position | TiledPosition:
     """Convenience method to open OME-Zarr stores.
 
     Parameters
     ----------
-    store_path : StrOrBytesPath
+    store_path : StrOrBytesPath | Path
         File path to the Zarr store to open
     layout: Literal["auto", "fov", "hcs", "tiled"], optional
         NGFF store layout:
@@ -1855,6 +1888,14 @@ def open_ome_zarr(
         OME-NGFF version, by default "0.4"
     synchronizer : object, optional
         Zarr thread or process synchronizer, by default None
+    disable_path_checking : bool, optional
+        Whether to allow overwriting a path that does not contain '.zarr',
+        by default False
+
+        .. warning::
+            This can lead to severe data loss
+            if the input path is not checked carefully.
+
     kwargs : dict, optional
         Keyword arguments to underlying NGFF node constructor,
         by default None
@@ -1868,16 +1909,26 @@ def open_ome_zarr(
         :py:class:`iohub.ngff.Plate`,
         or :py:class:`iohub.ngff.TiledPosition`)
     """
+    store_path = Path(store_path)
     if mode == "a":
-        mode = ("w-", "r+")[int(os.path.exists(store_path))]
+        mode = ("w-", "r+")[int(store_path.exists())]
     parse_meta = False
     if mode in ("r", "r+"):
         parse_meta = True
     elif mode == "w-":
-        if os.path.exists(store_path):
+        if store_path.exists():
             raise FileExistsError(store_path)
     elif mode == "w":
-        if os.path.exists(store_path):
+        if store_path.exists():
+            if (
+                ".zarr" not in str(store_path.resolve())
+                and not disable_path_checking
+            ):
+                raise ValueError(
+                    "Cannot overwrite a path that does not contain '.zarr', "
+                    "use `disable_path_checking=True` if you are sure that "
+                    f"{store_path} should be overwritten."
+                )
             _logger.warning(f"Overwriting data at {store_path}")
     else:
         raise ValueError(f"Invalid persistence mode '{mode}'.")

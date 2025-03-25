@@ -12,7 +12,7 @@ import hypothesis.strategies as st
 import pytest
 import zarr
 from hypothesis import HealthCheck, assume, given, settings
-from numpy.testing import assert_array_almost_equal
+from numpy.testing import assert_array_almost_equal, assert_array_equal
 from numpy.typing import NDArray
 from ome_zarr.io import parse_url
 from ome_zarr.reader import Reader
@@ -124,10 +124,11 @@ def test_open_store_create_existing():
     """Test `iohub.ngff._open_store()"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "new.zarr")
-        g = zarr.open_group(store_path, mode="w")
+        g = zarr.open_group(store_path, mode="w-")
         g.store.close()
         with pytest.raises(RuntimeError):
             _ = _open_store(store_path, mode="w-", version="0.4")
+        assert _open_store(store_path, mode="w", version="0.4") is not None
 
 
 def test_open_store_read_nonexist():
@@ -150,6 +151,35 @@ def test_init_ome_zarr(channel_names):
         )
         assert os.path.isdir(store_path)
         assert dataset.channel_names == channel_names
+
+
+@pytest.mark.parametrize(
+    "basename",
+    ["some.zarr", "other.zarr/0/0/0", "random_dir", "napari_ome_zarr"],
+)
+def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
+    """Test `iohub.ngff.open_ome_zarr()`"""
+    store_path = tmp_path / basename
+    store_path.mkdir(parents=True)
+    some_child_directory = store_path / "some_other_directory"
+    some_child_directory.mkdir()
+    if ".zarr" not in basename:
+        with pytest.raises(ValueError):
+            _ = open_ome_zarr(
+                store_path, layout="fov", mode="w", channel_names=["channel"]
+            )
+        assert some_child_directory.exists()
+    assert (
+        open_ome_zarr(
+            store_path,
+            layout="fov",
+            mode="w",
+            channel_names=["channel"],
+            disable_path_checking=True,
+        )
+        is not None
+    )
+    assert not some_child_directory.exists()
 
 
 @contextmanager
@@ -617,6 +647,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
 )
 @settings(deadline=None)
 def test_set_scale(ch_shape_dtype):
+    """Test `iohub.ngff.Position.set_scale()`"""
     channel_names, shape, dtype = ch_shape_dtype
     transform = [
         TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5)),
@@ -643,6 +674,54 @@ def test_set_scale(ch_shape_dtype):
                 dataset.set_scale(image="0", axis_name="z", new_scale=-1.0)
 
             assert dataset.zattrs["iohub"]["prior_z_scale"] == 3.0
+
+
+@given(channel_names=channel_names_st)
+@settings(max_examples=16)
+def test_set_contrast_limits(channel_names):
+    """Test `iohub.ngff.Position.set_contrast_limits()`"""
+    with TemporaryDirectory() as temp_dir:
+        store_path = os.path.join(temp_dir, "ome.zarr")
+        dataset = open_ome_zarr(
+            store_path, layout="fov", mode="a", channel_names=channel_names
+        )
+        # Create a simple small array - exact shape/dtype doesn't matter
+        dataset.create_zeros(
+            "data", shape=(1, len(channel_names), 1, 4, 4), dtype=float
+        )
+
+        # Store the initial window settings for all channels
+        initial_windows = {}
+        for ch_name in channel_names:
+            ch_idx = dataset.get_channel_index(ch_name)
+            initial_windows[ch_name] = dataset.metadata.omero.channels[
+                ch_idx
+            ].window
+
+        # Test setting contrast limits for the first channel only
+        target_channel = channel_names[0]
+        window = {"start": 10.0, "end": 100.0, "min": 0.0, "max": 255.0}
+
+        # Set contrast limits
+        dataset.set_contrast_limits(target_channel, window)
+
+        # Check that the contrast limits
+        # were set correctly for the target channel
+        channel_index = dataset.get_channel_index(target_channel)
+        channel_window = dataset.metadata.omero.channels[channel_index].window
+        assert channel_window is not None
+        assert channel_window["start"] == window["start"]
+        assert channel_window["end"] == window["end"]
+        assert channel_window["min"] == window["min"]
+        assert channel_window["max"] == window["max"]
+
+        # Check that other channels were not affected (if any exist)
+        for ch_name in channel_names[1:]:
+            ch_idx = dataset.get_channel_index(ch_name)
+            assert (
+                dataset.metadata.omero.channels[ch_idx].window
+                == initial_windows[ch_name]
+            )
 
 
 @given(channel_names=channel_names_st)
@@ -887,24 +966,48 @@ def test_position_scale(channels_and_random_5d):
     with _temp_ome_zarr(
         random_5d, channel_names, "0", transform=transform
     ) as dataset:
-        # round-trip test with the offical reader implementation
         assert dataset.scale == scale
 
 
-@pytest.mark.skip(reason="https://github.com/czbiohub-sf/iohub/issues/255")
 def test_combine_fovs_to_hcs():
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
     with open_ome_zarr(hcs_ref) as hcs_store:
+        fov = hcs_store["B/03/0"]
+        array = fov[0].numpy()
+        channel_names = fov.channel_names
+        old_omero_name = fov.metadata.omero.name
         for path in fov_paths:
-            fovs[path] = hcs_store["B/03/0"]
+            fovs[path] = fov
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "combined.zarr")
         Plate.from_positions(store_path, fovs).close()
-        # read data with an external reader
-        ext_reader = Reader(parse_url(store_path))
-        node = list(ext_reader())[0]
-        plate_meta = node.metadata["metadata"]["plate"]
-        assert len(plate_meta["rows"]) == 3
-        assert len(plate_meta["columns"]) == 2
-        assert node.data[0].shape == (1, 2, 2160 * 3, 5120 * 2)
+        with open_ome_zarr(store_path, layout="hcs", mode="r") as dataset:
+            assert len(dataset.metadata.rows) == 3
+            assert len(dataset.metadata.columns) == 2
+            for fov_path in fov_paths:
+                copied_fov = dataset[fov_path]
+                assert copied_fov.channel_names == channel_names
+                new_omero_name = copied_fov.metadata.omero.name
+                assert new_omero_name != old_omero_name
+                assert new_omero_name == fov_path[-1]
+                assert_array_equal(dataset[fov_path]["0"].numpy(), array)
+
+
+def test_hcs_external_reader(tmp_path):
+    store_path = tmp_path / "hcs.zarr"
+    fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
+    y_size, x_size = (128, 100)
+    with open_ome_zarr(
+        store_path, layout="hcs", mode="a", channel_names=["A", "B"]
+    ) as dataset:
+        for name in fov_name_parts:
+            fov = dataset.create_position(*name)
+            fov.create_zeros("0", shape=(1, 2, 3, y_size, x_size), dtype=int)
+        n_rows = len(dataset.metadata.rows)
+        n_cols = len(dataset.metadata.columns)
+    plate = list(Reader(parse_url(store_path))())[0]
+    assert plate.data[0].shape == (1, 2, 3, y_size * n_rows, x_size * n_cols)
+    assert plate.data[0].dtype == int
+    assert not plate.data[0].any()
+    assert plate.metadata["channel_names"] == ["A", "B"]
