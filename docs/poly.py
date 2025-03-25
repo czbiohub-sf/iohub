@@ -62,7 +62,7 @@ root = Git.root(Path(__file__).parent)
 src = Path(SOURCE_DIR)
 ENVIRONMENT = {
     "v0.1.0": Pip.factory(
-        venv=Path(".venv"),
+        venv=Path(".venv") / "v0.1.0",
         args=PIP_ARGS
         + [
             "sphinxcontrib-applehelp<=1.0.4",
@@ -74,8 +74,8 @@ ENVIRONMENT = {
         creator=VenvWrapper(),
     ),
     "main": Pip.factory(
-        venv=Path(".venv"),
-        args=PIP_ARGS,
+        venv=Path(".venv") / "main",
+        args=PIP_ARGS + ["importlib_metadata"],
         creator=VenvWrapper(),
     ),
 }
