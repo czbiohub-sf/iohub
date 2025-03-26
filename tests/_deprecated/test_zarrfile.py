@@ -51,7 +51,7 @@ def test_get_zarr_mm2gamma():
     mmr = ZarrReader(mm2gamma_zarr_v01)
     for i in range(mmr.get_num_positions()):
         z = mmr.get_zarr(i)
-        assert isinstance(z, zarr.core.Array)
+        assert isinstance(z, zarr.Array)
 
 
 def test_get_array_mm2gamma():

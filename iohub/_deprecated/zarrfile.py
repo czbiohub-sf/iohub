@@ -8,6 +8,7 @@ from typing import Literal
 
 import numpy as np
 import zarr
+import zarr.storage
 
 from iohub._deprecated.reader_base import ReaderBase
 
@@ -27,7 +28,7 @@ class ZarrReader(ReaderBase):
     """
 
     def __init__(
-        self, store_path: str, version: Literal["0.1", "0.4"] = "0.1"
+        self, store_path: str, version: Literal["0.1", "0.4", "0.5"] = "0.1"
     ):
         super().__init__()
 
@@ -43,16 +44,10 @@ class ZarrReader(ReaderBase):
         # zarr files (.zarr) are directories
         if not os.path.isdir(store_path):
             raise ValueError("file does not exist")
-        if version == "0.4":
-            dimension_separator = "/"
-        elif version == "0.1":
-            dimension_separator = "."
-        else:
+        if version not in ("0.1", "0.4", "0.5"):
             raise ValueError(f"Invalid NGFF version: {version}")
         try:
-            self.store = zarr.DirectoryStore(
-                store_path, dimension_separator=dimension_separator
-            )
+            self.store = zarr.storage.LocalStore(store_path)
             self.root = zarr.open(self.store, "r")
         except Exception:
             raise FileNotFoundError("Supplies path is not a valid zarr root")
