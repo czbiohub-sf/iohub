@@ -62,6 +62,11 @@ root = Git.root(Path(__file__).parent)
 src = Path(SOURCE_DIR)
 ENVIRONMENT = (
     {
+        None: Pip.factory(
+            venv=Path(".venv") / "default",
+            args=PIP_ARGS,
+            creator=VenvWrapper(),
+        ),
         "v0.1.0": Pip.factory(
             venv=Path(".venv") / "v0.1.0",
             args=PIP_ARGS
@@ -90,6 +95,7 @@ ENVIRONMENT = (
 
 BUILDER = (
     {
+        None: SphinxBuilder(src / "source", args=[]),
         "v0.1.0": SphinxBuilder(src / "source", args=["-D", "plot_gallery=0"]),
         "main": SphinxBuilder(src / "source", args=[]),
     }
