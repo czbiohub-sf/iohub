@@ -8,7 +8,9 @@ import os
 import sys
 
 import importlib_metadata
+from sphinx_polyversion import load
 
+load(globals())
 # -- General configuration ----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -33,7 +35,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx_copybutton",
     "numpydoc",
-    "sphinx_multiversion",
+    "sphinx_polyversion",
     "sphinx_sitemap",
     "sphinx_gallery.gen_gallery",
 ]
@@ -49,11 +51,6 @@ numpydoc_show_class_members = True
 
 # Add any paths that contain templates here, relative to this directory.
 # templates_path = ["_templates"]
-
-# Disabling generation of docs on different branches to use tags only
-smv_tag_whitelist = r"^v\d+\.\d+\.\d+$"
-smv_branch_whitelist = r"^main$"
-smv_latest_version = r"^main$"
 
 # The suffix of source filenames.
 source_suffix = ".rst"
