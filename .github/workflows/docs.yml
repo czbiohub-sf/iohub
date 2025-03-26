@@ -27,6 +27,7 @@ jobs:
       - name: Checkout main
         run: |
           git fetch origin main:main
+          git status
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v3
