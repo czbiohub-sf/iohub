@@ -1154,7 +1154,7 @@ class Position(NGFFNode):
 
         Parameters
         ----------
-        image : str | Literal[
+        image : str | Literal['*']
             Name of one image array (e.g. "0") to transform,
             or "*" for the whole FOV
         axis_name : str
