@@ -642,38 +642,51 @@ def test_set_transform_fov(ch_shape_dtype, arr_name):
         ]
 
 
-@given(
-    ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
-)
-@settings(deadline=None)
-def test_set_scale(ch_shape_dtype):
+@pytest.mark.parametrize("image_name", ["0", "1", "a", "*"])
+def test_set_scale(image_name):
     """Test `iohub.ngff.Position.set_scale()`"""
-    channel_names, shape, dtype = ch_shape_dtype
-    transform = [
-        TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5)),
-        TransformationMeta(type="scale", scale=(5, 4, 3, 2, 1)),
-    ]
+    translation = [float(t) for t in range(1, 6)]
+    scale = [float(s) for s in range(5, 0, -1)]
+    array_name = "0" if image_name == "*" else image_name
+    new_scale = 10.0
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
         with open_ome_zarr(
-            store_path, layout="fov", mode="w-", channel_names=channel_names
+            store_path, layout="fov", mode="w-", channel_names=["a", "b"]
         ) as dataset:
-            dataset.create_zeros(name="0", shape=shape, dtype=dtype)
-            dataset.set_transform(image="0", transform=transform)
-            dataset.set_scale(image="0", axis_name="z", new_scale=10.0)
-            assert dataset.scale[-3] == 10.0
-            assert (
-                dataset.metadata.multiscales[0]
-                .datasets[0]
-                .coordinate_transformations[0]
-                .translation[-1]
-                == 5
+            dataset.create_zeros(
+                name=array_name,
+                shape=(1, 2, 4, 8, 16),
+                dtype=int,
+                transform=[
+                    TransformationMeta(
+                        type="translation", translation=translation
+                    ),
+                    TransformationMeta(type="scale", scale=scale),
+                ],
             )
-
             with pytest.raises(ValueError):
-                dataset.set_scale(image="0", axis_name="z", new_scale=-1.0)
-
-            assert dataset.zattrs["iohub"]["prior_z_scale"] == 3.0
+                dataset.set_scale(
+                    image=image_name, axis_name="z", new_scale=-1.0
+                )
+            with pytest.raises(KeyError):
+                dataset.set_scale(
+                    image="nonexistent", axis_name="z", new_scale=9.0
+                )
+            assert dataset.scale[-3] == 3.0
+            dataset.set_scale(
+                image=image_name, axis_name="z", new_scale=new_scale
+            )
+            if image_name == "*":
+                assert dataset.scale[-3] == new_scale * 3.0
+            else:
+                assert dataset.scale[-3] == new_scale
+            assert dataset.get_effective_translation(array_name) == translation
+            for tf in dataset.zattrs["iohub"]["previous_transforms"][0][
+                "transforms"
+            ]:
+                if tf["type"] == "scale":
+                    assert tf["scale"] == scale
 
 
 @given(channel_names=channel_names_st)
