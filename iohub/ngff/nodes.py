@@ -9,6 +9,7 @@ import logging
 import math
 import os
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
 
@@ -1144,17 +1145,14 @@ class Position(NGFFNode):
         self.dump_meta()
 
     def set_scale(
-        self,
-        image: str | Literal["*"],
-        axis_name: str,
-        new_scale: float,
+        self, image: str | Literal["*"], axis_name: str, new_scale: float
     ):
         """Set the scale for a named axis.
         Either one image array or the whole FOV.
 
         Parameters
         ----------
-        image : str | Literal[
+        image : str | Literal['*']
             Name of one image array (e.g. "0") to transform,
             or "*" for the whole FOV
         axis_name : str
@@ -1162,39 +1160,56 @@ class Position(NGFFNode):
         new_scale : float
             Value of the new scale.
         """
-        if len(self.metadata.multiscales) > 1:
-            raise NotImplementedError(
-                "Cannot set scale for multi-resolution images."
-            )
-
         if new_scale <= 0:
-            raise ValueError("New scale must be positive.")
-
+            raise ValueError(
+                f"New scale {axis_name}: {new_scale} is not positive!"
+            )
+        if image not in self and image != "*":
+            raise KeyError(f"Image {image} not found.")
         axis_index = self.get_axis_index(axis_name)
-
+        # Update scale while preserving existing transforms
+        if image == "*":
+            transforms = (
+                self.metadata.multiscales[0].coordinate_transformations or []
+            )
+        else:
+            for dataset_meta in self.metadata.multiscales[0].datasets:
+                if dataset_meta.path == image:
+                    transforms = dataset_meta.coordinate_transformations
+                    break
         # Append old scale to metadata
         iohub_dict = {}
         if "iohub" in self.zattrs:
             iohub_dict = self.zattrs["iohub"]
-        iohub_dict.update({f"prior_{axis_name}_scale": self.scale[axis_index]})
-        self.zattrs["iohub"] = iohub_dict
-
-        # Update scale while preserving existing transforms
-        transforms = (
-            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        if "previous_transforms" not in iohub_dict:
+            iohub_dict["previous_transforms"] = []
+        iohub_dict["previous_transforms"].append(
+            {
+                "image": image,
+                "transforms": [
+                    t.model_dump(**TO_DICT_SETTINGS) for t in transforms
+                ],
+                "modified": datetime.now().isoformat(),
+            }
         )
+        self.zattrs["iohub"] = iohub_dict
         # Replace default identity transform with scale
-        if len(transforms) == 1 and transforms[0].type == "identity":
+        if transforms == [TransformationMeta(type="identity")]:
             transforms = [TransformationMeta(type="scale", scale=[1] * 5)]
         # Add scale transform if not present
         if not any([transform.type == "scale" for transform in transforms]):
             transforms.append(TransformationMeta(type="scale", scale=[1] * 5))
-
+        new_transforms = []
         for transform in transforms:
             if transform.type == "scale":
+                old_scale = transform.scale[axis_index]
                 transform.scale[axis_index] = new_scale
-
-        self.set_transform(image, transforms)
+            new_transforms.append(transform)
+        _logger.info(
+            f"Updating scale for axis {axis_name} "
+            f"from {old_scale} to {new_scale}."
+        )
+        self.set_transform(image, new_transforms)
 
     def set_contrast_limits(self, channel_name: str, window: WindowDict):
         """Set the contrast limits for a channel.

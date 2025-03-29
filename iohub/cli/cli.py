@@ -123,12 +123,14 @@ def convert(input, output, grid_layout, chunks):
     type=float,
     help="New x scale",
 )
+@click.option("--image", required=False, help="Image name to set scale for")
 def set_scale(
     input_position_dirpaths,
     t_scale=None,
     z_scale=None,
     y_scale=None,
     x_scale=None,
+    image=None,
 ):
     """Update scale metadata in OME-Zarr datasets.
 
@@ -138,6 +140,8 @@ def set_scale(
 
     >> iohub set-scale -i input.zarr/*/*/* -z 2.0
     """
+    if image is None:
+        image = "0"
     for input_position_dirpath in input_position_dirpaths:
         with open_ome_zarr(
             input_position_dirpath, layout="fov", mode="r+"
@@ -147,12 +151,7 @@ def set_scale(
             ):
                 if value is None:
                     continue
-                old_value = dataset.scale[dataset.get_axis_index(name)]
-                print(
-                    f"Updating {input_position_dirpath} {name} scale from "
-                    f"{old_value} to {value}."
-                )
-                dataset.set_scale("0", name, value)
+                dataset.set_scale(image, name, value)
 
 
 @cli.command(name="rename-wells")
