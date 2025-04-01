@@ -21,9 +21,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Fetch main
+        run: |
+          git fetch origin main:main
+          git status
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v3
@@ -31,21 +35,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ".[doc]"
+          # temporary fix for sphinx-polyversion
+          pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging
       - name: Set environment
         run: |
           REPO_OWNER="${GITHUB_REPOSITORY%%/*}"
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           echo "GITHUB_PAGES_URL=https://$REPO_OWNER.github.io/$REPO_NAME" >> $GITHUB_ENV
       - name: Build the docs
-        working-directory: ./docs
         run: |
           echo $GITHUB_PAGES_URL
-          make publish
-          touch build/html/.nojekyll
+          make build -C docs
+          touch docs/build/.nojekyll
       - name: Upload build artifacts
-        uses: actions/upload-pages-artifact@v1
+        uses: actions/upload-pages-artifact@v3
         with:
-          path: "./docs/build/html"
+          path: "./docs/build"
 
   deploy:
     environment:
