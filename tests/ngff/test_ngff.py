@@ -50,6 +50,16 @@ short_alpha_numeric = st.text(
     min_size=1,
     max_size=16,
 )
+if os.name == "nt":
+    # Windows does not allow certain file names
+    _INVALID_NT_FILE_NAMES = (
+        ["CON", "PRN", "AUX", "NUL"]
+        + ["COM" + str(i) for i in range(10)]
+        + ["LPT" + str(i) for i in range(10)]
+    )
+    short_alpha_numeric = short_alpha_numeric.filter(
+        lambda x: x not in _INVALID_NT_FILE_NAMES
+    )
 tiles_rc_st = st.tuples(t_dim_st, t_dim_st)
 plate_axis_names_st = st.lists(
     short_alpha_numeric,
