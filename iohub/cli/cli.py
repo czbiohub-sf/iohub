@@ -123,7 +123,11 @@ def convert(input, output, grid_layout, chunks):
     type=float,
     help="New x scale",
 )
-@click.option("--image", required=False, help="Image name to set scale for. Default = 0")
+@click.option(
+    "--image",
+    required=False,
+    help="Image name to set scale for. Default is '0'",
+)
 def set_scale(
     input_position_dirpaths,
     t_scale=None,
