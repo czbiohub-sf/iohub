@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import os
-import shutil
 import platform
+import shutil
 import string
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
@@ -23,11 +23,12 @@ if TYPE_CHECKING:
 
 from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
+    NGFFNode,
     Plate,
     TransformationMeta,
+    _case_insensitive_fs,
     _open_store,
     _pad_shape,
-    _case_insensitive_fs,
     open_ome_zarr,
 )
 from tests.conftest import hcs_ref
@@ -933,6 +934,18 @@ def test_get_axis_index():
 
         with pytest.raises(ValueError):
             _ = position.get_axis_index("DOG")
+
+
+def test_ngff_node_contains_cross_platform(caplog):
+    """Test `iohub.ngff.NGFFNode.__contains__()` on multiple platforms."""
+    with open_ome_zarr(hcs_ref, layout="hcs", mode="r") as dataset:
+        assert "B" in dataset
+        match platform.system():
+            case "Linux":
+                assert "b" not in dataset
+            case "Windows" | "Darwin":
+                assert "b" in dataset
+                assert any("Key 'b' matched" in r.message for r in caplog.records)
 
 
 @given(

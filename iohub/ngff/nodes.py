@@ -128,6 +128,7 @@ class NGFFNode:
             self._parse_meta()
         if not hasattr(self, "axes"):
             self.axes = self._DEFAULT_AXES
+        self._case_insensitive_fs = _case_insensitive_fs()
 
     @property
     def zgroup(self):
@@ -201,7 +202,18 @@ class NGFFNode:
 
     def __contains__(self, key):
         key = normalize_storage_path(key)
-        return key.lower() in [name.lower() for name in self._member_names]
+        if not self._case_insensitive_fs:
+            return key in self._member_names
+        for name in self._member_names:
+            if key.lower() != name.lower():
+                continue
+            if key != name:
+                _logger.warning(
+                    f"Key '{key}' matched member '{name}'. "
+                    "This may not work on case-sensitive filesystems."
+                )
+            return True
+        return False
 
     def __iter__(self):
         yield from self._member_names
