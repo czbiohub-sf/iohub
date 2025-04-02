@@ -1698,6 +1698,11 @@ class Plate(NGFFNode):
         # normalize input
         row_name = normalize_storage_path(row_name)
         col_name = normalize_storage_path(col_name)
+        if row_name in self:
+            if col_name in self[row_name]:
+                raise FileExistsError(
+                    f"Well '{row_name}/{col_name}' already exists."
+                )
         row_meta = PlateAxisMeta(name=row_name)
         col_meta = PlateAxisMeta(name=col_name)
         row_index = self._auto_idx(row_name, row_index, "row")

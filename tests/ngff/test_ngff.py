@@ -945,7 +945,9 @@ def test_ngff_node_contains_cross_platform(caplog):
                 assert "b" not in dataset
             case "Windows" | "Darwin":
                 assert "b" in dataset
-                assert any("Key 'b' matched" in r.message for r in caplog.records)
+                assert any(
+                    "Key 'b' matched" in r.message for r in caplog.records
+                )
 
 
 @given(
@@ -989,6 +991,21 @@ def test_create_well(row_names: list[str], col_names: list[str]):
         assert [
             r["name"] for r in dataset.zattrs["plate"]["rows"]
         ] == row_names
+
+
+def test_create_case_sensitive_well(tmp_path):
+    """Test `iohub.ngff.Plate.create_well()` with case-sensitive names."""
+    store_path = tmp_path / "hcs.zarr"
+    with open_ome_zarr(
+        store_path, layout="hcs", mode="w-", channel_names=["GFP"]
+    ) as dataset:
+        dataset.create_well("A", "B")
+        match platform.system():
+            case "Windows" | "Darwin":
+                with pytest.raises(FileExistsError):
+                    dataset.create_well("a", "b")
+            case "Linux":
+                dataset.create_well("a", "b")
 
 
 @given(
