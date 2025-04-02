@@ -997,15 +997,28 @@ def test_create_case_sensitive_well(tmp_path):
     """Test `iohub.ngff.Plate.create_well()` with case-sensitive names."""
     store_path = tmp_path / "hcs.zarr"
     with open_ome_zarr(
-        store_path, layout="hcs", mode="w-", channel_names=["GFP"]
+        store_path, layout="hcs", mode="w-", channel_names=["1", "2"]
     ) as dataset:
-        dataset.create_well("A", "B")
+        well = dataset.create_well("A", "B")
+        fov = well.create_position("0")
+        fov.create_zeros("0", shape=(1, 2, 3, 4, 5), dtype=int)
         match platform.system():
             case "Windows" | "Darwin":
                 with pytest.raises(FileExistsError):
-                    dataset.create_well("a", "b")
+                    dataset.create_well("a", "B")
+                with pytest.raises(FileExistsError):
+                    dataset.create_well("A", "b")
+                new_well = dataset.create_well("a", "1")
+                expected_rows = 1
             case "Linux":
-                dataset.create_well("a", "b")
+                new_well = dataset.create_well("a", "b")
+                expected_rows = 2
+        new_fov = new_well.create_position("0")
+        new_fov.create_zeros("0", shape=(1, 2, 3, 4, 5), dtype=int)
+    with open_ome_zarr(store_path) as dataset:
+        assert len(dataset.metadata.rows) == expected_rows
+        assert len(list(dataset.rows())) == expected_rows
+        assert len(dataset.metadata.columns) == 2
 
 
 @given(
