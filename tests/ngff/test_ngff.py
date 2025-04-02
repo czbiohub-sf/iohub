@@ -161,6 +161,8 @@ def test_case_insensitive_fs():
             assert _case_insensitive_fs() is True
         case "Linux":
             assert _case_insensitive_fs() is False
+        case _:
+            _ = _case_insensitive_fs()
 
 
 @given(channel_names=channel_names_st)
