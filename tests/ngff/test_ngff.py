@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import platform
 import string
 from contextlib import contextmanager
 from tempfile import TemporaryDirectory
@@ -26,6 +27,7 @@ from iohub.ngff.nodes import (
     TransformationMeta,
     _open_store,
     _pad_shape,
+    _case_insensitive_fs,
     open_ome_zarr,
 )
 from tests.conftest import hcs_ref
@@ -148,6 +150,17 @@ def test_open_store_read_nonexist():
             store_path = os.path.join(temp_dir, "new.zarr")
             with pytest.raises(FileNotFoundError):
                 _ = _open_store(store_path, mode=mode, version="0.4")
+
+
+def test_case_insensitive_fs():
+    """Test `iohub.ngff._case_insensitive_fs()`"""
+    match platform.system():
+        case "Windows":
+            assert _case_insensitive_fs() is True
+        case "Darwin":
+            assert _case_insensitive_fs() is True
+        case "Linux":
+            assert _case_insensitive_fs() is False
 
 
 @given(channel_names=channel_names_st)

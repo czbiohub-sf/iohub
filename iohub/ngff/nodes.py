@@ -89,6 +89,11 @@ def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
     return tuple(int(math.ceil(v / factor)) for v in values)
 
 
+def _case_insensitive_fs() -> bool:
+    """Check if the filesystem is case-insensitive."""
+    return Path(__file__.lower()).exists() and Path(__file__.upper()).exists()
+
+
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
