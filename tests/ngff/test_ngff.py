@@ -26,7 +26,7 @@ from iohub.ngff.nodes import (
     NGFFNode,
     Plate,
     TransformationMeta,
-    _case_insensitive_fs,
+    _case_insensitive_local_fs,
     _open_store,
     _pad_shape,
     open_ome_zarr,
@@ -153,17 +153,17 @@ def test_open_store_read_nonexist():
                 _ = _open_store(store_path, mode=mode, version="0.4")
 
 
-def test_case_insensitive_fs():
-    """Test `iohub.ngff._case_insensitive_fs()`"""
+def test_case_insensitive_local_fs():
+    """Test `iohub.ngff._case_insensitive_local_fs()`"""
     match platform.system():
         case "Windows":
-            assert _case_insensitive_fs() is True
+            assert _case_insensitive_local_fs() is True
         case "Darwin":
-            assert _case_insensitive_fs() is True
+            assert _case_insensitive_local_fs() is True
         case "Linux":
-            assert _case_insensitive_fs() is False
+            assert _case_insensitive_local_fs() is False
         case _:
-            _ = _case_insensitive_fs()
+            _ = _case_insensitive_local_fs()
 
 
 @given(channel_names=channel_names_st)

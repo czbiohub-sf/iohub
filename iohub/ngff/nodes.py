@@ -89,8 +89,8 @@ def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
     return tuple(int(math.ceil(v / factor)) for v in values)
 
 
-def _case_insensitive_fs() -> bool:
-    """Check if the filesystem is case-insensitive."""
+def _case_insensitive_local_fs() -> bool:
+    """Check if the local filesystem is case-insensitive."""
     return Path(__file__.lower()).exists() and Path(__file__.upper()).exists()
 
 
@@ -128,7 +128,9 @@ class NGFFNode:
             self._parse_meta()
         if not hasattr(self, "axes"):
             self.axes = self._DEFAULT_AXES
-        self._case_insensitive_fs = _case_insensitive_fs()
+        # TODO: properly check the underlying storage type
+        # This works for now as only the local filesystem is supported
+        self._case_insensitive_fs = _case_insensitive_local_fs()
 
     @property
     def zgroup(self):
