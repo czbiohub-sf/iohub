@@ -11,7 +11,7 @@ import os
 import shutil
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type, Tuple
+from typing import TYPE_CHECKING, Generator, Literal, Sequence, Tuple, Type
 
 import numpy as np
 import zarr.codecs
