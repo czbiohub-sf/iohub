@@ -15,7 +15,7 @@ from iohub.mmstack import _tiff_to_fsspec_store
 
 
 class MicromanagerSequenceReader(ReaderBase):
-    def __init__(self, folder, extract_data=False):
+    def __init__(self, folder, extract_data=False, strict=False):
         super().__init__()
 
         """
@@ -34,6 +34,8 @@ class MicromanagerSequenceReader(ReaderBase):
             which contain singlepage tiff sequences
         extract_data    (bool)
             True if zarr arrays should be extracted immediately
+        strict:         (bool)
+            True if failures in getting images should raise exceptions
         """
 
         if not os.path.isdir(folder):
@@ -41,6 +43,7 @@ class MicromanagerSequenceReader(ReaderBase):
                 "supplied path for singlepage tiff sequence reader "
                 "is not a folder"
             )
+        self._strict = strict
 
         self.log = logging.getLogger(__name__)
         self.positions = {}
@@ -222,17 +225,18 @@ class MicromanagerSequenceReader(ReaderBase):
                         )
 
         # check that the array was assigned
-        # if z == zarr.zeros(
-        #     shape=(
-        #         self.frames,
-        #         self.channels,
-        #         self.slices,
-        #         self.height,
-        #         self.width,
-        #     ),
-        #     chunks=(1, 1, 1, self.height, self.width),
-        # ):
-        #     raise IOError(f"array at position {p} can not be found")
+        if self._strict:
+            if z == zarr.zeros(
+                shape=(
+                    self.frames,
+                    self.channels,
+                    self.slices,
+                    self.height,
+                    self.width,
+                ),
+                chunks=(1, 1, 1, self.height, self.width),
+            ):
+                raise IOError(f"array at position {p} can not be found")
 
         self.positions[p] = z
 
