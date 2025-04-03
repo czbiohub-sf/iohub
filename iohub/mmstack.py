@@ -38,6 +38,20 @@ def _normalize_mm_pos_key(key: str | int) -> int:
 def _tiff_to_fsspec_store(
     zarr_tiff_store: ZarrTiffStore, root_uri: str
 ) -> zarr.storage.FsspecStore:
+    """Bridge tifffile (zarr-python v2 interface) with zarr-python v3.
+
+    Parameters
+    ----------
+    zarr_tiff_store : ZarrTiffStore
+        Zarr (v2) wrapper for a TIFF series
+    root_uri : str
+        `file://` URI to the directory containing the TIFF files
+
+    Returns
+    -------
+    zarr.storage.FsspecStore
+        Zarr (v3) wrapper for a TIFF series
+    """
     spec_container = io.StringIO()
     zarr_tiff_store.write_fsspec(spec_container, url=root_uri)
     fs, _ = fsspec.url_to_fs(
