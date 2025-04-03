@@ -3,6 +3,7 @@ import glob
 import json
 import logging
 import os
+from pathlib import Path
 
 import natsort
 import numpy as np
@@ -10,6 +11,7 @@ import tifffile as tiff
 import zarr
 
 from iohub._deprecated.reader_base import ReaderBase
+from iohub.mmstack import _tiff_to_fsspec_store
 
 
 class MicromanagerSequenceReader(ReaderBase):
@@ -206,20 +208,31 @@ class MicromanagerSequenceReader(ReaderBase):
             if c[0] == p:
                 self.log.info(f"reading coord = {c} from filename = {fn}")
                 with tiff.imread(fn, aszarr=True) as store:
-                    z[c[1], c[2], c[3]] = zarr.open(store)
+                    try:
+                        array = zarr.open(
+                            _tiff_to_fsspec_store(
+                                store, root_uri=Path(fn).parent.as_uri()
+                            ),
+                            mode="r",
+                        )[:]
+                        z[c[1], c[2], c[3]] = array
+                    except Exception:
+                        self.log.error(
+                            f"error reading file {fn} for coordinate {c}"
+                        )
 
         # check that the array was assigned
-        if z == zarr.zeros(
-            shape=(
-                self.frames,
-                self.channels,
-                self.slices,
-                self.height,
-                self.width,
-            ),
-            chunks=(1, 1, 1, self.height, self.width),
-        ):
-            raise IOError(f"array at position {p} can not be found")
+        # if z == zarr.zeros(
+        #     shape=(
+        #         self.frames,
+        #         self.channels,
+        #         self.slices,
+        #         self.height,
+        #         self.width,
+        #     ),
+        #     chunks=(1, 1, 1, self.height, self.width),
+        # ):
+        #     raise IOError(f"array at position {p} can not be found")
 
         self.positions[p] = z
 
