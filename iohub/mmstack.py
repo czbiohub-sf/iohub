@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import io
+import json
 import logging
 from copy import copy
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 from warnings import catch_warnings, filterwarnings
 
-import dask.array as da
+import xarray as xr
+import fsspec
 import numpy as np
 import zarr
+import zarr.storage
 from natsort import natsorted
 from numpy.typing import ArrayLike
-from tifffile import TiffFile
+from tifffile import TiffFile, ZarrTiffStore
 from xarray import DataArray
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
@@ -29,6 +33,20 @@ def _normalize_mm_pos_key(key: str | int) -> int:
         return int(key)
     except TypeError:
         raise TypeError("Micro-Manager position keys must be integers.")
+
+
+def _tiff_to_fsspec_store(
+    zarr_tiff_store: ZarrTiffStore, root_uri: str
+) -> zarr.storage.FsspecStore:
+    spec_container = io.StringIO()
+    zarr_tiff_store.write_fsspec(spec_container, url=root_uri)
+    fs, _ = fsspec.url_to_fs(
+        "reference://",
+        fo=json.loads(spec_container.getvalue()),
+        target_protocol="file",
+        asynchronous=True
+    )
+    return zarr.storage.FsspecStore(fs=fs)
 
 
 def find_first_ome_tiff_in_mmstack(data_path: Path) -> Path:
@@ -124,11 +142,12 @@ class MMStack(MicroManagerFOVMapping):
             self.width,
         ) = dims.values()
         self._set_mm_meta(self._first_tif.micromanager_metadata)
-        self._store = series.aszarr()
+        zarr_tiff_store = series.aszarr(multiscales=True)
+        self._store = _tiff_to_fsspec_store(
+            zarr_tiff_store, root_uri=self._root.as_uri()
+        )
         _logger.debug(f"Opened {self._store}.")
-        data = da.from_zarr(zarr.open(self._store))
-        self.dtype = data.dtype
-        img = DataArray(data, dims=raw_dims, name=self.dirname)
+        img = xr.open_zarr(self._store, consolidated=False)["0"]
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
