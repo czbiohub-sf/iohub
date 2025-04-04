@@ -100,7 +100,9 @@ class NDTiffDataset(MicroManagerFOVMapping):
             )
         self.stage_positions = self._mm_meta["Summary"]["StagePositions"]
         z_step_size = float(self._mm_meta["Summary"]["z-step_um"] or 1.0)
-        xy_pixel_size = float(self._mm_meta["Summary"]["PixelSize_um"] or 1.0)
+        xy_pixel_size = float(
+            self._mm_meta["Summary"].get("PixelSize_um") or 1.0
+        )
         self._zyx_scale = (z_step_size, xy_pixel_size, xy_pixel_size)
         self._gather_xdata()
 

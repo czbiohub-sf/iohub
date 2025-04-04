@@ -69,6 +69,15 @@ def test_cli_info_mock(mm2gamma_ome_tiff, verbose):
         assert "Reading" in result.output
 
 
+def test_cli_info_unknown(tmp_path):
+    runner = CliRunner()
+    empty_file = tmp_path / "unknown.txt"
+    empty_file.touch()
+    result = runner.invoke(cli, ["info", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "No compatible" in result.output
+
+
 def test_cli_info_ndtiff(ndtiff_dataset, verbose):
     runner = CliRunner()
     cmd = ["info", str(ndtiff_dataset)]
@@ -112,7 +121,7 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     assert "Converting" in result.output
 
 
-def test_cli_set_scale():
+def test_cli_set_scale(caplog):
     with _temp_copy(hcs_ref) as store_path:
         store_path = Path(store_path)
         position_path = Path(store_path) / "B" / "03" / "0"
@@ -140,23 +149,16 @@ def test_cli_set_scale():
             ],
         )
         assert result_pos.exit_code == 0
-        assert "Updating" in result_pos.output
-
+        assert any("Updating" in record.message for record in caplog.records)
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
             assert output_dataset.scale != old_scale
-            assert (
-                output_dataset.zattrs["iohub"]["prior_x_scale"]
-                == old_scale[-1]
-            )
-            assert (
-                output_dataset.zattrs["iohub"]["prior_y_scale"]
-                == old_scale[-2]
-            )
-            assert (
-                output_dataset.zattrs["iohub"]["prior_z_scale"]
-                == old_scale[-3]
-            )
+            for i, record in enumerate(
+                output_dataset.zattrs["iohub"]["previous_transforms"]
+            ):
+                for transform in record["transforms"]:
+                    if transform["type"] == "scale":
+                        assert transform["scale"][-3:][i] == old_scale[-3:][i]
 
         # Test plate-expands-into-positions behavior
         runner = CliRunner()
@@ -172,7 +174,11 @@ def test_cli_set_scale():
         )
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert output_dataset.scale[-1] == 0.1
-            assert output_dataset.zattrs["iohub"]["prior_x_scale"] == 0.5
+            for transform in output_dataset.zattrs["iohub"][
+                "previous_transforms"
+            ][-1]["transforms"]:
+                if transform["type"] == "scale":
+                    assert transform["scale"][-1] == 0.5
 
 
 def test_cli_rename_wells_help():

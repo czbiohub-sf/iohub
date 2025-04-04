@@ -1,6 +1,5 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
-SPHINXBUILD   = sphinx-build
 BUILDDIR      = build
 
 # Internal variables.
@@ -28,12 +27,7 @@ clean:
 	-rm -rf source/auto_examples/*
 
 build:
-	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
+	-sphinx-polyversion poly.py $(BUILDDIR) -vvv
+	-cp gh-pages-redirect.html $(BUILDDIR)/index.html
 	@echo
-	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
-
-publish:
-	sphinx-multiversion source build/html
-	cp gh-pages-redirect.html build/html/index.html
-	@echo
-	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
+	@echo "Build finished. The HTML pages are in $(BUILDDIR)."
