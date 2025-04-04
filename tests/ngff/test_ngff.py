@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import string
 from contextlib import contextmanager
@@ -22,8 +23,10 @@ if TYPE_CHECKING:
 
 from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
+    NGFFNode,
     Plate,
     TransformationMeta,
+    _case_insensitive_local_fs,
     _open_store,
     _pad_shape,
     open_ome_zarr,
@@ -148,6 +151,19 @@ def test_open_store_read_nonexist():
             store_path = os.path.join(temp_dir, "new.zarr")
             with pytest.raises(FileNotFoundError):
                 _ = _open_store(store_path, mode=mode, version="0.4")
+
+
+def test_case_insensitive_local_fs():
+    """Test `iohub.ngff._case_insensitive_local_fs()`"""
+    match platform.system():
+        case "Windows":
+            assert _case_insensitive_local_fs() is True
+        case "Darwin":
+            assert _case_insensitive_local_fs() is True
+        case "Linux":
+            assert _case_insensitive_local_fs() is False
+        case _:
+            _ = _case_insensitive_local_fs()
 
 
 @given(channel_names=channel_names_st)
@@ -920,6 +936,20 @@ def test_get_axis_index():
             _ = position.get_axis_index("DOG")
 
 
+def test_ngff_node_contains_cross_platform(caplog):
+    """Test `iohub.ngff.NGFFNode.__contains__()` on multiple platforms."""
+    with open_ome_zarr(hcs_ref, layout="hcs", mode="r") as dataset:
+        assert "B" in dataset
+        match platform.system():
+            case "Linux":
+                assert "b" not in dataset
+            case "Windows" | "Darwin":
+                assert "b" in dataset
+                assert any(
+                    "Key 'b' matched" in r.message for r in caplog.records
+                )
+
+
 @given(
     row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
 )
@@ -961,6 +991,34 @@ def test_create_well(row_names: list[str], col_names: list[str]):
         assert [
             r["name"] for r in dataset.zattrs["plate"]["rows"]
         ] == row_names
+
+
+def test_create_case_sensitive_well(tmp_path):
+    """Test `iohub.ngff.Plate.create_well()` with case-sensitive names."""
+    store_path = tmp_path / "hcs.zarr"
+    with open_ome_zarr(
+        store_path, layout="hcs", mode="w-", channel_names=["1", "2"]
+    ) as dataset:
+        well = dataset.create_well("A", "B")
+        fov = well.create_position("0")
+        fov.create_zeros("0", shape=(1, 2, 3, 4, 5), dtype=int)
+        match platform.system():
+            case "Windows" | "Darwin":
+                with pytest.raises(FileExistsError):
+                    dataset.create_well("a", "B")
+                with pytest.raises(FileExistsError):
+                    dataset.create_well("A", "b")
+                new_well = dataset.create_well("a", "1")
+                expected_rows = 1
+            case "Linux":
+                new_well = dataset.create_well("a", "b")
+                expected_rows = 2
+        new_fov = new_well.create_position("0")
+        new_fov.create_zeros("0", shape=(1, 2, 3, 4, 5), dtype=int)
+    with open_ome_zarr(store_path) as dataset:
+        assert len(dataset.metadata.rows) == expected_rows
+        assert len(list(dataset.rows())) == expected_rows
+        assert len(dataset.metadata.columns) == 2
 
 
 @given(
