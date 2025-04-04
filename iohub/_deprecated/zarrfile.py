@@ -48,7 +48,7 @@ class ZarrReader(ReaderBase):
             raise ValueError(f"Invalid NGFF version: {version}")
         try:
             self.store = zarr.storage.LocalStore(store_path)
-            self.root = zarr.open(self.store, "r")
+            self.root = zarr.open(self.store, mode="r")
         except Exception:
             raise FileNotFoundError("Supplies path is not a valid zarr root")
         try:

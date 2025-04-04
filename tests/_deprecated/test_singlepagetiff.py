@@ -63,7 +63,7 @@ def test_get_zarr(single_page_tiff):
     for i in range(mmr.get_num_positions()):
         z = mmr.get_zarr(i)
         assert z.shape == mmr.shape
-        assert isinstance(z, zarr.core.Array)
+        assert isinstance(z, zarr.Array)
 
 
 def test_get_array(single_page_tiff):
