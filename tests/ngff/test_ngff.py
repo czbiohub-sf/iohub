@@ -307,10 +307,10 @@ def test_create_zeros(ch_shape_dtype, arr_name):
             store_path, layout="fov", mode="w-", channel_names=channel_names
         )
         dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-        assert os.listdir(os.path.join(store_path, arr_name)) == [
+        assert set(os.listdir(os.path.join(store_path, arr_name))) == {
             ".zarray",
-            ".zattrs",
-        ]
+            ".zattrs"
+        }
         assert not dataset[arr_name][:].any()
         assert dataset[arr_name].shape == shape
         assert dataset[arr_name].dtype == dtype
@@ -398,7 +398,7 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
         assert dataset.metadata.omero.channels[0].label == new_channel
 
 
-@pytest.mark.skip(reason="broken")
+# @pytest.mark.skip(reason="broken")
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
