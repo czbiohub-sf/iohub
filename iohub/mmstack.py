@@ -167,7 +167,6 @@ class MMStack(MicroManagerFOVMapping):
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
-        self.dtype = xarr.dtype
         if self.channels > len(self.channel_names):
             for c in range(self.channels):
                 if c >= len(self.channel_names):
