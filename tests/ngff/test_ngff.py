@@ -1003,6 +1003,7 @@ def test_position_scale(channels_and_random_5d):
         assert dataset.scale == scale
 
 
+@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 def test_combine_fovs_to_hcs():
     from ome_zarr.io import parse_url
     from ome_zarr.reader import Reader
@@ -1031,6 +1032,7 @@ def test_combine_fovs_to_hcs():
                 assert_array_equal(dataset[fov_path]["0"].numpy(), array)
 
 
+@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 def test_hcs_external_reader(tmp_path):
     store_path = tmp_path / "hcs.zarr"
     fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
