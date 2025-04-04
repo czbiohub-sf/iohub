@@ -58,9 +58,9 @@ with open_ome_zarr(
 ) as dataset:
     # Create and write to positions
     # This affects the tile arrangement in visualization
-    position = dataset.create_position(0, 0, 0)
+    position = dataset.create_position("0", "0", "0")
     position.create_image("0", tczyx_1, transform=[translation[0]])
-    position = dataset.create_position(0, 0, 1)
+    position = dataset.create_position("0", "0", "1")
     position.create_image("0", tczyx_2, transform=[translation[1], scaling[0]])
     # Print dataset summary
     dataset.print_tree()

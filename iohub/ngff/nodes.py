@@ -1824,11 +1824,7 @@ class Plate(NGFFNode):
             for _, position in well.positions():
                 yield position.zgroup.path, position
 
-    def rename_well(
-        self,
-        old: str,
-        new: str
-    ):
+    def rename_well(self, old: str, new: str):
         """Rename a well.
 
         Parameters
