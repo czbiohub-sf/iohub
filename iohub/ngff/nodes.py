@@ -87,6 +87,11 @@ def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
     return tuple(int(math.ceil(v / factor)) for v in values)
 
 
+def _case_insensitive_local_fs() -> bool:
+    """Check if the local filesystem is case-insensitive."""
+    return Path(__file__.lower()).exists() and Path(__file__.upper()).exists()
+
+
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
@@ -121,6 +126,9 @@ class NGFFNode:
             self._parse_meta()
         if not hasattr(self, "axes"):
             self.axes = self._DEFAULT_AXES
+        # TODO: properly check the underlying storage type
+        # This works for now as only the local filesystem is supported
+        self._case_insensitive_fs = _case_insensitive_local_fs()
 
     @property
     def zgroup(self):
@@ -194,7 +202,18 @@ class NGFFNode:
 
     def __contains__(self, key):
         key = normalize_path(str(key))
-        return key.lower() in [name.lower() for name in self._member_names]
+        if not self._case_insensitive_fs:
+            return key in self._member_names
+        for name in self._member_names:
+            if key.lower() != name.lower():
+                continue
+            if key != name:
+                _logger.warning(
+                    f"Key '{key}' matched member '{name}'. "
+                    "This may not work on case-sensitive filesystems."
+                )
+            return True
+        return False
 
     def __iter__(self):
         yield from self._member_names
@@ -1711,6 +1730,11 @@ class Plate(NGFFNode):
         # normalize input
         row_name = normalize_path(row_name)
         col_name = normalize_path(col_name)
+        if row_name in self:
+            if col_name in self[row_name]:
+                raise FileExistsError(
+                    f"Well '{row_name}/{col_name}' already exists."
+                )
         row_meta = PlateAxisMeta(name=row_name)
         col_meta = PlateAxisMeta(name=col_name)
         row_index = self._auto_idx(row_name, row_index, "row")
