@@ -58,7 +58,7 @@ def _tiff_to_fsspec_store(
         "reference://",
         fo=json.loads(spec_container.getvalue()),
         target_protocol="file",
-        asynchronous=True
+        asynchronous=True,
     )
     return zarr.storage.FsspecStore(fs=fs)
 
@@ -165,6 +165,7 @@ class MMStack(MicroManagerFOVMapping):
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
+        self.dtype = xarr.dtype
         if self.channels > len(self.channel_names):
             for c in range(self.channels):
                 if c >= len(self.channel_names):
