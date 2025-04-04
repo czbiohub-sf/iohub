@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Iterable
 from warnings import catch_warnings, filterwarnings
 
-import xarray as xr
+import dask.array as da
 import fsspec
 import numpy as np
 import zarr
@@ -161,7 +161,9 @@ class MMStack(MicroManagerFOVMapping):
             zarr_tiff_store, root_uri=self._root.as_uri()
         )
         _logger.debug(f"Opened {self._store}.")
-        img = xr.open_zarr(self._store, consolidated=False)["0"]
+        data = da.from_zarr(zarr.open(self._store, mode="r")["0"])
+        self.dtype = data.dtype
+        img = DataArray(data, dims=raw_dims, name=self.dirname)
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
