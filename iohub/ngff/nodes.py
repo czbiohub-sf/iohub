@@ -1827,7 +1827,7 @@ class Plate(NGFFNode):
     def rename_well(
         self,
         old: str,
-        new: str,
+        new: str
     ):
         """Rename a well.
 

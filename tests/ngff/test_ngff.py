@@ -309,7 +309,7 @@ def test_create_zeros(ch_shape_dtype, arr_name):
         dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
         assert set(os.listdir(os.path.join(store_path, arr_name))) == {
             ".zarray",
-            ".zattrs"
+            ".zattrs",
         }
         assert not dataset[arr_name][:].any()
         assert dataset[arr_name].shape == shape
