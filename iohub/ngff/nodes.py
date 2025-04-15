@@ -57,13 +57,14 @@ def _pad_shape(shape: tuple[int, ...], target: int = 5):
 
 
 def _open_store(
-    store_path: StrOrBytesPath,
+    store_path: StrOrBytesPath | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
     version: Literal["0.1", "0.4", "0.5"],
 ):
-    if not os.path.isdir(store_path) and mode in ("r", "r+"):
+    store_path = Path(store_path).resolve()
+    if not store_path.exists() and mode in ("r", "r+"):
         raise FileNotFoundError(
-            f"Dataset directory not found at {store_path}."
+            f"Dataset directory not found at {str(store_path)}."
         )
     if version not in ("0.4", "0.5"):
         _logger.warning(
@@ -71,13 +72,13 @@ def _open_store(
             f"Requested version {version} may not work properly."
         )
     try:
-        store = zarr.storage.LocalStore(store_path)
-        root = zarr.open_group(
-            store, mode=mode, zarr_format=(3 if version == "0.5" else 2)
-        )
+        zarr_format = None
+        if mode in ("w", "w-"):
+            zarr_format = 3 if version == "0.5" else 2
+        root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
         raise RuntimeError(
-            f"Cannot open Zarr root group at {store_path}"
+            f"Cannot open Zarr root group at {str(store_path)}"
         ) from e
     return root
 
