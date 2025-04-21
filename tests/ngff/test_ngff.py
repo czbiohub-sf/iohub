@@ -414,7 +414,6 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
         assert dataset.metadata.omero.channels[0].label == new_channel
 
 
-# @pytest.mark.skip(reason="broken")
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
