@@ -1081,6 +1081,7 @@ def test_combine_fovs_to_hcs():
 def test_hcs_external_reader(tmp_path):
     from ome_zarr.io import parse_url
     from ome_zarr.reader import Reader
+
     store_path = tmp_path / "hcs.zarr"
     fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
     y_size, x_size = (128, 100)
