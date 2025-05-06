@@ -14,7 +14,7 @@ import hypothesis.strategies as st
 import pytest
 import zarr.storage
 from hypothesis import HealthCheck, assume, given, settings
-from numpy.testing import assert_array_almost_equal, assert_array_equal
+from numpy.testing import assert_allclose, assert_array_equal
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 
 from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
-    NGFFNode,
     Plate,
     TransformationMeta,
     _case_insensitive_local_fs,
@@ -278,7 +277,6 @@ def _temp_ome_zarr_plate(
         temp_dir.cleanup()
 
 
-@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
@@ -295,14 +293,13 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
 
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
-        assert_array_almost_equal(dataset[arr_name][:], random_5d)
+        assert_allclose(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
-        ext_reader = Reader(parse_url(dataset.zgroup.store.path))
+        ext_reader = Reader(parse_url(dataset.zgroup.store.root))
         node = list(ext_reader())[0]
         assert node.metadata["channel_names"] == channel_names
         assert node.specs[0].datasets == [arr_name]
-        assert node.data[0].shape == random_5d.shape
-        assert node.data[0].dtype == random_5d.dtype
+        assert_allclose(node.data[0], random_5d)
 
 
 @given(
@@ -344,13 +341,9 @@ def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data` to dask"""
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
-        assert_array_almost_equal(
-            dataset.data.dask_array().compute(), random_5d
-        )
+        assert_allclose(dataset.data.dask_array().compute(), random_5d)
     with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
-        assert_array_almost_equal(
-            dataset[arr_name].dask_array().compute(), random_5d
-        )
+        assert_allclose(dataset[arr_name].dask_array().compute(), random_5d)
 
 
 @given(
@@ -367,7 +360,7 @@ def test_position_data(channels_and_random_5d, arr_name):
     channel_names, random_5d = channels_and_random_5d
     assume(arr_name != "0")
     with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
-        assert_array_almost_equal(dataset.data.numpy(), random_5d)
+        assert_allclose(dataset.data.numpy(), random_5d)
     with pytest.raises(KeyError):
         with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
             _ = dataset.data
@@ -391,7 +384,7 @@ def test_append_channel(channels_and_random_5d, arr_name):
     ) as dataset:
         dataset.append_channel(channel_names[-1], resize_arrays=True)
         dataset[arr_name][:, -1] = random_5d[:, -1]
-        assert_array_almost_equal(dataset[arr_name][:], random_5d)
+        assert_allclose(dataset[arr_name][:], random_5d)
 
 
 @given(
@@ -488,9 +481,7 @@ def test_update_channel(channels_and_random_5d, arr_name):
             dataset.update_channel(
                 chan_name=ch, target=arr_name, data=random_5d[:, -1]
             )
-            assert_array_almost_equal(
-                dataset[arr_name][:, i], random_5d[:, -1]
-            )
+            assert_allclose(dataset[arr_name][:, i], random_5d[:, -1])
 
 
 @given(
@@ -511,7 +502,6 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
             pass
 
 
-@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
@@ -544,7 +534,7 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
                 == transform
             )
         # read data with an external reader
-        ext_reader = Reader(parse_url(dataset.zgroup.store.path))
+        ext_reader = Reader(parse_url(dataset.zgroup.store.root))
         node = list(ext_reader())[0]
         assert node.metadata["coordinateTransformations"][0] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
@@ -873,7 +863,7 @@ def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name):
         ) as dataset:
             for data, row, column in _tile_data(tiles):
                 read = tiles.get_tile(row, column)
-                assert_array_almost_equal(data, read)
+                assert_allclose(data, read)
 
 
 @given(channel_names=channel_names_st)
@@ -1088,8 +1078,9 @@ def test_combine_fovs_to_hcs():
                 assert_array_equal(dataset[fov_path]["0"].numpy(), array)
 
 
-@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 def test_hcs_external_reader(tmp_path):
+    from ome_zarr.io import parse_url
+    from ome_zarr.reader import Reader
     store_path = tmp_path / "hcs.zarr"
     fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
     y_size, x_size = (128, 100)
