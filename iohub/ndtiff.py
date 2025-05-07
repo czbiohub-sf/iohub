@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
@@ -336,7 +337,14 @@ class NDTiffDataset(MicroManagerFOVMapping):
                 p = int(p)
         p, t, c, z = self._check_coordinates(p, t, c, z)
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
-            metadata = self.dataset.read_metadata(
-                position=p, time=t, channel=c, z=z
-            )
+            try:
+                metadata = self.dataset.read_metadata(
+                    position=p, time=t, channel=c, z=z
+                )
+            except JSONDecodeError:
+                # acquisition crashed before metadata was written
+                _logger.warning(
+                    f"Unable to decode metadata for position {p}, "
+                    f"time {t}, channel {c}, z {z}"
+                )
         return metadata
