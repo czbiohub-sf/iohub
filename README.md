@@ -2,6 +2,7 @@
 
 [![PyPI - Python version](https://img.shields.io/pypi/pyversions/iohub)](https://pypi.org/project/iohub)
 [![PyPI - iohub version](https://img.shields.io/pypi/v/iohub.svg)](https://pypi.org/project/iohub)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15022067.svg)](https://doi.org/10.5281/zenodo.15022067)
 [![Docs deployment](https://github.com/czbiohub-sf/iohub/actions/workflows/docs.yml/badge.svg)](https://czbiohub-sf.github.io/iohub)
 
 N-dimensional bioimaging produces data and metadata in various formats,
