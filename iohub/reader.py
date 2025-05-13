@@ -206,7 +206,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
         else:
             reader = read_images(path, data_type=fmt)
     except (ValueError, RuntimeError):
-        print("Error: No compatible dataset is found.", file=sys.stderr)
+        print("Error: No compatible dataset is found.")
         return
     fmt_msg = f"Format:\t\t\t {fmt}"
     if extra_info:
