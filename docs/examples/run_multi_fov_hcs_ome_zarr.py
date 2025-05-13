@@ -32,9 +32,9 @@ print("Zarr store path", store_path)
 
 position_list = (
     ("A", "1", "0"),
-    ("H", 1, "0"),
+    ("H", "1", "0"),
     ("H", "12", "CannotVisualize"),
-    ("Control", "Blank", 0),
+    ("Control", "Blank", "0"),
 )
 
 with open_ome_zarr(
