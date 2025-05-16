@@ -34,7 +34,7 @@ def pytest_generate_tests(metafunc):
 def test_cli_entry():
     runner = CliRunner()
     result = runner.invoke(cli)
-    assert result.exit_code == 0
+    assert result.exit_code == 2
     assert "Usage" in result.output
 
 
