@@ -55,6 +55,6 @@ keywords:
   - bioimaging
   - ndimensional-arrays
 license: BSD-3-Clause
-commit: cea2e59361548db14fc400eafbfa97446dfdd33e
+commit: dc704aa5506a84fdb2b538834ac181b691e70766
 version: 0.2.0
 date-released: '2025-04-22'
