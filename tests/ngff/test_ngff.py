@@ -414,6 +414,7 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
         assert dataset.metadata.omero.channels[0].label == new_channel
 
 
+# @pytest.mark.skip(reason="broken")
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
@@ -1064,6 +1065,9 @@ def test_position_scale(channels_and_random_5d):
     reason="https://github.com/zarr-developers/zarr-python/issues/2407"
 )
 def test_combine_fovs_to_hcs():
+    from ome_zarr.io import parse_url
+    from ome_zarr.reader import Reader
+
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
     with open_ome_zarr(hcs_ref) as hcs_store:
