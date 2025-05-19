@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from json import JSONDecodeError
+from json import JSONDecodeError, UnicodeDecodeError
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
@@ -341,7 +341,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
                 metadata = self.dataset.read_metadata(
                     position=p, time=t, channel=c, z=z
                 )
-            except JSONDecodeError:
+            except (JSONDecodeError, UnicodeDecodeError):
                 # acquisition crashed before metadata was written
                 _logger.warning(
                     f"Unable to decode metadata for position {p}, "
