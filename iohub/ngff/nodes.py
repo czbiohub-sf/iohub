@@ -1557,6 +1557,11 @@ class Plate(NGFFNode):
 
         >>> new_plate = Plate.from_positions("combined.zarr", fovs)
         """
+        # TODO: remove when zarr-python adds back `copy_store`
+        raise NotImplementedError(
+            "This method is disabled until upstream support is finalized: "
+            "https://github.com/zarr-developers/zarr-python/issues/2407"
+        )
         # get metadata from an arbitraty FOV
         # deterministic because dicts are ordered
         example_position = next(iter(positions.values()))
