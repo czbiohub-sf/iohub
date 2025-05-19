@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
-from json import JSONDecodeError, UnicodeDecodeError
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
