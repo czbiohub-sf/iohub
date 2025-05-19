@@ -307,7 +307,9 @@ class TIFFConverter:
     def _init_grid_arrays(self, arr_kwargs):
         for row, columns in enumerate(self.position_grid):
             for column in columns:
-                self._create_zeros_array(row, column, "0", arr_kwargs)
+                self._create_zeros_array(
+                    str(row), str(column), "0", arr_kwargs
+                )
 
     def _create_zeros_array(
         self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict
