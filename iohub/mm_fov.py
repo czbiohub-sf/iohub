@@ -134,7 +134,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
         except KeyError:
             raise ValueError("Stage positions do not have labels.")
 
-        # See https://chatgpt.com/share/e/670097cc-2854-8008-bd33-b54cad7c99b9
+        # See https://chatgpt.com/share/e/68364412-fb4c-8002-8dcf-28127cfee37a
         pattern = re.compile(
             r"([A-Z])(\d+)-Site_(\d+)|"
             r"Pos-(\d+)-(\d+)_(\d+)|"
