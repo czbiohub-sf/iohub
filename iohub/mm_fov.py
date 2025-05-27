@@ -138,7 +138,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
         pattern = re.compile(
             r"([A-Z])(\d+)-Site_(\d+)|"
             r"Pos-(\d+)-(\d+)_(\d+)|"
-            r"(\d+)-Pos(\d+)_(\d+)"
+            r"(\d+)-Pos(\d+)_?(\d+)?"
         )
         row_col_fov = []
         for label in labels:
@@ -151,9 +151,14 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                     row_col_fov.append(
                         ("0", match.group(4), match.group(5) + match.group(6))
                     )
-                elif match.group(7):  # "1-Pos000_000" case
+                elif match.group(7):  # "1-Pos000_000" or "1-Pos000" case
+                    optional_last_part = match.group(9) or "000"
                     row_col_fov.append(
-                        ("0", match.group(7), match.group(8) + match.group(9))
+                        (
+                            "0",
+                            match.group(7),
+                            match.group(8) + optional_last_part,
+                        )
                     )
 
         if not row_col_fov:
