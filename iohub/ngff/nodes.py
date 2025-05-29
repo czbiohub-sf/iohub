@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Generator, Literal, Sequence, Tuple, Type
 
 import numpy as np
 import zarr.codecs
-from numcodecs import Blosc
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 from zarr.core.group import normalize_path
@@ -807,6 +806,7 @@ class Position(NGFFNode):
             )
 
     def _create_compressor_options(self, chunk_shape: Tuple[int, ...] = None):
+        shuffle = zarr.codecs.BloscShuffle.bitshuffle
         if self._zarr_format == 3:
             return {
                 "codecs": [
@@ -817,7 +817,7 @@ class Position(NGFFNode):
                             zarr.codecs.BloscCodec(
                                 cname="zstd",
                                 clevel=1,
-                                shuffle=Blosc.BITSHUFFLE,
+                                shuffle=shuffle,
                             ),
                         ],
                     )
@@ -825,9 +825,9 @@ class Position(NGFFNode):
             }
         else:
             return {
-                "compressor": Blosc(
-                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                ),
+                "compressors": zarr.codecs.BloscCodec(
+                    cname="zstd", clevel=1, shuffle=shuffle
+                )
             }
 
     def _create_image_meta(
