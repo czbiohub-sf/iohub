@@ -142,6 +142,11 @@ class NGFFNode:
         return self._group.attrs
 
     @property
+    def maybe_wrapped_ome_attrs(self):
+        """Container of OME metadata attributes."""
+        return self.zattrs.get("ome") or self.zattrs
+
+    @property
     def version(self):
         """NGFF version"""
         return self._version
@@ -575,9 +580,8 @@ class Position(NGFFNode):
             self._channel_names = list(range(example_image.channels))
 
     def _parse_meta(self):
-        attrs = self.zattrs.get("ome") or self.zattrs
-        multiscales = attrs.get("multiscales")
-        omero = attrs.get("omero")
+        multiscales = self.maybe_wrapped_ome_attrs.get("multiscales")
+        omero = self.maybe_wrapped_ome_attrs.get("omero")
         if multiscales:
             try:
                 self._set_meta(multiscales=multiscales, omero=omero)
@@ -1380,7 +1384,7 @@ class Well(NGFFNode):
         )
 
     def _parse_meta(self):
-        if well_group_meta := self.zattrs.get("well"):
+        if well_group_meta := self.maybe_wrapped_ome_attrs.get("well"):
             self.metadata = WellGroupMeta(**well_group_meta)
         else:
             self._warn_invalid_meta()
@@ -1623,7 +1627,7 @@ class Plate(NGFFNode):
         )
 
     def _parse_meta(self):
-        if plate_meta := self.zattrs.get("plate"):
+        if plate_meta := self.maybe_wrapped_ome_attrs.get("plate"):
             _logger.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
         else:

@@ -5,12 +5,14 @@ import platform
 import shutil
 import string
 from contextlib import contextmanager
+from itertools import product
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
-from pathlib import Path
 
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
+import numpy as np
 import pytest
 import zarr.storage
 from hypothesis import HealthCheck, assume, given, settings
@@ -22,8 +24,8 @@ if TYPE_CHECKING:
 
 from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
-    NGFFNode,
     Plate,
+    Position,
     TransformationMeta,
     _case_insensitive_local_fs,
     _open_store,
@@ -1110,3 +1112,19 @@ def test_hcs_external_reader(tmp_path):
     assert plate.data[0].dtype == int
     assert not plate.data[0].any()
     assert plate.metadata["channel_names"] == ["A", "B"]
+
+
+def test_read_empty_hcs_v05(empty_ome_zarr_hcs_v05):
+    """Test reading an empty OME-Zarr v0.5 HCS store."""
+    empty_zarr, (rows, cols, fovs, resolutions) = empty_ome_zarr_hcs_v05
+    with open_ome_zarr(empty_zarr, layout="hcs", mode="r") as dataset:
+        for row, col, fov in product(rows, cols, fovs):
+            position: Position = dataset[f"{row}/{col}/{fov}"]
+            for resolution in resolutions:
+                assert_array_equal(
+                    position[resolution].numpy(),
+                    np.zeros((50, 48, 64), dtype=np.uint16),
+                )
+        assert len(list(dataset.positions())) == len(rows) * len(cols) * len(
+            fovs
+        )
