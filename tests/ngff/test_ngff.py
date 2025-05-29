@@ -131,7 +131,7 @@ def test_open_store_create():
             assert isinstance(root, zarr.Group)
             assert isinstance(root.store, zarr.storage.LocalStore)
             # assert root.store._dimension_separator == "/"
-            assert root.store.root == Path(store_path)
+            assert root.store.root.resolve() == Path(store_path).resolve()
 
 
 def test_open_store_create_existing():
