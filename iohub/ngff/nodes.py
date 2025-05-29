@@ -825,7 +825,7 @@ class Position(NGFFNode):
             }
         else:
             return {
-                "compressors": zarr.codecs.BloscCodec(
+                "compressor": zarr.codecs.BloscCodec(
                     cname="zstd", clevel=1, shuffle=shuffle
                 )
             }
