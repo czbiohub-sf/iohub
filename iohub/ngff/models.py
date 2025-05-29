@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """
 Data model classes with validation for OME-NGFF metadata.
-Developed against OME-NGFF v0.4 and ome-zarr v0.9
+Developed against OME-NGFF v0.4/0.5.2 and ome-zarr v0.9.
 
 Attributes are 'snake_case' with aliases to match NGFF names in JSON output.
 See https://ngff.openmicroscopy.org/0.4/index.html#naming-style
