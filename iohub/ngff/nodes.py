@@ -1981,7 +1981,6 @@ def open_ome_zarr(
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
     version: Literal["0.1", "0.4", "0.5"] = "0.4",
-    synchronizer: zarr.ThreadSynchronizer | zarr.ProcessSynchronizer = None,
     disable_path_checking: bool = False,
     **kwargs,
 ) -> Plate | Position | TiledPosition:
