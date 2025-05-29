@@ -82,11 +82,13 @@ def _random_array_shape_and_dtype_with_channels(draw, c_dim: int):
         draw(y_dim_st),
         draw(x_dim_st),
     )
+    # zarr-python 3 broke big-endian support:
+    # https://github.com/zarr-developers/zarr-python/issues/3005
     dtype = draw(
         st.one_of(
-            npst.integer_dtypes(),
-            npst.unsigned_integer_dtypes(),
-            npst.floating_dtypes(),
+            npst.integer_dtypes(endianness="<"),
+            npst.unsigned_integer_dtypes(endianness="<"),
+            npst.floating_dtypes(endianness="<"),
             npst.boolean_dtypes(),
         )
     )
@@ -210,7 +212,7 @@ def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
 
 
 @contextmanager
-def _temp_ome_zarr(
+def _temp_ome_zarr_v04(
     image_5d: NDArray, channel_names: list[str], arr_name: str, **kwargs
 ):
     """Helper function to generate a temporary OME-Zarr store.
@@ -231,6 +233,7 @@ def _temp_ome_zarr(
             os.path.join(temp_dir.name, "ome.zarr"),
             layout="fov",
             mode="a",
+            version="0.4",
             channel_names=channel_names,
         )
         dataset.create_image(arr_name, image_5d, **kwargs)
@@ -296,7 +299,7 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
     from ome_zarr.reader import Reader
 
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
         ext_reader = Reader(parse_url(dataset.zgroup.store.path))
@@ -345,11 +348,11 @@ def test_create_zeros(ch_shape_dtype, arr_name):
 def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data` to dask"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, "0") as dataset:
         assert_array_almost_equal(
             dataset.data.dask_array().compute(), random_5d
         )
-    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(
             dataset[arr_name].dask_array().compute(), random_5d
         )
@@ -368,10 +371,10 @@ def test_position_data(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data`"""
     channel_names, random_5d = channels_and_random_5d
     assume(arr_name != "0")
-    with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, "0") as dataset:
         assert_array_almost_equal(dataset.data.numpy(), random_5d)
     with pytest.raises(KeyError):
-        with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+        with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
             _ = dataset.data
 
 
@@ -388,7 +391,7 @@ def test_append_channel(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.append_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
+    with _temp_ome_zarr_v04(
         random_5d[:, :-1], channel_names[:-1], arr_name
     ) as dataset:
         dataset.append_channel(channel_names[-1], resize_arrays=True)
@@ -410,7 +413,7 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
     """Test `iohub.ngff.Position.rename_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(new_channel not in channel_names)
-    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
         dataset.rename_channel(old=channel_names[0], new=new_channel)
         assert new_channel in dataset.channel_names
         assert dataset.metadata.omero.channels[0].label == new_channel
@@ -484,7 +487,7 @@ def test_update_channel(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.update_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
+    with _temp_ome_zarr_v04(
         random_5d[:, :-1], channel_names[:-1], arr_name
     ) as dataset:
         for i, ch in enumerate(dataset.channel_names):
@@ -510,7 +513,7 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
     with pytest.raises(ValueError):
-        with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name) as _:
+        with _temp_ome_zarr_v04(random_5d, channel_names[:-1], arr_name) as _:
             pass
 
 
@@ -1057,7 +1060,7 @@ def test_position_scale(channels_and_random_5d):
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
     transform = [TransformationMeta(type="scale", scale=scale)]
-    with _temp_ome_zarr(
+    with _temp_ome_zarr_v04(
         random_5d, channel_names, "0", transform=transform
     ) as dataset:
         assert dataset.scale == scale
