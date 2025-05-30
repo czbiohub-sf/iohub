@@ -71,7 +71,7 @@ def _open_store(
         )
     try:
         zarr_format = None
-        if mode in ("w", "w-"):
+        if mode in ("w", "w-") or (mode == "a" and not store_path.exists()):
             zarr_format = 3 if version == "0.5" else 2
         root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
@@ -824,9 +824,11 @@ class Position(NGFFNode):
                 ],
             }
         else:
+            from numcodecs import Blosc
+
             return {
-                "compressor": zarr.codecs.BloscCodec(
-                    cname="zstd", clevel=1, shuffle=shuffle
+                "compressor": Blosc(
+                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
                 )
             }
 
@@ -2057,6 +2059,7 @@ def open_ome_zarr(
     meta_keys = root.attrs.keys() if parse_meta else []
     if "ome" in meta_keys:
         meta_keys = root.attrs["ome"].keys()
+        version = root.attrs["ome"].get("version", version)
     if layout == "auto":
         if parse_meta:
             layout = _detect_layout(meta_keys)
