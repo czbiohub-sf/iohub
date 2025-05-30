@@ -37,7 +37,7 @@ def _find_ngff_version_in_zarr_group(group: zarr.Group) -> str | None:
 
 def _check_zarr_data_type(src: Path):
     try:
-        root = zarr.open(src, "r")
+        root = zarr.open(src, mode="r")
         if version := _find_ngff_version_in_zarr_group(root):
             return version
         else:
