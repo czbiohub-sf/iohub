@@ -1,6 +1,7 @@
 # Binary image files.
 *.tif[f]
 *.jp[e]g
+*.zar[r]
 
 # pycharm IDE
 .idea
