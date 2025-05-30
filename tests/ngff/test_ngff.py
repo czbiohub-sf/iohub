@@ -898,11 +898,11 @@ def test_create_hcs(channel_names):
 def test_open_hcs_create_empty():
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "hcs.zarr")
+        store_path = Path(temp_dir) / "hcs.zarr"
         dataset = open_ome_zarr(
             store_path, layout="hcs", mode="a", channel_names=["GFP"]
         )
-        assert str(dataset.zgroup.store.root) == store_path
+        assert dataset.zgroup.store.root.resolve() == store_path.resolve()
         dataset.close()
         with pytest.raises(FileExistsError):
             _ = open_ome_zarr(
