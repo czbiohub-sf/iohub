@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING, Generator, Literal, Sequence, Tuple, Type
 
 import numpy as np
 import zarr.codecs
-import zarr.storage
-from numcodecs import Blosc
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 from zarr.core.group import normalize_path
@@ -73,7 +71,7 @@ def _open_store(
         )
     try:
         zarr_format = None
-        if mode in ("w", "w-"):
+        if mode in ("w", "w-") or (mode == "a" and not store_path.exists()):
             zarr_format = 3 if version == "0.5" else 2
         root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
@@ -141,6 +139,11 @@ class NGFFNode:
         """Zarr attributes of the node.
         Assignments will modify the metadata file."""
         return self._group.attrs
+
+    @property
+    def maybe_wrapped_ome_attrs(self):
+        """Container of OME metadata attributes."""
+        return self.zattrs.get("ome") or self.zattrs
 
     @property
     def version(self):
@@ -576,9 +579,8 @@ class Position(NGFFNode):
             self._channel_names = list(range(example_image.channels))
 
     def _parse_meta(self):
-        attrs = self.zattrs.get("ome") or self.zattrs
-        multiscales = attrs.get("multiscales")
-        omero = attrs.get("omero")
+        multiscales = self.maybe_wrapped_ome_attrs.get("multiscales")
+        omero = self.maybe_wrapped_ome_attrs.get("omero")
         if multiscales:
             try:
                 self._set_meta(multiscales=multiscales, omero=omero)
@@ -804,6 +806,7 @@ class Position(NGFFNode):
             )
 
     def _create_compressor_options(self, chunk_shape: Tuple[int, ...] = None):
+        shuffle = zarr.codecs.BloscShuffle.bitshuffle
         if self._zarr_format == 3:
             return {
                 "codecs": [
@@ -814,17 +817,19 @@ class Position(NGFFNode):
                             zarr.codecs.BloscCodec(
                                 cname="zstd",
                                 clevel=1,
-                                shuffle=Blosc.BITSHUFFLE,
+                                shuffle=shuffle,
                             ),
                         ],
                     )
                 ],
             }
         else:
+            from numcodecs import Blosc
+
             return {
                 "compressor": Blosc(
                     cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                ),
+                )
             }
 
     def _create_image_meta(
@@ -1381,7 +1386,7 @@ class Well(NGFFNode):
         )
 
     def _parse_meta(self):
-        if well_group_meta := self.zattrs.get("well"):
+        if well_group_meta := self.maybe_wrapped_ome_attrs.get("well"):
             self.metadata = WellGroupMeta(**well_group_meta)
         else:
             self._warn_invalid_meta()
@@ -1557,6 +1562,11 @@ class Plate(NGFFNode):
 
         >>> new_plate = Plate.from_positions("combined.zarr", fovs)
         """
+        # TODO: remove when zarr-python adds back `copy_store`
+        raise NotImplementedError(
+            "This method is disabled until upstream support is finalized: "
+            "https://github.com/zarr-developers/zarr-python/issues/2407"
+        )
         # get metadata from an arbitraty FOV
         # deterministic because dicts are ordered
         example_position = next(iter(positions.values()))
@@ -1619,7 +1629,7 @@ class Plate(NGFFNode):
         )
 
     def _parse_meta(self):
-        if plate_meta := self.zattrs.get("plate"):
+        if plate_meta := self.maybe_wrapped_ome_attrs.get("plate"):
             _logger.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
         else:
@@ -1977,7 +1987,6 @@ def open_ome_zarr(
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
     version: Literal["0.1", "0.4", "0.5"] = "0.4",
-    synchronizer: zarr.ThreadSynchronizer | zarr.ProcessSynchronizer = None,
     disable_path_checking: bool = False,
     **kwargs,
 ) -> Plate | Position | TiledPosition:
@@ -2050,6 +2059,7 @@ def open_ome_zarr(
     meta_keys = root.attrs.keys() if parse_meta else []
     if "ome" in meta_keys:
         meta_keys = root.attrs["ome"].keys()
+        version = root.attrs["ome"].get("version", version)
     if layout == "auto":
         if parse_meta:
             layout = _detect_layout(meta_keys)
