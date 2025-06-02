@@ -1154,3 +1154,4 @@ def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
         assert multiscale["datasets"][1]["coordinateTransformations"][0][
             "scale"
         ] == [1.0, 1.0, 2.0, 2.0, 2.0]
+        assert 1 < dataset["0"].numpy().mean() < np.iinfo(np.uint16).max
