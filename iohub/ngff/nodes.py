@@ -1943,7 +1943,7 @@ def _check_file_mode(
     disable_path_checking: bool,
 ) -> bool:
     if mode == "a":
-        mode = ("w-", "r+")[int(store_path.exists())]
+        mode = "r+" if store_path.exists() else "w-"
     parse_meta = False
     if mode in ("r", "r+"):
         parse_meta = True
