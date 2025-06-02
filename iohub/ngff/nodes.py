@@ -2040,7 +2040,11 @@ def open_ome_zarr(
             )
     msg = f"Specified layout '{layout}' does not match existing metadata."
     if layout in ("fov", "tiled"):
-        if parse_meta and "multiscales" not in meta_keys:
+        if version == "0.5" and parse_meta and "ome" not in meta_keys:
+            raise ValueError(msg)
+        elif (
+            version != "0.5" and parse_meta and "multiscales" not in meta_keys
+        ):
             raise ValueError(msg)
         node = TiledPosition if layout == "tiled" else Position
     elif layout == "hcs":
@@ -2054,5 +2058,6 @@ def open_ome_zarr(
         parse_meta=parse_meta,
         channel_names=channel_names,
         axes=axes,
+        version=version,
         **kwargs,
     )

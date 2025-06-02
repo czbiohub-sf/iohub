@@ -3,7 +3,9 @@ import csv
 import shutil
 from pathlib import Path
 
+import acquire_zarr as aqz
 import fsspec
+import numpy as np
 import pytest
 from wget import download
 
@@ -135,3 +137,70 @@ def csv_data_file_2(tmpdir):
         writer = csv.writer(csvfile)
         writer.writerows(csv_data_2)
     return test_csv_2
+
+
+@pytest.fixture()
+def ome_zarr_05(tmpdir):
+    store_path = tmpdir / "ome_zarr_v0.5.zarr"
+
+    settings = aqz.StreamSettings(
+        compression=aqz.CompressionSettings(
+            codec=aqz.CompressionCodec.BLOSC_LZ4,
+            compressor=aqz.Compressor.BLOSC1,
+            level=1,
+            shuffle=0,
+        ),
+        data_type=aqz.DataType.UINT16,
+        dimensions=[
+            aqz.Dimension(
+                name="t",
+                kind=aqz.DimensionType.TIME,
+                array_size_px=0,
+                chunk_size_px=16,
+                shard_size_chunks=1,
+            ),
+            aqz.Dimension(
+                name="c",
+                kind=aqz.DimensionType.CHANNEL,
+                array_size_px=4,
+                chunk_size_px=1,
+                shard_size_chunks=1,
+            ),
+            aqz.Dimension(
+                name="z",
+                kind=aqz.DimensionType.SPACE,
+                array_size_px=10,
+                chunk_size_px=10,
+                shard_size_chunks=1,
+            ),
+            aqz.Dimension(
+                name="y",
+                kind=aqz.DimensionType.SPACE,
+                array_size_px=48,
+                chunk_size_px=16,
+                shard_size_chunks=3,
+            ),
+            aqz.Dimension(
+                name="x",
+                kind=aqz.DimensionType.SPACE,
+                array_size_px=64,
+                chunk_size_px=16,
+                shard_size_chunks=2,
+            ),
+        ],
+        multiscale=True,
+        store_path=str(store_path),
+        version=aqz.ZarrVersion.V3,
+        max_threads=1,
+    )
+
+    stream = aqz.ZarrStream(settings)
+    data = np.random.randint(
+        0, 2**16 - 1, (32, 4, 10, 48, 64), dtype=np.uint16
+    )
+    stream.append(data)
+    del stream
+
+    yield store_path
+
+    shutil.rmtree(str(store_path))

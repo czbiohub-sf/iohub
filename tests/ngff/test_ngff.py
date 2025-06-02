@@ -1107,3 +1107,26 @@ def test_hcs_external_reader(tmp_path):
     assert plate.data[0].dtype == int
     assert not plate.data[0].any()
     assert plate.metadata["channel_names"] == ["A", "B"]
+
+
+def test_ome_zarr_05(ome_zarr_05):
+    """Test that `iohub.ngff.open_ome_zarr()` can read OME-Zarr 0.5."""
+    with open_ome_zarr(
+        ome_zarr_05, layout="fov", mode="r", version="0.5"
+    ) as dataset:
+        assert dataset.version == "0.5"
+        assert dataset.data.shape == (32, 4, 10, 48, 64)
+        assert dataset.data.chunks == (16, 1, 10, 16, 16)
+        assert dataset.data.shards == (16, 1, 10, 48, 32)
+        assert "ome" in dataset.zattrs
+        assert "multiscales" in dataset.zattrs["ome"]
+        assert len(dataset.zattrs["ome"]["multiscales"]) == 1
+
+        multiscale = dataset.zattrs["ome"]["multiscales"][0]
+        assert len(multiscale["datasets"]) == 2
+        assert multiscale["datasets"][0]["coordinateTransformations"][0][
+            "scale"
+        ] == [1.0, 1.0, 1.0, 1.0, 1.0]
+        assert multiscale["datasets"][1]["coordinateTransformations"][0][
+            "scale"
+        ] == [1.0, 1.0, 2.0, 2.0, 2.0]
