@@ -239,6 +239,4 @@ def aqz_ome_zarr_05(tmpdir):
     stream.append(data)
     del stream
 
-    yield store_path
-
-    shutil.rmtree(str(store_path))
+    return store_path
