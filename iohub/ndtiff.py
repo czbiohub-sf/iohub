@@ -38,6 +38,10 @@ class NDTiffFOV(MicroManagerFOV):
 
     @property
     def t_scale(self) -> float:
+        _logger.warning(
+            "NDTiff does not store the planned time interval. "
+            "Returning 1.0 as a placeholder."
+        )
         return 1.0
 
     def __getitem__(
