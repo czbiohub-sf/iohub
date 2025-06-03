@@ -263,9 +263,11 @@ class TIFFConverter:
         return tuple(chunks)
 
     def _scale_voxels(self):
+        example_fov = next(iter(self.reader))[1]
         return [
             TransformationMeta(
-                type="scale", scale=[1.0, 1.0, *self.reader.zyx_scale]
+                type="scale",
+                scale=[example_fov.t_scale, 1.0, *example_fov.zyx_scale],
             )
         ]
 
