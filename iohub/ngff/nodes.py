@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING, Generator, Literal, Sequence, Tuple, Type
 
 import numpy as np
 import zarr.codecs
-import zarr.storage
-from numcodecs import Blosc
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 from zarr.core.group import normalize_path
@@ -57,13 +55,14 @@ def _pad_shape(shape: tuple[int, ...], target: int = 5):
 
 
 def _open_store(
-    store_path: StrOrBytesPath,
+    store_path: StrOrBytesPath | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
     version: Literal["0.1", "0.4", "0.5"],
 ):
-    if not os.path.isdir(store_path) and mode in ("r", "r+"):
+    store_path = Path(store_path).resolve()
+    if not store_path.exists() and mode in ("r", "r+"):
         raise FileNotFoundError(
-            f"Dataset directory not found at {store_path}."
+            f"Dataset directory not found at {str(store_path)}."
         )
     if version not in ("0.4", "0.5"):
         _logger.warning(
@@ -71,13 +70,13 @@ def _open_store(
             f"Requested version {version} may not work properly."
         )
     try:
-        store = zarr.storage.LocalStore(store_path)
-        root = zarr.open_group(
-            store, mode=mode, zarr_format=(3 if version == "0.5" else 2)
-        )
+        zarr_format = None
+        if mode in ("w", "w-") or (mode == "a" and not store_path.exists()):
+            zarr_format = 3 if version == "0.5" else 2
+        root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
         raise RuntimeError(
-            f"Cannot open Zarr root group at {store_path}"
+            f"Cannot open Zarr root group at {str(store_path)}"
         ) from e
     return root
 
@@ -140,6 +139,11 @@ class NGFFNode:
         """Zarr attributes of the node.
         Assignments will modify the metadata file."""
         return self._group.attrs
+
+    @property
+    def maybe_wrapped_ome_attrs(self):
+        """Container of OME metadata attributes."""
+        return self.zattrs.get("ome") or self.zattrs
 
     @property
     def version(self):
@@ -571,12 +575,12 @@ class Position(NGFFNode):
             )
             example_image: ImageArray = self[
                 self.metadata.multiscales[0].datasets[0].path
-            ].channels
+            ]
             self._channel_names = list(range(example_image.channels))
 
     def _parse_meta(self):
-        multiscales = self.zattrs.get("multiscales")
-        omero = self.zattrs.get("omero")
+        multiscales = self.maybe_wrapped_ome_attrs.get("multiscales")
+        omero = self.maybe_wrapped_ome_attrs.get("omero")
         if multiscales:
             try:
                 self._set_meta(multiscales=multiscales, omero=omero)
@@ -802,6 +806,7 @@ class Position(NGFFNode):
             )
 
     def _create_compressor_options(self, chunk_shape: Tuple[int, ...] = None):
+        shuffle = zarr.codecs.BloscShuffle.bitshuffle
         if self._zarr_format == 3:
             return {
                 "codecs": [
@@ -812,17 +817,19 @@ class Position(NGFFNode):
                             zarr.codecs.BloscCodec(
                                 cname="zstd",
                                 clevel=1,
-                                shuffle=Blosc.BITSHUFFLE,
+                                shuffle=shuffle,
                             ),
                         ],
                     )
                 ],
             }
         else:
+            from numcodecs import Blosc
+
             return {
                 "compressor": Blosc(
                     cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                ),
+                )
             }
 
     def _create_image_meta(
@@ -1379,7 +1386,7 @@ class Well(NGFFNode):
         )
 
     def _parse_meta(self):
-        if well_group_meta := self.zattrs.get("well"):
+        if well_group_meta := self.maybe_wrapped_ome_attrs.get("well"):
             self.metadata = WellGroupMeta(**well_group_meta)
         else:
             self._warn_invalid_meta()
@@ -1622,7 +1629,7 @@ class Plate(NGFFNode):
         )
 
     def _parse_meta(self):
-        if plate_meta := self.zattrs.get("plate"):
+        if plate_meta := self.maybe_wrapped_ome_attrs.get("plate"):
             _logger.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
         else:
@@ -1930,6 +1937,49 @@ class Plate(NGFFNode):
         self.dump_meta()
 
 
+def _check_file_mode(
+    store_path: Path,
+    mode: Literal["r", "r+", "a", "w", "w-"],
+    disable_path_checking: bool,
+) -> bool:
+    if mode == "a":
+        mode = "r+" if store_path.exists() else "w-"
+    parse_meta = False
+    if mode in ("r", "r+"):
+        parse_meta = True
+    elif mode == "w-":
+        if store_path.exists():
+            raise FileExistsError(store_path)
+    elif mode == "w":
+        if store_path.exists():
+            if (
+                ".zarr" not in str(store_path.resolve())
+                and not disable_path_checking
+            ):
+                raise ValueError(
+                    "Cannot overwrite a path that does not contain '.zarr', "
+                    "use `disable_path_checking=True` if you are sure that "
+                    f"{store_path} should be overwritten."
+                )
+            _logger.warning(f"Overwriting data at {store_path}")
+    else:
+        raise ValueError(f"Invalid persistence mode '{mode}'.")
+    return parse_meta
+
+
+def _detect_layout(meta_keys: list[str]) -> Literal["fov", "hcs"]:
+    if "plate" in meta_keys:
+        return "hcs"
+    elif "multiscales" in meta_keys:
+        return "fov"
+    else:
+        raise KeyError(
+            "Dataset metadata keys ('plate'/'multiscales') not in "
+            f"the found store metadata keys: {meta_keys}. "
+            "Is this a valid OME-Zarr dataset?"
+        )
+
+
 def open_ome_zarr(
     store_path: StrOrBytesPath | Path,
     layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
@@ -1937,7 +1987,6 @@ def open_ome_zarr(
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
     version: Literal["0.1", "0.4", "0.5"] = "0.4",
-    synchronizer: zarr.ThreadSynchronizer | zarr.ProcessSynchronizer = None,
     disable_path_checking: bool = False,
     **kwargs,
 ) -> Plate | Position | TiledPosition:
@@ -2003,42 +2052,17 @@ def open_ome_zarr(
         or :py:class:`iohub.ngff.TiledPosition`)
     """
     store_path = Path(store_path)
-    if mode == "a":
-        mode = ("w-", "r+")[int(store_path.exists())]
-    parse_meta = False
-    if mode in ("r", "r+"):
-        parse_meta = True
-    elif mode == "w-":
-        if store_path.exists():
-            raise FileExistsError(store_path)
-    elif mode == "w":
-        if store_path.exists():
-            if (
-                ".zarr" not in str(store_path.resolve())
-                and not disable_path_checking
-            ):
-                raise ValueError(
-                    "Cannot overwrite a path that does not contain '.zarr', "
-                    "use `disable_path_checking=True` if you are sure that "
-                    f"{store_path} should be overwritten."
-                )
-            _logger.warning(f"Overwriting data at {store_path}")
-    else:
-        raise ValueError(f"Invalid persistence mode '{mode}'.")
+    parse_meta = _check_file_mode(
+        store_path, mode, disable_path_checking=disable_path_checking
+    )
     root = _open_store(store_path, mode, version)
     meta_keys = root.attrs.keys() if parse_meta else []
+    if "ome" in meta_keys:
+        meta_keys = root.attrs["ome"].keys()
+        version = root.attrs["ome"].get("version", version)
     if layout == "auto":
         if parse_meta:
-            if "plate" in meta_keys:
-                layout = "hcs"
-            elif "multiscales" in meta_keys:
-                layout = "fov"
-            else:
-                raise KeyError(
-                    "Dataset metadata keys ('plate'/'multiscales') not in "
-                    f"the found store metadata keys: {meta_keys}. "
-                    "Is this a valid OME-Zarr dataset?"
-                )
+            layout = _detect_layout(meta_keys)
         else:
             raise ValueError(
                 "Store layout must be specified when creating a new dataset."
@@ -2059,5 +2083,6 @@ def open_ome_zarr(
         parse_meta=parse_meta,
         channel_names=channel_names,
         axes=axes,
+        version=version,
         **kwargs,
     )

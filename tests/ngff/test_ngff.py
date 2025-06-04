@@ -5,12 +5,14 @@ import platform
 import shutil
 import string
 from contextlib import contextmanager
+from itertools import product
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
-from pathlib import Path
 
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
+import numpy as np
 import pytest
 import zarr.storage
 from hypothesis import HealthCheck, assume, given, settings
@@ -22,8 +24,8 @@ if TYPE_CHECKING:
 
 from iohub.ngff.nodes import (
     TO_DICT_SETTINGS,
-    NGFFNode,
     Plate,
+    Position,
     TransformationMeta,
     _case_insensitive_local_fs,
     _open_store,
@@ -80,11 +82,13 @@ def _random_array_shape_and_dtype_with_channels(draw, c_dim: int):
         draw(y_dim_st),
         draw(x_dim_st),
     )
+    # zarr-python 3 broke big-endian support:
+    # https://github.com/zarr-developers/zarr-python/issues/3005
     dtype = draw(
         st.one_of(
-            npst.integer_dtypes(),
-            npst.unsigned_integer_dtypes(),
-            npst.floating_dtypes(),
+            npst.integer_dtypes(endianness="<"),
+            npst.unsigned_integer_dtypes(endianness="<"),
+            npst.floating_dtypes(endianness="<"),
             npst.boolean_dtypes(),
         )
     )
@@ -129,7 +133,7 @@ def test_open_store_create():
             assert isinstance(root, zarr.Group)
             assert isinstance(root.store, zarr.storage.LocalStore)
             # assert root.store._dimension_separator == "/"
-            assert root.store.root == Path(store_path)
+            assert root.store.root.resolve() == Path(store_path).resolve()
 
 
 def test_open_store_create_existing():
@@ -208,7 +212,7 @@ def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
 
 
 @contextmanager
-def _temp_ome_zarr(
+def _temp_ome_zarr_v04(
     image_5d: NDArray, channel_names: list[str], arr_name: str, **kwargs
 ):
     """Helper function to generate a temporary OME-Zarr store.
@@ -229,6 +233,7 @@ def _temp_ome_zarr(
             os.path.join(temp_dir.name, "ome.zarr"),
             layout="fov",
             mode="a",
+            version="0.4",
             channel_names=channel_names,
         )
         dataset.create_image(arr_name, image_5d, **kwargs)
@@ -294,7 +299,7 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
     from ome_zarr.reader import Reader
 
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
         ext_reader = Reader(parse_url(dataset.zgroup.store.path))
@@ -343,11 +348,11 @@ def test_create_zeros(ch_shape_dtype, arr_name):
 def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data` to dask"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, "0") as dataset:
         assert_array_almost_equal(
             dataset.data.dask_array().compute(), random_5d
         )
-    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
         assert_array_almost_equal(
             dataset[arr_name].dask_array().compute(), random_5d
         )
@@ -366,10 +371,10 @@ def test_position_data(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.data`"""
     channel_names, random_5d = channels_and_random_5d
     assume(arr_name != "0")
-    with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, "0") as dataset:
         assert_array_almost_equal(dataset.data.numpy(), random_5d)
     with pytest.raises(KeyError):
-        with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+        with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
             _ = dataset.data
 
 
@@ -386,7 +391,7 @@ def test_append_channel(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.append_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
+    with _temp_ome_zarr_v04(
         random_5d[:, :-1], channel_names[:-1], arr_name
     ) as dataset:
         dataset.append_channel(channel_names[-1], resize_arrays=True)
@@ -408,12 +413,13 @@ def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
     """Test `iohub.ngff.Position.rename_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(new_channel not in channel_names)
-    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
         dataset.rename_channel(old=channel_names[0], new=new_channel)
         assert new_channel in dataset.channel_names
         assert dataset.metadata.omero.channels[0].label == new_channel
 
 
+# @pytest.mark.skip(reason="broken")
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
@@ -481,7 +487,7 @@ def test_update_channel(channels_and_random_5d, arr_name):
     """Test `iohub.ngff.Position.update_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
+    with _temp_ome_zarr_v04(
         random_5d[:, :-1], channel_names[:-1], arr_name
     ) as dataset:
         for i, ch in enumerate(dataset.channel_names):
@@ -507,7 +513,7 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
     with pytest.raises(ValueError):
-        with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name) as _:
+        with _temp_ome_zarr_v04(random_5d, channel_names[:-1], arr_name) as _:
             pass
 
 
@@ -892,11 +898,11 @@ def test_create_hcs(channel_names):
 def test_open_hcs_create_empty():
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "hcs.zarr")
+        store_path = Path(temp_dir) / "hcs.zarr"
         dataset = open_ome_zarr(
             store_path, layout="hcs", mode="a", channel_names=["GFP"]
         )
-        assert str(dataset.zgroup.store.root) == store_path
+        assert dataset.zgroup.store.root.resolve() == store_path.resolve()
         dataset.close()
         with pytest.raises(FileExistsError):
             _ = open_ome_zarr(
@@ -1054,7 +1060,7 @@ def test_position_scale(channels_and_random_5d):
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
     transform = [TransformationMeta(type="scale", scale=scale)]
-    with _temp_ome_zarr(
+    with _temp_ome_zarr_v04(
         random_5d, channel_names, "0", transform=transform
     ) as dataset:
         assert dataset.scale == scale
@@ -1064,6 +1070,9 @@ def test_position_scale(channels_and_random_5d):
     reason="https://github.com/zarr-developers/zarr-python/issues/2407"
 )
 def test_combine_fovs_to_hcs():
+    from ome_zarr.io import parse_url
+    from ome_zarr.reader import Reader
+
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
     with open_ome_zarr(hcs_ref) as hcs_store:
@@ -1106,3 +1115,43 @@ def test_hcs_external_reader(tmp_path):
     assert plate.data[0].dtype == int
     assert not plate.data[0].any()
     assert plate.metadata["channel_names"] == ["A", "B"]
+
+
+def test_read_empty_hcs_v05(empty_ome_zarr_hcs_v05):
+    """Test reading an empty OME-Zarr v0.5 HCS store."""
+    empty_zarr, (rows, cols, fovs, resolutions) = empty_ome_zarr_hcs_v05
+    with open_ome_zarr(empty_zarr, layout="hcs", mode="r") as dataset:
+        for row, col, fov in product(rows, cols, fovs):
+            position: Position = dataset[f"{row}/{col}/{fov}"]
+            for resolution in resolutions:
+                assert_array_equal(
+                    position[resolution].numpy(),
+                    np.zeros((50, 48, 64), dtype=np.uint16),
+                )
+        assert len(list(dataset.positions())) == len(rows) * len(cols) * len(
+            fovs
+        )
+
+
+def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
+    """Test that `iohub.ngff.open_ome_zarr()` can read OME-Zarr 0.5."""
+    with open_ome_zarr(
+        aqz_ome_zarr_05, layout="fov", mode="r", version="0.5"
+    ) as dataset:
+        assert dataset.version == "0.5"
+        assert dataset.data.shape == (32, 4, 10, 48, 64)
+        assert dataset.data.chunks == (16, 1, 10, 16, 16)
+        assert dataset.data.shards == (16, 1, 10, 48, 32)
+        assert "ome" in dataset.zattrs
+        assert "multiscales" in dataset.zattrs["ome"]
+        assert len(dataset.zattrs["ome"]["multiscales"]) == 1
+
+        multiscale = dataset.zattrs["ome"]["multiscales"][0]
+        assert len(multiscale["datasets"]) == 2
+        assert multiscale["datasets"][0]["coordinateTransformations"][0][
+            "scale"
+        ] == [1.0, 1.0, 1.0, 1.0, 1.0]
+        assert multiscale["datasets"][1]["coordinateTransformations"][0][
+            "scale"
+        ] == [1.0, 1.0, 2.0, 2.0, 2.0]
+        assert 1 < dataset["0"].numpy().mean() < np.iinfo(np.uint16).max
