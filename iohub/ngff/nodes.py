@@ -8,17 +8,17 @@ from __future__ import annotations
 import logging
 import math
 import os
+import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
+from typing import TYPE_CHECKING, Generator, Literal, Sequence, Tuple, Type
 
 import numpy as np
-import zarr
-from numcodecs import Blosc
+import zarr.codecs
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
-from zarr.util import normalize_storage_path
+from zarr.core.group import normalize_path
 
 from iohub.ngff.display import channel_display_settings
 from iohub.ngff.models import (
@@ -48,38 +48,35 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
-def _pad_shape(shape: tuple[int], target: int = 5):
+def _pad_shape(shape: tuple[int, ...], target: int = 5):
     """Pad shape tuple to a target length."""
     pad = target - len(shape)
     return (1,) * pad + shape
 
 
 def _open_store(
-    store_path: StrOrBytesPath,
+    store_path: StrOrBytesPath | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
-    version: Literal["0.1", "0.4"],
-    synchronizer=None,
+    version: Literal["0.1", "0.4", "0.5"],
 ):
-    if not os.path.isdir(store_path) and mode in ("r", "r+"):
+    store_path = Path(store_path).resolve()
+    if not store_path.exists() and mode in ("r", "r+"):
         raise FileNotFoundError(
-            f"Dataset directory not found at {store_path}."
+            f"Dataset directory not found at {str(store_path)}."
         )
-    if version != "0.4":
+    if version not in ("0.4", "0.5"):
         _logger.warning(
-            "IOHub is only tested against OME-NGFF v0.4. "
+            "IOHub is only tested against OME-NGFF v0.4 and v0.5. "
             f"Requested version {version} may not work properly."
         )
-        dimension_separator = None
-    else:
-        dimension_separator = "/"
     try:
-        store = zarr.DirectoryStore(
-            store_path, dimension_separator=dimension_separator
-        )
-        root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
+        zarr_format = None
+        if mode in ("w", "w-") or (mode == "a" and not store_path.exists()):
+            zarr_format = 3 if version == "0.5" else 2
+        root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
         raise RuntimeError(
-            f"Cannot open Zarr root group at {store_path}"
+            f"Cannot open Zarr root group at {str(store_path)}"
         ) from e
     return root
 
@@ -110,7 +107,7 @@ class NGFFNode:
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4"] = "0.4",
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         if channel_names:
@@ -142,6 +139,11 @@ class NGFFNode:
         """Zarr attributes of the node.
         Assignments will modify the metadata file."""
         return self._group.attrs
+
+    @property
+    def maybe_wrapped_ome_attrs(self):
+        """Container of OME metadata attributes."""
+        return self.zattrs.get("ome") or self.zattrs
 
     @property
     def version(self):
@@ -180,7 +182,7 @@ class NGFFNode:
         return len(self._member_names)
 
     def __getitem__(self, key):
-        key = normalize_storage_path(key)
+        key = normalize_path(str(key))
         znode = self.zgroup.get(key)
         if not znode:
             raise KeyError(key)
@@ -188,8 +190,8 @@ class NGFFNode:
         item_type = self._MEMBER_TYPE
         for _ in range(levels):
             item_type = item_type._MEMBER_TYPE
-        if issubclass(item_type, zarr.Array):
-            return item_type(znode)
+        if issubclass(item_type, ImageArray):
+            return item_type.from_zarr_array(znode)
         else:
             return item_type(group=znode, parse_meta=True, **self._child_attrs)
 
@@ -198,12 +200,12 @@ class NGFFNode:
 
     def __delitem__(self, key):
         """.. Warning: this does NOT clean up metadata!"""
-        key = normalize_storage_path(key)
+        key = normalize_path(str(key))
         if key in self._member_names:
             del self[key]
 
     def __contains__(self, key):
-        key = normalize_storage_path(key)
+        key = normalize_path(str(key))
         if not self._case_insensitive_fs:
             return key in self._member_names
         for name in self._member_names:
@@ -332,30 +334,32 @@ class NGFFNode:
 class ImageArray(zarr.Array):
     """Container object for image stored as a zarr array (up to 5D)"""
 
-    def __init__(self, zarray: zarr.Array):
-        super().__init__(
-            store=zarray._store,
-            path=zarray._path,
-            read_only=zarray._read_only,
-            chunk_store=zarray._chunk_store,
-            synchronizer=zarray._synchronizer,
-            cache_metadata=zarray._cache_metadata,
-            cache_attrs=zarray._attrs.cache,
-            partial_decompress=zarray._partial_decompress,
-            write_empty_chunks=zarray._write_empty_chunks,
-            zarr_version=zarray._version,
-            meta_array=zarray._meta_array,
-        )
-        self._get_dims()
+    @classmethod
+    def from_zarr_array(cls, zarray: zarr.Array):
+        return cls(zarray._async_array)
 
-    def _get_dims(self):
-        (
-            self.frames,
-            self.channels,
-            self.slices,
-            self.height,
-            self.width,
-        ) = _pad_shape(self.shape, target=5)
+    @property
+    def frames(self):
+        return self._get_dim(0)
+
+    @property
+    def channels(self):
+        return self._get_dim(1)
+
+    @property
+    def slices(self):
+        return self._get_dim(2)
+
+    @property
+    def height(self):
+        return self._get_dim(3)
+
+    @property
+    def width(self):
+        return self._get_dim(4)
+
+    def _get_dim(self, idx):
+        return _pad_shape(self.shape, target=5)[idx]
 
     def numpy(self):
         """Return the whole image as an in-RAM NumPy array.
@@ -367,7 +371,7 @@ class ImageArray(zarr.Array):
         import dask.array as da
 
         # Note: Designed to work with zarr DirectoryStore
-        return da.from_zarr(self.store.path, component=self.path)
+        return da.from_zarr(self.store.root, component=self.path)
 
     def downscale(self):
         raise NotImplementedError
@@ -378,9 +382,6 @@ class ImageArray(zarr.Array):
 
 class TiledImageArray(ImageArray):
     """Container object for tiled image stored as a zarr array (up to 5D)."""
-
-    def __init__(self, zarray: zarr.Array):
-        super().__init__(zarray)
 
     @property
     def rows(self):
@@ -526,7 +527,7 @@ class Position(NGFFNode):
 
     Attributes
     ----------
-    version : Literal["0.1", "0.4"]
+    version : Literal["0.1", "0.4", "0.5"]
         OME-NGFF specification version
     zgroup : Group
         Root Zarr group holding arrays
@@ -546,7 +547,7 @@ class Position(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4"] = "0.4",
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -574,12 +575,12 @@ class Position(NGFFNode):
             )
             example_image: ImageArray = self[
                 self.metadata.multiscales[0].datasets[0].path
-            ].channels
+            ]
             self._channel_names = list(range(example_image.channels))
 
     def _parse_meta(self):
-        multiscales = self.zattrs.get("multiscales")
-        omero = self.zattrs.get("omero")
+        multiscales = self.maybe_wrapped_ome_attrs.get("multiscales")
+        omero = self.maybe_wrapped_ome_attrs.get("omero")
         if multiscales:
             try:
                 self._set_meta(multiscales=multiscales, omero=omero)
@@ -593,13 +594,8 @@ class Position(NGFFNode):
         self.zattrs.update(**self.metadata.model_dump(**TO_DICT_SETTINGS))
 
     @property
-    def _storage_options(self):
-        return {
-            "compressor": Blosc(
-                cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-            ),
-            "overwrite": self._overwrite,
-        }
+    def _zarr_format(self):
+        return 3 if self.version == "0.5" else 2
 
     @property
     def _member_names(self):
@@ -657,7 +653,7 @@ class Position(NGFFNode):
 
     def __setitem__(self, key, value: NDArray):
         """Write an up-to-5D image with default settings."""
-        key = normalize_storage_path(key)
+        key = normalize_path(str(key))
         if not isinstance(value, np.ndarray):
             raise TypeError(
                 f"Value must be a NumPy array. Got type {type(value)}."
@@ -710,11 +706,17 @@ class Position(NGFFNode):
             chunks = self._default_chunks(data.shape, 3)
         if check_shape:
             self._check_shape(data.shape)
-        img_arr = ImageArray(
-            self._group.array(
-                name, data, chunks=chunks, **self._storage_options
+        img_arr = ImageArray.from_zarr_array(
+            self._group.create_array(
+                name=name,
+                shape=data.shape,
+                dtype=data.dtype,
+                chunks=chunks,
+                overwrite=self._overwrite,
+                **self._create_compressor_options(chunks),
             )
         )
+        img_arr[...] = data
         self._create_image_meta(img_arr.basename, transform=transform)
         return img_arr
 
@@ -759,15 +761,18 @@ class Position(NGFFNode):
         """
         if not chunks:
             chunks = self._default_chunks(shape, 3)
+
         if check_shape:
             self._check_shape(shape)
-        img_arr = ImageArray(
+        img_arr = ImageArray.from_zarr_array(
             self._group.zeros(
-                name,
+                name=name,
                 shape=shape,
                 dtype=dtype,
                 chunks=chunks,
-                **self._storage_options,
+                overwrite=self._overwrite,
+                zarr_format=self._zarr_format,
+                **self._create_compressor_options(chunks),
             )
         )
         self._create_image_meta(img_arr.basename, transform=transform)
@@ -799,6 +804,33 @@ class Position(NGFFNode):
                 "Dataset channel axis is not set. "
                 "Skipping channel shape check."
             )
+
+    def _create_compressor_options(self, chunk_shape: Tuple[int, ...] = None):
+        shuffle = zarr.codecs.BloscShuffle.bitshuffle
+        if self._zarr_format == 3:
+            return {
+                "codecs": [
+                    zarr.codecs.ShardingCodec(
+                        chunk_shape=chunk_shape,
+                        codecs=[
+                            zarr.codecs.BytesCodec(),
+                            zarr.codecs.BloscCodec(
+                                cname="zstd",
+                                clevel=1,
+                                shuffle=shuffle,
+                            ),
+                        ],
+                    )
+                ],
+            }
+        else:
+            from numcodecs import Blosc
+
+            return {
+                "compressor": Blosc(
+                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+                )
+            }
 
     def _create_image_meta(
         self,
@@ -1258,7 +1290,7 @@ class TiledPosition(Position):
         self,
         name: str,
         grid_shape: tuple[int, int],
-        tile_shape: tuple[int],
+        tile_shape: tuple[int, ...],
         dtype: DTypeLike,
         transform: list[TransformationMeta] | None = None,
         chunk_dims: int = 2,
@@ -1287,16 +1319,21 @@ class TiledPosition(Position):
         -------
         TiledImageArray
         """
-        xy_shape = tuple(np.array(grid_shape) * np.array(tile_shape[-2:]))
-        tiles = TiledImageArray(
+        xy_shape = tuple(
+            int(i) for i in np.array(grid_shape) * np.array(tile_shape[-2:])
+        )
+        chunks = self._default_chunks(
+            shape=tile_shape, last_data_dims=chunk_dims
+        )
+        tiles = TiledImageArray.from_zarr_array(
             self._group.zeros(
                 name=name,
                 shape=tile_shape[:-2] + xy_shape,
                 dtype=dtype,
-                chunks=self._default_chunks(
-                    shape=tile_shape, last_data_dims=chunk_dims
-                ),
-                **self._storage_options,
+                chunks=chunks,
+                zarr_format=self._zarr_format,
+                overwrite=self._overwrite,
+                **self._create_compressor_options(chunks),
             )
         )
         self._create_image_meta(tiles.basename, transform=transform)
@@ -1312,7 +1349,7 @@ class Well(NGFFNode):
         Zarr heirarchy group object
     parse_meta : bool, optional
         Whether to parse NGFF metadata in `.zattrs`, by default True
-    version : Literal["0.1", "0.4"]
+    version : Literal["0.1", "0.4", "0.5"]
         OME-NGFF specification version
     overwriting_creation : bool, optional
         Whether to overwrite or error upon creating an existing child item,
@@ -1320,7 +1357,7 @@ class Well(NGFFNode):
 
     Attributes
     ----------
-    version : Literal["0.1", "0.4"]
+    version : Literal["0.1", "0.4", "0.5"]
         OME-NGFF specification version
     zgroup : Group
         Root Zarr group holding arrays
@@ -1336,7 +1373,7 @@ class Well(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4"] = "0.4",
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -1349,7 +1386,7 @@ class Well(NGFFNode):
         )
 
     def _parse_meta(self):
-        if well_group_meta := self.zattrs.get("well"):
+        if well_group_meta := self.maybe_wrapped_ome_attrs.get("well"):
             self.metadata = WellGroupMeta(**well_group_meta)
         else:
             self._warn_invalid_meta()
@@ -1416,7 +1453,7 @@ class Row(NGFFNode):
         Zarr heirarchy group object
     parse_meta : bool, optional
         Whether to parse NGFF metadata in `.zattrs`, by default True
-    version : Literal["0.1", "0.4"]
+    version : Literal["0.1", "0.4", "0.5"]
         OME-NGFF specification version
     overwriting_creation : bool, optional
         Whether to overwrite or error upon creating an existing child item,
@@ -1424,7 +1461,7 @@ class Row(NGFFNode):
 
     Attributes
     ----------
-    version : Literal["0.1", "0.4"]
+    version : Literal["0.1", "0.4", "0.5"]
         OME-NGFF specification version
     zgroup : Group
         Root Zarr group holding arrays
@@ -1440,7 +1477,7 @@ class Row(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4"] = "0.4",
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -1525,6 +1562,11 @@ class Plate(NGFFNode):
 
         >>> new_plate = Plate.from_positions("combined.zarr", fovs)
         """
+        # TODO: remove when zarr-python adds back `copy_store`
+        raise NotImplementedError(
+            "This method is disabled until upstream support is finalized: "
+            "https://github.com/zarr-developers/zarr-python/issues/2407"
+        )
         # get metadata from an arbitraty FOV
         # deterministic because dicts are ordered
         example_position = next(iter(positions.values()))
@@ -1542,7 +1584,7 @@ class Plate(NGFFNode):
                     f"Expected item type {type(Position)}, "
                     f"got {type(src_pos)}"
                 )
-            name = normalize_storage_path(name)
+            name = normalize_path(name)
             if name in plate.zgroup:
                 raise FileExistsError(
                     f"Duplicate name '{name}' after path normalization."
@@ -1570,7 +1612,7 @@ class Plate(NGFFNode):
         axes: list[AxisMeta] | None = None,
         name: str | None = None,
         acquisitions: list[AcquisitionMeta] | None = None,
-        version: Literal["0.1", "0.4"] = "0.4",
+        version: Literal["0.1", "0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -1587,7 +1629,7 @@ class Plate(NGFFNode):
         )
 
     def _parse_meta(self):
-        if plate_meta := self.zattrs.get("plate"):
+        if plate_meta := self.maybe_wrapped_ome_attrs.get("plate"):
             _logger.debug(f"Loading HCS metadata from file: {plate_meta}")
             self.metadata = PlateMeta(**plate_meta)
         else:
@@ -1698,8 +1740,8 @@ class Plate(NGFFNode):
             Well node object
         """
         # normalize input
-        row_name = normalize_storage_path(row_name)
-        col_name = normalize_storage_path(col_name)
+        row_name = normalize_path(row_name)
+        col_name = normalize_path(col_name)
         if row_name in self:
             if col_name in self[row_name]:
                 raise FileExistsError(
@@ -1770,8 +1812,8 @@ class Plate(NGFFNode):
         Position
             Position node object
         """
-        row_name = normalize_storage_path(row_name)
-        col_name = normalize_storage_path(col_name)
+        row_name = normalize_path(row_name)
+        col_name = normalize_path(col_name)
         well_path = os.path.join(row_name, col_name)
         if well_path in self.zgroup:
             well = self[well_path]
@@ -1818,11 +1860,7 @@ class Plate(NGFFNode):
             for _, position in well.positions():
                 yield position.zgroup.path, position
 
-    def rename_well(
-        self,
-        old: str,
-        new: str,
-    ):
+    def rename_well(self, old: str, new: str):
         """Rename a well.
 
         Parameters
@@ -1834,16 +1872,41 @@ class Plate(NGFFNode):
         """
 
         # normalize inputs
-        old = normalize_storage_path(old)
-        new = normalize_storage_path(new)
+        old = normalize_path(old)
+        new = normalize_path(new)
         old_row, old_column = old.split("/")
         new_row, new_column = new.split("/")
         new_row_meta = PlateAxisMeta(name=new_row)
         new_col_meta = PlateAxisMeta(name=new_column)
 
+        # self.zgroup.move(old, new) # Not Implemented
+
         # raises ValueError if old well does not exist
         # or if new well already exists
-        self.zgroup.move(old, new)
+        if old not in self.zgroup:
+            raise ValueError(f"Well '{old}' does not exist.")
+        if new in self.zgroup:
+            raise ValueError(f"Well '{new}' already exists.")
+
+        store_path = Path(
+            str(self.zgroup.store_path).replace("file:", "")
+        )  # zarr-python prepends file: for some reason
+        assert store_path.is_dir()
+
+        old_path = store_path / old
+        assert old_path.is_dir()
+
+        new_path = store_path / new
+        assert not new_path.parent.is_dir()
+
+        shutil.move(
+            str(old_path.parent), str(new_path.parent)
+        )  # rename row path
+        shutil.move(
+            str(new_path.parent / old_column), str(new_path)
+        )  # rename column path
+
+        assert new in self.zgroup
 
         # update well metadata
         old_well_index = [
@@ -1874,14 +1937,56 @@ class Plate(NGFFNode):
         self.dump_meta()
 
 
+def _check_file_mode(
+    store_path: Path,
+    mode: Literal["r", "r+", "a", "w", "w-"],
+    disable_path_checking: bool,
+) -> bool:
+    if mode == "a":
+        mode = "r+" if store_path.exists() else "w-"
+    parse_meta = False
+    if mode in ("r", "r+"):
+        parse_meta = True
+    elif mode == "w-":
+        if store_path.exists():
+            raise FileExistsError(store_path)
+    elif mode == "w":
+        if store_path.exists():
+            if (
+                ".zarr" not in str(store_path.resolve())
+                and not disable_path_checking
+            ):
+                raise ValueError(
+                    "Cannot overwrite a path that does not contain '.zarr', "
+                    "use `disable_path_checking=True` if you are sure that "
+                    f"{store_path} should be overwritten."
+                )
+            _logger.warning(f"Overwriting data at {store_path}")
+    else:
+        raise ValueError(f"Invalid persistence mode '{mode}'.")
+    return parse_meta
+
+
+def _detect_layout(meta_keys: list[str]) -> Literal["fov", "hcs"]:
+    if "plate" in meta_keys:
+        return "hcs"
+    elif "multiscales" in meta_keys:
+        return "fov"
+    else:
+        raise KeyError(
+            "Dataset metadata keys ('plate'/'multiscales') not in "
+            f"the found store metadata keys: {meta_keys}. "
+            "Is this a valid OME-Zarr dataset?"
+        )
+
+
 def open_ome_zarr(
     store_path: StrOrBytesPath | Path,
     layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
-    version: Literal["0.1", "0.4"] = "0.4",
-    synchronizer: zarr.ThreadSynchronizer | zarr.ProcessSynchronizer = None,
+    version: Literal["0.1", "0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
 ) -> Plate | Position | TiledPosition:
@@ -1923,10 +2028,8 @@ def open_ome_zarr(
             AxisMeta(name='Y', type='space', unit='micrometer'),
             AxisMeta(name='X', type='space', unit='micrometer')]
 
-    version : Literal["0.1", "0.4"], optional
+    version : Literal["0.1", "0.4", "0.5"], optional
         OME-NGFF version, by default "0.4"
-    synchronizer : object, optional
-        Zarr thread or process synchronizer, by default None
     disable_path_checking : bool, optional
         Whether to allow overwriting a path that does not contain '.zarr',
         by default False
@@ -1949,42 +2052,17 @@ def open_ome_zarr(
         or :py:class:`iohub.ngff.TiledPosition`)
     """
     store_path = Path(store_path)
-    if mode == "a":
-        mode = ("w-", "r+")[int(store_path.exists())]
-    parse_meta = False
-    if mode in ("r", "r+"):
-        parse_meta = True
-    elif mode == "w-":
-        if store_path.exists():
-            raise FileExistsError(store_path)
-    elif mode == "w":
-        if store_path.exists():
-            if (
-                ".zarr" not in str(store_path.resolve())
-                and not disable_path_checking
-            ):
-                raise ValueError(
-                    "Cannot overwrite a path that does not contain '.zarr', "
-                    "use `disable_path_checking=True` if you are sure that "
-                    f"{store_path} should be overwritten."
-                )
-            _logger.warning(f"Overwriting data at {store_path}")
-    else:
-        raise ValueError(f"Invalid persistence mode '{mode}'.")
-    root = _open_store(store_path, mode, version, synchronizer)
+    parse_meta = _check_file_mode(
+        store_path, mode, disable_path_checking=disable_path_checking
+    )
+    root = _open_store(store_path, mode, version)
     meta_keys = root.attrs.keys() if parse_meta else []
+    if "ome" in meta_keys:
+        meta_keys = root.attrs["ome"].keys()
+        version = root.attrs["ome"].get("version", version)
     if layout == "auto":
         if parse_meta:
-            if "plate" in meta_keys:
-                layout = "hcs"
-            elif "multiscales" in meta_keys:
-                layout = "fov"
-            else:
-                raise KeyError(
-                    "Dataset metadata keys ('plate'/'multiscales') not in "
-                    f"the found store metadata keys: {meta_keys}. "
-                    "Is this a valid OME-Zarr dataset?"
-                )
+            layout = _detect_layout(meta_keys)
         else:
             raise ValueError(
                 "Store layout must be specified when creating a new dataset."
@@ -2005,5 +2083,6 @@ def open_ome_zarr(
         parse_meta=parse_meta,
         channel_names=channel_names,
         axes=axes,
+        version=version,
         **kwargs,
     )
