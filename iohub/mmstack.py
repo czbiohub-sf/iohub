@@ -65,10 +65,6 @@ class MMOmeTiffFOV(MicroManagerFOV):
     def dtype(self) -> np.dtype:
         return self._xdata.dtype
 
-    @property
-    def t_scale(self) -> float:
-        return self.parent._t_scale
-
     def __getitem__(self, key: int | slice | tuple[int | slice]) -> ArrayLike:
         return self._xdata[key]
 
@@ -387,3 +383,7 @@ class MMStack(MicroManagerFOVMapping):
             self._xy_pixel_size,
             self._xy_pixel_size,
         )
+
+    @property
+    def t_scale(self) -> float:
+        return self._t_scale
