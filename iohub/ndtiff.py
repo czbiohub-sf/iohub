@@ -36,14 +36,6 @@ class NDTiffFOV(MicroManagerFOV):
     def dtype(self) -> np.dtype:
         return self._xdata.dtype
 
-    @property
-    def t_scale(self) -> float:
-        _logger.warning(
-            "NDTiff does not store the planned time interval. "
-            "Returning 1.0 as a placeholder."
-        )
-        return 1.0
-
     def __getitem__(
         self, key: int | slice | tuple[int | slice, ...]
     ) -> ArrayLike:
@@ -137,6 +129,14 @@ class NDTiffDataset(MicroManagerFOVMapping):
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
         return self._zyx_scale
+
+    @property
+    def t_scale(self) -> float:
+        _logger.warning(
+            "NDTiff does not store the planned time interval. "
+            "Returning 1.0 as a placeholder."
+        )
+        return 1.0
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
