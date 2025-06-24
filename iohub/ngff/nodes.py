@@ -94,7 +94,7 @@ def _case_insensitive_local_fs() -> bool:
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
-    _MEMBER_TYPE: Type[NGFFNode]
+    _MEMBER_TYPE: Type[NGFFNode | zarr.Array]
     _DEFAULT_AXES = [
         TimeAxisMeta(name="T", unit="second"),
         ChannelAxisMeta(name="C"),
