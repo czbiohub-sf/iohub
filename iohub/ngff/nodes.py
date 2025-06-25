@@ -1783,8 +1783,8 @@ class Plate(NGFFNode):
         row_name: str,
         col_name: str,
         pos_name: str,
-        row_index: int = None,
-        col_index: int = None,
+        row_index: int | None = None,
+        col_index: int | None = None,
         acq_index: int = 0,
     ):
         """Creates a new position group in the plate.
