@@ -766,13 +766,13 @@ class Position(NGFFNode):
         if check_shape:
             self._check_shape(shape)
         img_arr = ImageArray.from_zarr_array(
-            self._group.zeros(
+            self._group.create_array(
                 name=name,
                 shape=shape,
                 dtype=dtype,
                 chunks=chunks,
                 overwrite=self._overwrite,
-                zarr_format=self._zarr_format,
+                fill_value=0,
                 **self._create_compressor_options(),
             )
         )
