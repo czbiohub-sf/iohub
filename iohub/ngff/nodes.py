@@ -672,7 +672,7 @@ class Position(NGFFNode):
         self,
         name: str,
         data: NDArray,
-        chunks: tuple[int] | None = None,
+        chunks: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
@@ -684,7 +684,7 @@ class Position(NGFFNode):
             Name key of the new image.
         data : NDArray
             Image data.
-        chunks : tuple[int], optional
+        chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
         transform : list[TransformationMeta], optional
@@ -780,7 +780,7 @@ class Position(NGFFNode):
         chunks = shape[-min(last_data_dims, len(shape)) :]
         return _pad_shape(chunks, target=len(shape))
 
-    def _check_shape(self, data_shape: tuple[int]):
+    def _check_shape(self, data_shape: tuple[int, ...]) -> None:
         if len(data_shape) != len(self.axes):
             raise ValueError(
                 f"Image has {len(data_shape)} dimensions, "
@@ -1305,7 +1305,7 @@ class TiledPosition(Position):
             Name of the array.
         grid_shape : tuple[int, int]
             2-tuple of the tiling grid shape (rows, columns).
-        tile_shape : tuple[int]
+        tile_shape : tuple[int, ...]
             Shape of each tile (up to 5D).
         dtype : DTypeLike
             Data type in NumPy convention
