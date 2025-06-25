@@ -117,7 +117,7 @@ class NGFFNode:
             self.axes = axes
         self._group = group
         self._overwrite = overwriting_creation
-        self._version = version
+        self._version: Literal["0.4", "0.5"] = version
         if parse_meta:
             self._parse_meta()
         if not hasattr(self, "axes"):
@@ -143,7 +143,7 @@ class NGFFNode:
         return self.zattrs.get("ome") or self.zattrs
 
     @property
-    def version(self):
+    def version(self) -> Literal["0.4", "0.5"]:
         """NGFF version"""
         return self._version
 
@@ -852,7 +852,7 @@ class Position(NGFFNode):
                         axes=self.axes,
                         datasets=[dataset_meta],
                         name=name,
-                        coordinateTransformations=[
+                        coordinate_transformations=[
                             TransformationMeta(type="identity")
                         ],
                         metadata=extra_meta,
