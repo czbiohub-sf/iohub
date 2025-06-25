@@ -54,7 +54,7 @@ def _pad_shape(shape: tuple[int, ...], target: int = 5):
 def _open_store(
     store_path: str | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
-    version: Literal["0.1", "0.4", "0.5"],
+    version: Literal["0.4", "0.5"],
 ):
     store_path = Path(store_path).resolve()
     if not store_path.exists() and mode in ("r", "r+"):
@@ -104,7 +104,7 @@ class NGFFNode:
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         if channel_names:
@@ -524,7 +524,7 @@ class Position(NGFFNode):
 
     Attributes
     ----------
-    version : Literal["0.1", "0.4", "0.5"]
+    version : Literal["0.4", "0.5"]
         OME-NGFF specification version
     zgroup : Group
         Root Zarr group holding arrays
@@ -544,7 +544,7 @@ class Position(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -1350,7 +1350,7 @@ class Well(NGFFNode):
         Zarr heirarchy group object
     parse_meta : bool, optional
         Whether to parse NGFF metadata in `.zattrs`, by default True
-    version : Literal["0.1", "0.4", "0.5"]
+    version : Literal["0.4", "0.5"]
         OME-NGFF specification version
     overwriting_creation : bool, optional
         Whether to overwrite or error upon creating an existing child item,
@@ -1358,7 +1358,7 @@ class Well(NGFFNode):
 
     Attributes
     ----------
-    version : Literal["0.1", "0.4", "0.5"]
+    version : Literal["0.4", "0.5"]
         OME-NGFF specification version
     zgroup : Group
         Root Zarr group holding arrays
@@ -1374,7 +1374,7 @@ class Well(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -1454,7 +1454,7 @@ class Row(NGFFNode):
         Zarr heirarchy group object
     parse_meta : bool, optional
         Whether to parse NGFF metadata in `.zattrs`, by default True
-    version : Literal["0.1", "0.4", "0.5"]
+    version : Literal["0.4", "0.5"]
         OME-NGFF specification version
     overwriting_creation : bool, optional
         Whether to overwrite or error upon creating an existing child item,
@@ -1462,7 +1462,7 @@ class Row(NGFFNode):
 
     Attributes
     ----------
-    version : Literal["0.1", "0.4", "0.5"]
+    version : Literal["0.4", "0.5"]
         OME-NGFF specification version
     zgroup : Group
         Root Zarr group holding arrays
@@ -1478,7 +1478,7 @@ class Row(NGFFNode):
         parse_meta: bool = True,
         channel_names: list[str] | None = None,
         axes: list[AxisMeta] | None = None,
-        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -1613,7 +1613,7 @@ class Plate(NGFFNode):
         axes: list[AxisMeta] | None = None,
         name: str | None = None,
         acquisitions: list[AcquisitionMeta] | None = None,
-        version: Literal["0.1", "0.4", "0.5"] = "0.4",
+        version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
         super().__init__(
@@ -1987,7 +1987,7 @@ def open_ome_zarr(
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
-    version: Literal["0.1", "0.4", "0.5"] = "0.4",
+    version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
 ) -> Plate | Position | TiledPosition:
@@ -2029,7 +2029,7 @@ def open_ome_zarr(
             AxisMeta(name='Y', type='space', unit='micrometer'),
             AxisMeta(name='X', type='space', unit='micrometer')]
 
-    version : Literal["0.1", "0.4", "0.5"], optional
+    version : Literal["0.4", "0.5"], optional
         OME-NGFF version, by default "0.4"
     disable_path_checking : bool, optional
         Whether to allow overwriting a path that does not contain '.zarr',
