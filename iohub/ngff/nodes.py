@@ -723,9 +723,9 @@ class Position(NGFFNode):
     def create_zeros(
         self,
         name: str,
-        shape: tuple[int],
+        shape: tuple[int, ...],
         dtype: DTypeLike,
-        chunks: tuple[int] | None = None,
+        chunks: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
@@ -740,11 +740,11 @@ class Position(NGFFNode):
         ----------
         name : str
             Name key of the new image.
-        shape : tuple
+        shape : tuple[int, ...]
             Image shape.
         dtype : DTypeLike
             Data type.
-        chunks : tuple[int], optional
+        chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
         transform : list[TransformationMeta], optional
@@ -805,9 +805,13 @@ class Position(NGFFNode):
                 "Skipping channel shape check."
             )
 
-    def _create_compressor_options(self, chunk_shape: Tuple[int, ...] = None):
+    def _create_compressor_options(
+        self, chunk_shape: tuple[int, ...] | None = None
+    ):
         shuffle = zarr.codecs.BloscShuffle.bitshuffle
         if self._zarr_format == 3:
+            if chunk_shape is None:
+                raise ValueError("Chunk shape must be specified for Zarr v3.")
             return {
                 "codecs": [
                     zarr.codecs.ShardingCodec(
