@@ -557,7 +557,7 @@ class Position(NGFFNode):
         )
 
     def _set_meta(
-        self, multiscales: MultiScaleMeta | None, omero: OMEROMeta | None
+        self, multiscales: list[MultiScaleMeta], omero: OMEROMeta | None
     ):
         self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
         self.axes = self.metadata.multiscales[0].axes
