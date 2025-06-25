@@ -714,7 +714,7 @@ class Position(NGFFNode):
                 dtype=data.dtype,
                 chunks=chunks,
                 overwrite=self._overwrite,
-                **self._create_compressor_options(chunks),
+                **self._create_compressor_options(),
             )
         )
         img_arr[...] = data
@@ -773,7 +773,7 @@ class Position(NGFFNode):
                 chunks=chunks,
                 overwrite=self._overwrite,
                 zarr_format=self._zarr_format,
-                **self._create_compressor_options(chunks),
+                **self._create_compressor_options(),
             )
         )
         self._create_image_meta(img_arr.basename, transform=transform)
@@ -806,27 +806,15 @@ class Position(NGFFNode):
                 "Skipping channel shape check."
             )
 
-    def _create_compressor_options(
-        self, chunk_shape: tuple[int, ...] | None = None
-    ):
+    def _create_compressor_options(self):
         shuffle = zarr.codecs.BloscShuffle.bitshuffle
         if self._zarr_format == 3:
-            if chunk_shape is None:
-                raise ValueError("Chunk shape must be specified for Zarr v3.")
             return {
-                "codecs": [
-                    zarr.codecs.ShardingCodec(
-                        chunk_shape=chunk_shape,
-                        codecs=[
-                            zarr.codecs.BytesCodec(),
-                            zarr.codecs.BloscCodec(
-                                cname="zstd",
-                                clevel=1,
-                                shuffle=shuffle,
-                            ),
-                        ],
-                    )
-                ],
+                "compressors": zarr.codecs.BloscCodec(
+                    cname="zstd",
+                    clevel=1,
+                    shuffle=shuffle,
+                )
             }
         else:
             from numcodecs import Blosc
@@ -1338,7 +1326,7 @@ class TiledPosition(Position):
                 chunks=chunks,
                 zarr_format=self._zarr_format,
                 overwrite=self._overwrite,
-                **self._create_compressor_options(chunks),
+                **self._create_compressor_options(),
             )
         )
         self._create_image_meta(tiles.basename, transform=transform)
