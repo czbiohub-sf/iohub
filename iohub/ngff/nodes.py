@@ -12,13 +12,13 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, Literal, Sequence, Tuple, Type
+from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
 
 import numpy as np
 import zarr.codecs
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
-from zarr.core.group import normalize_path
+from zarr.storage._utils import normalize_path
 
 from iohub.ngff.display import channel_display_settings
 from iohub.ngff.models import (
