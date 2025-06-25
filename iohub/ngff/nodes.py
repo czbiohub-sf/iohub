@@ -1571,7 +1571,7 @@ class Plate(NGFFNode):
             "This method is disabled until upstream support is finalized: "
             "https://github.com/zarr-developers/zarr-python/issues/2407"
         )
-        # get metadata from an arbitraty FOV
+        # get metadata from an arbitrary FOV
         # deterministic because dicts are ordered
         example_position = next(iter(positions.values()))
         plate = open_ome_zarr(
