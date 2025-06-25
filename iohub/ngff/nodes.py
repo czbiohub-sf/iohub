@@ -1239,10 +1239,12 @@ class Position(NGFFNode):
         self.zattrs["iohub"] = iohub_dict
         # Replace default identity transform with scale
         if transforms == [TransformationMeta(type="identity")]:
-            transforms = [TransformationMeta(type="scale", scale=[1] * 5)]
+            transforms = [TransformationMeta(type="scale", scale=[1.0] * 5)]
         # Add scale transform if not present
         if not any([transform.type == "scale" for transform in transforms]):
-            transforms.append(TransformationMeta(type="scale", scale=[1] * 5))
+            transforms.append(
+                TransformationMeta(type="scale", scale=[1.0] * 5)
+            )
         new_transforms = []
         for transform in transforms:
             if transform.type == "scale":
