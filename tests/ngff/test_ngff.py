@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from itertools import product
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
@@ -226,8 +226,12 @@ def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename, version):
 
 
 @contextmanager
-def _temp_ome_zarr_v04(
-    image_5d: NDArray, channel_names: list[str], arr_name: str, **kwargs
+def _temp_ome_zarr(
+    image_5d: NDArray,
+    channel_names: list[str],
+    arr_name: str,
+    version: Literal["0.4", "0.5"],
+    **kwargs,
 ):
     """Helper function to generate a temporary OME-Zarr store.
 
@@ -236,6 +240,9 @@ def _temp_ome_zarr_v04(
     image_5d : NDArray
     channel_names : list[str]
     arr_name : str
+    version : str
+    **kwargs : dict
+        Additional keyword arguments to pass to `create_image()`.
 
     Yields
     ------
@@ -247,7 +254,7 @@ def _temp_ome_zarr_v04(
             os.path.join(temp_dir.name, "ome.zarr"),
             layout="fov",
             mode="a",
-            version="0.4",
+            version=version,
             channel_names=channel_names,
         )
         dataset.create_image(arr_name, image_5d, **kwargs)
@@ -301,19 +308,22 @@ def _temp_ome_zarr_plate(
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_write_ome_zarr(channels_and_random_5d, arr_name):
+def test_write_ome_zarr(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.__setitem__()`"""
     from ome_zarr.io import parse_url
     from ome_zarr.reader import Reader
 
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr(
+        random_5d, channel_names, arr_name, version=version
+    ) as dataset:
         assert_array_almost_equal(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
         ext_reader = Reader(parse_url(dataset.zgroup.store.path))
@@ -327,25 +337,35 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name):
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_create_zeros(ch_shape_dtype, arr_name):
+def test_create_zeros(ch_shape_dtype, arr_name, version):
     """Test `iohub.ngff.Position.create_zeros()`"""
     channel_names, shape, dtype = ch_shape_dtype
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
         dataset = open_ome_zarr(
-            store_path, layout="fov", mode="w-", channel_names=channel_names
+            store_path,
+            layout="fov",
+            mode="w-",
+            channel_names=channel_names,
+            version=version,
         )
         dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-        assert set(os.listdir(os.path.join(store_path, arr_name))) == {
-            ".zarray",
-            ".zattrs",
-        }
+        if version == "0.4":
+            assert set(os.listdir(os.path.join(store_path, arr_name))) == {
+                ".zarray",
+                ".zattrs",
+            }
+        else:
+            assert set(os.listdir(os.path.join(store_path, arr_name))) == {
+                "zarr.json",
+            }
         assert not dataset[arr_name][:].any()
         assert dataset[arr_name].shape == shape
         assert dataset[arr_name].dtype == dtype
@@ -354,19 +374,24 @@ def test_create_zeros(ch_shape_dtype, arr_name):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
+def test_ome_zarr_to_dask(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.data` to dask"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr_v04(random_5d, channel_names, "0") as dataset:
+    with _temp_ome_zarr(
+        random_5d, channel_names, "0", version=version
+    ) as dataset:
         assert_array_almost_equal(
             dataset.data.dask_array().compute(), random_5d
         )
-    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr(
+        random_5d, channel_names, arr_name, version=version
+    ) as dataset:
         assert_array_almost_equal(
             dataset[arr_name].dask_array().compute(), random_5d
         )
@@ -375,38 +400,44 @@ def test_ome_zarr_to_dask(channels_and_random_5d, arr_name):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_position_data(channels_and_random_5d, arr_name):
+def test_position_data(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.data`"""
     channel_names, random_5d = channels_and_random_5d
     assume(arr_name != "0")
-    with _temp_ome_zarr_v04(random_5d, channel_names, "0") as dataset:
+    with _temp_ome_zarr(
+        random_5d, channel_names, "0", version=version
+    ) as dataset:
         assert_array_almost_equal(dataset.data.numpy(), random_5d)
     with pytest.raises(KeyError):
-        with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
+        with _temp_ome_zarr(
+            random_5d, channel_names, arr_name, version=version
+        ) as dataset:
             _ = dataset.data
 
 
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_append_channel(channels_and_random_5d, arr_name):
+def test_append_channel(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.append_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr_v04(
-        random_5d[:, :-1], channel_names[:-1], arr_name
+    with _temp_ome_zarr(
+        random_5d[:, :-1], channel_names[:-1], arr_name, version=version
     ) as dataset:
         dataset.append_channel(channel_names[-1], resize_arrays=True)
         dataset[arr_name][:, -1] = random_5d[:, -1]
@@ -416,6 +447,7 @@ def test_append_channel(channels_and_random_5d, arr_name):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
     new_channel=short_text_st,
 )
 @settings(
@@ -423,11 +455,15 @@ def test_append_channel(channels_and_random_5d, arr_name):
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_rename_channel(channels_and_random_5d, arr_name, new_channel):
+def test_rename_channel(
+    channels_and_random_5d, arr_name, new_channel, version
+):
     """Test `iohub.ngff.Position.rename_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(new_channel not in channel_names)
-    with _temp_ome_zarr_v04(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr(
+        random_5d, channel_names, arr_name, version=version
+    ) as dataset:
         dataset.rename_channel(old=channel_names[0], new=new_channel)
         assert new_channel in dataset.channel_names
         assert dataset.metadata.omero.channels[0].label == new_channel
@@ -491,18 +527,19 @@ def test_rename_well(channels_and_random_5d, arr_name):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_update_channel(channels_and_random_5d, arr_name):
+def test_update_channel(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.update_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr_v04(
-        random_5d[:, :-1], channel_names[:-1], arr_name
+    with _temp_ome_zarr(
+        random_5d[:, :-1], channel_names[:-1], arr_name, version=version
     ) as dataset:
         for i, ch in enumerate(dataset.channel_names):
             dataset.update_channel(
@@ -527,7 +564,7 @@ def test_write_more_channels(channels_and_random_5d, arr_name):
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
     with pytest.raises(ValueError):
-        with _temp_ome_zarr_v04(random_5d, channel_names[:-1], arr_name) as _:
+        with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name) as _:
             pass
 
 
@@ -1068,14 +1105,16 @@ def test_create_position(row, col, pos):
         assert dataset[row][col].metadata.images[0].path == pos
 
 
-@given(channels_and_random_5d=_channels_and_random_5d())
-def test_position_scale(channels_and_random_5d):
+@given(
+    channels_and_random_5d=_channels_and_random_5d(), version=ngff_versions_st
+)
+def test_position_scale(channels_and_random_5d, version):
     """Test `iohub.ngff.Position.scale`"""
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
     transform = [TransformationMeta(type="scale", scale=scale)]
-    with _temp_ome_zarr_v04(
-        random_5d, channel_names, "0", transform=transform
+    with _temp_ome_zarr(
+        random_5d, channel_names, "0", transform=transform, version=version
     ) as dataset:
         assert dataset.scale == scale
 
