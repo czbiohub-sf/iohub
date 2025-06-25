@@ -47,6 +47,7 @@ channel_names_st = c_dim_st.flatmap(
         )
     )
 )
+ngff_versions_st = st.sampled_from(["0.4", "0.5"])
 short_alpha_numeric = st.text(
     alphabet=list(
         string.ascii_lowercase + string.ascii_uppercase + string.digits
@@ -124,36 +125,39 @@ def test_pad_shape(shape, target):
     assert new_shape[-len(shape) :] == shape
 
 
-def test_open_store_create():
+@given(version=ngff_versions_st)
+def test_open_store_create(version):
     """Test `iohub.ngff._open_store()"""
     for mode in ("a", "w", "w-"):
         with TemporaryDirectory() as temp_dir:
             store_path = os.path.join(temp_dir, "new.zarr")
-            root = _open_store(store_path, mode=mode, version="0.4")
+            root = _open_store(store_path, mode=mode, version=version)
             assert isinstance(root, zarr.Group)
             assert isinstance(root.store, zarr.storage.LocalStore)
             # assert root.store._dimension_separator == "/"
             assert root.store.root.resolve() == Path(store_path).resolve()
 
 
-def test_open_store_create_existing():
+@given(version=ngff_versions_st)
+def test_open_store_create_existing(version):
     """Test `iohub.ngff._open_store()"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "new.zarr")
         g = zarr.open_group(store_path, mode="w-")
         g.store.close()
         with pytest.raises(RuntimeError):
-            _ = _open_store(store_path, mode="w-", version="0.4")
-        assert _open_store(store_path, mode="w", version="0.4") is not None
+            _ = _open_store(store_path, mode="w-", version=version)
+        assert _open_store(store_path, mode="w", version=version) is not None
 
 
-def test_open_store_read_nonexist():
+@given(version=ngff_versions_st)
+def test_open_store_read_nonexist(version):
     """Test `iohub.ngff._open_store()"""
     for mode in ("r", "r+"):
         with TemporaryDirectory() as temp_dir:
             store_path = os.path.join(temp_dir, "new.zarr")
             with pytest.raises(FileNotFoundError):
-                _ = _open_store(store_path, mode=mode, version="0.4")
+                _ = _open_store(store_path, mode=mode, version=version)
 
 
 def test_case_insensitive_local_fs():
@@ -169,24 +173,29 @@ def test_case_insensitive_local_fs():
             _ = _case_insensitive_local_fs()
 
 
-@given(channel_names=channel_names_st)
+@given(channel_names=channel_names_st, version=ngff_versions_st)
 @settings(max_examples=16)
-def test_init_ome_zarr(channel_names):
+def test_init_ome_zarr(channel_names, version):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
         dataset = open_ome_zarr(
-            store_path, layout="fov", mode="w-", channel_names=channel_names
+            store_path,
+            layout="fov",
+            mode="w-",
+            channel_names=channel_names,
+            version=version,
         )
         assert os.path.isdir(store_path)
         assert dataset.channel_names == channel_names
 
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
 @pytest.mark.parametrize(
     "basename",
     ["some.zarr", "other.zarr/0/0/0", "random_dir", "napari_ome_zarr"],
 )
-def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
+def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename, version):
     """Test `iohub.ngff.open_ome_zarr()`"""
     store_path = tmp_path / basename
     store_path.mkdir(parents=True)
@@ -195,7 +204,11 @@ def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
     if ".zarr" not in basename:
         with pytest.raises(ValueError):
             _ = open_ome_zarr(
-                store_path, layout="fov", mode="w", channel_names=["channel"]
+                store_path,
+                layout="fov",
+                mode="w",
+                channel_names=["channel"],
+                version=version,
             )
         assert some_child_directory.exists()
     assert (
@@ -205,6 +218,7 @@ def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename):
             mode="w",
             channel_names=["channel"],
             disable_path_checking=True,
+            version=version,
         )
         is not None
     )
