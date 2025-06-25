@@ -553,18 +553,21 @@ def test_update_channel(channels_and_random_5d, arr_name, version):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_write_more_channels(channels_and_random_5d, arr_name):
+def test_write_more_channels(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.create_image()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
     with pytest.raises(ValueError):
-        with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name) as _:
+        with _temp_ome_zarr(
+            random_5d, channel_names[:-1], arr_name, version=version
+        ) as _:
             pass
 
 
