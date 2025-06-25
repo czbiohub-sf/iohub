@@ -12,7 +12,7 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, Literal, Sequence, Type
+from typing import Generator, Literal, Sequence, Type, overload
 
 import numpy as np
 import zarr.codecs
@@ -1973,6 +1973,58 @@ def _detect_layout(meta_keys: list[str]) -> Literal["fov", "hcs"]:
             f"the found store metadata keys: {meta_keys}. "
             "Is this a valid OME-Zarr dataset?"
         )
+
+
+@overload
+def open_ome_zarr(
+    store_path: str | Path,
+    layout: Literal["auto"],
+    mode: Literal["r", "r+", "a", "w", "w-"] = "r",
+    channel_names: list[str] | None = None,
+    axes: list[AxisMeta] | None = None,
+    version: Literal["0.4", "0.5"] = "0.4",
+    disable_path_checking: bool = False,
+    **kwargs,
+) -> Plate | Position | TiledPosition: ...
+
+
+@overload
+def open_ome_zarr(
+    store_path: str | Path,
+    layout: Literal["fov"],
+    mode: Literal["r", "r+", "a", "w", "w-"] = "r",
+    channel_names: list[str] | None = None,
+    axes: list[AxisMeta] | None = None,
+    version: Literal["0.4", "0.5"] = "0.4",
+    disable_path_checking: bool = False,
+    **kwargs,
+) -> Position: ...
+
+
+@overload
+def open_ome_zarr(
+    store_path: str | Path,
+    layout: Literal["tiled"],
+    mode: Literal["r", "r+", "a", "w", "w-"] = "r",
+    channel_names: list[str] | None = None,
+    axes: list[AxisMeta] | None = None,
+    version: Literal["0.4", "0.5"] = "0.4",
+    disable_path_checking: bool = False,
+    **kwargs,
+) -> TiledPosition: ...
+
+
+@overload
+def open_ome_zarr(
+    store_path: str | Path,
+    layout: Literal["hcs"],
+    mode: Literal["r", "r+", "a", "w", "w-"] = "r",
+    channel_names: list[str] | None = None,
+    axes: list[AxisMeta] | None = None,
+    version: Literal["0.4", "0.5"] = "0.4",
+    disable_path_checking: bool = False,
+    **kwargs,
+) -> Plate: ...
 
 
 def open_ome_zarr(
