@@ -12,7 +12,7 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
+from typing import Generator, Literal, Sequence, Type
 
 import numpy as np
 import zarr.codecs
@@ -42,9 +42,6 @@ from iohub.ngff.models import (
     WindowDict,
 )
 
-if TYPE_CHECKING:
-    from _typeshed import StrOrBytesPath
-
 _logger = logging.getLogger(__name__)
 
 
@@ -55,7 +52,7 @@ def _pad_shape(shape: tuple[int, ...], target: int = 5):
 
 
 def _open_store(
-    store_path: StrOrBytesPath | Path,
+    store_path: str | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
     version: Literal["0.1", "0.4", "0.5"],
 ):
@@ -1530,7 +1527,7 @@ class Plate(NGFFNode):
     @classmethod
     def from_positions(
         cls,
-        store_path: StrOrBytesPath,
+        store_path: str | Path,
         positions: dict[str, Position],
     ) -> Plate:
         """Create a new HCS store from existing OME-Zarr stores
@@ -1541,7 +1538,7 @@ class Plate(NGFFNode):
 
         Parameters
         ----------
-        store_path : StrOrBytesPath
+        store_path : str | Path
             Path of the new store
         positions : dict[str, Position]
             Dictionary where keys are destination path names ('row/column/fov')
@@ -1985,7 +1982,7 @@ def _detect_layout(meta_keys: list[str]) -> Literal["fov", "hcs"]:
 
 
 def open_ome_zarr(
-    store_path: StrOrBytesPath | Path,
+    store_path: str | Path,
     layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: list[str] | None = None,
@@ -1998,7 +1995,7 @@ def open_ome_zarr(
 
     Parameters
     ----------
-    store_path : StrOrBytesPath | Path
+    store_path : str | Path
         File path to the Zarr store to open
     layout: Literal["auto", "fov", "hcs", "tiled"], optional
         NGFF store layout:
