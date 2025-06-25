@@ -588,7 +588,11 @@ class Position(NGFFNode):
 
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
-        self.zattrs.update(**self.metadata.model_dump(**TO_DICT_SETTINGS))
+        ome = self.metadata.model_dump(**TO_DICT_SETTINGS)
+        if self.version == "0.4":
+            self.zattrs.update(**ome)
+        elif self.version == "0.5":
+            self.zattrs["ome"] = ome
 
     @property
     def _zarr_format(self):
