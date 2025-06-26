@@ -400,6 +400,37 @@ def test_ome_zarr_to_dask(channels_and_random_5d, arr_name, version):
         )
 
 
+@given(channels_and_random_5d=_channels_and_random_5d())
+@settings(
+    max_examples=16,
+    deadline=4000,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_writing_sharded(channels_and_random_5d):
+    """Test `iohub.ngff.Position.data`"""
+    channel_names, random_5d = channels_and_random_5d
+    chunks = (
+        1,
+        max(1, random_5d.shape[1] // 3),
+        max(1, random_5d.shape[2] // 4),
+        max(1, random_5d.shape[3] // 5),
+        max(1, random_5d.shape[4] // 6),
+    )
+    shards = []
+    for chunk, size in zip(chunks, random_5d.shape):
+        shards.append(chunk * (size // chunk + 1))
+    shards[0] = min(7, shards[0])
+    with _temp_ome_zarr(
+        random_5d,
+        channel_names,
+        arr_name="0",
+        version="0.5",
+        chunks=chunks,
+        shards=shards,
+    ) as dataset:
+        assert_array_equal(dataset["0"].numpy(), random_5d)
+
+
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
