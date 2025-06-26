@@ -319,6 +319,13 @@ class NGFFNode:
         """Parse and set NGFF metadata from `.zattrs`."""
         raise NotImplementedError
 
+    def _dump_ome(self, ome: dict):
+        """Dump OME metadata to the `.zattrs` file."""
+        if self.version == "0.4":
+            self.zattrs.update(ome)
+        elif self.version == "0.5":
+            self.zattrs["ome"] = ome
+
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
         raise NotImplementedError
@@ -589,10 +596,7 @@ class Position(NGFFNode):
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
         ome = self.metadata.model_dump(**TO_DICT_SETTINGS)
-        if self.version == "0.4":
-            self.zattrs.update(**ome)
-        elif self.version == "0.5":
-            self.zattrs["ome"] = ome
+        self._dump_ome(ome)
 
     @property
     def _zarr_format(self):
@@ -1388,9 +1392,8 @@ class Well(NGFFNode):
 
     def dump_meta(self):
         """Dumps metadata JSON to the `.zattrs` file."""
-        self.zattrs.update(
-            {"well": self.metadata.model_dump(**TO_DICT_SETTINGS)}
-        )
+        ome = {"well": self.metadata.model_dump(**TO_DICT_SETTINGS)}
+        self._dump_ome(ome)
 
     def __getitem__(self, key: str):
         """Get a position member of the well.
@@ -1663,9 +1666,8 @@ class Plate(NGFFNode):
         """
         if field_count:
             self.metadata.field_count = len(list(self.positions()))
-        self.zattrs.update(
-            {"plate": self.metadata.model_dump(**TO_DICT_SETTINGS)}
-        )
+        ome = {"plate": self.metadata.model_dump(**TO_DICT_SETTINGS)}
+        self._dump_ome(ome)
 
     def _auto_idx(
         self,
