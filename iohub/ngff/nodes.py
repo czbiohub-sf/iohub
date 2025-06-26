@@ -1829,7 +1829,7 @@ class Plate(NGFFNode):
         """
         yield from self.iteritems()
 
-    def wells(self):
+    def wells(self) -> Generator[tuple[str, Well], None, None]:
         """Returns a generator that iterate over the path and value
         of all the wells (along rows, columns) in the plate.
 
