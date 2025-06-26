@@ -681,6 +681,7 @@ class Position(NGFFNode):
         name: str,
         data: NDArray,
         chunks: tuple[int, ...] | None = None,
+        shards: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
@@ -695,6 +696,9 @@ class Position(NGFFNode):
         chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
+        shards : tuple[int, ...], optional
+            Shard size, by default None.
+            No sharding will be used if not specified.
         transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
@@ -707,22 +711,16 @@ class Position(NGFFNode):
         ImageArray
             Container object for image stored as a zarr array (up to 5D)
         """
-        if not chunks:
-            chunks = self._default_chunks(data.shape, 3)
-        if check_shape:
-            self._check_shape(data.shape)
-        img_arr = ImageArray.from_zarr_array(
-            self._group.create_array(
-                name=name,
-                shape=data.shape,
-                dtype=data.dtype,
-                chunks=chunks,
-                overwrite=self._overwrite,
-                **self._create_compressor_options(),
-            )
+        img_arr = self.create_zeros(
+            name=name,
+            shape=data.shape,
+            dtype=data.dtype,
+            chunks=chunks,
+            shards=shards,
+            transform=transform,
+            check_shape=check_shape,
         )
         img_arr[...] = data
-        self._create_image_meta(img_arr.basename, transform=transform)
         return img_arr
 
     def create_zeros(
@@ -731,6 +729,7 @@ class Position(NGFFNode):
         shape: tuple[int, ...],
         dtype: DTypeLike,
         chunks: tuple[int, ...] | None = None,
+        shards: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
@@ -752,6 +751,9 @@ class Position(NGFFNode):
         chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
+        shards : tuple[int, ...], optional
+            Shard size, by default None.
+            No sharding will be used if not specified.
         transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
@@ -766,7 +768,6 @@ class Position(NGFFNode):
         """
         if not chunks:
             chunks = self._default_chunks(shape, 3)
-
         if check_shape:
             self._check_shape(shape)
         img_arr = ImageArray.from_zarr_array(
@@ -775,6 +776,7 @@ class Position(NGFFNode):
                 shape=shape,
                 dtype=dtype,
                 chunks=chunks,
+                shards=shards,
                 overwrite=self._overwrite,
                 fill_value=0,
                 **self._create_compressor_options(),
@@ -1324,19 +1326,15 @@ class TiledPosition(Position):
         chunks = self._default_chunks(
             shape=tile_shape, last_data_dims=chunk_dims
         )
-        tiles = TiledImageArray.from_zarr_array(
-            self._group.zeros(
+        return TiledImageArray.from_zarr_array(
+            self.create_zeros(
                 name=name,
                 shape=tile_shape[:-2] + xy_shape,
                 dtype=dtype,
                 chunks=chunks,
-                zarr_format=self._zarr_format,
-                overwrite=self._overwrite,
-                **self._create_compressor_options(),
+                transform=transform,
             )
         )
-        self._create_image_meta(tiles.basename, transform=transform)
-        return tiles
 
 
 class Well(NGFFNode):
