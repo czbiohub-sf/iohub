@@ -1311,7 +1311,9 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
     with _temp_ome_zarr(
         random_5d, channel_names, arr_name=arr_name, version=version
     ) as dataset:
-        nz_multiscales = from_ngff_zarr(dataset.zgroup.store.root)
+        nz_multiscales = from_ngff_zarr(
+            dataset.zgroup.store.root, validate=True
+        )
         assert_array_almost_equal(
             dataset[arr_name].dask_array().compute(),
             nz_multiscales.images[0].data,

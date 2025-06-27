@@ -834,7 +834,7 @@ class Position(NGFFNode):
         extra_meta: dict | None = None,
     ):
         if not transform:
-            transform = [TransformationMeta(type="identity")]
+            transform = [TransformationMeta(type="scale", scale=[1.0] * 5)]
         dataset_meta = DatasetMeta(
             path=name, coordinate_transformations=transform
         )
@@ -846,9 +846,7 @@ class Position(NGFFNode):
                         axes=self.axes,
                         datasets=[dataset_meta],
                         name=name,
-                        coordinate_transformations=[
-                            TransformationMeta(type="identity")
-                        ],
+                        coordinate_transformations=None,
                         metadata=extra_meta,
                     )
                 ],
