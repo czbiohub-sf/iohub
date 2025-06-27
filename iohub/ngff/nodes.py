@@ -588,7 +588,8 @@ class Position(NGFFNode):
         if multiscales:
             try:
                 self._set_meta(multiscales=multiscales, omero=omero)
-            except ValidationError:
+            except ValidationError as e:
+                _logger.warning(str(e))
                 self._warn_invalid_meta()
         else:
             self._warn_invalid_meta()
