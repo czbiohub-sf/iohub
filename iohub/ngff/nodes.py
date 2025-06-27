@@ -18,6 +18,7 @@ import numpy as np
 import zarr.codecs
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
+from zarr.core.chunk_key_encodings import ChunkKeyEncodingParams
 from zarr.storage._utils import normalize_path
 
 from iohub.ngff.display import channel_display_settings
@@ -790,6 +791,10 @@ class Position(NGFFNode):
                     [ax.name for ax in self.axes]
                     if self._zarr_format == 3
                     else None
+                ),
+                chunk_key_encoding=ChunkKeyEncodingParams(
+                    name="default" if self._zarr_format == 3 else "v2",
+                    separator="/",
                 ),
                 **self._create_compressor_options(),
             )
