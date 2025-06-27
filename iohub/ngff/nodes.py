@@ -563,12 +563,9 @@ class Position(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
 
-    def _set_meta(
-        self, multiscales: list[MultiScaleMeta], omero: OMEROMeta | None
-    ):
-        self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
+    def _set_meta(self):
         self.axes = self.metadata.multiscales[0].axes
-        if omero is not None:
+        if self.metadata.omero is not None:
             self._channel_names = [
                 c.label for c in self.metadata.omero.channels
             ]
@@ -583,15 +580,13 @@ class Position(NGFFNode):
             self._channel_names = list(range(example_image.channels))
 
     def _parse_meta(self):
-        multiscales = self.maybe_wrapped_ome_attrs.get("multiscales")
-        omero = self.maybe_wrapped_ome_attrs.get("omero")
-        if multiscales:
-            try:
-                self._set_meta(multiscales=multiscales, omero=omero)
-            except ValidationError as e:
-                _logger.warning(str(e))
-                self._warn_invalid_meta()
-        else:
+        try:
+            self.metadata = ImagesMeta.model_validate(
+                self.maybe_wrapped_ome_attrs
+            )
+            self._set_meta()
+        except ValidationError as e:
+            _logger.warning(str(e))
             self._warn_invalid_meta()
 
     def dump_meta(self):
@@ -858,6 +853,7 @@ class Position(NGFFNode):
                     )
                 ],
                 omero=self._omero_meta(id=0, name=self._group.basename),
+                version="0.5" if self.version == "0.5" else None,
             )
         elif (
             dataset_meta.path

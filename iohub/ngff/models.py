@@ -300,6 +300,9 @@ class ImagesMeta(MetaBase):
     multiscales: list[MultiScaleMeta]
     # transitional, optional
     omero: OMEROMeta | None = None
+    # only for OME-NGFF v0.5
+    version: Literal["0.5"] | None = None
+    model_config = ConfigDict(extra="allow")
 
 
 class LabelsMeta(MetaBase):
