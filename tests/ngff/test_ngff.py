@@ -778,9 +778,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name, version):
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
             assert dataset.metadata.multiscales[
                 0
-            ].coordinate_transformations == [
-                TransformationMeta(type="identity")
-            ]
+            ].coordinate_transformations == None
             dataset.set_transform(image="*", transform=transform)
             assert (
                 dataset.metadata.multiscales[0].coordinate_transformations
