@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 import zarr.storage
 from hypothesis import HealthCheck, assume, given, settings
+from ngff_zarr import from_ngff_zarr
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 from numpy.typing import NDArray
 
@@ -1293,3 +1294,25 @@ def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
             "scale"
         ] == [1.0, 1.0, 2.0, 2.0, 2.0]
         assert 1 < dataset["0"].numpy().mean() < np.iinfo(np.uint16).max
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
+)
+@settings(
+    max_examples=16,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
+    """Test that image written with iohub can be read with ngff-zarr."""
+    channel_names, random_5d = channels_and_random_5d
+    with _temp_ome_zarr(
+        random_5d, channel_names, arr_name=arr_name, version=version
+    ) as dataset:
+        nz_multiscales = from_ngff_zarr(dataset.zgroup.store.root)
+        assert_array_almost_equal(
+            dataset[arr_name].dask_array().compute(),
+            nz_multiscales.images[0].data,
+        )
