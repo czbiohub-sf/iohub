@@ -1385,6 +1385,8 @@ class Well(NGFFNode):
 
     def _parse_meta(self):
         if well_group_meta := self.maybe_wrapped_ome_attrs.get("well"):
+            if "version" not in well_group_meta:
+                well_group_meta["version"] = self.version
             self.metadata = WellGroupMeta(**well_group_meta)
         else:
             self._warn_invalid_meta()
@@ -1423,7 +1425,9 @@ class Well(NGFFNode):
         # build metadata
         image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
         if not hasattr(self, "metadata"):
-            self.metadata = WellGroupMeta(images=[image_meta])
+            self.metadata = WellGroupMeta(
+                images=[image_meta], version=self.version
+            )
         else:
             self.metadata.images.append(image_meta)
         self.dump_meta()
@@ -1628,6 +1632,8 @@ class Plate(NGFFNode):
     def _parse_meta(self):
         if plate_meta := self.maybe_wrapped_ome_attrs.get("plate"):
             _logger.debug(f"Loading HCS metadata from file: {plate_meta}")
+            if "version" not in plate_meta:
+                plate_meta["version"] = self.version
             self.metadata = PlateMeta(**plate_meta)
         else:
             self._warn_invalid_meta()
