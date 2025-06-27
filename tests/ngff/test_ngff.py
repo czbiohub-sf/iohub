@@ -417,19 +417,20 @@ def test_writing_sharded(channels_and_random_5d):
         max(1, random_5d.shape[3] // 5),
         max(1, random_5d.shape[4] // 6),
     )
-    shards = []
-    for chunk, size in zip(chunks, random_5d.shape):
-        shards.append(chunk * (size // chunk + 1))
-    shards[0] = min(7, shards[0])
+    shards_ratio = (3, 4, 5, 6, 7)
     with _temp_ome_zarr(
         random_5d,
         channel_names,
         arr_name="0",
         version="0.5",
         chunks=chunks,
-        shards=shards,
+        shards_ratio=shards_ratio,
     ) as dataset:
         assert_array_equal(dataset["0"].numpy(), random_5d)
+        assert dataset["0"].chunks == chunks
+        assert dataset["0"].shards == tuple(
+            c * s for c, s in zip(chunks, shards_ratio)
+        )
 
 
 @given(
@@ -629,7 +630,7 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
             assert dataset.metadata.multiscales[0].datasets[
                 0
             ].coordinate_transformations == [
-                TransformationMeta(type="identity")
+                TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0))
             ]
             dataset.set_transform(image=arr_name, transform=transform)
             assert (

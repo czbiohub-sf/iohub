@@ -677,7 +677,7 @@ class Position(NGFFNode):
         name: str,
         data: NDArray,
         chunks: tuple[int, ...] | None = None,
-        shards: tuple[int, ...] | None = None,
+        shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
@@ -692,8 +692,9 @@ class Position(NGFFNode):
         chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
-        shards : tuple[int, ...], optional
-            Shard size, by default None.
+        shards_ratio : tuple[int, ...], optional
+            Sharding ratio for each dimension, by default None.
+            Each shard contains the product of the ratios number of chunks.
             No sharding will be used if not specified.
         transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
@@ -712,7 +713,7 @@ class Position(NGFFNode):
             shape=data.shape,
             dtype=data.dtype,
             chunks=chunks,
-            shards=shards,
+            shards_ratio=shards_ratio,
             transform=transform,
             check_shape=check_shape,
         )
@@ -725,7 +726,7 @@ class Position(NGFFNode):
         shape: tuple[int, ...],
         dtype: DTypeLike,
         chunks: tuple[int, ...] | None = None,
-        shards: tuple[int, ...] | None = None,
+        shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
     ):
@@ -747,8 +748,9 @@ class Position(NGFFNode):
         chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
-        shards : tuple[int, ...], optional
-            Shard size, by default None.
+        shards_ratio : tuple[int, ...], optional
+            Sharding ratio for each dimension, by default None.
+            Each shard contains the product of the ratios number of chunks.
             No sharding will be used if not specified.
         transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
@@ -766,6 +768,15 @@ class Position(NGFFNode):
             chunks = self._default_chunks(shape, 3)
         if check_shape:
             self._check_shape(shape)
+        if shards_ratio:
+            if len(shards_ratio) != len(shape):
+                raise ValueError(
+                    f"Sharding ratio length {len(shards_ratio)} "
+                    f"does not match shape length {len(shape)}."
+                )
+            shards = tuple(c * s for c, s in zip(chunks, shards_ratio))
+        else:
+            shards = None
         img_arr = ImageArray.from_zarr_array(
             self._group.create_array(
                 name=name,
