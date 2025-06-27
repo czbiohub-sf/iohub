@@ -370,6 +370,13 @@ def test_create_zeros(ch_shape_dtype, arr_name, version):
             assert set(os.listdir(os.path.join(store_path, arr_name))) == {
                 "zarr.json",
             }
+            assert dataset[arr_name].metadata.dimension_names == (
+                "T",
+                "C",
+                "Z",
+                "Y",
+                "X",
+            )
         assert not dataset[arr_name][:].any()
         assert dataset[arr_name].shape == shape
         assert dataset[arr_name].dtype == dtype
@@ -630,7 +637,9 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
             assert dataset.metadata.multiscales[0].datasets[
                 0
             ].coordinate_transformations == [
-                TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0))
+                TransformationMeta(
+                    type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)
+                )
             ]
             dataset.set_transform(image=arr_name, transform=transform)
             assert (
@@ -776,9 +785,10 @@ def test_set_transform_fov(ch_shape_dtype, arr_name, version):
             version=version,
         ) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-            assert dataset.metadata.multiscales[
-                0
-            ].coordinate_transformations == None
+            assert (
+                dataset.metadata.multiscales[0].coordinate_transformations
+                == None
+            )
             dataset.set_transform(image="*", transform=transform)
             assert (
                 dataset.metadata.multiscales[0].coordinate_transformations

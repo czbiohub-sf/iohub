@@ -786,6 +786,11 @@ class Position(NGFFNode):
                 shards=shards,
                 overwrite=self._overwrite,
                 fill_value=0,
+                dimension_names=(
+                    [ax.name for ax in self.axes]
+                    if self._zarr_format == 3
+                    else None
+                ),
                 **self._create_compressor_options(),
             )
         )
