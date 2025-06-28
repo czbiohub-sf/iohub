@@ -325,6 +325,8 @@ class NGFFNode:
         if self.version == "0.4":
             self.zattrs.update(ome)
         elif self.version == "0.5":
+            if "version" not in ome:
+                ome["version"] = "0.5"
             self.zattrs["ome"] = ome
 
     def dump_meta(self):

@@ -1184,19 +1184,30 @@ def test_create_case_sensitive_well(tmp_path):
 
 
 @given(
-    row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
+    row=short_alpha_numeric,
+    col=short_alpha_numeric,
+    pos=short_alpha_numeric,
+    version=ngff_versions_st,
 )
-def test_create_position(row, col, pos):
+def test_create_position(row, col, pos, version):
     """Test `iohub.ngff.Plate.create_position()`"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "hcs.zarr")
+        store_path = Path(temp_dir) / "hcs.zarr"
         dataset = open_ome_zarr(
-            store_path, layout="hcs", mode="a", channel_names=["GFP"]
+            store_path,
+            layout="hcs",
+            mode="a",
+            channel_names=["GFP"],
+            version=version,
         )
         _ = dataset.create_position(row_name=row, col_name=col, pos_name=pos)
-        assert [c["name"] for c in dataset.zattrs["plate"]["columns"]] == [col]
-        assert [r["name"] for r in dataset.zattrs["plate"]["rows"]] == [row]
-        assert os.path.isdir(os.path.join(store_path, row, col, pos))
+        if version == "0.4":
+            ome = dataset.zgroup.attrs
+        elif version == "0.5":
+            ome = dataset.zgroup.attrs["ome"]
+        assert [c["name"] for c in ome["plate"]["columns"]] == [col]
+        assert [r["name"] for r in ome["plate"]["rows"]] == [row]
+        assert (store_path / row / col / pos).is_dir()
         assert dataset[row][col].metadata.images[0].path == pos
 
 
@@ -1271,6 +1282,7 @@ def test_read_empty_hcs_v05(empty_ome_zarr_hcs_v05):
     with open_ome_zarr(empty_zarr, layout="hcs", mode="r") as dataset:
         for row, col, fov in product(rows, cols, fovs):
             position: Position = dataset[f"{row}/{col}/{fov}"]
+            assert position.version == "0.5"
             for resolution in resolutions:
                 assert_array_equal(
                     position[resolution].numpy(),
