@@ -79,5 +79,3 @@ with open_ome_zarr(new_store_path / "A/1/0", mode="r") as dataset:
 # %%
 # Clean up
 tmp_dir.cleanup()
-
-# %%
