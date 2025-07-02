@@ -375,24 +375,13 @@ class ImageArray(zarr.Array):
     def tensorstore(self):
         import tensorstore as ts
 
-        metadata = {
-            "dtype": self.dtype.str,
-            "shape": self.shape,
-            "chunks": self.chunks,
-        }
         ts_spec = {
             "driver": "zarr",
-            "kvstore": {
-                "driver": "file",
-                "path": str((Path(self._store.path) / self.path).resolve()),
-            },
-            "metadata": metadata,
+            "kvstore": (Path(self.store.path) / self.name.strip("/")).as_uri(),
         }
-        try:
-            zarr_dataset = ts.open(ts_spec, open=True).result()
-        except ValueError as e:
-            print(f"Error opening Zarr store: {e}")
-            raise
+        zarr_dataset = ts.open(
+            ts_spec, read=True, write=not self.read_only
+        ).result()
         return zarr_dataset
 
 
