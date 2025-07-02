@@ -1,8 +1,28 @@
+import os
+import csv
 import shutil
 from pathlib import Path
 
 import fsspec
+import pytest
 from wget import download
+
+
+def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
+    ghfs = fsspec.filesystem(
+        "github",
+        org="micro-manager",
+        repo="NDTiffStorage",
+        username=os.environ.get("GITHUB_ACTOR"),
+        token=os.environ.get("GITHUB_TOKEN"),
+    )
+    v3_lp = test_data / "ndtiff_v3_labeled_positions"
+    Path.mkdir(v3_lp)
+    ghfs.get(
+        ghfs.ls("test_data/v3/labeled_positions_1"),
+        str(v3_lp),
+        recursive=True,
+    )
 
 
 def download_data():
@@ -28,16 +48,7 @@ def download_data():
             output = test_data / Path(url).name
             download(url, out=str(output))
             shutil.unpack_archive(output, extract_dir=test_data)
-        ghfs = fsspec.filesystem(
-            "github", org="micro-manager", repo="NDTiffStorage"
-        )
-        v3_lp = test_data / "ndtiff_v3_labeled_positions"
-        Path.mkdir(v3_lp)
-        ghfs.get(
-            ghfs.ls("test_data/v3/labeled_positions_1"),
-            str(v3_lp),
-            recursive=True,
-        )
+        _download_ndtiff_v3_labeled_positions(test_data)
     return test_data
 
 
@@ -100,3 +111,27 @@ ndtiff_v2_ptcz = (
 
 
 ndtiff_v3_labeled_positions = test_datasets / "ndtiff_v3_labeled_positions"
+
+
+@pytest.fixture
+def csv_data_file_1(tmpdir):
+    test_csv_1 = tmpdir / "well_names_1.csv"
+    csv_data_1 = [
+        ["B/03", "D/4"],
+    ]
+    with open(test_csv_1, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data_1)
+    return test_csv_1
+
+
+@pytest.fixture
+def csv_data_file_2(tmpdir):
+    test_csv_2 = tmpdir / "well_names_2.csv"
+    csv_data_2 = [
+        ["D/4", "B/03"],
+    ]
+    with open(test_csv_2, mode="w", newline="") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerows(csv_data_2)
+    return test_csv_2

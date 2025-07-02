@@ -9,6 +9,7 @@ import logging
 import math
 import os
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Literal, Sequence, Type
 
@@ -38,6 +39,7 @@ from iohub.ngff.models import (
     TransformationMeta,
     WellGroupMeta,
     WellIndexMeta,
+    WindowDict,
 )
 
 if TYPE_CHECKING:
@@ -87,6 +89,11 @@ def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
     return tuple(int(math.ceil(v / factor)) for v in values)
 
 
+def _case_insensitive_local_fs() -> bool:
+    """Check if the local filesystem is case-insensitive."""
+    return Path(__file__.lower()).exists() and Path(__file__.upper()).exists()
+
+
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
@@ -121,6 +128,9 @@ class NGFFNode:
             self._parse_meta()
         if not hasattr(self, "axes"):
             self.axes = self._DEFAULT_AXES
+        # TODO: properly check the underlying storage type
+        # This works for now as only the local filesystem is supported
+        self._case_insensitive_fs = _case_insensitive_local_fs()
 
     @property
     def zgroup(self):
@@ -194,7 +204,18 @@ class NGFFNode:
 
     def __contains__(self, key):
         key = normalize_storage_path(key)
-        return key in self._member_names
+        if not self._case_insensitive_fs:
+            return key in self._member_names
+        for name in self._member_names:
+            if key.lower() != name.lower():
+                continue
+            if key != name:
+                _logger.warning(
+                    f"Key '{key}' matched member '{name}'. "
+                    "This may not work on case-sensitive filesystems."
+                )
+            return True
+        return False
 
     def __iter__(self):
         yield from self._member_names
@@ -340,6 +361,13 @@ class ImageArray(zarr.Array):
         """Return the whole image as an in-RAM NumPy array.
         `self.numpy()` is equivalent to `self[:]`."""
         return self[:]
+
+    def dask_array(self):
+        """Return as a dask array"""
+        import dask.array as da
+
+        # Note: Designed to work with zarr DirectoryStore
+        return da.from_zarr(self.store.path, component=self.path)
 
     def downscale(self):
         raise NotImplementedError
@@ -550,18 +578,31 @@ class Position(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
 
+    def _set_meta(
+        self, multiscales: MultiScaleMeta | None, omero: OMEROMeta | None
+    ):
+        self.metadata = ImagesMeta(multiscales=multiscales, omero=omero)
+        self.axes = self.metadata.multiscales[0].axes
+        if omero is not None:
+            self._channel_names = [
+                c.label for c in self.metadata.omero.channels
+            ]
+        else:
+            _logger.warning(
+                "OMERO metadata not found. "
+                "Using channel indices as channel names."
+            )
+            example_image: ImageArray = self[
+                self.metadata.multiscales[0].datasets[0].path
+            ].channels
+            self._channel_names = list(range(example_image.channels))
+
     def _parse_meta(self):
         multiscales = self.zattrs.get("multiscales")
         omero = self.zattrs.get("omero")
-        if multiscales and omero:
+        if multiscales:
             try:
-                self.metadata = ImagesMeta(
-                    multiscales=multiscales, omero=omero
-                )
-                self._channel_names = [
-                    c.label for c in self.metadata.omero.channels
-                ]
-                self.axes = self.metadata.multiscales[0].axes
+                self._set_meta(multiscales=multiscales, omero=omero)
             except ValidationError:
                 self._warn_invalid_meta()
         else:
@@ -983,19 +1024,133 @@ class Position(NGFFNode):
         Helper function for scale transform metadata of
         highest resolution scale.
         """
-        scale = [1] * self.data.ndim
-        transforms = (
-            self.metadata.multiscales[0].datasets[0].coordinate_transformations
+        return self.get_effective_scale(
+            self.metadata.multiscales[0].datasets[0].path
         )
-        for trans in transforms:
-            if trans.type == "scale":
-                if len(trans.scale) != len(scale):
-                    raise RuntimeError(
-                        f"Length of scale transformation {len(trans.scale)} "
-                        f"does not match data dimension {len(scale)}."
+
+    @property
+    def axis_names(self) -> list[str]:
+        """
+        Helper function for axis names of the highest resolution scale.
+
+        Returns lowercase axis names.
+        """
+        return [
+            axis.name.lower() for axis in self.metadata.multiscales[0].axes
+        ]
+
+    def get_axis_index(self, axis_name: str) -> int:
+        """
+        Get the index of a given axis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the axis. Case insensitive.
+
+        Returns
+        -------
+        int
+            Index of the axis.
+        """
+        return self.axis_names.index(axis_name.lower())
+
+    def _get_all_transforms(
+        self, image: str | Literal["*"]
+    ) -> list[TransformationMeta]:
+        """Get all transforms metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[TransformationMeta]
+            All transforms applicable to this image or FOV.
+        """
+        transforms: list[TransformationMeta] = (
+            [
+                t
+                for t in self.metadata.multiscales[
+                    0
+                ].coordinate_transformations
+            ]
+            if self.metadata.multiscales[0].coordinate_transformations
+            is not None
+            else []
+        )
+        if image != "*" and image in self:
+            for i, dataset_meta in enumerate(
+                self.metadata.multiscales[0].datasets
+            ):
+                if dataset_meta.path == image:
+                    transforms.extend(
+                        self.metadata.multiscales[0]
+                        .datasets[i]
+                        .coordinate_transformations
                     )
-                scale = [s1 * s2 for s1, s2 in zip(scale, trans.scale)]
-        return scale
+        elif image != "*":
+            raise ValueError(f"Key {image} not recognized.")
+        return transforms
+
+    def get_effective_scale(
+        self,
+        image: str | Literal["*"],
+    ) -> list[float]:
+        """Get the effective coordinate scale metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[float]
+            A list of floats representing the total scale
+            for the image or FOV for each axis.
+        """
+        transforms = self._get_all_transforms(image)
+
+        full_scale = np.ones(len(self.axes), dtype=float)
+        for transform in transforms:
+            if transform.type == "scale":
+                full_scale *= np.array(transform.scale)
+
+        return [float(x) for x in full_scale]
+
+    def get_effective_translation(
+        self,
+        image: str | Literal["*"],
+    ) -> TransformationMeta:
+        """Get the effective coordinate translation metadata
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[float]
+            A list of floats representing the total translation
+            for the image or FOV for each axis.
+        """
+        transforms = self._get_all_transforms(image)
+        full_translation = np.zeros(len(self.axes), dtype=float)
+        for transform in transforms:
+            if transform.type == "translation":
+                full_translation += np.array(transform.translation)
+
+        return [float(x) for x in full_translation]
 
     def set_transform(
         self,
@@ -1026,6 +1181,87 @@ class Position(NGFFNode):
                     )
         else:
             raise ValueError(f"Key {image} not recognized.")
+        self.dump_meta()
+
+    def set_scale(
+        self, image: str | Literal["*"], axis_name: str, new_scale: float
+    ):
+        """Set the scale for a named axis.
+        Either one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal['*']
+            Name of one image array (e.g. "0") to transform,
+            or "*" for the whole FOV
+        axis_name : str
+            Name of the axis to set.
+        new_scale : float
+            Value of the new scale.
+        """
+        if new_scale <= 0:
+            raise ValueError(
+                f"New scale {axis_name}: {new_scale} is not positive!"
+            )
+        if image not in self and image != "*":
+            raise KeyError(f"Image {image} not found.")
+        axis_index = self.get_axis_index(axis_name)
+        # Update scale while preserving existing transforms
+        if image == "*":
+            transforms = (
+                self.metadata.multiscales[0].coordinate_transformations or []
+            )
+        else:
+            for dataset_meta in self.metadata.multiscales[0].datasets:
+                if dataset_meta.path == image:
+                    transforms = dataset_meta.coordinate_transformations
+                    break
+        # Append old scale to metadata
+        iohub_dict = {}
+        if "iohub" in self.zattrs:
+            iohub_dict = self.zattrs["iohub"]
+        if "previous_transforms" not in iohub_dict:
+            iohub_dict["previous_transforms"] = []
+        iohub_dict["previous_transforms"].append(
+            {
+                "image": image,
+                "transforms": [
+                    t.model_dump(**TO_DICT_SETTINGS) for t in transforms
+                ],
+                "modified": datetime.now().isoformat(),
+            }
+        )
+        self.zattrs["iohub"] = iohub_dict
+        # Replace default identity transform with scale
+        if transforms == [TransformationMeta(type="identity")]:
+            transforms = [TransformationMeta(type="scale", scale=[1] * 5)]
+        # Add scale transform if not present
+        if not any([transform.type == "scale" for transform in transforms]):
+            transforms.append(TransformationMeta(type="scale", scale=[1] * 5))
+        new_transforms = []
+        for transform in transforms:
+            if transform.type == "scale":
+                old_scale = transform.scale[axis_index]
+                transform.scale[axis_index] = new_scale
+            new_transforms.append(transform)
+        _logger.info(
+            f"Updating scale for axis {axis_name} "
+            f"from {old_scale} to {new_scale}."
+        )
+        self.set_transform(image, new_transforms)
+
+    def set_contrast_limits(self, channel_name: str, window: WindowDict):
+        """Set the contrast limits for a channel.
+
+        Parameters
+        ----------
+        channel_name : str
+            Name of the channel to set
+        window : WindowDict
+            Contrast limit (min, max, start, end)
+        """
+        channel_index = self.get_channel_index(channel_name)
+        self.metadata.omero.channels[channel_index].window = window
         self.dump_meta()
 
 
@@ -1332,7 +1568,7 @@ class Plate(NGFFNode):
                     f"Duplicate name '{name}' after path normalization."
                 )
             row, col, fov = name.split("/")
-            _ = plate.create_position(row, col, fov)
+            dst_pos = plate.create_position(row, col, fov)
             # overwrite position group
             _ = zarr.copy_store(
                 src_pos.zgroup.store,
@@ -1341,6 +1577,9 @@ class Plate(NGFFNode):
                 dest_path=name,
                 if_exists="replace",
             )
+            dst_pos._parse_meta()
+            dst_pos.metadata.omero.name = fov
+            dst_pos.dump_meta()
         return plate
 
     def __init__(
@@ -1481,6 +1720,11 @@ class Plate(NGFFNode):
         # normalize input
         row_name = normalize_storage_path(row_name)
         col_name = normalize_storage_path(col_name)
+        if row_name in self:
+            if col_name in self[row_name]:
+                raise FileExistsError(
+                    f"Well '{row_name}/{col_name}' already exists."
+                )
         row_meta = PlateAxisMeta(name=row_name)
         col_meta = PlateAxisMeta(name=col_name)
         row_index = self._auto_idx(row_name, row_index, "row")
@@ -1594,22 +1838,78 @@ class Plate(NGFFNode):
             for _, position in well.positions():
                 yield position.zgroup.path, position
 
+    def rename_well(
+        self,
+        old: str,
+        new: str,
+    ):
+        """Rename a well.
+
+        Parameters
+        ----------
+        old : str
+            Old name of well, e.g. "A/1"
+        new : str
+            New name of well, e.g. "B/2"
+        """
+
+        # normalize inputs
+        old = normalize_storage_path(old)
+        new = normalize_storage_path(new)
+        old_row, old_column = old.split("/")
+        new_row, new_column = new.split("/")
+        new_row_meta = PlateAxisMeta(name=new_row)
+        new_col_meta = PlateAxisMeta(name=new_column)
+
+        # raises ValueError if old well does not exist
+        # or if new well already exists
+        self.zgroup.move(old, new)
+
+        # update well metadata
+        old_well_index = [
+            well_name.path for well_name in self.metadata.wells
+        ].index(old)
+        self.metadata.wells[old_well_index].path = new
+        new_well_names = [well.path for well in self.metadata.wells]
+
+        # update row/col metadata
+        # check for new row/col
+        if new_row not in [row.name for row in self.metadata.rows]:
+            self.metadata.rows.append(new_row_meta)
+        if new_column not in [col.name for col in self.metadata.columns]:
+            self.metadata.columns.append(new_col_meta)
+
+        # check for empty row/col
+        if old_row not in [well.split("/")[0] for well in new_well_names]:
+            # delete empty row from zarr
+            del self.zgroup[old_row]
+            self.metadata.rows = [
+                row for row in self.metadata.rows if row.name != old_row
+            ]
+        if old_column not in [well.split("/")[1] for well in new_well_names]:
+            self.metadata.columns = [
+                col for col in self.metadata.columns if col.name != old_column
+            ]
+
+        self.dump_meta()
+
 
 def open_ome_zarr(
-    store_path: StrOrBytesPath,
+    store_path: StrOrBytesPath | Path,
     layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
     version: Literal["0.1", "0.4"] = "0.4",
     synchronizer: zarr.ThreadSynchronizer | zarr.ProcessSynchronizer = None,
+    disable_path_checking: bool = False,
     **kwargs,
 ) -> Plate | Position | TiledPosition:
     """Convenience method to open OME-Zarr stores.
 
     Parameters
     ----------
-    store_path : StrOrBytesPath
+    store_path : StrOrBytesPath | Path
         File path to the Zarr store to open
     layout: Literal["auto", "fov", "hcs", "tiled"], optional
         NGFF store layout:
@@ -1647,6 +1947,14 @@ def open_ome_zarr(
         OME-NGFF version, by default "0.4"
     synchronizer : object, optional
         Zarr thread or process synchronizer, by default None
+    disable_path_checking : bool, optional
+        Whether to allow overwriting a path that does not contain '.zarr',
+        by default False
+
+        .. warning::
+            This can lead to severe data loss
+            if the input path is not checked carefully.
+
     kwargs : dict, optional
         Keyword arguments to underlying NGFF node constructor,
         by default None
@@ -1660,16 +1968,26 @@ def open_ome_zarr(
         :py:class:`iohub.ngff.Plate`,
         or :py:class:`iohub.ngff.TiledPosition`)
     """
+    store_path = Path(store_path)
     if mode == "a":
-        mode = ("w-", "r+")[int(os.path.exists(store_path))]
+        mode = ("w-", "r+")[int(store_path.exists())]
     parse_meta = False
     if mode in ("r", "r+"):
         parse_meta = True
     elif mode == "w-":
-        if os.path.exists(store_path):
+        if store_path.exists():
             raise FileExistsError(store_path)
     elif mode == "w":
-        if os.path.exists(store_path):
+        if store_path.exists():
+            if (
+                ".zarr" not in str(store_path.resolve())
+                and not disable_path_checking
+            ):
+                raise ValueError(
+                    "Cannot overwrite a path that does not contain '.zarr', "
+                    "use `disable_path_checking=True` if you are sure that "
+                    f"{store_path} should be overwritten."
+                )
             _logger.warning(f"Overwriting data at {store_path}")
     else:
         raise ValueError(f"Invalid persistence mode '{mode}'.")

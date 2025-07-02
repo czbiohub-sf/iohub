@@ -10,6 +10,7 @@ from ndtiff import Dataset
 from tifffile import TiffFile
 
 from iohub.convert import TIFFConverter
+from iohub.mm_fov import MicroManagerFOV
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
 from tests.conftest import (
@@ -35,7 +36,7 @@ def pytest_generate_tests(metafunc):
         )
 
 
-def _check_scale_transform(position: Position) -> None:
+def _check_scale_transform(fov: MicroManagerFOV, position: Position) -> None:
     """Check scale transformation of the highest resolution level."""
     tf = (
         position.metadata.multiscales[0]
@@ -43,7 +44,9 @@ def _check_scale_transform(position: Position) -> None:
         .coordinate_transformations[0]
     )
     assert tf.type == "scale"
-    assert tf.scale[:2] == [1.0, 1.0]
+    assert tf.scale[0] == fov.t_scale
+    assert tf.scale[1] == 1.0
+    assert tf.scale[2:] == list(fov.zyx_scale)
 
 
 def _check_chunks(
@@ -60,6 +63,40 @@ def _check_chunks(
             assert img.chunks == chunks
         case _:
             assert False
+
+
+def _check_result(
+    output: Path,
+    expected_sum: float,
+    converter: TIFFConverter,
+    grid_layout: bool,
+    chunks: Literal["XY", "XYZ"] | tuple[int] | None,
+) -> None:
+    with open_ome_zarr(output, mode="r") as result:
+        intensity = 0
+        if grid_layout and converter.p > 1:
+            assert len(result) < converter.p
+        for (_, example_fov), (pos_name, pos) in zip(
+            converter.reader, result.positions(), strict=True
+        ):
+            _check_scale_transform(example_fov, pos)
+            _check_chunks(pos, chunks)
+            intensity += pos["0"][:].sum()
+            with open(
+                output / pos_name / "0" / "image_plane_metadata.json"
+            ) as f:
+                metadata = json.load(f)
+                key = "0/0/0"
+                assert key in metadata
+                assert "ElapsedTime-ms" in metadata[key]
+        assert intensity == expected_sum
+
+
+def test_converter_inputs(mm2gamma_ome_tiff, tmpdir):
+    # Test that output directory needs to end with ".zarr"
+    output = tmpdir / "converted"
+    with pytest.raises(ValueError):
+        _ = TIFFConverter(mm2gamma_ome_tiff, output)
 
 
 def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
@@ -82,20 +119,13 @@ def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
         "Summary",
     ]
     converter()
-    with open_ome_zarr(output, mode="r") as result:
-        intensity = 0
-        if grid_layout and converter.p > 1:
-            assert len(result) < converter.p
-        for pos_name, pos in result.positions():
-            _check_scale_transform(pos)
-            _check_chunks(pos, chunks)
-            intensity += pos["0"][:].sum()
-            assert os.path.isfile(
-                os.path.join(
-                    output, pos_name, "0", "image_plane_metadata.json"
-                )
-            )
-        assert intensity == raw_array.sum()
+    _check_result(
+        output=output,
+        expected_sum=raw_array.sum(),
+        converter=converter,
+        grid_layout=grid_layout,
+        chunks=chunks,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -103,6 +133,7 @@ def example_ome_tiff() -> Path:
     for d in mm2gamma_ome_tiffs:
         if d.name == "mm2.0-20201209_4p_2t_5z_1c_512k_1":
             return d
+    raise FileNotFoundError("Corrupted test data directory")
 
 
 @pytest.fixture(scope="function")
@@ -184,25 +215,13 @@ def test_converter_ndtiff(ndtiff_datasets: Path, grid_layout, chunks, tmpdir):
         "Summary",
     ]
     converter()
-    with open_ome_zarr(output, mode="r") as result:
-        intensity = 0
-        for pos_name, pos in result.positions():
-            _check_scale_transform(pos)
-            _check_chunks(pos, chunks)
-            intensity += pos["0"][:].sum()
-            assert os.path.isfile(
-                os.path.join(
-                    output, pos_name, "0", "image_plane_metadata.json"
-                )
-            )
-    assert intensity == raw_array.sum()
-    with open(
-        os.path.join(output, pos_name, "0", "image_plane_metadata.json")
-    ) as f:
-        metadata = json.load(f)
-        key = "0/0/0"
-        assert key in metadata
-        assert "ElapsedTime-ms" in metadata[key]
+    _check_result(
+        output=output,
+        expected_sum=raw_array.sum(),
+        converter=converter,
+        grid_layout=grid_layout,
+        chunks=chunks,
+    )
 
 
 def test_converter_ndtiff_v3_position_labels(tmpdir):

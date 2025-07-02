@@ -65,10 +65,6 @@ class MMOmeTiffFOV(MicroManagerFOV):
     def dtype(self) -> np.dtype:
         return self._xdata.dtype
 
-    @property
-    def t_scale(self) -> float:
-        return self.parent._t_scale
-
     def __getitem__(self, key: int | slice | tuple[int | slice]) -> ArrayLike:
         return self._xdata[key]
 
@@ -219,7 +215,7 @@ class MMStack(MicroManagerFOVMapping):
         # acquisition script on the Dragonfly miroscope
         elif (
             mm_version == "2.0.1 20220920"
-            and self._mm_meta["Summary"]["Prefix"] == "raw_data"
+            and self._mm_meta["Summary"].get("Prefix", None) == "raw_data"
         ):
             files = natsorted(self.root.glob("*.ome.tif"))
             self.positions = len(files)  # not all positions are saved
@@ -238,7 +234,7 @@ class MMStack(MicroManagerFOVMapping):
                 self.channel_names.append(ch)
 
         else:
-            if self._mm_meta["Summary"]["Positions"] > 1:
+            if self._mm_meta["Summary"].get("Positions", 1) > 1:
                 self._stage_positions = []
 
                 for p in range(self._mm_meta["Summary"]["Positions"]):
@@ -387,3 +383,7 @@ class MMStack(MicroManagerFOVMapping):
             self._xy_pixel_size,
             self._xy_pixel_size,
         )
+
+    @property
+    def t_scale(self) -> float:
+        return self._t_scale

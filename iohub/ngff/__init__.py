@@ -1,4 +1,21 @@
 from iohub.ngff.models import TransformationMeta
-from iohub.ngff.nodes import Plate, Position, open_ome_zarr
+from iohub.ngff.nodes import (
+    ImageArray,
+    NGFFNode,
+    Plate,
+    Position,
+    TiledImageArray,
+    TiledPosition,
+    open_ome_zarr,
+)
 
-__all__ = ["open_ome_zarr", "Plate", "Position", "TransformationMeta"]
+__all__ = [
+    "ImageArray",
+    "NGFFNode",
+    "Plate",
+    "Position",
+    "TiledImageArray",
+    "TiledPosition",
+    "TransformationMeta",
+    "open_ome_zarr",
+]

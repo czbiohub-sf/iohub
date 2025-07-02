@@ -1,5 +1,6 @@
 import json
 import logging
+from importlib.metadata import version
 from pathlib import Path
 from typing import Literal
 
@@ -9,7 +10,6 @@ from tqdm import tqdm
 from tqdm.contrib.itertools import product
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from iohub._version import version as iohub_version
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset, read_images
@@ -107,7 +107,7 @@ class TIFFConverter:
     ):
         _logger.debug("Checking output.")
         output_dir = Path(output_dir)
-        if "zarr" in output_dir.suffixes:
+        if ".zarr" not in output_dir.suffixes:
             raise ValueError("Please specify .zarr at the end of your output")
         self.output_dir = output_dir
         _logger.info("Initializing data.")
@@ -140,7 +140,7 @@ class TIFFConverter:
             f"dimensions (P, T, C, Z, Y, X): {self.dim}"
         )
         self.metadata = dict()
-        self.metadata["iohub_version"] = iohub_version
+        self.metadata["iohub_version"] = version("iohub")
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
             if hcs_plate:
@@ -200,10 +200,10 @@ class TIFFConverter:
         if not self.reader.stage_positions:
             raise ValueError("Stage positions not available.")
         for idx, pos in enumerate(self.reader.stage_positions):
-            stage_pos = (
-                pos.get("XYStage") or pos.get("XY") or pos.get("XY Stage")
-            )
-            if stage_pos is None:
+            try:
+                xy_stage = pos["DefaultXYStage"]
+                stage_pos = pos[xy_stage]
+            except KeyError:
                 raise ValueError(
                     f"Stage position is not available for position {idx}"
                 )
@@ -263,9 +263,11 @@ class TIFFConverter:
         return tuple(chunks)
 
     def _scale_voxels(self):
+        example_fov = next(iter(self.reader))[1]
         return [
             TransformationMeta(
-                type="scale", scale=[1.0, 1.0, *self.reader.zyx_scale]
+                type="scale",
+                scale=[example_fov.t_scale, 1.0, *example_fov.zyx_scale],
             )
         ]
 

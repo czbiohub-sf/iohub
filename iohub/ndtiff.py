@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
@@ -34,10 +35,6 @@ class NDTiffFOV(MicroManagerFOV):
     @property
     def dtype(self) -> np.dtype:
         return self._xdata.dtype
-
-    @property
-    def t_scale(self) -> float:
-        return 1.0
 
     def __getitem__(
         self, key: int | slice | tuple[int | slice, ...]
@@ -100,7 +97,9 @@ class NDTiffDataset(MicroManagerFOVMapping):
             )
         self.stage_positions = self._mm_meta["Summary"]["StagePositions"]
         z_step_size = float(self._mm_meta["Summary"]["z-step_um"] or 1.0)
-        xy_pixel_size = float(self._mm_meta["Summary"]["PixelSize_um"] or 1.0)
+        xy_pixel_size = float(
+            self._mm_meta["Summary"].get("PixelSize_um") or 1.0
+        )
         self._zyx_scale = (z_step_size, xy_pixel_size, xy_pixel_size)
         self._gather_xdata()
 
@@ -131,6 +130,14 @@ class NDTiffDataset(MicroManagerFOVMapping):
     def zyx_scale(self) -> tuple[float, float, float]:
         return self._zyx_scale
 
+    @property
+    def t_scale(self) -> float:
+        _logger.warning(
+            "NDTiff does not store the planned time interval. "
+            "Returning 1.0 as a placeholder."
+        )
+        return 1.0
+
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
         pm_metadata["MicroManagerVersion"] = "pycromanager"
@@ -140,19 +147,20 @@ class NDTiffDataset(MicroManagerFOVMapping):
         c_idx = self._ndtiff_channel_names[0]
         img_metadata = self.get_image_metadata(p_idx, 0, c_idx, 0)
 
-        pm_metadata["z-step_um"] = None
-        if "ZPosition_um_Intended" in img_metadata.keys():
+        try:
+            z0 = self.get_image_metadata(p_idx, 0, c_idx, 0)[
+                "ZPosition_um_Intended"
+            ]
+            z1 = self.get_image_metadata(p_idx, 0, c_idx, 1)[
+                "ZPosition_um_Intended"
+            ]
             pm_metadata["z-step_um"] = np.around(
-                abs(
-                    self.get_image_metadata(p_idx, 0, c_idx, 1)[
-                        "ZPosition_um_Intended"
-                    ]
-                    - self.get_image_metadata(p_idx, 0, c_idx, 0)[
-                        "ZPosition_um_Intended"
-                    ]
-                ),
-                decimals=3,
+                abs(z1 - z0), decimals=3
             ).astype(float)
+        # Will raise KeyError if dataset does not have z slices
+        # Will raise ValueError if dataset has only one z slice
+        except (KeyError, ValueError):
+            pm_metadata["z-step_um"] = None
 
         pm_metadata["StagePositions"] = []
         if "position" in self._axes:
@@ -167,7 +175,9 @@ class NDTiffDataset(MicroManagerFOVMapping):
                         "YPosition_um_Intended",
                     ]
                 ):
-                    position_metadata[img_metadata["Core-XYStage"]] = (
+                    xy_stage = img_metadata["Core-XYStage"]
+                    position_metadata["DefaultXYStage"] = xy_stage
+                    position_metadata[xy_stage] = (
                         img_metadata["XPosition_um_Intended"],
                         img_metadata["YPosition_um_Intended"],
                     )
@@ -331,7 +341,14 @@ class NDTiffDataset(MicroManagerFOVMapping):
                 p = int(p)
         p, t, c, z = self._check_coordinates(p, t, c, z)
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
-            metadata = self.dataset.read_metadata(
-                position=p, time=t, channel=c, z=z
-            )
+            try:
+                metadata = self.dataset.read_metadata(
+                    position=p, time=t, channel=c, z=z
+                )
+            except (JSONDecodeError, UnicodeDecodeError):
+                # acquisition crashed before metadata was written
+                _logger.warning(
+                    f"Unable to decode metadata for position {p}, "
+                    f"time {t}, channel {c}, z {z}"
+                )
         return metadata
