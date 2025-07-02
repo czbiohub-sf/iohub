@@ -373,6 +373,14 @@ class ImageArray(zarr.Array):
         raise NotImplementedError
 
     def tensorstore(self):
+        """Open the zarr array as a TensorStore object.
+        Needs the optional dependency ``tensorstore``.
+
+        Returns
+        -------
+        TensorStore
+            Async handle to the Zarr array.
+        """
         import tensorstore as ts
 
         ts_spec = {
