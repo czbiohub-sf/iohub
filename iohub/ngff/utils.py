@@ -15,7 +15,7 @@ from iohub.ngff.nodes import TransformationMeta
 
 def create_empty_plate(
     store_path: Path,
-    position_keys: list[tuple[str]],
+    position_keys: list[tuple[str, str, str]],
     channel_names: list[str],
     shape: tuple[int, ...],
     chunks: tuple[int, ...] | None = None,
@@ -32,8 +32,8 @@ def create_empty_plate(
     ----------
     store_path : Path
         Path to the HCS plate.
-    position_keys : list[tuple[str]]
-        Position keys to append if not present in the plate,
+    position_keys : list[tuple[str, str, str]]
+        Position keys (row, column, fov) to append if not present in the plate,
         e.g., [("A", "1", "0"), ("A", "1", "1")].
     channel_names : list[str]
         List of channel names. If the store exists,
