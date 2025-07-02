@@ -384,7 +384,24 @@ class ImageArray(zarr.Array):
         raise NotImplementedError
 
     def tensorstore(self):
-        raise NotImplementedError
+        """Open the zarr array as a TensorStore object.
+        Needs the optional dependency ``tensorstore``.
+
+        Returns
+        -------
+        TensorStore
+            Handle to the Zarr array.
+        """
+        import tensorstore as ts
+
+        ts_spec = {
+            "driver": "zarr",
+            "kvstore": (Path(self.store.path) / self.name.strip("/")).as_uri(),
+        }
+        zarr_dataset = ts.open(
+            ts_spec, read=True, write=not self.read_only
+        ).result()
+        return zarr_dataset
 
 
 class TiledImageArray(ImageArray):
