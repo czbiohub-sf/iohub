@@ -178,6 +178,7 @@ def empty_ome_zarr_hcs_v05(tmpdir) -> tuple[Path, tuple[tuple[str, ...], ...]]:
 
 @pytest.fixture()
 def aqz_ome_zarr_05(tmpdir):
+    pytest.importorskip("acquire_zarr")
     import acquire_zarr as aqz
 
     store_path = tmpdir / "ome_zarr_v0.5.zarr"
