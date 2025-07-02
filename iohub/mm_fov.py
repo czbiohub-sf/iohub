@@ -41,6 +41,10 @@ class MicroManagerFOV(BaseFOV):
         return self.parent.zyx_scale
 
     @property
+    def t_scale(self) -> float:
+        return self.parent.t_scale
+
+    @property
     def channel_names(self) -> list[str]:
         return self.parent.channel_names
 
@@ -194,4 +198,9 @@ class MicroManagerFOVMapping(BaseFOVMapping):
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
         """ZXY pixel size in micrometers."""
+        raise NotImplementedError
+
+    @property
+    def t_scale(self) -> float:
+        """Time scale in seconds."""
         raise NotImplementedError
