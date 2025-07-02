@@ -468,22 +468,25 @@ def test_position_data(channels_and_random_5d, arr_name, version):
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
+    version=ngff_versions_st,
 )
 @settings(
     max_examples=16,
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name):
+def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.data` to tensorstore"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+    with _temp_ome_zarr(
+        random_5d, channel_names, arr_name, version=version
+    ) as dataset:
         tstore = dataset[arr_name].tensorstore()
         assert_array_equal(tstore, random_5d)
         zeros = np.zeros_like(random_5d)
         tstore[...].write(zeros).result()
         with open_ome_zarr(
-            dataset.zgroup.store.path, mode="r"
+            dataset.zgroup.store.root, mode="r"
         ) as read_only_dataset:
             assert_array_equal(read_only_dataset[arr_name].numpy(), zeros)
             read_only_tstore = read_only_dataset[arr_name].tensorstore()

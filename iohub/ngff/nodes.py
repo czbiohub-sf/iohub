@@ -395,8 +395,8 @@ class ImageArray(zarr.Array):
         import tensorstore as ts
 
         ts_spec = {
-            "driver": "zarr",
-            "kvstore": (Path(self.store.path) / self.name.strip("/")).as_uri(),
+            "driver": "zarr2" if self.metadata.zarr_format == 2 else "zarr3",
+            "kvstore": (Path(self.store.root) / self.path.strip("/")).as_uri(),
         }
         zarr_dataset = ts.open(
             ts_spec, read=True, write=not self.read_only
