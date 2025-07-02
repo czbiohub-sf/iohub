@@ -379,7 +379,7 @@ class ImageArray(zarr.Array):
         Returns
         -------
         TensorStore
-            Async handle to the Zarr array.
+            Handle to the Zarr array.
         """
         import tensorstore as ts
 
