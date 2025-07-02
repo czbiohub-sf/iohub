@@ -1321,6 +1321,7 @@ def test_read_empty_hcs_v05(empty_ome_zarr_hcs_v05):
 
 def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
     """Test that `iohub.ngff.open_ome_zarr()` can read OME-Zarr 0.5."""
+    pytest.importorskip("acquire_zarr")
     with open_ome_zarr(
         aqz_ome_zarr_05, layout="fov", mode="r", version="0.5"
     ) as dataset:
