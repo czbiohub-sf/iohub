@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
+import numpy as np
 import pytest
 import zarr
 from hypothesis import HealthCheck, assume, given, settings
@@ -377,16 +378,20 @@ def test_position_data(channels_and_random_5d, arr_name):
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name):
-    """Test `iohub.ngff.Position.data` to tensortore"""
-    pytest.importorskip("tensorstore")
+    """Test `iohub.ngff.Position.data` to tensorstore"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(random_5d, channel_names, "0") as dataset:
-        assert_array_almost_equal(dataset.data.numpy(), random_5d)
-    with pytest.raises(KeyError):
-        with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
-            t = dataset.data.tensorstore()
-            t.read().result()
-            del t
+    with _temp_ome_zarr(random_5d, channel_names, arr_name) as dataset:
+        tstore = dataset[arr_name].tensorstore()
+        assert_array_equal(tstore, random_5d)
+        zeros = np.zeros_like(random_5d)
+        tstore[...].write(zeros).result()
+        with open_ome_zarr(
+            dataset.zgroup.store.path, mode="r"
+        ) as read_only_dataset:
+            assert_array_equal(read_only_dataset[arr_name].numpy(), zeros)
+            read_only_tstore = read_only_dataset[arr_name].tensorstore()
+            with pytest.raises(ValueError):
+                read_only_tstore[0] = 1
 
 
 @given(
