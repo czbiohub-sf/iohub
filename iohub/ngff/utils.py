@@ -20,7 +20,7 @@ def create_empty_plate(
     shape: tuple[int, ...],
     chunks: tuple[int, ...] | None = None,
     shards_ratio: tuple[int, ...] | None = None,
-    version: Literal["0.4", "0.5"] | None = None,
+    version: Literal["0.4", "0.5"] = "0.4",
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     max_chunk_size_bytes: float = 500e6,
@@ -52,7 +52,7 @@ def create_empty_plate(
         Defaults to None.
     version : Literal["0.4", "0.5"], optional
         OME-Zarr version to use for the plate.
-        Defaults to "0.5".
+        Defaults to "0.4".
     scale : tuple[float, ...], optional
         TCZYX scale of the plate. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
