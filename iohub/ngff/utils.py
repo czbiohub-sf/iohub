@@ -3,7 +3,7 @@ import itertools
 import multiprocessing as mp
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Union, Literal
+from typing import Any, Callable, Literal, Union
 
 import click
 import numpy as np
