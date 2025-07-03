@@ -3,7 +3,7 @@ import itertools
 import multiprocessing as mp
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Union
+from typing import Any, Callable, Union, Literal
 
 import click
 import numpy as np
@@ -19,6 +19,8 @@ def create_empty_plate(
     channel_names: list[str],
     shape: tuple[int, ...],
     chunks: tuple[int, ...] | None = None,
+    shards_ratio: tuple[int, ...] | None = None,
+    version: Literal["0.4", "0.5"] | None = None,
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     max_chunk_size_bytes: float = 500e6,
@@ -44,6 +46,13 @@ def create_empty_plate(
         TCZYX chunk size of the plate. If None, the chunk size is calculated
         based on the shape to be less than max_chunk_size_bytes.
         Defaults to None.
+    shards_ratio : tuple[int, ...], optional
+        TCZYX shards ratio of the plate.
+        If None, no sharding is applied.
+        Defaults to None.
+    version : Literal["0.4", "0.5"], optional
+        OME-Zarr version to use for the plate.
+        Defaults to "0.5".
     scale : tuple[float, ...], optional
         TCZYX scale of the plate. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
@@ -91,8 +100,14 @@ def create_empty_plate(
 
     # Create plate
     output_plate = open_ome_zarr(
-        str(store_path), layout="hcs", mode="a", channel_names=channel_names
+        str(store_path),
+        layout="hcs",
+        mode="a",
+        channel_names=channel_names,
+        version=version,
     )
+    if output_plate.version == "0.4" and shards_ratio is not None:
+        raise ValueError("Sharding is not supported in OME-Zarr version 0.4.")
 
     # Create positions
     for position_key in position_keys:
@@ -104,6 +119,7 @@ def create_empty_plate(
                 name="0",
                 shape=shape,
                 chunks=chunks,
+                shards_ratio=shards_ratio,
                 dtype=dtype,
                 transform=[TransformationMeta(type="scale", scale=scale)],
             )
