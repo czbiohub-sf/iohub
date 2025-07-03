@@ -3,7 +3,7 @@ import itertools
 import multiprocessing as mp
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Tuple, Union
+from typing import Any, Callable, Literal, Union
 
 import click
 import numpy as np
@@ -15,11 +15,13 @@ from iohub.ngff.nodes import TransformationMeta
 
 def create_empty_plate(
     store_path: Path,
-    position_keys: list[Tuple[str]],
+    position_keys: list[tuple[str, str, str]],
     channel_names: list[str],
-    shape: Tuple[int],
-    chunks: Tuple[int] = None,
-    scale: Tuple[float] = (1, 1, 1, 1, 1),
+    shape: tuple[int, ...],
+    chunks: tuple[int, ...] | None = None,
+    shards_ratio: tuple[int, ...] | None = None,
+    version: Literal["0.4", "0.5"] = "0.4",
+    scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     max_chunk_size_bytes: float = 500e6,
 ) -> None:
@@ -32,19 +34,26 @@ def create_empty_plate(
     ----------
     store_path : Path
         Path to the HCS plate.
-    position_keys : list[Tuple[str]]
-        Position keys to append if not present in the plate,
+    position_keys : list[tuple[str, str, str]]
+        Position keys (row, column, fov) to append if not present in the plate,
         e.g., [("A", "1", "0"), ("A", "1", "1")].
     channel_names : list[str]
         List of channel names. If the store exists,
         append if not present in metadata.
-    shape : Tuple[int]
+    shape : tuple[int, ...]
         TCZYX shape of the plate.
-    chunks : Tuple[int], optional
+    chunks : tuple[int, ...], optional
         TCZYX chunk size of the plate. If None, the chunk size is calculated
         based on the shape to be less than max_chunk_size_bytes.
         Defaults to None.
-    scale : Tuple[float], optional
+    shards_ratio : tuple[int, ...], optional
+        TCZYX shards ratio of the plate.
+        If None, no sharding is applied.
+        Defaults to None.
+    version : Literal["0.4", "0.5"], optional
+        OME-Zarr version to use for the plate.
+        Defaults to "0.4".
+    scale : tuple[float, ...], optional
         TCZYX scale of the plate. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
         Data type of the plate. Defaults to np.float32.
@@ -54,22 +63,22 @@ def create_empty_plate(
     Examples
     --------
     Create a new plate with positions and channels:
-    create_empty_plate(
-        store_path=Path("/path/to/store"),
-        position_keys=[("A", "1", "0"), ("A", "1", "1")],
-        channel_names=["DAPI", "FITC"],
-        shape=(1, 1, 256, 256, 256)
-    )
+    >>> create_empty_plate(
+            store_path=Path("/path/to/store"),
+            position_keys=[("A", "1", "0"), ("A", "1", "1")],
+            channel_names=["DAPI", "FITC"],
+            shape=(1, 1, 256, 256, 256)
+        )
 
     Create a plate with custom chunk size and scale:
-    create_empty_plate(
-        store_path=Path("/path/to/store"),
-        position_keys=[("A", "1", "0")],
-        channel_names=["DAPI"],
-        shape=(1, 1, 256, 256, 256),
-        chunks=(1, 1, 128, 128, 128),
-        scale=(1, 1, 0.5, 0.5, 0.5)
-    )
+    >>> create_empty_plate(
+            store_path=Path("/path/to/store"),
+            position_keys=[("A", "1", "0")],
+            channel_names=["DAPI"],
+            shape=(1, 1, 256, 256, 256),
+            chunks=(1, 1, 128, 128, 128),
+            scale=(1, 1, 0.5, 0.5, 0.5)
+        )
 
     Notes
     -----
@@ -91,8 +100,14 @@ def create_empty_plate(
 
     # Create plate
     output_plate = open_ome_zarr(
-        str(store_path), layout="hcs", mode="a", channel_names=channel_names
+        str(store_path),
+        layout="hcs",
+        mode="a",
+        channel_names=channel_names,
+        version=version,
     )
+    if output_plate.version == "0.4" and shards_ratio is not None:
+        raise ValueError("Sharding is not supported in OME-Zarr version 0.4.")
 
     # Create positions
     for position_key in position_keys:
@@ -104,6 +119,7 @@ def create_empty_plate(
                 name="0",
                 shape=shape,
                 chunks=chunks,
+                shards_ratio=shards_ratio,
                 dtype=dtype,
                 transform=[TransformationMeta(type="scale", scale=scale)],
             )
