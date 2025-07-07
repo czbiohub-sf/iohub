@@ -64,21 +64,21 @@ def create_empty_plate(
     --------
     Create a new plate with positions and channels:
     >>> create_empty_plate(
-            store_path=Path("/path/to/store"),
-            position_keys=[("A", "1", "0"), ("A", "1", "1")],
-            channel_names=["DAPI", "FITC"],
-            shape=(1, 1, 256, 256, 256)
-        )
+    ...     store_path=Path("/path/to/store"),
+    ...     position_keys=[("A", "1", "0"), ("A", "1", "1")],
+    ...     channel_names=["DAPI", "FITC"],
+    ...     shape=(1, 1, 256, 256, 256)
+    ... )
 
     Create a plate with custom chunk size and scale:
     >>> create_empty_plate(
-            store_path=Path("/path/to/store"),
-            position_keys=[("A", "1", "0")],
-            channel_names=["DAPI"],
-            shape=(1, 1, 256, 256, 256),
-            chunks=(1, 1, 128, 128, 128),
-            scale=(1, 1, 0.5, 0.5, 0.5)
-        )
+    ...     store_path=Path("/path/to/store"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(1, 1, 256, 256, 256),
+    ...     chunks=(1, 1, 128, 128, 128),
+    ...     scale=(1, 1, 0.5, 0.5, 0.5)
+    ... )
 
     Notes
     -----
@@ -177,26 +177,26 @@ def apply_transform_to_czyx_and_save(
     Examples
     --------
     Using slices for input_channel_indices:
-    apply_transform_to_zyx_and_save(
-        func=some_function,
-        input_position_path=Path("/path/to/input.zarr/A/1/0"),
-        output_position_path=Path("/path/to/output.zarr/A/1/0"),
-        input_channel_indices=slice(0, 2),
-        output_channel_indices=[0],
-        input_time_index=0,
-        output_time_index=0,
-    )
+    >>> apply_transform_to_zyx_and_save(
+    ...     func=some_function,
+    ...     input_position_path=Path("/path/to/input.zarr/A/1/0"),
+    ...     output_position_path=Path("/path/to/output.zarr/A/1/0"),
+    ...     input_channel_indices=slice(0, 2),
+    ...     output_channel_indices=[0],
+    ...     input_time_index=0,
+    ...     output_time_index=0,
+    ... )
 
     Using list for input_channel_indices:
-    apply_transform_to_zyx_and_save(
-        func=some_function,
-        input_position_path=Path("/path/to/input.zarr/A/1/0"),
-        output_store_path=Path("/path/to/output.zarr/A/1/0"),
-        input_channel_indices=[0, 1, 2, 3, 4],
-        output_channel_indices=[0, 1, 2],
-        input_time_index=0,
-        output_time_index=0,
-    )
+    >>> apply_transform_to_zyx_and_save(
+    ...     func=some_function,
+    ...     input_position_path=Path("/path/to/input.zarr/A/1/0"),
+    ...     output_store_path=Path("/path/to/output.zarr/A/1/0"),
+    ...     input_channel_indices=[0, 1, 2, 3, 4],
+    ...     output_channel_indices=[0, 1, 2],
+    ...     input_time_index=0,
+    ...     output_time_index=0,
+    ... )
 
     """
     # Check if input_time_indices should be added to the func kwargs
