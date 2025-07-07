@@ -234,10 +234,10 @@ def process_single_position(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
     output_position_path: Path,
-    input_channel_indices: Union[list[slice], list[list[int]]] = None,
-    output_channel_indices: Union[list[slice], list[list[int]]] = None,
-    input_time_indices: list[int] = None,
-    output_time_indices: list[int] = None,
+    input_channel_indices: list[slice] | list[list[int]] | None = None,
+    output_channel_indices: list[slice] | list[list[int]] | None = None,
+    input_time_indices: list[int] | None = None,
+    output_time_indices: list[int] | None = None,
     num_processes: int = 1,
     **kwargs,
 ) -> None:
@@ -270,14 +270,14 @@ def process_single_position(
         - A list of lists of integers: [[0, 1, 2, 3, 4]].
         If empty, process all channels.
         Must match output_channel_indices if not empty.
-        Defaults to an empty list.
+        Defaults to None.
     output_channel_indices : Union[list[slice], list[list[int]]], optional
         The channel indices to write to. Acceptable values:
         - A list of slices: [slice(0, 2), slice(2, 4), ...].
         - A list of lists of integers: [[0, 1, 2, 3, 4]].
         If empty, write to all channels.
         Must match input_channel_indices if not empty.
-        Defaults to an empty list.
+        Defaults to None.
     num_processes : int, optional
         Number of simultaneous processes per position. Defaults to 1.
     kwargs : dict, optional
