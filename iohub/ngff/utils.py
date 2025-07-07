@@ -1,9 +1,10 @@
 import inspect
 import itertools
 import multiprocessing as mp
+from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Union
+from typing import Any, Callable, Literal, Sequence, Union
 
 import click
 import numpy as np
@@ -228,6 +229,33 @@ def apply_transform_to_czyx_and_save(
             f"Skipping t={input_time_index}, c={output_channel_indices}"
             "due to all zeros or nans"
         )
+
+
+def _indices_to_shard_aligned_batches(
+    indices: Sequence[int], shard_size: int
+) -> list[list[int]]:
+    """Split indices into batches that are in the same shards.
+
+    Parameters
+    ----------
+    indices : Sequence[int]
+        Non-negative indices to split.
+    shard_size : int
+        The size of each shard.
+
+    Returns
+    -------
+    list[list[int]]
+        List of sorted batches,
+        where each batch is a list of indices in the same shard.
+    """
+    indices = sorted(indices)
+    batches = defaultdict(list)
+    for index in indices:
+        if index < 0:
+            raise ValueError(f"Negative indices are not supported: {indices}")
+        batches[index // shard_size].append(index)
+    return list(batches.values())
 
 
 def process_single_position(

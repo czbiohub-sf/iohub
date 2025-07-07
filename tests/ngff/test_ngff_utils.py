@@ -15,6 +15,7 @@ from iohub.ngff.utils import (
     apply_transform_to_czyx_and_save,
     create_empty_plate,
     process_single_position,
+    _indices_to_shard_aligned_batches,
 )
 
 
@@ -558,6 +559,29 @@ def test_apply_transform_to_zyx_and_save(setup, constant):
                 dummy_transform,
                 **kwargs,
             )
+
+
+@given(
+    indices=st.lists(st.integers(min_value=0), min_size=1, unique=True),
+    shard_size=st.integers(min_value=1),
+)
+def test_indices_to_shard_aligned_batches(indices, shard_size):
+    """Test ``_indices_to_shard_aligned_batches``"""
+    batches = _indices_to_shard_aligned_batches(indices, shard_size)
+    assert isinstance(batches, list)
+    elements = []
+    for batch in batches:
+        assert batch
+        assert isinstance(batch, list)
+        elements.extend(batch)
+        first_element = batch[0]
+        shard_index = first_element // shard_size
+        lower_bound = shard_index * shard_size
+        upper_bound = lower_bound + shard_size
+        for item in batch:
+            assert isinstance(item, int)
+            assert lower_bound <= item < upper_bound, batches
+    assert elements == sorted(indices)
 
 
 @given(
