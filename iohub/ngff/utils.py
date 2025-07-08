@@ -134,6 +134,60 @@ def create_empty_plate(
                 position.append_channel(channel_name, resize_arrays=True)
 
 
+def _apply_transform_to_czyx(
+    func: Callable[[NDArray, Any], NDArray],
+    input_position_path: Path,
+    input_channel_indices: Union[list[int], slice],
+    input_time_index: int,
+    **kwargs,
+) -> NDArray | None:
+    # Check if input_time_indices should be added to the func kwargs
+    # This is needed when a different processing is needed for each time point,
+    # for example during stabilization
+    all_func_params = inspect.signature(func).parameters.keys()
+    if "input_time_index" in all_func_params:
+        kwargs["input_time_index"] = input_time_index
+
+    # Process CZYX given with the given indices
+    # if input_channel_indices is not None and len(input_channel_indices) > 0:
+    click.echo(f"Processing t={input_time_index}, c={input_channel_indices}")
+    input_dataset = open_ome_zarr(input_position_path)
+    czyx_data = input_dataset.data.oindex[
+        input_time_index, input_channel_indices
+    ]
+    if not _check_nan_n_zeros(czyx_data):
+        return func(czyx_data, **kwargs)
+    else:
+        return None
+
+
+def _echo_finished(
+    input_time: int | list[int] | slice,
+    output_channel: int | list[int] | slice,
+    skipped: bool,
+) -> None:
+    if skipped:
+        click.echo(
+            f"Skipping t={input_time}, c={output_channel} "
+            "due to all zeros or nans"
+        )
+    else:
+        click.echo(f"Finished writing t={input_time}, c={output_channel}")
+
+
+def _save_transformed(
+    transformed: NDArray | None,
+    output_position_path: Path,
+    output_channel_indices: list[int] | slice,
+    input_time_indices: int | list[int],
+    output_time_indices: int | list[int],
+) -> None:
+    with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
+        output_dataset[0].oindex[
+            output_time_indices, output_channel_indices
+        ] = transformed
+
+
 def apply_transform_to_czyx_and_save(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
@@ -200,34 +254,31 @@ def apply_transform_to_czyx_and_save(
     ... )
 
     """
-    # Check if input_time_indices should be added to the func kwargs
-    # This is needed when a different processing is needed for each time point,
-    # for example during stabilization
-    all_func_params = inspect.signature(func).parameters.keys()
-    if "input_time_index" in all_func_params:
-        kwargs["input_time_index"] = input_time_index
-
-    # Process CZYX given with the given indices
-    # if input_channel_indices is not None and len(input_channel_indices) > 0:
-    click.echo(f"Processing t={input_time_index}, c={input_channel_indices}")
-    input_dataset = open_ome_zarr(input_position_path)
-    czyx_data = input_dataset.data.oindex[
-        input_time_index, input_channel_indices
-    ]
-    if not _check_nan_n_zeros(czyx_data):
-        transformed_czyx = func(czyx_data, **kwargs)
-        # Write to file
-        with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
-            output_dataset[0].oindex[
-                output_time_index, output_channel_indices
-            ] = transformed_czyx
-        click.echo(
-            f"Finished t={input_time_index}, c={output_channel_indices}"
+    transformed = _apply_transform_to_czyx(
+        func,
+        input_position_path=input_position_path,
+        input_channel_indices=input_channel_indices,
+        input_time_index=input_time_index,
+        **kwargs,
+    )
+    if transformed is not None:
+        _save_transformed(
+            transformed,
+            input_time_indices=input_time_index,
+            output_time_indices=output_time_index,
+            output_channel_indices=output_channel_indices,
+            output_position_path=output_position_path,
+        )
+        _echo_finished(
+            input_time=input_time_index,
+            output_channel=output_channel_indices,
+            skipped=False,
         )
     else:
-        click.echo(
-            f"Skipping t={input_time_index}, c={output_channel_indices}"
-            "due to all zeros or nans"
+        _echo_finished(
+            input_time=input_time_index,
+            output_channel=output_channel_indices,
+            skipped=True,
         )
 
 
