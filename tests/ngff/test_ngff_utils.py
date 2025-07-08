@@ -377,16 +377,12 @@ def populate_store(
             position_path = "/".join(position_key_tuple)
             position = input_dataset[position_path]
             T, C, Z, Y, X = shape
-            for t in range(T):
-                for c in range(C):
-                    # Generate random data based on dtype
-                    if np.issubdtype(dtype, np.floating):
-                        data = np.random.rand(Z, Y, X).astype(dtype)
-                    else:
-                        data = np.random.randint(
-                            1, 20, size=(Z, Y, X), dtype=dtype
-                        )
-                    position.data.oindex[t, c] = data
+            # Generate random data based on dtype
+            if np.issubdtype(dtype, np.floating):
+                data = np.random.rand(*shape).astype(dtype)
+            else:
+                data = np.random.randint(1, 20, size=shape, dtype=dtype)
+            position.data[:] = data
 
 
 # Verify the transformation
