@@ -309,6 +309,114 @@ def _indices_to_shard_aligned_batches(
     return list(batches.values())
 
 
+def _match_indices_to_batches(
+    flat_indices: Sequence[int],
+    original_reference: Sequence[int],
+    batched_reference: list[list[int]],
+) -> list[list[int]]:
+    """Match flat indices to batches based on a reference pair.
+
+    Parameters
+    ----------
+    flat_indices : Sequence[int]
+        Flat indices to match.
+    original_reference : Sequence[int]
+        Original reference indices.
+    batched_reference : list[list[int]]
+        Batched version of reference.
+
+    Returns
+    -------
+    list[list[int]]
+        List of matched batches, where each batch corresponds to the
+        original reference indices.
+    """
+    matched_batches = []
+    for batch in batched_reference:
+        matched_batch = []
+        for index in batch:
+            matched_batch.append(flat_indices[original_reference.index(index)])
+        matched_batches.append(matched_batch)
+    return matched_batches
+
+
+def _slice_to_list(indices: list[int] | slice) -> list[int]:
+    if isinstance(indices, slice):
+        return list(range(indices.start, indices.stop, indices.step))
+    return indices
+
+
+def apply_transform_to_tczyx_and_save(
+    func: Callable[[NDArray, Any], NDArray],
+    input_position_path: Path,
+    output_position_path: Path,
+    input_channel_indices: list[int] | slice,
+    output_channel_indices: list[int] | slice,
+    input_time_indices: list[int] | slice,
+    output_time_indices: list[int] | slice,
+    **kwargs,
+) -> None:
+    """
+    Load a TCZYX array from a position store,
+    apply a transformation, and save the result.
+
+    Parameters
+    ----------
+    func : Callable[[NDArray, Any], NDArray]
+        The function to be applied to the data.
+        func must take the TCZYX NDArray as the first argument and return
+        a TCZXY NDArray. Additional arguments are passed through **kwargs.
+    input_position_path : Path
+        The path to input OME-Zarr position store
+        (e.g., "input_store_path.zarr/A/1/0").
+    output_position_path : Path
+        The path to output OME-Zarr position store
+        (e.g., "output_store_path.zarr/A/1/0").
+    input_channel_indices : list[int] | slice
+        The channel indices to process. Acceptable values:
+        - Slices: slice(0, 2).
+        - A list of integers: [0, 1, 2, 3, 4].
+    output_channel_indices : list[int] | slice
+        The channel indices to write to,
+        similar to input_channel_indices.
+    input_time_indices : list[int] | slice
+        The time indices to process,
+        similar to input_channel_indices.
+    output_time_indices : list[int] | slice
+        The time indices to write to,
+        similar to input_channel_indices.
+    kwargs : dict, optional
+        Additional arguments to pass to the function.
+    """
+    input_time_indices = _slice_to_list(input_time_indices)
+    output_time_indices = _slice_to_list(output_time_indices)
+    results = {}
+    for input_time_index in input_time_indices:
+        result = _apply_transform_to_czyx(
+            func,
+            input_position_path=input_position_path,
+            input_channel_indices=input_channel_indices,
+            input_time_index=input_time_index,
+            **kwargs,
+        )
+        if result is not None:
+            results[input_time_index] = result
+        else:
+            _echo_finished(
+                input_time=input_time_index,
+                output_channel=output_channel_indices,
+                skipped=True,
+            )
+    _save_transformed(
+        transformed=list(results.values()),
+        output_position_path=output_position_path,
+        output_channel_indices=output_channel_indices,
+        input_time_indices=input_time_indices,
+        output_time_indices=output_time_indices,
+    )
+    _echo_finished(input_time_indices, output_channel_indices, skipped=False)
+
+
 def process_single_position(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
@@ -401,18 +509,35 @@ def process_single_position(
     click.echo(f"Output data path:\t{output_position_path}")
 
     # Get the reader
-    with open_ome_zarr(input_position_path) as input_dataset:
+    with open_ome_zarr(
+        input_position_path, layout="fov", mode="r"
+    ) as input_dataset:
         input_data_shape = input_dataset.data.shape
+    with open_ome_zarr(
+        output_position_path, layout="fov", mode="r"
+    ) as output_dataset:
+        output_shards = output_dataset.data.shards
 
     # Process time indices
     if input_time_indices is None:
         input_time_indices = list(range(input_data_shape[0]))
-        output_time_indices = input_time_indices
     assert (
         type(input_time_indices) is list
     ), "input_time_indices must be a list"
     if output_time_indices is None:
         output_time_indices = input_time_indices
+    if output_shards is not None:
+        batched_output_time_indices = _indices_to_shard_aligned_batches(
+            output_time_indices, output_shards[0]
+        )
+        batched_input_time_indices = _match_indices_to_batches(
+            flat_indices=input_time_indices,
+            original_reference=output_time_indices,
+            batched_reference=batched_output_time_indices,
+        )
+    else:
+        batched_input_time_indices = [[i] for i in input_time_indices]
+        batched_output_time_indices = [[i] for i in output_time_indices]
 
     # Process channel indices
     if input_channel_indices is None:
@@ -441,12 +566,12 @@ def process_single_position(
     # Loop through (T, C), applying transform and writing as we go
     iterable = itertools.product(
         zip(input_channel_indices, output_channel_indices),
-        zip(input_time_indices, output_time_indices),
+        zip(batched_input_time_indices, batched_output_time_indices),
     )
     flat_iterable = ((*c, *t) for c, t in iterable)
 
     partial_apply_transform_to_czyx_and_save = partial(
-        apply_transform_to_czyx_and_save,
+        apply_transform_to_tczyx_and_save,
         func,
         input_position_path,
         output_position_path,
