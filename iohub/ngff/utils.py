@@ -1,4 +1,5 @@
 import inspect
+import platform
 import itertools
 import multiprocessing as mp
 from collections import defaultdict
@@ -179,11 +180,10 @@ def _save_transformed(
     transformed: NDArray | list[NDArray] | None,
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
-    input_time_indices: int | list[int],
     output_time_indices: int | list[int],
 ) -> None:
     with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
-        output_dataset[0].oindex[
+        output_dataset["0"].oindex[
             output_time_indices, output_channel_indices
         ] = transformed
 
@@ -264,7 +264,6 @@ def apply_transform_to_czyx_and_save(
     if transformed is not None:
         _save_transformed(
             transformed,
-            input_time_indices=input_time_index,
             output_time_indices=output_time_index,
             output_channel_indices=output_channel_indices,
             output_position_path=output_position_path,
@@ -411,7 +410,6 @@ def apply_transform_to_tczyx_and_save(
         transformed=list(results.values()),
         output_position_path=output_position_path,
         output_channel_indices=output_channel_indices,
-        input_time_indices=input_time_indices,
         output_time_indices=list(results.keys()),
     )
     _echo_finished(input_time_indices, output_channel_indices, skipped=False)
@@ -582,7 +580,11 @@ def process_single_position(
         f"\nStarting multiprocess pool with\
     {num_processes} processes"
     )
-    with mp.Pool(num_processes) as p:
+    if platform.system() == "Windows":
+        context = mp.get_context("spawn")
+    else:
+        context = mp.get_context("forkserver")
+    with context.Pool(num_processes) as p:
         p.starmap(
             partial_apply_transform_to_czyx_and_save,
             flat_iterable,
