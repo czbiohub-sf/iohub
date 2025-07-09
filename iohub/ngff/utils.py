@@ -176,7 +176,7 @@ def _echo_finished(
 
 
 def _save_transformed(
-    transformed: NDArray | None,
+    transformed: NDArray | list[NDArray] | None,
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
     input_time_indices: int | list[int],
@@ -412,7 +412,7 @@ def apply_transform_to_tczyx_and_save(
         output_position_path=output_position_path,
         output_channel_indices=output_channel_indices,
         input_time_indices=input_time_indices,
-        output_time_indices=output_time_indices,
+        output_time_indices=list(results.keys()),
     )
     _echo_finished(input_time_indices, output_channel_indices, skipped=False)
 
