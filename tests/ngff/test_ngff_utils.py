@@ -3,21 +3,21 @@ import string
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Optional, Tuple, Literal
+from typing import Literal, Optional, Tuple
 
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
+    _indices_to_shard_aligned_batches,
+    _match_indices_to_batches,
     apply_transform_to_czyx_and_save,
     apply_transform_to_tczyx_and_save,
     create_empty_plate,
     process_single_position,
-    _indices_to_shard_aligned_batches,
-    _match_indices_to_batches,
 )
 
 
@@ -192,6 +192,9 @@ def plate_setup(draw):
     # Generate channel names based on the number of channels
     channel_names = [f"Channel_{i}" for i in range(num_channels)]
 
+    version_st = st.one_of(st.just("0.4"), st.just("0.5"))
+    version = draw(version_st)
+
     # Generate shape ensuring that the
     # second dimension (C) matches num_channels
     T = draw(st.integers(min_value=1, max_value=3))  # Time
@@ -199,6 +202,11 @@ def plate_setup(draw):
     Y = draw(st.integers(min_value=8, max_value=32))  # Y-dimension
     X = draw(st.integers(min_value=8, max_value=32))  # X-dimension
     shape = (T, num_channels, Z, Y, X)  # TCZYX
+
+    if version == "0.5":
+        shards_ratio = draw(st.one_of(st.just((2, 1, 1, 2, 2)), st.just(None)))
+    else:
+        shards_ratio = None
 
     # Generate chunks
     # Ensure that chunks are compatible with the shape dimensions
@@ -232,7 +240,16 @@ def plate_setup(draw):
     # Generate dtype
     dtype = draw(st.sampled_from([np.float32, np.int16, np.uint8]))
 
-    return position_keys, channel_names, shape, chunks, scale, dtype
+    return (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    )
 
 
 @st.composite
@@ -253,9 +270,16 @@ def apply_transform_czyx_setup(draw):
         - time_indices
     """
     # Generate plate setup parameters
-    position_keys, channel_names, shape, chunks, scale, dtype = draw(
-        plate_setup()
-    )
+    (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    ) = draw(plate_setup())
     T, C = shape[:2]
 
     # Define a helper strategy to generate channel indices based on C
@@ -285,14 +309,12 @@ def apply_transform_czyx_setup(draw):
     channel_indices = draw(channel_indices_strategy)
     time_indices = draw(time_indices_strategy)
 
-    version_st = st.one_of(st.just("0.4"), st.just("0.5"))
-    version = draw(version_st)
-
     return (
         position_keys,
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
@@ -320,9 +342,16 @@ def process_single_position_setup(draw):
         - time_indices
     """
     # Generate plate setup parameters
-    position_keys, channel_names, shape, chunks, scale, dtype = draw(
-        plate_setup()
-    )
+    (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    ) = draw(plate_setup())
     # NOTE: Chunking along T,C =1,1
     if chunks is not None:
         chunks = (1, 1) + chunks[2:]
@@ -372,10 +401,12 @@ def process_single_position_setup(draw):
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
         time_indices,
+        version,
     )
 
 
@@ -451,7 +482,17 @@ def verify_transformation(
 )
 @settings(max_examples=5)
 def test_create_empty_plate(plate_setup, extra_channels):
-    position_keys, channel_names, shape, chunks, scale, dtype = plate_setup
+    (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    ) = plate_setup
+
 
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "test.zarr"
@@ -463,8 +504,10 @@ def test_create_empty_plate(plate_setup, extra_channels):
             channel_names=channel_names,
             shape=shape,
             chunks=chunks,
+            shards_ratio=shards_ratio,
             scale=scale,
             dtype=dtype,
+            version=version,
         )
 
         # Verify the store was created
@@ -500,8 +543,10 @@ def test_create_empty_plate(plate_setup, extra_channels):
             channel_names=extra_channels,
             shape=shape,
             chunks=chunks,
+            shards_ratio=shards_ratio,
             scale=scale,
             dtype=dtype,
+            version=version,
         )
 
         with open_ome_zarr(store_path) as dataset:
@@ -524,12 +569,14 @@ def test_apply_transform_to_czyx_and_save(setup, constant):
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
         time_indices,
         version,
     ) = setup
+    assume(shards_ratio is None)
 
     # Use the enhanced context manager to get both input and output store paths
     with _temp_ome_zarr_stores(
@@ -537,6 +584,7 @@ def test_apply_transform_to_czyx_and_save(setup, constant):
         channel_names=channel_names,
         shape=shape,
         chunks=chunks,
+        shards_ratio=shards_ratio,
         scale=scale,
         dtype=dtype,
         version=version,
@@ -589,6 +637,7 @@ def test_apply_transform_to_tczyx_and_save(setup, constant):
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
@@ -602,7 +651,7 @@ def test_apply_transform_to_tczyx_and_save(setup, constant):
         channel_names=channel_names,
         shape=shape,
         chunks=chunks,
-        shards_ratio=(2, 1, 2, 1, 1),
+        shards_ratio=shards_ratio,
         scale=scale,
         dtype=dtype,
         version=version,
@@ -688,16 +737,17 @@ def test_match_indices_to_batches(indices, shard_size):
 )
 @settings(max_examples=3, deadline=None)
 def test_process_single_position(setup, constant, num_processes):
-    # def test_process_single_position(setup, constant, num_processes):
     (
         position_keys,
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
         time_indices,
+        version,
     ) = setup
 
     # Use the enhanced context manager to get both input and output store paths
@@ -706,8 +756,10 @@ def test_process_single_position(setup, constant, num_processes):
         channel_names=channel_names,
         shape=shape,
         chunks=chunks,
+        shards_ratio=shards_ratio,
         scale=scale,
         dtype=dtype,
+        version=version,
     ) as (input_store_path, output_store_path):
         # Populate Store with random data
         populate_store(input_store_path, position_keys, shape, dtype)
