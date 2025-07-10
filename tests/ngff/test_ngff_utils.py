@@ -493,7 +493,6 @@ def test_create_empty_plate(plate_setup, extra_channels):
         version,
     ) = plate_setup
 
-
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "test.zarr"
 

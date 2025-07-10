@@ -183,9 +183,9 @@ def _save_transformed(
     output_time_indices: int | list[int],
 ) -> None:
     with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
-        output_dataset["0"].oindex[
+        output_dataset["0"].tensorstore().oindex[
             output_time_indices, output_channel_indices
-        ] = transformed
+        ].write(transformed).result()
 
 
 def apply_transform_to_czyx_and_save(
@@ -579,10 +579,7 @@ def process_single_position(
     click.echo(
         f"\nStarting multiprocess pool with {num_processes} processes"
     )
-    if platform.system() == "Windows":
-        context = mp.get_context("spawn")
-    else:
-        context = mp.get_context("forkserver")
+    context = mp.get_context("spawn")
     with context.Pool(num_processes) as p:
         p.starmap(
             partial_apply_transform_to_czyx_and_save,
