@@ -577,8 +577,7 @@ def process_single_position(
     )
 
     click.echo(
-        f"\nStarting multiprocess pool with\
-    {num_processes} processes"
+        f"\nStarting multiprocess pool with {num_processes} processes"
     )
     if platform.system() == "Windows":
         context = mp.get_context("spawn")
