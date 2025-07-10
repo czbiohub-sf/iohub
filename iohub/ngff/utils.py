@@ -183,9 +183,11 @@ def _save_transformed(
     output_time_indices: int | list[int],
 ) -> None:
     with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
-        output_dataset["0"].tensorstore().oindex[
-            output_time_indices, output_channel_indices
-        ].write(transformed).result()
+        ts = output_dataset["0"].tensorstore(concurrency=4)
+    ts.oindex[output_time_indices, output_channel_indices].write(
+        transformed
+    ).result()
+    del ts
 
 
 def apply_transform_to_czyx_and_save(
@@ -412,6 +414,7 @@ def apply_transform_to_tczyx_and_save(
         output_channel_indices=output_channel_indices,
         output_time_indices=list(results.keys()),
     )
+    del results
     _echo_finished(input_time_indices, output_channel_indices, skipped=False)
 
 
@@ -566,7 +569,7 @@ def process_single_position(
         zip(input_channel_indices, output_channel_indices),
         zip(batched_input_time_indices, batched_output_time_indices),
     )
-    flat_iterable = ((*c, *t) for c, t in iterable)
+    flat_iterable = tuple((*c, *t) for c, t in iterable)
 
     partial_apply_transform_to_czyx_and_save = partial(
         apply_transform_to_tczyx_and_save,
@@ -575,16 +578,15 @@ def process_single_position(
         output_position_path,
         **kwargs,
     )
-
-    click.echo(
-        f"\nStarting multiprocess pool with {num_processes} processes"
-    )
+    num_processes = min(num_processes, len(flat_iterable), mp.cpu_count())
+    click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
     context = mp.get_context("spawn")
     with context.Pool(num_processes) as p:
         p.starmap(
             partial_apply_transform_to_czyx_and_save,
             flat_iterable,
         )
+    click.echo("Shut down multiprocess pool")
 
 
 def _check_nan_n_zeros(input_array):
