@@ -1,7 +1,7 @@
 import inspect
-import platform
 import itertools
 import multiprocessing as mp
+import platform
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
