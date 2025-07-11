@@ -143,9 +143,12 @@ class NDTiffDataset(MicroManagerFOVMapping):
         pm_metadata["MicroManagerVersion"] = "pycromanager"
         pm_metadata["Positions"] = len(self)
 
-        p_idx = self._all_position_keys[0]
         c_idx = self._ndtiff_channel_names[0]
-        img_metadata = self.get_image_metadata(p_idx, 0, c_idx, 0)
+        # Get the first position index that has metadata
+        for p_idx in self._all_position_keys:
+            img_metadata = self.get_image_metadata(p_idx, 0, c_idx, 0)
+            if img_metadata is not None:
+                break
 
         try:
             z0 = self.get_image_metadata(p_idx, 0, c_idx, 0)[
@@ -316,7 +319,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
     def get_image_metadata(
         self, p: int | str, t: int, c: int | str, z: int
-    ) -> dict:
+    ) -> dict | None:
         """Return image plane metadata at the requested PTCZ coordinates
 
         Parameters
