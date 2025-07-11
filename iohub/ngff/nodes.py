@@ -405,11 +405,11 @@ class ImageArray(zarr.Array):
             ts_spec,
             read=True,
             write=not self.read_only,
-            context=ts.Context(
-                {"data_copy_concurrency": {"limit": concurrency}}
-            )
-            if concurrency
-            else None,
+            context=(
+                ts.Context({"data_copy_concurrency": {"limit": concurrency}})
+                if concurrency
+                else None
+            ),
         ).result()
         return zarr_dataset
 
@@ -2038,8 +2038,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate | Position | TiledPosition:
-    ...
+) -> Plate | Position | TiledPosition: ...
 
 
 @overload
@@ -2052,8 +2051,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Position:
-    ...
+) -> Position: ...
 
 
 @overload
@@ -2066,8 +2064,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> TiledPosition:
-    ...
+) -> TiledPosition: ...
 
 
 @overload
@@ -2080,8 +2077,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate:
-    ...
+) -> Plate: ...
 
 
 def open_ome_zarr(
