@@ -342,13 +342,7 @@ class TIFFConverter:
                 )
             missing_data_warning_issued = False
             for z_idx in range(self.z):
-                metadata = None
-                try:
-                    metadata = fov.frame_metadata(t=t_idx, c=c_key, z=z_idx)
-                except ValueError:
-                    # This T/C/Z index does not exist,
-                    # warning will be issued below
-                    pass
+                metadata = fov.frame_metadata(t=t_idx, c=c_key, z=z_idx)
                 if metadata is None:
                     if not missing_data_warning_issued:
                         missing_data_warning_issued = True

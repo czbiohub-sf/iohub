@@ -45,7 +45,7 @@ class NDTiffFOV(MicroManagerFOV):
     def xdata(self) -> DataArray:
         return self._xdata
 
-    def frame_metadata(self, t: int, c: int, z: int) -> dict[str, Any]:
+    def frame_metadata(self, t: int, c: int, z: int) -> dict | None:
         return self.parent.get_image_metadata(self._position, t, c, z)
 
 
@@ -342,7 +342,10 @@ class NDTiffDataset(MicroManagerFOVMapping):
         if not self.str_position_axis and isinstance(p, str):
             if p.isdigit():
                 p = int(p)
-        p, t, c, z = self._check_coordinates(p, t, c, z)
+        try:
+            p, t, c, z = self._check_coordinates(p, t, c, z)
+        except ValueError as e:
+            _logger.debug(f"Error checking coordinates: {e}")
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
             try:
                 metadata = self.dataset.read_metadata(
