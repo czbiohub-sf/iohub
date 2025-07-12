@@ -25,3 +25,6 @@ NGFF Nodes
 
 .. autoclass:: Plate
     :members:
+
+.. autoclass:: ImageArray
+    :members:

@@ -10,5 +10,9 @@
     {
         "version": "v0.2.0",
         "url": "/iohub/v0.2.0/index.html"
+    },
+    {
+        "version": "v0.2.1",
+        "url": "/iohub/v0.2.1/index.html"
     }
 ]
