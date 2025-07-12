@@ -345,7 +345,10 @@ class NDTiffDataset(MicroManagerFOVMapping):
         try:
             p, t, c, z = self._check_coordinates(p, t, c, z)
         except ValueError as e:
-            _logger.debug(f"Error checking coordinates: {e}")
+            _logger.debug(
+                f"Error checking coordinates at position {p}, time {t}, "
+                f"channel {c}, z {z}: {e}"
+            )
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
             try:
                 metadata = self.dataset.read_metadata(
