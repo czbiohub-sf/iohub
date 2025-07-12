@@ -346,7 +346,9 @@ class TIFFConverter:
                 try:
                     metadata = fov.frame_metadata(t=t_idx, c=c_key, z=z_idx)
                 except ValueError:
-                    pass # This T/C/Z index does not exist, warning will be issued below
+                    # This T/C/Z index does not exist,
+                    # warning will be issued below
+                    pass
                 if metadata is None:
                     if not missing_data_warning_issued:
                         missing_data_warning_issued = True
