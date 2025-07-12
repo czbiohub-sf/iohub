@@ -4,7 +4,7 @@ import logging
 import warnings
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Iterable, Literal
 
 import numpy as np
 from natsort import natsorted
