@@ -1,3 +1,8 @@
+"""
+Sphinx Polyversion configuration file.
+See https://real-yfprojects.github.io/sphinx-polyversion
+"""
+
 from datetime import datetime
 from functools import partial
 from pathlib import Path
@@ -63,6 +68,14 @@ src = Path(SOURCE_DIR)
 
 
 def main_factory(name: str):
+    """
+    Venv factory for recent iohub versions.
+
+    Parameters
+    ----------
+    name : str
+        Name of the virtual environment to create.
+    """
     return Pip.factory(
         venv=Path(".venv") / name,
         args=PIP_ARGS + ["importlib_metadata"],
