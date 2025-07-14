@@ -335,8 +335,8 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
         Returns
         -------
-        dict
-            image plane metadata
+        dict | None
+            Image plane metadata. None if not available.
         """
         metadata = None
         if not self.str_position_axis and isinstance(p, str):
