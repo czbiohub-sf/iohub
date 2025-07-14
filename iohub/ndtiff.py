@@ -4,7 +4,7 @@ import logging
 import warnings
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Iterable, Literal
 
 import numpy as np
 from natsort import natsorted
@@ -45,7 +45,7 @@ class NDTiffFOV(MicroManagerFOV):
     def xdata(self) -> DataArray:
         return self._xdata
 
-    def frame_metadata(self, t: int, c: int, z: int) -> dict[str, Any]:
+    def frame_metadata(self, t: int, c: int, z: int) -> dict | None:
         return self.parent.get_image_metadata(self._position, t, c, z)
 
 
@@ -143,9 +143,12 @@ class NDTiffDataset(MicroManagerFOVMapping):
         pm_metadata["MicroManagerVersion"] = "pycromanager"
         pm_metadata["Positions"] = len(self)
 
-        p_idx = self._all_position_keys[0]
         c_idx = self._ndtiff_channel_names[0]
-        img_metadata = self.get_image_metadata(p_idx, 0, c_idx, 0)
+        # Get the first position index that has metadata
+        for p_idx in self._all_position_keys:
+            img_metadata = self.get_image_metadata(p_idx, 0, c_idx, 0)
+            if img_metadata is not None:
+                break
 
         try:
             z0 = self.get_image_metadata(p_idx, 0, c_idx, 0)[
@@ -316,7 +319,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
     def get_image_metadata(
         self, p: int | str, t: int, c: int | str, z: int
-    ) -> dict:
+    ) -> dict | None:
         """Return image plane metadata at the requested PTCZ coordinates
 
         Parameters
@@ -332,14 +335,20 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
         Returns
         -------
-        dict
-            image plane metadata
+        dict | None
+            Image plane metadata. None if not available.
         """
         metadata = None
         if not self.str_position_axis and isinstance(p, str):
             if p.isdigit():
                 p = int(p)
-        p, t, c, z = self._check_coordinates(p, t, c, z)
+        try:
+            p, t, c, z = self._check_coordinates(p, t, c, z)
+        except ValueError as e:
+            _logger.debug(
+                f"Error checking coordinates at position {p}, time {t}, "
+                f"channel {c}, z {z}: {e}"
+            )
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
             try:
                 metadata = self.dataset.read_metadata(
