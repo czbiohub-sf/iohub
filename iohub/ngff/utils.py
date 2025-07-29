@@ -5,6 +5,7 @@ from collections import defaultdict
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Literal, Sequence, Union
+from warnings import warn
 
 import click
 import numpy as np
@@ -108,7 +109,7 @@ def create_empty_plate(
         version=version,
     )
     if output_plate.version == "0.4" and shards_ratio is not None:
-        raise ValueError("Sharding is not supported in OME-Zarr version 0.4.")
+        warn("Ignoring shards ratio for OME-Zarr version 0.4.")
 
     # Create positions
     for position_key in position_keys:
