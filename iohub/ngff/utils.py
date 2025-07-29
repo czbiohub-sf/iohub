@@ -110,6 +110,7 @@ def create_empty_plate(
     )
     if output_plate.version == "0.4" and shards_ratio is not None:
         warn("Ignoring shards ratio for OME-Zarr version 0.4.")
+        shards_ratio = None
 
     # Create positions
     for position_key in position_keys:
