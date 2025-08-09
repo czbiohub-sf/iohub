@@ -183,11 +183,13 @@ def _save_transformed(
     output_channel_indices: list[int] | slice,
     output_time_indices: int | list[int],
 ) -> None:
+    # NOTE: use tensorstore due to zarr-python#3221
     with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
         ts = output_dataset["0"].tensorstore(concurrency=4)
     ts.oindex[output_time_indices, output_channel_indices].write(
         transformed
     ).result()
+    # NOTE: explicit GC due to tensorstore#223
     del ts
 
 
@@ -581,6 +583,7 @@ def process_single_position(
     )
     num_processes = min(num_processes, len(flat_iterable), mp.cpu_count())
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
+    # NOTE: use spawn to work around tensorstore#61
     context = mp.get_context("spawn")
     with context.Pool(num_processes) as p:
         p.starmap(
