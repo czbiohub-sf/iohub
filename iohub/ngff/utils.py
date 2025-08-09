@@ -165,7 +165,7 @@ def _apply_transform_to_czyx(
     # Process CZYX given with the given indices
     # if input_channel_indices is not None and len(input_channel_indices) > 0:
     click.echo(f"Processing t={input_time_index}, c={input_channel_indices}")
-    input_dataset = open_ome_zarr(input_position_path)
+    input_dataset = open_ome_zarr(input_position_path, layout="fov", mode="r")
     czyx_data = input_dataset.data.oindex[
         input_time_index, input_channel_indices
     ]
@@ -196,8 +196,10 @@ def _save_transformed(
     output_time_indices: int | list[int],
 ) -> None:
     # NOTE: use tensorstore due to zarr-python#3221
-    with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
-        ts = output_dataset["0"].tensorstore(concurrency=4)
+    with open_ome_zarr(
+        output_position_path, layout="fov", mode="r+"
+    ) as output_dataset:
+        ts = output_dataset.data.tensorstore(concurrency=4)
     ts.oindex[output_time_indices, output_channel_indices].write(
         transformed
     ).result()
@@ -576,7 +578,9 @@ def process_single_position(
 
     # Write extra metadata to the output store
     extra_metadata = kwargs.pop("extra_metadata", None)
-    with open_ome_zarr(output_position_path, mode="r+") as output_dataset:
+    with open_ome_zarr(
+        output_position_path, layout="fov", mode="r+"
+    ) as output_dataset:
         output_dataset.zattrs["extra_metadata"] = extra_metadata
 
     # Loop through (T, C), applying transform and writing as we go
