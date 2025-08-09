@@ -3,16 +3,19 @@ import string
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Optional, Tuple
+from typing import Literal, Optional, Tuple
 
 import hypothesis.strategies as st
 import numpy as np
-from hypothesis import given, settings
+from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
+    _indices_to_shard_aligned_batches,
+    _match_indices_to_batches,
     apply_transform_to_czyx_and_save,
+    apply_transform_to_tczyx_and_save,
     create_empty_plate,
     process_single_position,
 )
@@ -28,6 +31,7 @@ def _temp_ome_zarr(
     scale: Tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     base_dir: Optional[Path] = None,  # Added base_dir parameter
+    version: Literal["0.4", "0.5"] = "0.4",
 ):
     """
     Helper context manager to generate a temporary OME-Zarr store.
@@ -51,6 +55,8 @@ def _temp_ome_zarr(
     base_dir : Optional[Path], optional
         Base directory to create the store in.
         If None, a new TemporaryDirectory is created.
+    version : Literal["0.4", "0.5"], optional
+        OME-Zarr version, by default "0.4".
 
     Yields
     ------
@@ -71,6 +77,7 @@ def _temp_ome_zarr(
                 chunks=chunks,
                 scale=scale,
                 dtype=dtype,
+                version=version,
             )
             yield store_path
         finally:
@@ -86,6 +93,7 @@ def _temp_ome_zarr(
             chunks=chunks,
             scale=scale,
             dtype=dtype,
+            version=version,
         )
         yield store_path
 
@@ -94,10 +102,12 @@ def _temp_ome_zarr(
 def _temp_ome_zarr_stores(
     position_keys: list[Tuple[str, str, str]],
     channel_names: list[str],
-    shape: Tuple[int, ...],
-    chunks: Optional[Tuple[int, ...]] = None,
-    scale: Tuple[float, ...] = (1, 1, 1, 1, 1),
+    shape: tuple[int, ...],
+    chunks: tuple[int, ...] | None = None,
+    shards_ratio: tuple[int, ...] | None = None,
+    scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
+    version: Literal["0.4", "0.5"] = "0.4",
 ):
     """
     Helper context manager to generate temporary
@@ -109,14 +119,18 @@ def _temp_ome_zarr_stores(
         list of position keys, e.g., [("A", "1", "0")].
     channel_names : list[str]
         list of channel names.
-    shape : Tuple[int, ...]
+    shape : tuple[int, ...]
         TCZYX shape of the plate.
-    chunks : Optional[Tuple[int, ...]], optional
+    chunks : tuple[int, ...], optional
         TCZYX chunk size, by default None.
-    scale : Tuple[float, ...], optional
+    shards_ratio : tuple[int, ...], optional
+        Sharding ratio, by default None.
+    scale : tuple[float, ...], optional
         TCZYX scale of the plate, by default (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
         Data type of the plate, by default np.float32.
+    version : Literal["0.4", "0.5"], optional
+        OME-Zarr version, by default "0.4".
 
     Yields
     ------
@@ -136,6 +150,7 @@ def _temp_ome_zarr_stores(
             scale=scale,
             dtype=dtype,
             base_dir=base_dir,  # Use the same base directory
+            version=version,
         ) as input_store_path:
             # Create output store
             with _temp_ome_zarr(
@@ -147,6 +162,7 @@ def _temp_ome_zarr_stores(
                 scale=scale,
                 dtype=dtype,
                 base_dir=base_dir,  # Use the same base directory
+                version=version,
             ) as output_store_path:
                 yield input_store_path, output_store_path
 
@@ -176,6 +192,9 @@ def plate_setup(draw):
     # Generate channel names based on the number of channels
     channel_names = [f"Channel_{i}" for i in range(num_channels)]
 
+    version_st = st.one_of(st.just("0.4"), st.just("0.5"))
+    version = draw(version_st)
+
     # Generate shape ensuring that the
     # second dimension (C) matches num_channels
     T = draw(st.integers(min_value=1, max_value=3))  # Time
@@ -183,6 +202,11 @@ def plate_setup(draw):
     Y = draw(st.integers(min_value=8, max_value=32))  # Y-dimension
     X = draw(st.integers(min_value=8, max_value=32))  # X-dimension
     shape = (T, num_channels, Z, Y, X)  # TCZYX
+
+    if version == "0.5":
+        shards_ratio = draw(st.one_of(st.just((2, 1, 1, 2, 2)), st.just(None)))
+    else:
+        shards_ratio = None
 
     # Generate chunks
     # Ensure that chunks are compatible with the shape dimensions
@@ -216,7 +240,16 @@ def plate_setup(draw):
     # Generate dtype
     dtype = draw(st.sampled_from([np.float32, np.int16, np.uint8]))
 
-    return position_keys, channel_names, shape, chunks, scale, dtype
+    return (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    )
 
 
 @st.composite
@@ -237,9 +270,16 @@ def apply_transform_czyx_setup(draw):
         - time_indices
     """
     # Generate plate setup parameters
-    position_keys, channel_names, shape, chunks, scale, dtype = draw(
-        plate_setup()
-    )
+    (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    ) = draw(plate_setup())
     T, C = shape[:2]
 
     # Define a helper strategy to generate channel indices based on C
@@ -274,10 +314,12 @@ def apply_transform_czyx_setup(draw):
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
         time_indices,
+        version,
     )
 
 
@@ -300,9 +342,16 @@ def process_single_position_setup(draw):
         - time_indices
     """
     # Generate plate setup parameters
-    position_keys, channel_names, shape, chunks, scale, dtype = draw(
-        plate_setup()
-    )
+    (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    ) = draw(plate_setup())
     # NOTE: Chunking along T,C =1,1
     if chunks is not None:
         chunks = (1, 1) + chunks[2:]
@@ -352,10 +401,12 @@ def process_single_position_setup(draw):
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
         time_indices,
+        version,
     )
 
 
@@ -376,16 +427,12 @@ def populate_store(
             position_path = "/".join(position_key_tuple)
             position = input_dataset[position_path]
             T, C, Z, Y, X = shape
-            for t in range(T):
-                for c in range(C):
-                    # Generate random data based on dtype
-                    if np.issubdtype(dtype, np.floating):
-                        data = np.random.rand(Z, Y, X).astype(dtype)
-                    else:
-                        data = np.random.randint(
-                            1, 20, size=(Z, Y, X), dtype=dtype
-                        )
-                    position.data.oindex[t, c] = data
+            # Generate random data based on dtype
+            if np.issubdtype(dtype, np.floating):
+                data = np.random.rand(*shape).astype(dtype)
+            else:
+                data = np.random.randint(1, 20, size=shape, dtype=dtype)
+            position.data[:] = data
 
 
 # Verify the transformation
@@ -435,7 +482,16 @@ def verify_transformation(
 )
 @settings(max_examples=5)
 def test_create_empty_plate(plate_setup, extra_channels):
-    position_keys, channel_names, shape, chunks, scale, dtype = plate_setup
+    (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        version,
+    ) = plate_setup
 
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "test.zarr"
@@ -447,8 +503,10 @@ def test_create_empty_plate(plate_setup, extra_channels):
             channel_names=channel_names,
             shape=shape,
             chunks=chunks,
+            shards_ratio=shards_ratio,
             scale=scale,
             dtype=dtype,
+            version=version,
         )
 
         # Verify the store was created
@@ -484,8 +542,10 @@ def test_create_empty_plate(plate_setup, extra_channels):
             channel_names=extra_channels,
             shape=shape,
             chunks=chunks,
+            shards_ratio=shards_ratio,
             scale=scale,
             dtype=dtype,
+            version=version,
         )
 
         with open_ome_zarr(store_path) as dataset:
@@ -502,17 +562,20 @@ def test_create_empty_plate(plate_setup, extra_channels):
     constant=st.integers(min_value=1, max_value=5),
 )
 @settings(max_examples=5, deadline=None)
-def test_apply_transform_to_zyx_and_save(setup, constant):
+def test_apply_transform_to_czyx_and_save(setup, constant):
     (
         position_keys,
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
         time_indices,
+        version,
     ) = setup
+    assume(shards_ratio is None)
 
     # Use the enhanced context manager to get both input and output store paths
     with _temp_ome_zarr_stores(
@@ -520,8 +583,10 @@ def test_apply_transform_to_zyx_and_save(setup, constant):
         channel_names=channel_names,
         shape=shape,
         chunks=chunks,
+        shards_ratio=shards_ratio,
         scale=scale,
         dtype=dtype,
+        version=version,
     ) as (input_store_path, output_store_path):
         # Populate the input store with random data
         populate_store(input_store_path, position_keys, shape, dtype)
@@ -561,22 +626,22 @@ def test_apply_transform_to_zyx_and_save(setup, constant):
 
 
 @given(
-    setup=process_single_position_setup(),
-    constant=st.integers(min_value=1, max_value=3),
-    num_processes=st.integers(min_value=1, max_value=3),
+    setup=apply_transform_czyx_setup(),
+    constant=st.integers(min_value=1, max_value=5),
 )
-@settings(max_examples=3, deadline=None)
-def test_process_single_position(setup, constant, num_processes):
-    # def test_process_single_position(setup, constant, num_processes):
+@settings(max_examples=5, deadline=None)
+def test_apply_transform_to_tczyx_and_save(setup, constant):
     (
         position_keys,
         channel_names,
         shape,
         chunks,
+        shards_ratio,
         scale,
         dtype,
         channel_indices,
         time_indices,
+        version,
     ) = setup
 
     # Use the enhanced context manager to get both input and output store paths
@@ -585,8 +650,115 @@ def test_process_single_position(setup, constant, num_processes):
         channel_names=channel_names,
         shape=shape,
         chunks=chunks,
+        shards_ratio=shards_ratio,
         scale=scale,
         dtype=dtype,
+        version=version,
+    ) as (input_store_path, output_store_path):
+        # Populate the input store with random data
+        populate_store(input_store_path, position_keys, shape, dtype)
+
+        kwargs = {"constant": constant}
+
+        # Apply the transformation for each position and time point
+        for position_key_tuple in position_keys:
+            input_position_path = input_store_path / Path(*position_key_tuple)
+            output_position_path = output_store_path / Path(
+                *position_key_tuple
+            )
+
+            apply_transform_to_tczyx_and_save(
+                func=dummy_transform,
+                input_position_path=Path(input_position_path),
+                output_position_path=Path(output_position_path),
+                input_channel_indices=channel_indices,
+                output_channel_indices=channel_indices,
+                input_time_indices=time_indices,
+                output_time_indices=time_indices,
+                **kwargs,
+            )
+
+            # Verify the transformation
+            verify_transformation(
+                input_store_path,
+                output_store_path,
+                position_key_tuple,
+                shape,
+                time_indices,
+                channel_indices,
+                dummy_transform,
+                **kwargs,
+            )
+
+
+@given(
+    indices=st.lists(st.integers(min_value=0), min_size=1, unique=True),
+    shard_size=st.integers(min_value=1),
+)
+def test_indices_to_shard_aligned_batches(indices, shard_size):
+    """Test ``_indices_to_shard_aligned_batches``"""
+    batches = _indices_to_shard_aligned_batches(indices, shard_size)
+    assert isinstance(batches, list)
+    elements = []
+    for batch in batches:
+        assert batch
+        assert isinstance(batch, list)
+        elements.extend(batch)
+        first_element = batch[0]
+        shard_index = first_element // shard_size
+        lower_bound = shard_index * shard_size
+        upper_bound = lower_bound + shard_size
+        for item in batch:
+            assert isinstance(item, int)
+            assert lower_bound <= item < upper_bound, batches
+    assert elements == sorted(indices)
+
+
+@given(
+    indices=st.lists(st.integers(min_value=0), min_size=1, unique=True),
+    shard_size=st.integers(min_value=1),
+)
+def test_match_indices_to_batches(indices, shard_size):
+    """Test ``_match_indices_to_batches``"""
+    batched_reference = _indices_to_shard_aligned_batches(indices, shard_size)
+    matched_batches = _match_indices_to_batches(
+        flat_indices=indices,
+        original_reference=indices,
+        batched_reference=batched_reference,
+    )
+    assert matched_batches == batched_reference
+
+
+@given(
+    setup=process_single_position_setup(),
+    constant=st.integers(min_value=1, max_value=3),
+    num_processes=st.integers(min_value=1, max_value=3),
+)
+@settings(max_examples=3, deadline=None)
+def test_process_single_position(setup, constant, num_processes):
+    (
+        position_keys,
+        channel_names,
+        shape,
+        chunks,
+        shards_ratio,
+        scale,
+        dtype,
+        channel_indices,
+        time_indices,
+        version,
+    ) = setup
+
+    # Use the enhanced context manager to get both input and output store paths
+    with _temp_ome_zarr_stores(
+        position_keys=position_keys,
+        channel_names=channel_names,
+        shape=shape,
+        chunks=chunks,
+        shards_ratio=shards_ratio,
+        scale=scale,
+        dtype=dtype,
+        version=version,
     ) as (input_store_path, output_store_path):
         # Populate Store with random data
         populate_store(input_store_path, position_keys, shape, dtype)
