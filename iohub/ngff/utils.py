@@ -82,6 +82,18 @@ def create_empty_plate(
     ...     scale=(1, 1, 0.5, 0.5, 0.5)
     ... )
 
+    Create a plate with sharding:
+    >>> create_empty_plate(
+    ...     store_path=Path("/path/to/store"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(1, 1, 64, 2048, 2048),
+    ...     chunks=(1, 1, 8, 128, 128),
+    ...     scale=(1, 1, 0.5, 0.5, 0.5),
+    ...     shards_ratio=(10, 1, 8, 16, 16),
+    ...     version="0.5"
+    ... )
+
     Notes
     -----
     - If `chunks` is not provided, the function calculates an appropriate
