@@ -308,7 +308,7 @@ def _temp_ome_zarr_plate(
         temp_dir.cleanup()
 
 
-@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
+# @pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,
@@ -636,7 +636,7 @@ def test_write_more_channels(channels_and_random_5d, arr_name, version):
             pass
 
 
-@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
+# @pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
@@ -1278,7 +1278,7 @@ def test_combine_fovs_to_hcs():
                 assert_array_equal(dataset[fov_path]["0"].numpy(), array)
 
 
-@pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
+# @pytest.mark.skip(reason="zarr-python / ome_zarr incompatibility")
 def test_hcs_external_reader(tmp_path):
     from ome_zarr.io import parse_url
     from ome_zarr.reader import Reader
@@ -1361,7 +1361,7 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
         nz_multiscales = from_ngff_zarr(
             dataset.zgroup.store.root, validate=True
         )
-        assert_array_almost_equal(
+        assert_allclose(
             dataset[arr_name].dask_array().compute(),
             nz_multiscales.images[0].data,
         )
