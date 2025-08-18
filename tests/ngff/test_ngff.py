@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Literal
 import hypothesis.extra.numpy as npst
 import hypothesis.strategies as st
 import numpy as np
+import ome_zarr.io
+import ome_zarr.reader
 import pytest
 import zarr.storage
 from hypothesis import HealthCheck, assume, given, settings
@@ -320,16 +322,15 @@ def _temp_ome_zarr_plate(
 )
 def test_write_ome_zarr(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.__setitem__()`"""
-    from ome_zarr.io import parse_url
-    from ome_zarr.reader import Reader
-
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(
         random_5d, channel_names, arr_name, version=version
     ) as dataset:
         assert_allclose(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
-        ext_reader = Reader(parse_url(dataset.zgroup.store.root))
+        ext_reader = ome_zarr.reader.Reader(
+            ome_zarr.io.parse_url(dataset.zgroup.store.root)
+        )
         node = list(ext_reader())[0]
         assert node.metadata["channel_names"] == channel_names
         assert node.specs[0].datasets == [arr_name]
@@ -641,9 +642,6 @@ def test_write_more_channels(channels_and_random_5d, arr_name, version):
 )
 def test_set_transform_image(ch_shape_dtype, arr_name):
     """Test `iohub.ngff.Position.set_transform()`"""
-    from ome_zarr.io import parse_url
-    from ome_zarr.reader import Reader
-
     channel_names, shape, dtype = ch_shape_dtype
     transform = [
         TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))
@@ -669,7 +667,9 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
                 == transform
             )
         # read data with an external reader
-        ext_reader = Reader(parse_url(dataset.zgroup.store.root))
+        ext_reader = ome_zarr.reader.Reader(
+            ome_zarr.io.parse_url(dataset.zgroup.store.root)
+        )
         node = list(ext_reader())[0]
         assert node.metadata["coordinateTransformations"][0] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
@@ -1249,9 +1249,6 @@ def test_position_scale(channels_and_random_5d, version):
     reason="https://github.com/zarr-developers/zarr-python/issues/2407"
 )
 def test_combine_fovs_to_hcs():
-    from ome_zarr.io import parse_url
-    from ome_zarr.reader import Reader
-
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
     with open_ome_zarr(hcs_ref) as hcs_store:
@@ -1277,9 +1274,6 @@ def test_combine_fovs_to_hcs():
 
 
 def test_hcs_external_reader(tmp_path):
-    from ome_zarr.io import parse_url
-    from ome_zarr.reader import Reader
-
     store_path = tmp_path / "hcs.zarr"
     fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
     y_size, x_size = (128, 100)
@@ -1291,7 +1285,9 @@ def test_hcs_external_reader(tmp_path):
             fov.create_zeros("0", shape=(1, 2, 3, y_size, x_size), dtype=int)
         n_rows = len(dataset.metadata.rows)
         n_cols = len(dataset.metadata.columns)
-    plate = list(Reader(parse_url(store_path))())[0]
+    plate = list(
+        ome_zarr.reader.Reader(ome_zarr.io.parse_url(store_path))()
+    )[0]
     assert plate.data[0].shape == (1, 2, 3, y_size * n_rows, x_size * n_cols)
     assert plate.data[0].dtype == int
     assert not plate.data[0].any()
