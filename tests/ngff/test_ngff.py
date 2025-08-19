@@ -1326,13 +1326,16 @@ def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
         assert len(dataset.zattrs["ome"]["multiscales"]) == 1
 
         multiscale = dataset.zattrs["ome"]["multiscales"][0]
-        assert len(multiscale["datasets"]) == 2
+        assert len(multiscale["datasets"]) == 3
         assert multiscale["datasets"][0]["coordinateTransformations"][0][
             "scale"
         ] == [1.0, 1.0, 1.0, 1.0, 1.0]
         assert multiscale["datasets"][1]["coordinateTransformations"][0][
             "scale"
-        ] == [1.0, 1.0, 2.0, 2.0, 2.0]
+        ] == [1.0, 1.0, 1.0, 2.0, 2.0]
+        assert multiscale["datasets"][2]["coordinateTransformations"][0][
+            "scale"
+        ] == [1.0, 1.0, 1.0, 4.0, 4.0]
         assert 1 < dataset["0"].numpy().mean() < np.iinfo(np.uint16).max
 
 
