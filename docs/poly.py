@@ -101,6 +101,7 @@ ENVIRONMENT = (
         ),
         "v0.2.0": main_factory("v0.2.0"),
         "v0.2.1": main_factory("v0.2.1"),
+        "v0.2.2": main_factory("v0.2.2"),
         "main": main_factory("main"),
     }
     if not MOCK
@@ -119,6 +120,7 @@ BUILDER = (
         "v0.1.0": SphinxBuilder(src / "source", args=["-D", "plot_gallery=0"]),
         "v0.2.0": main_builder,
         "v0.2.1": main_builder,
+        "v0.2.2": main_builder,
         "main": main_builder,
     }
     if not MOCK
