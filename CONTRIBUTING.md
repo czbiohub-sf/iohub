@@ -104,7 +104,7 @@ Then make the changes and [track them with Git](https://docs.github.com/en/get-s
 
 #### Prerequisites
 
-Install a forked version of `sphinx-polyversion`
+Install a forked version of `sphinx-polyversion` due to an incompatibility with `setuptools_scm`.
 
 ```shell
 pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging 
@@ -117,7 +117,7 @@ Inside `/docs` folder
 ```shell
 pip install "/PATH/TO/iohub[doc]"
 make clean
-sphinx-polyversion docs/poly.py -vvv --local
+sphinx-polyversion poly.py -vvv --local
 ```
 
 Generated HTML documentation can be found in
