@@ -102,13 +102,22 @@ Then make the changes and [track them with Git](https://docs.github.com/en/get-s
 
 ### Developing documentation
 
+#### Prerequisites
+
+Install a forked version of `sphinx-polyversion`
+
+```shell
+pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging 
+```
+
 #### Building the HTML version locally
 
 Inside `/docs` folder
 
 ```shell
 pip install "/PATH/TO/iohub[doc]"
-make clean && make build
+make clean
+sphinx-polyversion docs/poly.py -vvv --local
 ```
 
 Generated HTML documentation can be found in
