@@ -456,12 +456,15 @@ def apply_transform_to_tczyx_and_save(
                 output_channel=output_channel_indices,
                 skipped=True,
             )
-    _save_transformed(
-        transformed=list(results.values()),
-        output_position_path=output_position_path,
-        output_channel_indices=output_channel_indices,
-        output_time_indices=list(results.keys()),
-    )
+    if results:
+        _save_transformed(
+            transformed=list(results.values()),
+            output_position_path=output_position_path,
+            output_channel_indices=output_channel_indices,
+            output_time_indices=list(results.keys()),
+        )
+    else:
+        click.echo(f"No valid time points to write for channel indices {output_channel_indices}, output time indices {output_time_indices}")
     del results
     _echo_finished(input_time_indices, output_channel_indices, skipped=False)
 
