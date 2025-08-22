@@ -195,14 +195,45 @@ def _save_transformed(
     output_channel_indices: list[int] | slice,
     output_time_indices: int | list[int],
 ) -> None:
+    # Add validation for empty arrays
+    if transformed is not None:
+        if isinstance(transformed, list):
+            for i, t in enumerate(transformed):
+                if hasattr(t, 'size') and t.size == 0:
+                    click.echo(f"Warning: Empty array found at time index {i}, shape: {t.shape}")
+                    click.echo(f"Skipping write for position: {output_position_path}")
+                    return
+        elif hasattr(transformed, 'size') and transformed.size == 0:
+            click.echo(f"Warning: Empty transformed array, shape: {transformed.shape}")
+            click.echo(f"Skipping write for position: {output_position_path}")
+            return
+    
     # NOTE: use tensorstore due to zarr-python#3221
     with open_ome_zarr(
         output_position_path, layout="fov", mode="r+"
     ) as output_dataset:
         ts = output_dataset.data.tensorstore(concurrency=4)
-    ts.oindex[output_time_indices, output_channel_indices].write(
-        transformed
-    ).result()
+    
+    try:
+        ts.oindex[output_time_indices, output_channel_indices].write(
+            transformed
+        ).result()
+    except ValueError as e:
+        click.echo(f"ERROR: Failed to write to {output_position_path}")
+        click.echo(f"Output time indices: {output_time_indices}")
+        click.echo(f"Output channel indices: {output_channel_indices}")
+        if transformed is not None:
+            if isinstance(transformed, list):
+                click.echo(f"Transformed shapes: {[t.shape if hasattr(t, 'shape') else 'No shape attr' for t in transformed]}")
+                click.echo(f"Transformed sizes: {[t.size if hasattr(t, 'size') else 'No size attr' for t in transformed]}")
+            else:
+                click.echo(f"Transformed shape: {transformed.shape if hasattr(transformed, 'shape') else 'No shape attr'}")
+                click.echo(f"Transformed size: {transformed.size if hasattr(transformed, 'size') else 'No size attr'}")
+        else:
+            click.echo("Transformed data is None")
+        click.echo(f"TensorStore error: {str(e)}")
+        raise e
+    
     # NOTE: explicit GC due to tensorstore#223
     del ts
 
