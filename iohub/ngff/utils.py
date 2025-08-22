@@ -407,9 +407,8 @@ def apply_transform_to_tczyx_and_save(
         Additional arguments to pass to the function.
     """
     input_time_indices = _slice_to_list(input_time_indices)
-    output_time_indices = _slice_to_list(output_time_indices)
     results = {}
-    for input_time_index in input_time_indices:
+    for i, input_time_index in enumerate(input_time_indices):
         result = _apply_transform_to_czyx(
             func,
             input_position_path=input_position_path,
@@ -418,7 +417,7 @@ def apply_transform_to_tczyx_and_save(
             **kwargs,
         )
         if result is not None:
-            results[input_time_index] = result
+            results[i] = result
         else:
             _echo_finished(
                 input_time=input_time_index,
@@ -426,11 +425,13 @@ def apply_transform_to_tczyx_and_save(
                 skipped=True,
             )
     if results:
+        output_time_indices = _slice_to_list(output_time_indices)
+        output_time_indices = [output_time_indices[i] for i in results.keys()]
         _save_transformed(
             transformed=list(results.values()),
             output_position_path=output_position_path,
             output_channel_indices=output_channel_indices,
-            output_time_indices=list(results.keys()),
+            output_time_indices=output_time_indices,
         )
     else:
         click.echo(f"No valid time points to write for channel indices {output_channel_indices}, output time indices {output_time_indices}")
