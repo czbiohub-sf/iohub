@@ -617,7 +617,7 @@ def process_single_position(
     click.echo("Shut down multiprocess pool")
 
 
-def _check_nan_n_zeros(input_array):
+def _check_nan_n_zeros(input_array) -> bool:
     """
     Checks if any of the channels are all zeros or nans and returns true
     """
@@ -645,7 +645,9 @@ def _check_nan_n_zeros(input_array):
     return False
 
 
-def _calculate_zyx_chunk_size(shape, bytes_per_pixel, max_chunk_size_bytes):
+def _calculate_zyx_chunk_size(
+    shape, bytes_per_pixel, max_chunk_size_bytes
+) -> tuple[int, int, int]:
     """
     Calculate the chunk size for ZYX dimensions based on the shape,
     bytes per pixel of data, and desired max chunk size.
@@ -658,6 +660,6 @@ def _calculate_zyx_chunk_size(shape, bytes_per_pixel, max_chunk_size_bytes):
         chunk_zyx_shape[-3] > 1
         and np.prod(chunk_zyx_shape) * bytes_per_pixel > max_chunk_size_bytes
     ):
-        chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2).astype(int)
-    chunk_zyx_shape = tuple(chunk_zyx_shape)
+        chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2)
+    chunk_zyx_shape = tuple(map(int, chunk_zyx_shape))
     return chunk_zyx_shape
