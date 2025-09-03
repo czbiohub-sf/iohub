@@ -176,17 +176,17 @@ def _apply_transform_to_czyx(
 
 
 def _echo_finished(
-    input_time: int | list[int] | slice,
-    output_channel: int | list[int] | slice,
+    time_index: int | list[int] | slice,
+    channel_index: int | list[int] | slice,
     skipped: bool,
 ) -> None:
     if skipped:
         click.echo(
-            f"Skipping t={input_time}, c={output_channel} "
+            f"Skipping t={time_index}, c={channel_index} "
             "due to all zeros or nans"
         )
     else:
-        click.echo(f"Finished writing t={input_time}, c={output_channel}")
+        click.echo(f"Finished writing t={time_index}, c={channel_index}")
 
 
 def _save_transformed(
@@ -218,6 +218,8 @@ def apply_transform_to_czyx_and_save(
     **kwargs,
 ) -> None:
     """
+    Note: To be deprecated, no longer used by process_single_position
+
     Load a CZYX array from a position store,
     apply a transformation, and save the result.
 
@@ -288,14 +290,14 @@ def apply_transform_to_czyx_and_save(
             output_position_path=output_position_path,
         )
         _echo_finished(
-            input_time=input_time_index,
-            output_channel=output_channel_indices,
+            time_index=input_time_index,
+            channel_index=input_channel_indices,
             skipped=False,
         )
     else:
         _echo_finished(
-            input_time=input_time_index,
-            output_channel=output_channel_indices,
+            time_index=input_time_index,
+            channel_index=input_channel_indices,
             skipped=True,
         )
 
@@ -420,8 +422,8 @@ def apply_transform_to_tczyx_and_save(
             results[i] = result
         else:
             _echo_finished(
-                input_time=input_time_index,
-                output_channel=output_channel_indices,
+                time_index=input_time_index,
+                channel_index=input_channel_indices,
                 skipped=True,
             )
     if results:
@@ -433,14 +435,8 @@ def apply_transform_to_tczyx_and_save(
             output_channel_indices=output_channel_indices,
             output_time_indices=output_time_indices,
         )
-    else:
-        click.echo(
-            f"No valid time points to write for channel indices "
-            f"{output_channel_indices}, output time indices "
-            f"{output_time_indices}"
-        )
+        _echo_finished(input_time_indices, input_channel_indices, skipped=False)
     del results
-    _echo_finished(input_time_indices, output_channel_indices, skipped=False)
 
 
 def process_single_position(
