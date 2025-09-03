@@ -435,7 +435,9 @@ def apply_transform_to_tczyx_and_save(
             output_channel_indices=output_channel_indices,
             output_time_indices=output_time_indices,
         )
-        _echo_finished(input_time_indices, input_channel_indices, skipped=False)
+        _echo_finished(
+            input_time_indices, input_channel_indices, skipped=False
+        )
     del results
 
 
