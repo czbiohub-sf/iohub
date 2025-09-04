@@ -383,7 +383,7 @@ class ImageArray(zarr.Array):
     def downscale(self):
         raise NotImplementedError
 
-    def tensorstore(self):
+    def tensorstore(self, concurrency: int | None = None):
         """Open the zarr array as a TensorStore object.
         Needs the optional dependency ``tensorstore``.
 
@@ -396,10 +396,20 @@ class ImageArray(zarr.Array):
 
         ts_spec = {
             "driver": "zarr2" if self.metadata.zarr_format == 2 else "zarr3",
-            "kvstore": (Path(self.store.root) / self.path.strip("/")).as_uri(),
+            "kvstore": {
+                "driver": "file",
+                "path": str(Path(self.store.root) / self.path.strip("/")),
+            },
         }
         zarr_dataset = ts.open(
-            ts_spec, read=True, write=not self.read_only
+            ts_spec,
+            read=True,
+            write=not self.read_only,
+            context=(
+                ts.Context({"data_copy_concurrency": {"limit": concurrency}})
+                if concurrency
+                else None
+            ),
         ).result()
         return zarr_dataset
 
