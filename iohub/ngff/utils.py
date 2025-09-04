@@ -572,6 +572,10 @@ def process_single_position(
     ), "input_channel_indices must be a list"
     if output_channel_indices is None:
         output_channel_indices = input_channel_indices
+    if output_shards is not None and output_shards[1] != 1:
+        raise ValueError(
+            "Sharding along the channel dimension is not supported."
+        )
 
     # Check for invalid times
     time_ubound = input_data_shape[0] - 1
