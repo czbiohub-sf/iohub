@@ -572,6 +572,18 @@ def process_single_position(
     ), "input_channel_indices must be a list"
     if output_channel_indices is None:
         output_channel_indices = input_channel_indices
+    if output_shards is not None:
+        batched_output_channel_indices = _indices_to_shard_aligned_batches(
+            output_channel_indices, output_shards[1]
+        )
+        batched_input_channel_indices = _match_indices_to_batches(
+            flat_indices=input_channel_indices,
+            original_reference=output_channel_indices,
+            batched_reference=batched_output_channel_indices,
+        )
+    else:
+        batched_input_channel_indices = [[i] for i in input_channel_indices]
+        batched_output_channel_indices = [[i] for i in output_channel_indices]
 
     # Check for invalid times
     time_ubound = input_data_shape[0] - 1
@@ -591,7 +603,7 @@ def process_single_position(
 
     # Loop through (T, C), applying transform and writing as we go
     iterable = itertools.product(
-        zip(input_channel_indices, output_channel_indices),
+        zip(batched_input_channel_indices, batched_output_channel_indices),
         zip(batched_input_time_indices, batched_output_time_indices),
     )
     flat_iterable = tuple((*c, *t) for c, t in iterable)
