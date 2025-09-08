@@ -4,7 +4,15 @@ import multiprocessing as mp
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, Union, Protocol, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Protocol,
+    Sequence,
+    Union,
+    runtime_checkable,
+)
 from warnings import warn
 
 import click
