@@ -1936,9 +1936,7 @@ class Plate(NGFFNode):
         if new in self.zgroup:
             raise ValueError(f"Well '{new}' already exists.")
 
-        store_path = Path(
-            str(self.zgroup.store_path).replace("file:", "")
-        )  # zarr-python prepends file: for some reason
+        store_path = self.zgroup.store.root
         assert store_path.is_dir()
 
         old_path = store_path / old
