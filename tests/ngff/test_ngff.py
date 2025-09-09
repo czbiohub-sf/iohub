@@ -580,11 +580,11 @@ def test_rename_well(channels_and_random_5d, arr_name, version):
         assert "4" in [col.name for col in dataset.metadata.columns]
 
         # destination exists
-        with pytest.raises(ValueError):
+        with pytest.raises(FileExistsError):
             dataset.rename_well("B/2", "C/4")
 
         # source doesn't exist
-        with pytest.raises(ValueError):
+        with pytest.raises(FileNotFoundError):
             dataset.rename_well("Q/1", "Q/2")
 
         # invalid well names
