@@ -1932,9 +1932,9 @@ class Plate(NGFFNode):
         # raises ValueError if old well does not exist
         # or if new well already exists
         if old not in self.zgroup:
-            raise ValueError(f"Well '{old}' does not exist.")
+            raise FileNotFoundError(f"Well '{old}' does not exist.")
         if new in self.zgroup:
-            raise ValueError(f"Well '{new}' already exists.")
+            raise FileExistsError(f"Well '{new}' already exists.")
 
         store_path = self.zgroup.store.root
         assert store_path.is_dir()
