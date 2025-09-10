@@ -383,9 +383,16 @@ class ImageArray(zarr.Array):
     def downscale(self):
         raise NotImplementedError
 
-    def tensorstore(self, concurrency: int | None = None):
-        """Open the zarr array as a TensorStore object.
+    def tensorstore(self, **kwargs):
+        """
+        Open the zarr array as a TensorStore object.
         Needs the optional dependency ``tensorstore``.
+
+        Parameters
+        ----------
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to ``tensorstore.open()``,
+            by default None
 
         Returns
         -------
@@ -401,15 +408,15 @@ class ImageArray(zarr.Array):
                 "path": str(Path(self.store.root) / self.path.strip("/")),
             },
         }
+        if "read" in kwargs or "write" in kwargs:
+            raise ValueError(
+                "Cannot override file mode for the Zarr store."
+            )
         zarr_dataset = ts.open(
             ts_spec,
             read=True,
             write=not self.read_only,
-            context=(
-                ts.Context({"data_copy_concurrency": {"limit": concurrency}})
-                if concurrency
-                else None
-            ),
+            **kwargs
         ).result()
         return zarr_dataset
 

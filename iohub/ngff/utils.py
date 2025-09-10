@@ -196,10 +196,16 @@ def _save_transformed(
     output_time_indices: int | list[int],
 ) -> None:
     # NOTE: use tensorstore due to zarr-python#3221
+    import tensorstore
+
     with open_ome_zarr(
         output_position_path, layout="fov", mode="r+"
     ) as output_dataset:
-        ts = output_dataset.data.tensorstore(concurrency=4)
+        ts = output_dataset.data.tensorstore(
+            context=tensorstore.Context(
+                {"data_copy_concurrency": {"limit": 4}}
+            )
+        )
     ts.oindex[output_time_indices, output_channel_indices].write(
         transformed
     ).result()

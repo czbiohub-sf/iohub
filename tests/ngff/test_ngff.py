@@ -475,11 +475,19 @@ def test_ome_zarr_to_tensorstore(
     channels_and_random_5d, arr_name, version, concurrency
 ):
     """Test `iohub.ngff.Position.data` to tensorstore"""
+    import tensorstore as ts
+
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(
         random_5d, channel_names, arr_name, version=version
     ) as dataset:
-        tstore = dataset[arr_name].tensorstore(concurrency=concurrency)
+        tstore = dataset[arr_name].tensorstore(
+            context=(
+                ts.Context({"data_copy_concurrency": {"limit": concurrency}})
+                if concurrency is not None
+                else None
+            )
+        )
         assert_array_equal(tstore, random_5d)
         zeros = np.zeros_like(random_5d)
         tstore[...].write(zeros).result()
@@ -1288,9 +1296,9 @@ def test_hcs_external_reader(tmp_path):
             fov.create_zeros("0", shape=(1, 2, 3, y_size, x_size), dtype=int)
         n_rows = len(dataset.metadata.rows)
         n_cols = len(dataset.metadata.columns)
-    plate = list(
-        ome_zarr.reader.Reader(ome_zarr.io.parse_url(store_path))()
-    )[0]
+    plate = list(ome_zarr.reader.Reader(ome_zarr.io.parse_url(store_path))())[
+        0
+    ]
     assert plate.data[0].shape == (1, 2, 3, y_size * n_rows, x_size * n_cols)
     assert plate.data[0].dtype == int
     assert not plate.data[0].any()
