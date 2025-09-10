@@ -409,14 +409,9 @@ class ImageArray(zarr.Array):
             },
         }
         if "read" in kwargs or "write" in kwargs:
-            raise ValueError(
-                "Cannot override file mode for the Zarr store."
-            )
+            raise ValueError("Cannot override file mode for the Zarr store.")
         zarr_dataset = ts.open(
-            ts_spec,
-            read=True,
-            write=not self.read_only,
-            **kwargs
+            ts_spec, read=True, write=not self.read_only, **kwargs
         ).result()
         return zarr_dataset
 
