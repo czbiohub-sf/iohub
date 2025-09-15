@@ -12,7 +12,7 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, Literal, Sequence, Type, overload
+from typing import Any, Generator, Literal, Sequence, Type, overload
 
 import numpy as np
 import zarr.codecs
@@ -28,8 +28,12 @@ from iohub.ngff.models import (
     AxisMeta,
     ChannelAxisMeta,
     DatasetMeta,
+    ImageLabelMeta,
     ImageMeta,
     ImagesMeta,
+    LabelColorMeta,
+    LabelImageMeta,
+    LabelsMeta,
     MultiScaleMeta,
     OMEROMeta,
     PlateAxisMeta,
@@ -542,6 +546,511 @@ class TiledImageArray(ImageArray):
     def _check_rc(row: int, column: int):
         if not (isinstance(row, int) and isinstance(column, int)):
             raise TypeError("Row and column indices must be integers.")
+
+
+class LabelsArray(zarr.Array):
+    """Container object for labels stored as a zarr array (TZYX)"""
+
+    @classmethod
+    def from_zarr_array(cls, zarray: zarr.Array) -> LabelsArray:
+        return cls(zarray._async_array)
+
+    @property
+    def frames(self):
+        """Number of time frames in the labels array."""
+        return self._get_dim(0)
+
+    @property
+    def slices(self):
+        """Number of Z slices in the labels array."""
+        return self._get_dim(1)
+
+    @property
+    def height(self):
+        """Height (Y dimension) of the labels array."""
+        return self._get_dim(2)
+
+    @property
+    def width(self):
+        """Width (X dimension) of the labels array."""
+        return self._get_dim(3)
+
+    def _get_dim(self, idx):
+        """Get dimension size for 4D labels array (TZYX)."""
+        return _pad_shape(self.shape, target=4)[idx]
+
+    def numpy(self) -> NDArray:
+        """Return the whole image as an in-RAM NumPy array."""
+        return self[:]
+
+    def dask_array(self):
+        """Return as a dask array."""
+        import dask.array as da
+
+        return da.from_zarr(self.store.root, component=self.path)
+
+    def downscale(self):
+        """Labels downscaling is not supported."""
+        raise NotImplementedError(
+            "Downscaling is not implemented for labels arrays."
+        )
+
+    def tensorstore(self, **kwargs):
+        """
+        Open the zarr labels array as a TensorStore object.
+        Needs the optional dependency ``tensorstore``.
+
+        Parameters
+        ----------
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to ``tensorstore.open()``,
+            by default None
+
+        Returns
+        -------
+        TensorStore
+            Handle to the Zarr labels array.
+        """
+        import tensorstore as ts
+
+        ts_spec = {
+            "driver": "zarr2" if self.metadata.zarr_format == 2 else "zarr3",
+            "kvstore": {
+                "driver": "file",
+                "path": str(Path(self.store.root) / self.path.strip("/")),
+            },
+        }
+        if "read" in kwargs or "write" in kwargs:
+            raise ValueError("Cannot override file mode for the Zarr store.")
+        zarr_dataset = ts.open(
+            ts_spec, read=True, write=not self.read_only, **kwargs
+        ).result()
+        return zarr_dataset
+
+
+class LabelImage(NGFFNode):
+    """Multiscale label image group containing LabelsArray pyramid levels.
+
+    This class manages label images according to NGFF specification where
+    each label image MUST implement the multiscales specification with the
+    same number of scale levels as the original image.
+
+    Parameters
+    ----------
+    group : zarr.Group
+        Zarr hierarchy group object for the label image
+    parse_meta : bool, optional
+        Whether to parse NGFF metadata in `.zattrs`, by default True
+    axes : list[AxisMeta], optional
+        List of axes for TZYX dimensions (no channel), by default None
+    version : Literal["0.4", "0.5"]
+        OME-NGFF specification version
+    colors : dict[int, list[int]], optional
+        Color mapping for label values, by default None
+    properties : list[dict[str, Any]], optional
+        Properties for label values, by default None
+    overwriting_creation : bool, optional
+        Whether to overwrite existing arrays, by default False
+
+    Attributes
+    ----------
+    version : Literal["0.4", "0.5"]
+        OME-NGFF specification version
+    zgroup : Group
+        Zarr group holding label arrays
+    zattr : Attributes
+        Zarr attributes of the group
+    axes : list[AxisMeta]
+        Axes metadata (TZYX, no channel)
+    """
+
+    _MEMBER_TYPE = LabelsArray
+
+    def __init__(
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        axes: list[AxisMeta] | None = None,
+        version: Literal["0.4", "0.5"] = "0.4",
+        colors: dict[int, list[int]] | None = None,
+        properties: list[dict[str, Any]] | None = None,
+        overwriting_creation: bool = False,
+    ):
+        if axes:
+            self.axes = [ax for ax in axes if ax.type != "channel"]
+        else:
+            self.axes = [
+                TimeAxisMeta(name="T", unit="second"),
+                *[
+                    SpaceAxisMeta(name=i, unit="micrometer")
+                    for i in ("Z", "Y", "X")
+                ],
+            ]
+
+        super().__init__(
+            group=group,
+            parse_meta=parse_meta,
+            channel_names=[
+                "label"
+            ],  # Dummy channel name for labels (no actual channels)
+            axes=self.axes,
+            version=version,
+            overwriting_creation=overwriting_creation,
+        )
+
+        # Store colors and properties for metadata
+        self._colors = colors
+        self._properties = properties
+
+    def _parse_meta(self):
+        """Parse multiscales and image-label metadata."""
+        try:
+            self.metadata = LabelImageMeta.model_validate(
+                self.maybe_wrapped_ome_attrs
+            )
+        except ValidationError as e:
+            _logger.warning(str(e))
+            self._warn_invalid_meta()
+
+    def dump_meta(self):
+        """Dump metadata to zarr.json file."""
+        ome = self.metadata.model_dump(**TO_DICT_SETTINGS)
+        self._dump_ome(ome)
+
+    @property
+    def _zarr_format(self):
+        return 3 if self.version == "0.5" else 2
+
+    @property
+    def _member_names(self):
+        return self.array_keys()
+
+    @property
+    def data(self) -> LabelsArray:
+        """.. warning::
+            This property does *NOT* aim to retrieve all the arrays.
+            And it may also fail to retrive any data if arrays exist but
+            are not named conventionally.
+
+        Alias for the highest resolution label array ('0').
+
+        Returns
+        -------
+        LabelsArray
+            Label array at the highest resolution level
+        """
+        try:
+            return self["0"]
+        except KeyError:
+            raise KeyError(
+                "There is no array named '0' "
+                f"in the group of: {self.array_keys()}"
+            )
+
+    def __getitem__(self, key: int | str) -> LabelsArray:
+        """Get a label array at a specific resolution level.
+
+        Parameters
+        ----------
+        key : int | str
+            Resolution level (e.g., "0", "1", "2")
+
+        Returns
+        -------
+        LabelsArray
+            Label array at the specified resolution level
+        """
+        key = normalize_path(str(key))
+        znode = self.zgroup.get(key)
+        if not znode:
+            raise KeyError(key)
+
+        if isinstance(znode, zarr.Array):
+            return LabelsArray.from_zarr_array(znode)
+        else:
+            raise TypeError(
+                f"Expected zarr.Array at level '{key}', got {type(znode)}"
+            )
+
+    def __setitem__(self, key, value: NDArray):
+        """Write label data to a specific resolution level."""
+        key = normalize_path(str(key))
+        if not isinstance(value, np.ndarray):
+            raise TypeError(
+                f"Value must be a NumPy array. Got type {type(value)}."
+            )
+        self.create_level(key, value)
+
+    def create_level(
+        self,
+        level: str,
+        data: NDArray,
+        chunks: tuple[int, ...] | None = None,
+        transform: list[TransformationMeta] | None = None,
+    ) -> LabelsArray:
+        """Create a label array at a specific resolution level.
+
+        Parameters
+        ----------
+        level : str
+            Resolution level name (e.g., "0", "1", "2")
+        data : NDArray
+            Label data (integer array, TZYX format)
+        chunks : tuple[int, ...], optional
+            Chunk size, by default None
+        transform : list[TransformationMeta], optional
+            Coordinate transformations for this level, by default None
+
+        Returns
+        -------
+        LabelsArray
+            Created label array
+        """
+        if not isinstance(data, np.ndarray):
+            raise TypeError("Label data must be a NumPy array")
+
+        if not np.issubdtype(data.dtype, np.integer):
+            raise ValueError(
+                f"Label data must be an integer dtype, got {data.dtype}."
+            )
+
+        if chunks is None:
+            chunks = self._default_chunks(data.shape, last_data_dims=3)
+
+        zarray = self._group.create_array(
+            name=level,
+            data=data,
+            chunks=chunks,
+            overwrite=self._overwrite,
+            fill_value=0,
+            dimension_names=(
+                [ax.name for ax in self.axes[: len(data.shape)]]
+                if self._zarr_format == 3
+                else None
+            ),
+            chunk_key_encoding=ChunkKeyEncodingParams(
+                name="default" if self._zarr_format == 3 else "v2",
+                separator="/",
+            ),
+            **self._create_compressor_options(),
+        )
+
+        self._create_label_meta(level, transform=transform)
+
+        return LabelsArray.from_zarr_array(zarray)
+
+    def create_zeros(
+        self,
+        level: str,
+        shape: tuple[int, ...],
+        dtype: DTypeLike,
+        chunks: tuple[int, ...] | None = None,
+        transform: list[TransformationMeta] | None = None,
+    ) -> LabelsArray:
+        """Create a zero-filled label array at a specific resolution level.
+
+        Parameters
+        ----------
+        level : str
+            Resolution level name
+        shape : tuple[int, ...]
+            Array shape (TZYX)
+        dtype : DTypeLike
+            Integer data type for labels
+        chunks : tuple[int, ...], optional
+            Chunk size, by default None
+        transform : list[TransformationMeta], optional
+            Coordinate transformations, by default None
+
+        Returns
+        -------
+        LabelsArray
+            Zero-filled label array
+        """
+        if chunks is None:
+            chunks = self._default_chunks(shape, last_data_dims=3)
+
+        # Ensure integer dtype
+        if not np.issubdtype(dtype, np.integer):
+            raise ValueError(f"Labels must use integer dtype, got {dtype}")
+
+        zarray = LabelsArray.from_zarr_array(
+            self._group.create_array(
+                name=level,
+                shape=shape,
+                dtype=dtype,
+                chunks=chunks,
+                overwrite=self._overwrite,
+                fill_value=0,
+                dimension_names=(
+                    [ax.name for ax in self.axes[: len(shape)]]
+                    if self._zarr_format == 3
+                    else None
+                ),
+                chunk_key_encoding=ChunkKeyEncodingParams(
+                    name="default" if self._zarr_format == 3 else "v2",
+                    separator="/",
+                ),
+                **self._create_compressor_options(),
+            )
+        )
+
+        self._create_label_meta(level, transform=transform)
+        return zarray
+
+    def initialize_pyramid(self, levels: int, source_level: str = "0") -> None:
+        """Initialize multiscale pyramid for label image.
+
+        Creates downscaled versions of the source level using label-preserving
+        downscaling to maintain integer label values.
+
+        Parameters
+        ----------
+        levels : int
+            Total number of pyramid levels
+        source_level : str, optional
+            Source level to downscale from, by default "0"
+        """
+        if source_level not in self:
+            raise KeyError(f"Source level '{source_level}' not found")
+
+        source_array = self[source_level]
+
+        for level in range(1, levels):
+            factor = 2**level
+
+            downscaled_shape = source_array.shape[:-3] + _scale_integers(
+                source_array.shape[-3:], factor
+            )
+
+            downscaled_chunks = _pad_shape(
+                _scale_integers(source_array.chunks, factor),
+                len(downscaled_shape),
+            )
+
+            transforms = [
+                TransformationMeta(
+                    type="scale",
+                    scale=[1.0] * (len(source_array.shape) - 3)
+                    + [float(factor)] * 3,
+                )
+            ]
+
+            # Create downscaled level (empty, same as images)
+            self.create_zeros(
+                level=str(level),
+                shape=downscaled_shape,
+                dtype=source_array.dtype,
+                chunks=downscaled_chunks,
+                transform=transforms,
+            )
+
+    @staticmethod
+    def _default_chunks(shape, last_data_dims: int):
+        """Default chunking for label arrays."""
+        chunks = shape[-min(last_data_dims, len(shape)) :]
+        return _pad_shape(chunks, target=len(shape))
+
+    def _create_compressor_options(self):
+        """Compression options for label arrays."""
+        shuffle = zarr.codecs.BloscShuffle.bitshuffle
+        if self._zarr_format == 3:
+            return {
+                "compressors": zarr.codecs.BloscCodec(
+                    cname="zstd",
+                    clevel=1,
+                    shuffle=shuffle,
+                )
+            }
+        else:
+            from numcodecs import Blosc
+
+            return {
+                "compressor": Blosc(
+                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+                )
+            }
+
+    def _create_label_meta(
+        self,
+        level: str,
+        transform: list[TransformationMeta] | None = None,
+    ):
+        """Create or update multiscales metadata for this label image."""
+        if not transform:
+            transform = [
+                TransformationMeta(type="scale", scale=[1.0] * len(self.axes))
+            ]
+
+        dataset_meta = DatasetMeta(
+            path=level, coordinate_transformations=transform
+        )
+
+        image_label_meta = self._create_image_label_meta()
+
+        if not hasattr(self, "metadata"):
+            self.metadata = LabelImageMeta(
+                multiscales=[
+                    MultiScaleMeta(
+                        version=self.version,
+                        axes=self.axes,
+                        datasets=[dataset_meta],
+                        name=self._group.basename,
+                        coordinate_transformations=None,
+                    )
+                ],
+                image_label=image_label_meta,
+                version="0.5" if self.version == "0.5" else None,
+            )
+        elif (
+            dataset_meta.path
+            not in self.metadata.multiscales[0].get_dataset_paths()
+        ):
+            # Add new level to existing metadata
+            self.metadata.multiscales[0].datasets.append(dataset_meta)
+
+        self.dump_meta()
+
+    def _create_image_label_meta(self) -> ImageLabelMeta:
+        """Create image-label metadata from colors and properties."""
+        # Prepare colors
+        label_colors = []
+        if self._colors:
+            for label_value, rgba in self._colors.items():
+                # Ensure RGBA format
+                if len(rgba) == 3:
+                    rgba = rgba + [255]  # Add alpha
+
+                # Convert to 0-1 range for Pydantic
+                # But will be serialized as 0-255
+                rgba_normalized = []
+                for val in rgba:
+                    if isinstance(val, int) and val > 1:
+                        rgba_normalized.append(val / 255.0)
+                    else:
+                        rgba_normalized.append(float(val))
+
+                label_colors.append(
+                    LabelColorMeta(
+                        label_value=label_value, rgba=rgba_normalized
+                    )
+                )
+
+        label_properties = []
+        if self._properties:
+            for prop in self._properties:
+                if "label_id" in prop:
+                    prop = prop.copy()
+                    prop["label-value"] = prop.pop("label_id")
+                elif "label-value" not in prop:
+                    continue
+                label_properties.append(prop)
+
+        return ImageLabelMeta(
+            colors=label_colors if label_colors else [],
+            properties=label_properties if label_properties else [],
+            source={"image": "../../"},  # Reference to parent image
+        )
 
 
 class Position(NGFFNode):
@@ -1312,6 +1821,266 @@ class Position(NGFFNode):
         )
         self.set_transform(image, new_transforms)
 
+    def _get_label_dimension_names(self, ndims: int) -> list[str]:
+        """Get dimension names for label arrays.
+
+        Labels use TZYX format (excluding channel dimension).
+
+        Parameters
+        ----------
+        ndims : int
+            Number of dimensions in the label array
+
+        Returns
+        -------
+        list[str]
+            List of dimension names for the label array
+        """
+        # Labels use TZYX dimensions (no channel dimension)
+        label_axes = [ax for ax in self.axes if ax.type != "channel"]
+        return [ax.name for ax in label_axes[:ndims]]
+
+    @property
+    def labels_group(self) -> zarr.Group | None:
+        """Access the labels subgroup if it exists."""
+        if "labels" in self._group:
+            return self._group["labels"]
+        return None
+
+    @property
+    def has_labels(self) -> bool:
+        """Check if this position has any labels."""
+        return (
+            "labels" in self._group
+            and len(list(self.labels_group.group_keys())) > 0
+        )
+
+    def create_labels_group(self) -> zarr.Group:
+        """Create the labels subgroup if it doesn't exist."""
+        if "labels" not in self._group:
+            labels_group = self._group.create_group("labels", overwrite=False)
+            # Initialize empty labels metadata
+            self._update_labels_metadata([])
+            return labels_group
+        return self._group["labels"]
+
+    def labels(self) -> Generator[tuple[str, LabelImage], None, None]:
+        """Returns a generator that iterates over the name and value
+        of all the label images in the position.
+
+        Yields
+        ------
+        tuple[str, LabelImage]
+            Name and LabelImage object.
+        """
+        if self.labels_group is None:
+            return
+        for name in self.labels_group.group_keys():
+            yield name, self.get_label(name)
+
+    def label_names(self) -> list[str]:
+        """List all available label names in this position.
+
+        Returns
+        -------
+        list[str]
+            List of label names (group keys in the labels group)
+        """
+        if self.labels_group is None:
+            return []
+        return sorted(list(self.labels_group.group_keys()))
+
+    def get_label(self, name: str) -> LabelImage:
+        """Get a multiscale label image by name.
+
+        Parameters
+        ----------
+        name : str
+            Name of the label image
+
+        Returns
+        -------
+        LabelImage
+            Container object for the multiscale label image
+
+        Raises
+        ------
+        KeyError
+            If the label does not exist
+        """
+        if self.labels_group is None:
+            raise KeyError("No labels group exists in this position")
+
+        if name not in self.labels_group:
+            raise KeyError(
+                f"Label '{name}' not found.",
+                "Available labels: {self.label_names()}",
+            )
+
+        zgroup = self.labels_group[name]
+        label_axes = [ax for ax in self.axes if ax.type != "channel"]
+
+        return LabelImage(
+            group=zgroup,
+            parse_meta=True,
+            axes=label_axes,
+            version=self.version,
+            overwriting_creation=self._overwrite,
+        )
+
+    def create_label(
+        self,
+        name: str,
+        data: NDArray,
+        colors: dict[int, list[int]] | None = None,
+        properties: list[dict[str, Any]] | None = None,
+        chunks: tuple[int, ...] | None = None,
+        pyramid_levels: int = 1,
+    ) -> LabelImage:
+        """Create a new multiscale label image in this position.
+
+        This creates an NGFF-compliant multiscale label image.
+
+        Parameters
+        ----------
+        name : str
+            Name for the new label image
+        data : NDArray
+            Label data as integer array (TZYX format, no channel dimension)
+        colors : dict[int, list[int]], optional
+            Color mapping for label values {label_value: [r, g, b, a]}
+            Values should be integers 0-255
+        properties : list[dict[str, Any]], optional
+            Properties for each label value, must include "label-value" field
+        chunks : tuple[int, ...], optional
+            Chunk size for the zarr arrays
+        pyramid_levels : int, optional
+            Number of pyramid levels to create, by default 1
+
+        Returns
+        -------
+        LabelImage
+            The created multiscale label image
+
+        Raises
+        ------
+        TypeError
+            If the label data is not an NDArray array
+        ValueError
+            If the label data is not an integer dtype
+
+
+        Examples
+        --------
+        Create a cell segmentation label with colors and pyramid levels:
+
+        >>> import numpy as np
+        >>> from iohub.ngff.nodes import open_ome_zarr
+        >>>
+        >>> # Create segmentation mask (TZYX format, no channel dimension)
+        >>> segmentation = np.zeros((1, 3, 256, 256), dtype=np.uint16)
+        >>> segmentation[0, :, 50:100, 50:100] = 1  # Cell 1
+        >>> segmentation[0, :, 150:200, 150:200] = 2  # Cell 2
+        >>>
+        >>> # Define colors for visualization (RGBA integers 0-255)
+        >>> colors = {
+        ...     1: [255, 0, 0, 255],    # Red for cell 1
+        ...     2: [0, 255, 0, 255],    # Green for cell 2
+        ... }
+        >>>
+        >>> # Define properties for each label value
+        >>> properties = [
+        ...     {"label-value": 1, "type": "cell", "area": 2500},
+        ...     {"label-value": 2, "type": "cell", "area": 2500},
+        ... ]
+        >>>
+        >>> with open_ome_zarr("dataset.zarr", mode="r+") as position:
+        ...     # Create multiscale label image (3 pyramid levels)
+        ...     cells = position.create_label(
+        ...         name="cells",
+        ...         data=segmentation,
+        ...         colors=colors,
+        ...         properties=properties,
+        ...         pyramid_levels=3,
+        ...     )
+        ...
+        ...     # Access different resolution levels
+        ...     high_res = cells["0"]      # Highest resolution
+        ...     medium_res = cells["1"]    # 2x downscaled
+        ...     low_res = cells["2"]       # 4x downscaled
+        ...
+        ...     # Iterate over all labels
+        ...     for name, label in position.labels():
+        ...         print(f"Label: {name}, Levels: {label.array_keys()}")
+        ...         # Or use the highest resolution level with `.data`
+        ...         high_res_labels = label.data
+
+
+        Notes
+        -----
+        Label data MUST be integer data types per NGFF specification:
+        `uint8`, `int8`, `uint16`, `int16`, `uint32`, `int32`, `uint64`,
+        and `int64` are supported.
+
+        """
+        if not isinstance(data, np.ndarray):
+            raise TypeError("Label data must be a NumPy array")
+
+        # Ensure integer dtype for labels
+        if not np.issubdtype(data.dtype, np.integer):
+            raise ValueError(
+                f"Label data must be an integer dtype, got {data.dtype}."
+            )
+
+        # Create labels group if it doesn't exist
+        labels_group = self.create_labels_group()
+
+        # Create label image group
+        label_group = labels_group.create_group(
+            name, overwrite=self._overwrite
+        )
+
+        # Create LabelImage with proper axes (TZYX, no channel)
+        label_axes = [ax for ax in self.axes if ax.type != "channel"]
+        label_image = LabelImage(
+            group=label_group,
+            parse_meta=False,
+            axes=label_axes,
+            version=self.version,
+            colors=colors,
+            properties=properties,
+            overwriting_creation=self._overwrite,
+        )
+
+        label_image.create_level("0", data, chunks=chunks)
+
+        if pyramid_levels > 1:
+            label_image.initialize_pyramid(pyramid_levels)
+
+        self._update_labels_metadata(self.label_names())
+
+        return label_image
+
+    def _update_labels_metadata(
+        self,
+        labels_list: list[str],
+    ):
+        """Update the labels metadata in the position metadata.
+
+        Notes
+        -----
+        This only updates the labels list at Position level.
+        Individual label metadata (image-label) is written to each label array.
+        """
+        labels_meta = LabelsMeta(
+            labels=labels_list,
+            image_label=None,  # Not stored at Position level per NGFF spec
+        )
+
+        self.metadata.labels = labels_meta
+
+        self.dump_meta()
+
     def set_contrast_limits(self, channel_name: str, window: WindowDict):
         """Set the contrast limits for a channel.
 
@@ -2038,7 +2807,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate | Position | TiledPosition: ...
+) -> Plate | Position | TiledPosition:
+    ...
 
 
 @overload
@@ -2051,7 +2821,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Position: ...
+) -> Position:
+    ...
 
 
 @overload
@@ -2064,7 +2835,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> TiledPosition: ...
+) -> TiledPosition:
+    ...
 
 
 @overload
@@ -2077,7 +2849,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate: ...
+) -> Plate:
+    ...
 
 
 def open_ome_zarr(
