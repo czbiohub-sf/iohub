@@ -698,7 +698,6 @@ class LabelImage(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
 
-        # Store colors and properties for metadata
         self._colors = colors
         self._properties = properties
 
@@ -1006,7 +1005,6 @@ class LabelImage(NGFFNode):
             dataset_meta.path
             not in self.metadata.multiscales[0].get_dataset_paths()
         ):
-            # Add new level to existing metadata
             self.metadata.multiscales[0].datasets.append(dataset_meta)
 
         self.dump_meta()
@@ -2807,8 +2805,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate | Position | TiledPosition:
-    ...
+) -> Plate | Position | TiledPosition: ...
 
 
 @overload
@@ -2821,8 +2818,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Position:
-    ...
+) -> Position: ...
 
 
 @overload
@@ -2835,8 +2831,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> TiledPosition:
-    ...
+) -> TiledPosition: ...
 
 
 @overload
@@ -2849,8 +2844,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate:
-    ...
+) -> Plate: ...
 
 
 def open_ome_zarr(
