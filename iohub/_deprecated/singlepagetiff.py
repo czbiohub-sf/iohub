@@ -44,10 +44,12 @@ class MicromanagerSequenceReader(ReaderBase):
                 "is not a folder"
             )
         self._strict = strict
+        self._folder = folder
 
         self.log = logging.getLogger(__name__)
         self.positions = {}
         self.num_positions = None
+        self.position_map = {}  # Initialize position map
         self.z_step_size = None
         self.height = 0
         self.width = 0
@@ -75,6 +77,10 @@ class MicromanagerSequenceReader(ReaderBase):
 
         # update coordinates if the acquisition finished early
         self._dims_from_coordinates()
+        
+        # Set default dtype if not already set
+        if self.dtype is None:
+            self.dtype = np.uint16
 
         # todo: consider iterating over all positions.
         # Doable once we add a metadata search for stage positions
@@ -207,17 +213,36 @@ class MicromanagerSequenceReader(ReaderBase):
             ),
             chunks=(1, 1, 1, self.height, self.width),
         )
+        # Find all coordinates for this sequential position index
+        # by looking up the actual position index from the filenames
+        position_folder = self.position_map[p]
+        
+        # Extract the actual position index from folder name for matching with coordinates
+        import re
+        match = re.search(r'position(\d+)', position_folder, re.IGNORECASE)
+        if not match:
+            # Try to extract from Site pattern
+            match = re.search(r'Site[_-](\d+)', position_folder)
+        
+        if match:
+            actual_pos_idx = int(match.group(1))
+        else:
+            actual_pos_idx = p
+            
         for c, fn in self.coord_to_filename.items():
-            if c[0] == p:
+            # Match using the actual position index from metadata
+            if c[0] == actual_pos_idx:
                 self.log.info(f"reading coord = {c} from filename = {fn}")
                 with tiff.imread(fn, aszarr=True) as store:
                     try:
                         array = zarr.open(
-                            _tiff_to_fsspec_store(
-                                store, root_uri=Path(fn).parent.as_uri()
-                            ),
+                            store,
+                            # _tiff_to_fsspec_store(
+                            #     store, root_uri=Path(fn).parent.as_uri()
+                            # ),
                             mode="r",
                         )[:]
+                        self.log.info(f"Image shape: {array.shape}")
                         z[c[1], c[2], c[3]] = array
                     except Exception:
                         self.log.error(
@@ -267,6 +292,9 @@ class MicromanagerSequenceReader(ReaderBase):
             raise FileNotFoundError(
                 "no position subfolder found in supplied folder"
             )
+        
+        # Sort positions to ensure consistent ordering
+        positions = natsort.natsorted(positions)
 
         metadatas = [
             os.path.join(folder, position, "metadata.txt")
@@ -278,9 +306,13 @@ class MicromanagerSequenceReader(ReaderBase):
             )
 
         coord_filename_map = {}
+        self.position_map = {}  # Map from sequential index to actual position folder
+        
         for idx, metadata in enumerate(metadatas):
             with open(metadata, "r") as m:
                 j = json.load(m)
+                # Store mapping from sequential index to position folder name
+                self.position_map[idx] = positions[idx]
                 coord_filename_map.update(
                     self._extract_coord_to_filename(j, folder, positions[idx])
                 )
@@ -409,6 +441,67 @@ class MicromanagerSequenceReader(ReaderBase):
         self.frames = len(t)
         self.slices = len(z)
         self.channels = len(c)
+        
+    @property
+    def folder(self):
+        """Return the root folder path."""
+        return self._folder
+        
+        
+    @property
+    def micromanager_summary(self):
+        """Return MicroManager summary metadata."""
+        return self._mm_meta.get("Summary", {})
+        
+    @property
+    def stage_positions(self):
+        """Return stage positions metadata."""
+        # Create stage positions from folder names
+        positions = [
+            p
+            for p in os.listdir(self._folder)
+            if os.path.isdir(os.path.join(self._folder, p))
+        ]
+        positions = natsort.natsorted(positions)
+        
+        stage_positions = []
+        for idx, pos_name in enumerate(positions):
+            stage_pos = {
+                "Label": pos_name,
+                "PositionIndex": idx
+            }
+            # Add more metadata if available from the position's metadata.txt
+            stage_positions.append(stage_pos)
+            
+        return stage_positions
+        
+    @property
+    def hcs_position_labels(self):
+        """Return HCS position labels if available."""
+        # Parse HCS labels from position folder names
+        hcs_labels = []
+        positions = [
+            p
+            for p in os.listdir(self._folder)
+            if os.path.isdir(os.path.join(self._folder, p))
+        ]
+        
+        import re
+        for pos in natsort.natsorted(positions):
+            # Match pattern like "A1-Site_0" or "B2-Site_116"
+            match = re.match(r'([A-Z]+)(\d+)-Site[_-](\d+)', pos)
+            if match:
+                row_letter = match.group(1)  # Keep as letter
+                col_number = match.group(2)   # Well column
+                site_number = match.group(3)  # Site/FOV number
+                
+                # Return tuple of (row, column, site) matching the expected format
+                hcs_labels.append((row_letter, col_number, site_number))
+        
+        if not hcs_labels:
+            raise ValueError("No HCS position labels found in folder names")
+            
+        return hcs_labels
 
     def _mm1_meta_parser(self):
         """
@@ -425,6 +518,13 @@ class MicromanagerSequenceReader(ReaderBase):
         self.frames = self._mm_meta["Summary"]["Frames"]
         self.slices = self._mm_meta["Summary"]["Slices"]
         self.channels = self._mm_meta["Summary"]["Channels"]
+        
+        # Extract channel names if available
+        if "ChNames" in self._mm_meta["Summary"]:
+            self.channel_names = self._mm_meta["Summary"]["ChNames"]
+        else:
+            # Generate default channel names
+            self.channel_names = [f"Channel_{i}" for i in range(self.channels)]
 
     def _mm2beta_meta_parser(self):
         """
@@ -468,3 +568,43 @@ class MicromanagerSequenceReader(ReaderBase):
         self.frames = self._mm_meta["Summary"]["Frames"]
         self.slices = self._mm_meta["Summary"]["Slices"]
         self.channels = self._mm_meta["Summary"]["Channels"]
+        
+        # Extract channel names if available
+        if "ChNames" in self._mm_meta["Summary"]:
+            self.channel_names = self._mm_meta["Summary"]["ChNames"]
+        else:
+            # Generate default channel names
+            self.channel_names = [f"Channel_{i}" for i in range(self.channels)]
+
+    def __len__(self):
+        return self.num_positions
+
+    def __iter__(self):
+        """Iterate over positions, yielding (name, FOV) tuples."""
+        from iohub._deprecated.singlepagetiff_fov import SinglePageTiffFOV
+        
+        # Get sorted position folder names
+        positions = [
+            p
+            for p in os.listdir(self._folder)
+            if os.path.isdir(os.path.join(self._folder, p))
+        ]
+        positions = natsort.natsorted(positions)
+        
+        for idx, pos_folder in enumerate(positions):
+            # Use folder name as position name
+            name = str(idx)  # Use index for now, will update with HCS mapping
+            fov = SinglePageTiffFOV(self, idx)
+            yield name, fov
+
+    def __contains__(self, position):
+        return position in self.positions
+
+    def __getitem__(self, position):
+        return self.positions[position]
+        
+    def close(self):
+        """Close any open file handles."""
+        # Since we open TIFF files on-demand and close them immediately,
+        # there's nothing to close here
+        pass

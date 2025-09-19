@@ -15,7 +15,8 @@ import zarr
 import zarr.storage
 from natsort import natsorted
 from numpy.typing import ArrayLike
-from tifffile import TiffFile, ZarrTiffStore
+from tifffile import TiffFile
+from tifffile.zarr import ZarrTiffStore
 from xarray import DataArray
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping

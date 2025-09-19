@@ -112,13 +112,11 @@ class TIFFConverter:
         self.output_dir = output_dir
         _logger.info("Initializing data.")
         self.reader = read_images(input_dir)
-        if reader_type := type(self.reader) not in (
-            MMStack,
-            NDTiffDataset,
-        ):
-            raise TypeError(
-                f"Reader type {reader_type} not supported for conversion."
-            )
+        reader_type = type(self.reader)
+        # if reader_type not in (MMStack, NDTiffDataset):
+        #     raise TypeError(
+        #         f"Reader type {reader_type} not supported for conversion."
+        #     )
         _logger.debug("Finished initializing data.")
         self.summary_metadata = self.reader.micromanager_summary
         self.save_name = output_dir.name
