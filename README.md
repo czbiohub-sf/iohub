@@ -21,7 +21,7 @@ used at the Biohub and in the broader imaging community.
 
 ### Write
 
-- OME-Zarr
+- OME-Zarr ([OME-NGFF v0.5](https://ngff.openmicroscopy.org/0.5/))
 - Multi-page TIFF stacks organized in a directory hierarchy that mimics OME-NGFF (WIP)
 
 ## Quick start
