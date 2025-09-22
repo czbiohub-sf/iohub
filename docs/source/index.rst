@@ -30,7 +30,7 @@ Write
 .. toctree::
    :maxdepth: 1
    :hidden:
-   
+
    getting_started
    auto_examples/index
    api
