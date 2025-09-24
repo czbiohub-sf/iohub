@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=64", "wheel", "setuptools_scm[toml]"]
+requires = ["setuptools>=77.0.0", "wheel", "setuptools_scm[toml]"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -42,10 +42,11 @@ dependencies = [
 ]
 dynamic = ["version"]
 
-urls.Homepage = "https://github.com/czbiohub-sf/iohub"
-urls.Issue = "https://github.com/czbiohub-sf/iohub/issues"
-urls.Documentation = "https://czbiohub-sf.github.io/iohub"
-urls.Source = "https://github.com/czbiohub-sf/iohub"
+[project.urls]
+Homepage = "https://github.com/czbiohub-sf/iohub"
+Issue = "https://github.com/czbiohub-sf/iohub/issues"
+Documentation = "https://czbiohub-sf.github.io/iohub"
+Source = "https://github.com/czbiohub-sf/iohub"
 
 [project.optional-dependencies]
 tensorstore = [
@@ -82,7 +83,7 @@ iohub = "iohub.cli.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["iohub*"]
+include = ["iohub"]
 
 [tool.setuptools_scm]
 version_scheme = "release-branch-semver"
