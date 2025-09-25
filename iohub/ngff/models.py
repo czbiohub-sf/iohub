@@ -52,11 +52,30 @@ def unique_validator(
     ValueError
         raised if any value is not unique
     """
+    if not data:
+        return data
+
     fields = [field] if isinstance(field, str) else field
     if not isinstance(data[0], dict):
         params = [d.model_dump() for d in data]
+    else:
+        params = data
     df = pd.DataFrame(params)
+
     for key in fields:
+        # Handle both aliased and non-aliased field names
+        if key not in df.columns:
+            # Try to find the aliased version
+            # For label_value, the alias is label-value
+            alias_key = key.replace("_", "-")
+            if alias_key in df.columns:
+                key = alias_key
+            else:
+                raise ValueError(
+                    f"Field '{key}' not found in data columns: "
+                    f"{list(df.columns)}"
+                )
+
         if not df[key].is_unique:
             raise ValueError(f"'{key}' must be unique!")
     return data
@@ -293,6 +312,20 @@ class OMEROMeta(VersionMeta):
     rdefs: RDefsMeta | None = None
 
 
+class LabelImageMeta(MetaBase):
+    """Metadata for individual multiscale label image.
+    Combines multiscales specification with image-label metadata.
+    https://ngff.openmicroscopy.org/latest/index.html#labels-md"""
+
+    # MUST: multiscales with same levels as original image
+    multiscales: list[MultiScaleMeta]
+    # SHOULD: image-label with colors, properties, source
+    image_label: ImageLabelMeta = Field(alias="image-label")
+    # only for OME-NGFF v0.5
+    version: Literal["0.5"] | None = None
+    model_config = ConfigDict(extra="allow")
+
+
 class ImagesMeta(MetaBase):
     """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
     https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
@@ -300,6 +333,8 @@ class ImagesMeta(MetaBase):
     multiscales: list[MultiScaleMeta]
     # transitional, optional
     omero: OMEROMeta | None = None
+    # labels group support
+    labels: LabelsMeta | None = None
     # only for OME-NGFF v0.5
     version: Literal["0.5"] | None = None
     model_config = ConfigDict(extra="allow")
@@ -308,9 +343,12 @@ class ImagesMeta(MetaBase):
 class LabelsMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#labels-md"""
 
-    # SHOULD? (keyword not found in spec)
-    labels: str
-    # unlisted groups MAY be labels
+    # MUST: list of paths to labeled multiscale images
+    labels: list[str]
+    # MAY: metadata for individual labels
+    image_label: ImageLabelMeta | None = Field(
+        alias="image-label", default=None
+    )
 
 
 class LabelColorMeta(MetaBase):
@@ -338,11 +376,17 @@ class ImageLabelMeta(VersionMeta):
     # MAY
     source: dict[str, Any]
 
-    @field_validator("colors", "properties")
+    @field_validator("colors")
     @classmethod
-    def unique_label_value(cls, v):
-        # MUST
+    def unique_label_value_colors(cls, v):
+        # MUST: colors must have unique label_value
         unique_validator(v, "label_value")
+        return v
+
+    @field_validator("properties")
+    @classmethod
+    def validate_properties(cls, v):
+        # Properties are arbitrary dictionaries, no specific validation needed
         return v
 
 
