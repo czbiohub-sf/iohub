@@ -198,15 +198,16 @@ class NDTiffDataset(MicroManagerFOVMapping):
                     img_metadata = self.get_image_metadata(
                         p_idx, t_idx, c_idx, 0
                     )
-                    if img_metadata is not None:
-                        _time = datetime.strptime(
-                            img_metadata["TimeReceivedByCore"],
-                            "%Y-%m-%d %H:%M:%S.%f",
-                        ).timestamp()
-                        _acq_times.append(_time)
-                        _t_idx.append(t_idx)
                 except ValueError:
                     continue
+                # Note: Timestamp key differs between Micro-manager versions
+                timestamp = img_metadata.get("TimeReceivedByCore")
+                if timestamp is not None:
+                    acq_time = datetime.strptime(
+                        timestamp, "%Y-%m-%d %H:%M:%S.%f"
+                    ).timestamp()
+                    _acq_times.append(acq_time)
+                    _t_idx.append(t_idx)
             if len(_acq_times) > 1:
                 # find slope of _acq_times vs _t_idx
                 _acq_times = np.array(_acq_times, dtype=float)
