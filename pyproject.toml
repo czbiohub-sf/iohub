@@ -1,6 +1,89 @@
 [build-system]
-requires = ["setuptools", "wheel", "setuptools_scm[toml]"]
+requires = ["setuptools>=77.0.0", "wheel", "setuptools_scm[toml]"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "iohub"
+description = "N-dimensional bioimaging data I/O with OME metadata in Python"
+authors = [
+    {name = "CZ Biohub and iohub contributors", email = "iohub@czbiohub.org"},
+]
+license = {text = "BSD 3-Clause License"}
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+]
+dependencies = [
+    "pandas>=1.5.2",
+    "pydantic>=2.8.2",
+    "pydantic_extra_types>=2.9.0",
+    "tifffile>=2024.1.30, <2025.5.21",
+    "natsort>=7.1.1",
+    "ndtiff>=2.2.1",
+    "zarr>=3.0.8",
+    "rich",
+    "tqdm",
+    "pillow>=9.4.0",
+    "blosc2",
+    "xarray>=2024.1.1",
+    "dask[array]",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/czbiohub-sf/iohub"
+Issue = "https://github.com/czbiohub-sf/iohub/issues"
+Documentation = "https://czbiohub-sf.github.io/iohub"
+Source = "https://github.com/czbiohub-sf/iohub"
+
+[project.optional-dependencies]
+tensorstore = [
+    "tensorstore>=0.1.64",
+]
+acquire-zarr = [
+    "acquire-zarr",
+]
+dev = [
+    "iohub[tensorstore]",
+    "ngff-zarr[validate]",
+    "black",
+    "flake8",
+    "pytest>=5.0.0",
+    "pytest-cov",
+    "hypothesis>=6.61.0",
+    "requests>=2.22.0",
+    "wget>=3.2",
+    "ome-zarr>=0.12.0",
+]
+doc = [
+    "matplotlib",
+    "numpydoc>=1.1.0",
+    "sphinx>=4.2.0",
+    "pydata-sphinx-theme>=0.15.2",
+    "sphinx-copybutton>=0.4.0",
+    "sphinx-polyversion>=0.2.4",
+    "sphinx-sitemap>=2.5.0",
+    "sphinx-gallery>=0.13.0",
+]
+
+[project.scripts]
+iohub = "iohub.cli.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["iohub"]
 
 [tool.setuptools_scm]
 version_scheme = "release-branch-semver"

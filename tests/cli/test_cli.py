@@ -141,11 +141,11 @@ def test_cli_set_scale(caplog):
                 "-i",
                 str(position_path),
                 "-z",
-                random_z,
+                str(random_z),
                 "-y",
-                0.5,
+                "0.5",
                 "-x",
-                0.5,
+                "0.5",
             ],
         )
         assert result_pos.exit_code == 0

@@ -24,7 +24,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _find_ngff_version_in_zarr_group(group: zarr.Group) -> str | None:
-    for key in ["plate", "well"]:
+    for key in ["plate", "well", "ome"]:
         if key in group.attrs:
             if v := group.attrs[key].get("version"):
                 return v
@@ -37,7 +37,7 @@ def _find_ngff_version_in_zarr_group(group: zarr.Group) -> str | None:
 
 def _check_zarr_data_type(src: Path):
     try:
-        root = zarr.open(src, "r")
+        root = zarr.open(src, mode="r")
         if version := _find_ngff_version_in_zarr_group(root):
             return version
         else:
@@ -200,8 +200,8 @@ def print_info(path: StrOrBytesPath, verbose=False):
     path = Path(path).resolve()
     try:
         fmt, extra_info = _infer_format(path)
-        if fmt == "omezarr" and extra_info == "0.4":
-            reader = open_ome_zarr(path, mode="r")
+        if fmt == "omezarr" and extra_info in ("0.4", "0.5"):
+            reader = open_ome_zarr(path, mode="r", version=extra_info)
         else:
             reader = read_images(path, data_type=fmt)
     except (ValueError, RuntimeError):

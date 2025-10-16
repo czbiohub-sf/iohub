@@ -91,16 +91,26 @@ git clone https://github.com/czbiohub-sf/iohub.git
 Otherwise, you can follow [these instructions](https://docs.github.com/en/get-started/quickstart/fork-a-repo)
 to [fork](https://github.com/czbiohub-sf/iohub/fork) the repository.
 
-Then install the package in editable mode with the development dependencies:
+Then install the package in editable mode with the development dependencies.
+Remove acquire-zarr if you do not have glibc version 2.35 or later,
+for example on the Bruno cluster (Rocky Linux 8).
 
 ```sh
 cd iohub/ # or the renamed project root directory
-pip install -e ".[dev]"
+pip install -e ".[dev,acquire-zarr]"
 ```
 
 Then make the changes and [track them with Git](https://docs.github.com/en/get-started/using-git/about-git#example-contribute-to-an-existing-repository).
 
 ### Developing documentation
+
+#### Prerequisites
+
+Install a forked version of `sphinx-polyversion` due to an incompatibility with `setuptools_scm`.
+
+```shell
+pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging 
+```
 
 #### Building the HTML version locally
 
@@ -108,7 +118,8 @@ Inside `/docs` folder
 
 ```shell
 pip install "/PATH/TO/iohub[doc]"
-make clean && make build
+make clean
+sphinx-polyversion poly.py -vvv --local
 ```
 
 Generated HTML documentation can be found in
