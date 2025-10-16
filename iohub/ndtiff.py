@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import logging
 import warnings
+from datetime import datetime
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Iterable, Literal
 
 import numpy as np
-from datetime import datetime
 from natsort import natsorted
 from ndtiff import Dataset
 from numpy.typing import ArrayLike
@@ -195,11 +195,13 @@ class NDTiffDataset(MicroManagerFOVMapping):
             _acq_times, _t_idx = [], []
             for t_idx in range(self.frames):
                 try:
-                    img_metadata = self.get_image_metadata(p_idx, t_idx, c_idx, 0)
+                    img_metadata = self.get_image_metadata(
+                        p_idx, t_idx, c_idx, 0
+                    )
                     if img_metadata is not None:
                         _time = datetime.strptime(
                             img_metadata["TimeReceivedByCore"],
-                            '%Y-%m-%d %H:%M:%S.%f'
+                            "%Y-%m-%d %H:%M:%S.%f",
                         ).timestamp()
                         _acq_times.append(_time)
                         _t_idx.append(t_idx)
