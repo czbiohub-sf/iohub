@@ -332,20 +332,22 @@ class NGFFNode:
 class ImageArray(zarr.Array):
     """Container object for image stored as a zarr array (up to 5D)"""
 
-    def __init__(self, zarray: zarr.Array):
-        super().__init__(
-            store=zarray._store,
-            path=zarray._path,
-            read_only=zarray._read_only,
-            chunk_store=zarray._chunk_store,
-            synchronizer=zarray._synchronizer,
-            cache_metadata=zarray._cache_metadata,
-            cache_attrs=zarray._attrs.cache,
-            partial_decompress=zarray._partial_decompress,
-            write_empty_chunks=zarray._write_empty_chunks,
-            zarr_version=zarray._version,
-            meta_array=zarray._meta_array,
-        )
+    def __init__(self, zarray: zarr.Array = None, **kwargs):
+        if zarray is not None:
+            kwargs.update(
+                store=zarray._store,
+                path=zarray._path,
+                read_only=zarray._read_only,
+                chunk_store=zarray._chunk_store,
+                synchronizer=zarray._synchronizer,
+                cache_metadata=zarray._cache_metadata,
+                cache_attrs=zarray._attrs.cache,
+                partial_decompress=zarray._partial_decompress,
+                write_empty_chunks=zarray._write_empty_chunks,
+                zarr_version=zarray._version,
+                meta_array=zarray._meta_array,
+            )
+        super().__init__(**kwargs)
         self._get_dims()
 
     def _get_dims(self):
