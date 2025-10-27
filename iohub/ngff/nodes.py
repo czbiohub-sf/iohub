@@ -345,8 +345,9 @@ class NGFFNode:
 class NGFFMultiscalesNode(NGFFNode):
     """Base class for nodes managing multiscale pyramids.
 
-    Provides common functionality for Position (5D images) and PositionLabel (4D labels).
-    Eliminates code duplication in pyramid management, array access, and compression.
+    Provides common functionality for Position (5D images) and
+    PositionLabel (4D labels). Eliminates code duplication in pyramid
+    management, array access, and compression.
     """
 
     @property
@@ -453,7 +454,7 @@ class NGFFMultiscalesNode(NGFFNode):
         tuple[int, ...]
             Chunk sizes for each dimension
         """
-        chunks = shape[-min(last_data_dims, len(shape)) :]
+        chunks = shape[-min(last_data_dims, len(shape)):]
         return _pad_shape(chunks, target=len(shape))
 
     def _create_compressor_options(self) -> dict:
@@ -506,46 +507,45 @@ class NGFFMultiscalesNode(NGFFNode):
     ) -> NGFFNDArray:
         """Create zarr array with optional data and metadata.
 
-        This is the core array creation logic shared by Position and PositionLabel.
-        Centralizes the common zarr array creation boilerplate while allowing
-        subclass-specific customization through the metadata callback.
+        Core array creation logic shared by Position and PositionLabel.
+        Centralizes common zarr array creation boilerplate with subclass
+        customization via metadata callback.
 
         Parameters
         ----------
         name : str
-            Array name (level identifier like "0", "1", "2" for multiscale)
+            Array name (level identifier like "0", "1", "2")
         shape : tuple[int, ...]
-            Array shape (e.g., TCZYX for Position, TZYX for PositionLabel)
+            Array shape (TCZYX for Position, TZYX for PositionLabel)
         dtype : DTypeLike
             Data type (numpy dtype)
         chunks : tuple[int, ...]
             Chunk size for the zarr array
         array_class : type[NGFFNDArray]
-            Array wrapper class (ImageArray or LabelsArray) for type-safe wrapping
+            Array wrapper class (ImageArray or LabelsArray)
         shards_ratio : tuple[int, ...], optional
             Sharding ratio for each dimension, by default None.
             Each shard contains the product of the ratios number of chunks.
             No sharding will be used if not specified.
         data : NDArray, optional
-            Initial data to write to the array, by default None (creates empty array)
+            Initial data to write, by default None (creates empty array)
         metadata_callback : Callable, optional
             Function to create metadata atomically after array creation.
-            Signature: callback(name: str, transform: list[TransformationMeta] | None) -> None
-            By default None (no metadata created - subclass responsibility)
+            Signature: callback(name, transform) -> None.
+            By default None (no metadata - subclass responsibility)
         transform : list[TransformationMeta], optional
-            Coordinate transformations for this level (e.g., scale, translation),
-            by default None
+            Coordinate transformations (e.g., scale, translation)
 
         Returns
         -------
         NGFFNDArray
-            Wrapped zarr array (ImageArray or LabelsArray depending on array_class)
+            Wrapped zarr array (ImageArray or LabelsArray)
 
         Notes
         -----
-        - Metadata creation is atomic: if metadata_callback is provided, it's called
-          immediately after array creation to prevent inconsistent state
-        - Handles both zarr format v2 and v3 automatically based on self._zarr_format
+        - Metadata creation is atomic: callback called immediately after
+          array creation to prevent inconsistent state
+        - Handles zarr format v2 and v3 via self._zarr_format
         - dimension_names are only set for zarr v3
         - chunk_key_encoding differs between v2 and v3
         - Sharding calculation is centralized here to avoid code duplication
@@ -676,7 +676,7 @@ class NGFFMultiscalesNode(NGFFNode):
             _scale_integers(source_array.chunks, factor), len(downscaled_shape)
         )
 
-        # Leading dimensions (T, C) get scale=1.0, spatial (ZYX) get scale=factor
+        # Leading dims (T, C) scale=1.0, spatial (ZYX) scale=factor
         transforms = [
             TransformationMeta(
                 type="scale",
@@ -970,7 +970,7 @@ class TiledImageArray(ImageArray):
 
 
 class LabelsArray(NGFFNDArray):
-    """Container object for labels stored as a zarr array (4D: TZYX, no channel)"""
+    """Container for labels stored as zarr array (4D: TZYX)"""
 
     _SUPPORTED_DIMS = "TZYX"
     _N_DIMS = 4
@@ -1104,8 +1104,8 @@ class PositionLabel(NGFFMultiscalesNode):
     ) -> LabelsArray:
         """Create a label array at a specific resolution level.
 
-        This method is the parallel to :meth:`Position.create_image` for creating
-        label arrays at specific multiscale resolution levels.
+        Parallel to :meth:`Position.create_image` for creating label
+        arrays at specific multiscale resolution levels.
 
         Parameters
         ----------
