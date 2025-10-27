@@ -12,7 +12,7 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Generator, Literal, Sequence, Type, overload
+from typing import Any, Callable, Generator, Literal, Sequence, Type, overload
 
 import numpy as np
 import zarr.codecs
@@ -28,11 +28,11 @@ from iohub.ngff.models import (
     AxisMeta,
     ChannelAxisMeta,
     DatasetMeta,
-    ImageLabelMeta,
     ImageMeta,
     ImagesMeta,
     LabelColorMeta,
     LabelImageMeta,
+    PositionLabelMeta,
     LabelsMeta,
     MultiScaleMeta,
     OMEROMeta,
@@ -342,12 +342,483 @@ class NGFFNode:
         self._group.store.close()
 
 
-class ImageArray(zarr.Array):
-    """Container object for image stored as a zarr array (up to 5D)"""
+class NGFFMultiscalesNode(NGFFNode):
+    """Base class for nodes managing multiscale pyramids.
+
+    Provides common functionality for Position (5D images) and PositionLabel (4D labels).
+    Eliminates code duplication in pyramid management, array access, and compression.
+    """
+
+    @property
+    def _zarr_format(self) -> int:
+        """Zarr format version based on NGFF version."""
+        return 3 if self.version == "0.5" else 2
+
+    @property
+    def _member_names(self):
+        """Names of member arrays."""
+        return self.array_keys()
+
+    @property
+    def data(self):
+        """Alias for the highest resolution array ('0').
+
+        .. warning::
+            This property does *NOT* aim to retrieve all the arrays.
+            And it may also fail to retrieve any data if arrays exist but
+            are not named conventionally.
+
+        Returns
+        -------
+        ImageArray or LabelsArray
+            Array at the highest resolution level
+
+        Raises
+        ------
+        KeyError
+            If no array is named '0'.
+
+        Notes
+        -----
+        Do not depend on this in non-interactive code!
+        The name is hard-coded and is not guaranteed
+        by the OME-NGFF specification.
+        """
+        try:
+            return self["0"]
+        except KeyError:
+            raise KeyError(
+                f"There is no array named '0' "
+                f"in the group of: {self.array_keys()}"
+            )
+
+    def __getitem__(self, key: int | str):
+        """Get an array at a specific resolution level.
+
+        Parameters
+        ----------
+        key : int | str
+            Resolution level (e.g., "0", "1", "2")
+
+        Returns
+        -------
+        ImageArray or LabelsArray
+            Array at the specified resolution level
+        """
+        key = normalize_path(str(key))
+        znode = self.zgroup.get(key)
+        if not znode:
+            raise KeyError(key)
+
+        if isinstance(znode, zarr.Array):
+            return self._MEMBER_TYPE.from_zarr_array(znode)
+        else:
+            raise TypeError(
+                f"Expected zarr.Array at level '{key}', got {type(znode)}"
+            )
+
+    def __setitem__(self, key, value: NDArray):
+        """Write array data to a specific resolution level.
+
+        Parameters
+        ----------
+        key : int | str
+            Resolution level identifier
+        value : NDArray
+            NumPy array to write
+        """
+        key = normalize_path(str(key))
+        if not isinstance(value, np.ndarray):
+            raise TypeError(
+                f"Value must be a NumPy array. Got type {type(value)}."
+            )
+        self._create_from_data(key, value)
+
+    @staticmethod
+    def _default_chunks(
+        shape: tuple[int, ...], last_data_dims: int
+    ) -> tuple[int, ...]:
+        """Default chunking strategy for arrays.
+
+        Parameters
+        ----------
+        shape : tuple[int, ...]
+            Array shape
+        last_data_dims : int
+            Number of trailing dimensions to use for chunking
+            (typically 3 for ZYX spatial dimensions)
+
+        Returns
+        -------
+        tuple[int, ...]
+            Chunk sizes for each dimension
+        """
+        chunks = shape[-min(last_data_dims, len(shape)) :]
+        return _pad_shape(chunks, target=len(shape))
+
+    def _create_compressor_options(self) -> dict:
+        """Create compression options based on Zarr format.
+
+        Returns
+        -------
+        dict
+            Compression configuration for zarr.create_array
+        """
+        shuffle = zarr.codecs.BloscShuffle.bitshuffle
+
+        if self._zarr_format == 3:
+            return {
+                "compressors": zarr.codecs.BloscCodec(
+                    cname="zstd",
+                    clevel=1,
+                    shuffle=shuffle,
+                )
+            }
+        else:
+            from numcodecs import Blosc
+
+            return {
+                "compressor": Blosc(
+                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
+                )
+            }
+
+    def _create_from_data(self, key, value):
+        """Create array from data. Override in subclass.
+
+        Position calls create_image(), PositionLabel calls create_level().
+        """
+        raise NotImplementedError("Subclass must implement _create_from_data")
+
+    def _create_zarr_array_base(
+        self,
+        name: str,
+        shape: tuple[int, ...],
+        dtype: DTypeLike,
+        chunks: tuple[int, ...],
+        array_class: type[NGFFNDArray],
+        shards_ratio: tuple[int, ...] | None = None,
+        data: NDArray | None = None,
+        metadata_callback: (
+            Callable[[str, list[TransformationMeta] | None], None] | None
+        ) = None,
+        transform: list[TransformationMeta] | None = None,
+    ) -> NGFFNDArray:
+        """Create zarr array with optional data and metadata.
+
+        This is the core array creation logic shared by Position and PositionLabel.
+        Centralizes the common zarr array creation boilerplate while allowing
+        subclass-specific customization through the metadata callback.
+
+        Parameters
+        ----------
+        name : str
+            Array name (level identifier like "0", "1", "2" for multiscale)
+        shape : tuple[int, ...]
+            Array shape (e.g., TCZYX for Position, TZYX for PositionLabel)
+        dtype : DTypeLike
+            Data type (numpy dtype)
+        chunks : tuple[int, ...]
+            Chunk size for the zarr array
+        array_class : type[NGFFNDArray]
+            Array wrapper class (ImageArray or LabelsArray) for type-safe wrapping
+        shards_ratio : tuple[int, ...], optional
+            Sharding ratio for each dimension, by default None.
+            Each shard contains the product of the ratios number of chunks.
+            No sharding will be used if not specified.
+        data : NDArray, optional
+            Initial data to write to the array, by default None (creates empty array)
+        metadata_callback : Callable, optional
+            Function to create metadata atomically after array creation.
+            Signature: callback(name: str, transform: list[TransformationMeta] | None) -> None
+            By default None (no metadata created - subclass responsibility)
+        transform : list[TransformationMeta], optional
+            Coordinate transformations for this level (e.g., scale, translation),
+            by default None
+
+        Returns
+        -------
+        NGFFNDArray
+            Wrapped zarr array (ImageArray or LabelsArray depending on array_class)
+
+        Notes
+        -----
+        - Metadata creation is atomic: if metadata_callback is provided, it's called
+          immediately after array creation to prevent inconsistent state
+        - Handles both zarr format v2 and v3 automatically based on self._zarr_format
+        - dimension_names are only set for zarr v3
+        - chunk_key_encoding differs between v2 and v3
+        - Sharding calculation is centralized here to avoid code duplication
+
+        Examples
+        --------
+        >>> # Used by Position.create_zeros()
+        >>> img_arr = self._create_zarr_array_base(
+        ...     name="0",
+        ...     shape=(1, 2, 256, 256, 256),
+        ...     dtype=np.uint16,
+        ...     chunks=(1, 1, 64, 64, 64),
+        ...     array_class=ImageArray,
+        ...     shards_ratio=(1, 1, 2, 2, 2),  # 2x2x2 chunks per shard
+        ...     metadata_callback=self._create_image_meta,
+        ...     transform=None,
+        ... )
+        """
+        if shards_ratio:
+            if len(shards_ratio) != len(shape):
+                raise ValueError(
+                    f"Sharding ratio length {len(shards_ratio)} "
+                    f"does not match shape length {len(shape)}."
+                )
+            shards = tuple(c * s for c, s in zip(chunks, shards_ratio))
+        else:
+            shards = None
+
+        create_params = {
+            "name": name,
+            "chunks": chunks,
+            "shards": shards,
+            "overwrite": self._overwrite,
+            "fill_value": 0,
+            "dimension_names": (
+                # Only for zarr v3: use axis names from metadata
+                [ax.name for ax in self.axes[: len(shape)]]
+                if self._zarr_format == 3
+                else None
+            ),
+            "chunk_key_encoding": ChunkKeyEncodingParams(
+                # v3 uses "default", v2 uses "v2" encoding
+                name="default" if self._zarr_format == 3 else "v2",
+                separator="/",
+            ),
+            **self._create_compressor_options(),
+        }
+
+        if data is None:
+            create_params["shape"] = shape
+            create_params["dtype"] = dtype
+        else:
+            create_params["data"] = data
+
+        zarray = self._group.create_array(**create_params)
+
+        wrapped_array = array_class.from_zarr_array(zarray)
+
+        if metadata_callback is not None:
+            metadata_callback(name, transform)
+
+        return wrapped_array
+
+    def _calculate_pyramid_params(
+        self,
+        source_array: NGFFNDArray,
+        level: int,
+    ) -> tuple[tuple[int, ...], tuple[int, ...], list[TransformationMeta]]:
+        """Calculate pyramid level parameters for multiscale downscaling.
+
+        Computes the shape, chunks, and coordinate transformations for a
+        downscaled pyramid level. Uses a factor of 2^level for downscaling,
+        applying the factor only to the last 3 spatial dimensions (ZYX).
+
+        Parameters
+        ----------
+        source_array : NGFFNDArray
+            Source array to downscale from (typically level 0)
+        level : int
+            Pyramid level number (1, 2, 3, ...). Level 0 is full resolution.
+            Each level is downscaled by a factor of 2 from the previous level.
+
+        Returns
+        -------
+        downscaled_shape : tuple[int, ...]
+            Shape for the downscaled array. Non-spatial dimensions (T, C)
+            remain unchanged; spatial dimensions (ZYX) are divided by 2^level
+            and rounded up.
+        downscaled_chunks : tuple[int, ...]
+            Chunk size for the downscaled array, scaled proportionally and
+            padded to match the shape length.
+        transforms : list[TransformationMeta]
+            List containing a single scale transformation with factor 2^level
+            applied to spatial dimensions.
+
+        Notes
+        -----
+        - Only the last 3 dimensions (assumed to be ZYX spatial) are downscaled
+        - Leading dimensions (T, C) are preserved at original size
+        - Uses _scale_integers() helper for proper rounding (rounds up)
+        - Uses _pad_shape() to ensure chunk tuple matches shape length
+
+        Examples
+        --------
+        >>> # Calculate parameters for level 1 (2x downscaling)
+        >>> shape, chunks, transforms = self._calculate_pyramid_params(
+        ...     source_array=position.data,  # shape (1, 3, 512, 512, 512)
+        ...     level=1
+        ... )
+        >>> shape  # (1, 3, 256, 256, 256) - spatial dims halved
+        >>> transforms[0].scale  # [1.0, 1.0, 2.0, 2.0, 2.0] - 2x on spatial
+
+        >>> # Level 2 (4x downscaling)
+        >>> shape, chunks, transforms = self._calculate_pyramid_params(
+        ...     source_array=position.data,
+        ...     level=2
+        ... )
+        >>> shape  # (1, 3, 128, 128, 128) - spatial dims quartered
+        >>> transforms[0].scale  # [1.0, 1.0, 4.0, 4.0, 4.0] - 4x on spatial
+        """
+        factor = 2**level
+
+        downscaled_shape = source_array.shape[:-3] + _scale_integers(
+            source_array.shape[-3:], factor
+        )
+
+        downscaled_chunks = _pad_shape(
+            _scale_integers(source_array.chunks, factor), len(downscaled_shape)
+        )
+
+        # Leading dimensions (T, C) get scale=1.0, spatial (ZYX) get scale=factor
+        transforms = [
+            TransformationMeta(
+                type="scale",
+                scale=[1.0] * (len(source_array.shape) - 3)
+                + [float(factor)] * 3,
+            )
+        ]
+
+        return downscaled_shape, downscaled_chunks, transforms
+
+
+class NGFFNDArray(zarr.Array):
+    """Base class for NGFF N-dimensional arrays.
+
+    Provides common functionality for ImageArray (5D) and LabelsArray (4D).
+
+    Attributes
+    ----------
+    _SUPPORTED_DIMS : str
+        Dimension names (e.g., "TCZYX" for 5D, "TZYX" for 4D)
+    _N_DIMS : int
+        Number of dimensions (e.g., 5 or 4)
+    """
+
+    _SUPPORTED_DIMS: str
+    _N_DIMS: int
 
     @classmethod
     def from_zarr_array(cls, zarray: zarr.Array):
+        """Create instance from an existing zarr.Array.
+
+        Parameters
+        ----------
+        zarray : zarr.Array
+            Source zarr array
+
+        Returns
+        -------
+        NGFFNDArray
+            New instance wrapping the zarr array
+        """
         return cls(zarray._async_array)
+
+    def _get_dim(self, idx: int) -> int:
+        """Get dimension size at index, padding shape to _N_DIMS.
+
+        Parameters
+        ----------
+        idx : int
+            Dimension index
+
+        Returns
+        -------
+        int
+            Size of dimension at index
+        """
+        return _pad_shape(self.shape, target=self._N_DIMS)[idx]
+
+    def numpy(self) -> NDArray:
+        """Return the whole array as an in-RAM NumPy array.
+
+        Equivalent to `self[:]`.
+
+        Returns
+        -------
+        NDArray
+            NumPy array containing all data
+        """
+        return self[:]
+
+    def dask_array(self):
+        """Return as a dask array.
+
+        Returns
+        -------
+        dask.array.Array
+            Lazy dask array backed by zarr storage
+
+        Notes
+        -----
+        Designed to work with zarr DirectoryStore.
+        """
+        import dask.array as da
+
+        return da.from_zarr(self.store.root, component=self.path)
+
+    def tensorstore(self, **kwargs):
+        """Open the zarr array as a TensorStore object.
+
+        Requires the optional dependency ``tensorstore``.
+
+        Parameters
+        ----------
+        **kwargs : dict, optional
+            Additional keyword arguments to pass to ``tensorstore.open()``.
+            Cannot include 'read' or 'write' (auto-configured).
+
+        Returns
+        -------
+        tensorstore.TensorStore
+            Handle to the Zarr array
+
+        Raises
+        ------
+        ValueError
+            If 'read' or 'write' are specified in kwargs
+        """
+        import tensorstore as ts
+
+        ts_spec = {
+            "driver": f"zarr{self.metadata.zarr_format}",
+            "kvstore": {
+                "driver": "file",
+                "path": str(Path(self.store.root) / self.path.strip("/")),
+            },
+        }
+
+        if "read" in kwargs or "write" in kwargs:
+            raise ValueError("Cannot override file mode for the Zarr store.")
+
+        zarr_dataset = ts.open(
+            ts_spec, read=True, write=not self.read_only, **kwargs
+        ).result()
+
+        return zarr_dataset
+
+    def downscale(self):
+        """Create downscaled pyramid levels.
+
+        Raises
+        ------
+        NotImplementedError
+            Downscaling not implemented for this array type
+        """
+        raise NotImplementedError
+
+
+class ImageArray(NGFFNDArray):
+    """Container object for image stored as a zarr array (up to 5D: TCZYX)"""
+
+    _SUPPORTED_DIMS = "TCZYX"
+    _N_DIMS = 5
 
     @property
     def frames(self):
@@ -368,56 +839,6 @@ class ImageArray(zarr.Array):
     @property
     def width(self):
         return self._get_dim(4)
-
-    def _get_dim(self, idx):
-        return _pad_shape(self.shape, target=5)[idx]
-
-    def numpy(self):
-        """Return the whole image as an in-RAM NumPy array.
-        `self.numpy()` is equivalent to `self[:]`."""
-        return self[:]
-
-    def dask_array(self):
-        """Return as a dask array"""
-        import dask.array as da
-
-        # Note: Designed to work with zarr DirectoryStore
-        return da.from_zarr(self.store.root, component=self.path)
-
-    def downscale(self):
-        raise NotImplementedError
-
-    def tensorstore(self, **kwargs):
-        """
-        Open the zarr array as a TensorStore object.
-        Needs the optional dependency ``tensorstore``.
-
-        Parameters
-        ----------
-        **kwargs : dict, optional
-            Additional keyword arguments to pass to ``tensorstore.open()``,
-            by default None
-
-        Returns
-        -------
-        TensorStore
-            Handle to the Zarr array.
-        """
-        import tensorstore as ts
-
-        ts_spec = {
-            "driver": "zarr2" if self.metadata.zarr_format == 2 else "zarr3",
-            "kvstore": {
-                "driver": "file",
-                "path": str(Path(self.store.root) / self.path.strip("/")),
-            },
-        }
-        if "read" in kwargs or "write" in kwargs:
-            raise ValueError("Cannot override file mode for the Zarr store.")
-        zarr_dataset = ts.open(
-            ts_spec, read=True, write=not self.read_only, **kwargs
-        ).result()
-        return zarr_dataset
 
 
 class TiledImageArray(ImageArray):
@@ -548,12 +969,11 @@ class TiledImageArray(ImageArray):
             raise TypeError("Row and column indices must be integers.")
 
 
-class LabelsArray(zarr.Array):
-    """Container object for labels stored as a zarr array (TZYX)"""
+class LabelsArray(NGFFNDArray):
+    """Container object for labels stored as a zarr array (4D: TZYX, no channel)"""
 
-    @classmethod
-    def from_zarr_array(cls, zarray: zarr.Array) -> LabelsArray:
-        return cls(zarray._async_array)
+    _SUPPORTED_DIMS = "TZYX"
+    _N_DIMS = 4
 
     @property
     def frames(self):
@@ -575,60 +995,14 @@ class LabelsArray(zarr.Array):
         """Width (X dimension) of the labels array."""
         return self._get_dim(3)
 
-    def _get_dim(self, idx):
-        """Get dimension size for 4D labels array (TZYX)."""
-        return _pad_shape(self.shape, target=4)[idx]
-
-    def numpy(self) -> NDArray:
-        """Return the whole image as an in-RAM NumPy array."""
-        return self[:]
-
-    def dask_array(self):
-        """Return as a dask array."""
-        import dask.array as da
-
-        return da.from_zarr(self.store.root, component=self.path)
-
     def downscale(self):
         """Labels downscaling is not supported."""
         raise NotImplementedError(
             "Downscaling is not implemented for labels arrays."
         )
 
-    def tensorstore(self, **kwargs):
-        """
-        Open the zarr labels array as a TensorStore object.
-        Needs the optional dependency ``tensorstore``.
 
-        Parameters
-        ----------
-        **kwargs : dict, optional
-            Additional keyword arguments to pass to ``tensorstore.open()``,
-            by default None
-
-        Returns
-        -------
-        TensorStore
-            Handle to the Zarr labels array.
-        """
-        import tensorstore as ts
-
-        ts_spec = {
-            "driver": "zarr2" if self.metadata.zarr_format == 2 else "zarr3",
-            "kvstore": {
-                "driver": "file",
-                "path": str(Path(self.store.root) / self.path.strip("/")),
-            },
-        }
-        if "read" in kwargs or "write" in kwargs:
-            raise ValueError("Cannot override file mode for the Zarr store.")
-        zarr_dataset = ts.open(
-            ts_spec, read=True, write=not self.read_only, **kwargs
-        ).result()
-        return zarr_dataset
-
-
-class LabelImage(NGFFNode):
+class PositionLabel(NGFFMultiscalesNode):
     """Multiscale label image group containing LabelsArray pyramid levels.
 
     This class manages label images according to NGFF specification where
@@ -716,78 +1090,22 @@ class LabelImage(NGFFNode):
         ome = self.metadata.model_dump(**TO_DICT_SETTINGS)
         self._dump_ome(ome)
 
-    @property
-    def _zarr_format(self):
-        return 3 if self.version == "0.5" else 2
+    def _create_from_data(self, key, value):
+        """Create label from data (implementation of base class hook)."""
+        return self.create_label(key, value)
 
-    @property
-    def _member_names(self):
-        return self.array_keys()
-
-    @property
-    def data(self) -> LabelsArray:
-        """.. warning::
-            This property does *NOT* aim to retrieve all the arrays.
-            And it may also fail to retrive any data if arrays exist but
-            are not named conventionally.
-
-        Alias for the highest resolution label array ('0').
-
-        Returns
-        -------
-        LabelsArray
-            Label array at the highest resolution level
-        """
-        try:
-            return self["0"]
-        except KeyError:
-            raise KeyError(
-                "There is no array named '0' "
-                f"in the group of: {self.array_keys()}"
-            )
-
-    def __getitem__(self, key: int | str) -> LabelsArray:
-        """Get a label array at a specific resolution level.
-
-        Parameters
-        ----------
-        key : int | str
-            Resolution level (e.g., "0", "1", "2")
-
-        Returns
-        -------
-        LabelsArray
-            Label array at the specified resolution level
-        """
-        key = normalize_path(str(key))
-        znode = self.zgroup.get(key)
-        if not znode:
-            raise KeyError(key)
-
-        if isinstance(znode, zarr.Array):
-            return LabelsArray.from_zarr_array(znode)
-        else:
-            raise TypeError(
-                f"Expected zarr.Array at level '{key}', got {type(znode)}"
-            )
-
-    def __setitem__(self, key, value: NDArray):
-        """Write label data to a specific resolution level."""
-        key = normalize_path(str(key))
-        if not isinstance(value, np.ndarray):
-            raise TypeError(
-                f"Value must be a NumPy array. Got type {type(value)}."
-            )
-        self.create_level(key, value)
-
-    def create_level(
+    def create_label(
         self,
         level: str,
         data: NDArray,
         chunks: tuple[int, ...] | None = None,
+        shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
     ) -> LabelsArray:
         """Create a label array at a specific resolution level.
+
+        This method is the parallel to :meth:`Position.create_image` for creating
+        label arrays at specific multiscale resolution levels.
 
         Parameters
         ----------
@@ -797,6 +1115,10 @@ class LabelImage(NGFFNode):
             Label data (integer array, TZYX format)
         chunks : tuple[int, ...], optional
             Chunk size, by default None
+        shards_ratio : tuple[int, ...], optional
+            Sharding ratio for each dimension, by default None.
+            Each shard contains the product of the ratios number of chunks.
+            No sharding will be used if not specified.
         transform : list[TransformationMeta], optional
             Coordinate transformations for this level, by default None
 
@@ -804,6 +1126,12 @@ class LabelImage(NGFFNode):
         -------
         LabelsArray
             Created label array
+
+        See Also
+        --------
+        Position.create_image : Equivalent method for Position class
+        create_zeros : Create empty label array
+        initialize_pyramid : Create downscaled pyramid levels
         """
         if not isinstance(data, np.ndarray):
             raise TypeError("Label data must be a NumPy array")
@@ -816,27 +1144,17 @@ class LabelImage(NGFFNode):
         if chunks is None:
             chunks = self._default_chunks(data.shape, last_data_dims=3)
 
-        zarray = self._group.create_array(
+        return self._create_zarr_array_base(
             name=level,
-            data=data,
+            shape=data.shape,
+            dtype=data.dtype,
             chunks=chunks,
-            overwrite=self._overwrite,
-            fill_value=0,
-            dimension_names=(
-                [ax.name for ax in self.axes[: len(data.shape)]]
-                if self._zarr_format == 3
-                else None
-            ),
-            chunk_key_encoding=ChunkKeyEncodingParams(
-                name="default" if self._zarr_format == 3 else "v2",
-                separator="/",
-            ),
-            **self._create_compressor_options(),
+            array_class=LabelsArray,
+            shards_ratio=shards_ratio,
+            data=data,
+            metadata_callback=self._create_label_meta,
+            transform=transform,
         )
-
-        self._create_label_meta(level, transform=transform)
-
-        return LabelsArray.from_zarr_array(zarray)
 
     def create_zeros(
         self,
@@ -844,6 +1162,7 @@ class LabelImage(NGFFNode):
         shape: tuple[int, ...],
         dtype: DTypeLike,
         chunks: tuple[int, ...] | None = None,
+        shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
     ) -> LabelsArray:
         """Create a zero-filled label array at a specific resolution level.
@@ -858,6 +1177,10 @@ class LabelImage(NGFFNode):
             Integer data type for labels
         chunks : tuple[int, ...], optional
             Chunk size, by default None
+        shards_ratio : tuple[int, ...], optional
+            Sharding ratio for each dimension, by default None.
+            Each shard contains the product of the ratios number of chunks.
+            No sharding will be used if not specified.
         transform : list[TransformationMeta], optional
             Coordinate transformations, by default None
 
@@ -869,33 +1192,20 @@ class LabelImage(NGFFNode):
         if chunks is None:
             chunks = self._default_chunks(shape, last_data_dims=3)
 
-        # Ensure integer dtype
         if not np.issubdtype(dtype, np.integer):
             raise ValueError(f"Labels must use integer dtype, got {dtype}")
 
-        zarray = LabelsArray.from_zarr_array(
-            self._group.create_array(
-                name=level,
-                shape=shape,
-                dtype=dtype,
-                chunks=chunks,
-                overwrite=self._overwrite,
-                fill_value=0,
-                dimension_names=(
-                    [ax.name for ax in self.axes[: len(shape)]]
-                    if self._zarr_format == 3
-                    else None
-                ),
-                chunk_key_encoding=ChunkKeyEncodingParams(
-                    name="default" if self._zarr_format == 3 else "v2",
-                    separator="/",
-                ),
-                **self._create_compressor_options(),
-            )
+        return self._create_zarr_array_base(
+            name=level,
+            shape=shape,
+            dtype=dtype,
+            chunks=chunks,
+            array_class=LabelsArray,
+            shards_ratio=shards_ratio,
+            data=None,
+            metadata_callback=self._create_label_meta,
+            transform=transform,
         )
-
-        self._create_label_meta(level, transform=transform)
-        return zarray
 
     def initialize_pyramid(self, levels: int, source_level: str = "0") -> None:
         """Initialize multiscale pyramid for label image.
@@ -916,26 +1226,10 @@ class LabelImage(NGFFNode):
         source_array = self[source_level]
 
         for level in range(1, levels):
-            factor = 2**level
-
-            downscaled_shape = source_array.shape[:-3] + _scale_integers(
-                source_array.shape[-3:], factor
+            downscaled_shape, downscaled_chunks, transforms = (
+                self._calculate_pyramid_params(source_array, level)
             )
 
-            downscaled_chunks = _pad_shape(
-                _scale_integers(source_array.chunks, factor),
-                len(downscaled_shape),
-            )
-
-            transforms = [
-                TransformationMeta(
-                    type="scale",
-                    scale=[1.0] * (len(source_array.shape) - 3)
-                    + [float(factor)] * 3,
-                )
-            ]
-
-            # Create downscaled level (empty, same as images)
             self.create_zeros(
                 level=str(level),
                 shape=downscaled_shape,
@@ -943,32 +1237,6 @@ class LabelImage(NGFFNode):
                 chunks=downscaled_chunks,
                 transform=transforms,
             )
-
-    @staticmethod
-    def _default_chunks(shape, last_data_dims: int):
-        """Default chunking for label arrays."""
-        chunks = shape[-min(last_data_dims, len(shape)) :]
-        return _pad_shape(chunks, target=len(shape))
-
-    def _create_compressor_options(self):
-        """Compression options for label arrays."""
-        shuffle = zarr.codecs.BloscShuffle.bitshuffle
-        if self._zarr_format == 3:
-            return {
-                "compressors": zarr.codecs.BloscCodec(
-                    cname="zstd",
-                    clevel=1,
-                    shuffle=shuffle,
-                )
-            }
-        else:
-            from numcodecs import Blosc
-
-            return {
-                "compressor": Blosc(
-                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                )
-            }
 
     def _create_label_meta(
         self,
@@ -1009,7 +1277,7 @@ class LabelImage(NGFFNode):
 
         self.dump_meta()
 
-    def _create_image_label_meta(self) -> ImageLabelMeta:
+    def _create_image_label_meta(self) -> PositionLabelMeta:
         """Create image-label metadata from colors and properties."""
         # Prepare colors
         label_colors = []
@@ -1044,14 +1312,14 @@ class LabelImage(NGFFNode):
                     continue
                 label_properties.append(prop)
 
-        return ImageLabelMeta(
+        return PositionLabelMeta(
             colors=label_colors if label_colors else [],
             properties=label_properties if label_properties else [],
             source={"image": "../../"},  # Reference to parent image
         )
 
 
-class Position(NGFFNode):
+class Position(NGFFMultiscalesNode):
     """The Zarr group level directly containing multiscale image arrays.
 
     Parameters
@@ -1133,72 +1401,9 @@ class Position(NGFFNode):
         ome = self.metadata.model_dump(**TO_DICT_SETTINGS)
         self._dump_ome(ome)
 
-    @property
-    def _zarr_format(self):
-        return 3 if self.version == "0.5" else 2
-
-    @property
-    def _member_names(self):
-        return self.array_keys()
-
-    @property
-    def data(self):
-        """.. warning::
-            This property does *NOT* aim to retrieve all the arrays.
-            And it may also fail to retrive any data if arrays exist but
-            are not named conventionally.
-
-        Alias for an array named '0' in the position,
-        which is usually the raw data (or the finest resolution in a pyramid).
-
-        Returns
-        -------
-        ImageArray
-
-        Raises
-        ------
-        KeyError
-            If no array is named '0'.
-
-        Notes
-        -----
-        Do not depend on this in non-interactive code!
-        The name is hard-coded and is not guaranteed
-        by the OME-NGFF specification.
-        """
-        try:
-            return self["0"]
-        except KeyError:
-            raise KeyError(
-                "There is no array named '0' "
-                f"in the group of: {self.array_keys()}"
-            )
-
-    def __getitem__(self, key: int | str) -> ImageArray:
-        """Get an image array member of the position.
-        E.g. Raw-coordinates image, a multi-scale level, or labels
-
-        Parameters
-        ----------
-        key : int| str
-            Name or path to the image array.
-            Integer key is converted to string (name).
-
-        Returns
-        -------
-        ImageArray
-            Container object for image stored as a zarr array (up to 5D)
-        """
-        return super().__getitem__(key)
-
-    def __setitem__(self, key, value: NDArray):
-        """Write an up-to-5D image with default settings."""
-        key = normalize_path(str(key))
-        if not isinstance(value, np.ndarray):
-            raise TypeError(
-                f"Value must be a NumPy array. Got type {type(value)}."
-            )
-        self.create_image(key, value)
+    def _create_from_data(self, key, value):
+        """Create image from data (implementation of base class hook)."""
+        return self.create_image(key, value)
 
     def images(self) -> Generator[tuple[str, ImageArray]]:
         """Returns a generator that iterate over the name and value
@@ -1305,45 +1510,23 @@ class Position(NGFFNode):
         """
         if not chunks:
             chunks = self._default_chunks(shape, 3)
+
         if check_shape:
             self._check_shape(shape)
-        if shards_ratio:
-            if len(shards_ratio) != len(shape):
-                raise ValueError(
-                    f"Sharding ratio length {len(shards_ratio)} "
-                    f"does not match shape length {len(shape)}."
-                )
-            shards = tuple(c * s for c, s in zip(chunks, shards_ratio))
-        else:
-            shards = None
-        img_arr = ImageArray.from_zarr_array(
-            self._group.create_array(
-                name=name,
-                shape=shape,
-                dtype=dtype,
-                chunks=chunks,
-                shards=shards,
-                overwrite=self._overwrite,
-                fill_value=0,
-                dimension_names=(
-                    [ax.name for ax in self.axes]
-                    if self._zarr_format == 3
-                    else None
-                ),
-                chunk_key_encoding=ChunkKeyEncodingParams(
-                    name="default" if self._zarr_format == 3 else "v2",
-                    separator="/",
-                ),
-                **self._create_compressor_options(),
-            )
-        )
-        self._create_image_meta(img_arr.basename, transform=transform)
-        return img_arr
 
-    @staticmethod
-    def _default_chunks(shape, last_data_dims: int):
-        chunks = shape[-min(last_data_dims, len(shape)) :]
-        return _pad_shape(chunks, target=len(shape))
+        img_arr = self._create_zarr_array_base(
+            name=name,
+            shape=shape,
+            dtype=dtype,
+            chunks=chunks,
+            array_class=ImageArray,
+            shards_ratio=shards_ratio,
+            data=None,
+            metadata_callback=self._create_image_meta,
+            transform=transform,
+        )
+
+        return img_arr
 
     def _check_shape(self, data_shape: tuple[int, ...]) -> None:
         if len(data_shape) != len(self.axes):
@@ -1366,25 +1549,6 @@ class Position(NGFFNode):
                 "Dataset channel axis is not set. "
                 "Skipping channel shape check."
             )
-
-    def _create_compressor_options(self):
-        shuffle = zarr.codecs.BloscShuffle.bitshuffle
-        if self._zarr_format == 3:
-            return {
-                "compressors": zarr.codecs.BloscCodec(
-                    cname="zstd",
-                    clevel=1,
-                    shuffle=shuffle,
-                )
-            }
-        else:
-            from numcodecs import Blosc
-
-            return {
-                "compressor": Blosc(
-                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                )
-            }
 
     def _create_image_meta(
         self,
@@ -1556,16 +1720,9 @@ class Position(NGFFNode):
             Number of down scaling levels, if levels is 1 nothing happens.
         """
         array = self.data
+
         for level in range(1, levels):
-            factor = 2**level
-
-            shape = array.shape[:-3] + _scale_integers(
-                array.shape[-3:], factor
-            )
-
-            chunks = _pad_shape(
-                _scale_integers(array.chunks, factor), len(shape)
-            )
+            shape, chunks, _ = self._calculate_pyramid_params(array, level)
 
             transforms = deepcopy(
                 self.metadata.multiscales[0]
@@ -1575,7 +1732,7 @@ class Position(NGFFNode):
             for tr in transforms:
                 if tr.type == "scale":
                     for i in range(len(tr.scale))[-3:]:
-                        tr.scale[i] *= factor
+                        tr.scale[i] *= 2**level
 
             self.create_zeros(
                 name=str(level),
@@ -1773,7 +1930,6 @@ class Position(NGFFNode):
         if image not in self and image != "*":
             raise KeyError(f"Image {image} not found.")
         axis_index = self.get_axis_index(axis_name)
-        # Update scale while preserving existing transforms
         if image == "*":
             transforms = (
                 self.metadata.multiscales[0].coordinate_transformations or []
@@ -1783,7 +1939,6 @@ class Position(NGFFNode):
                 if dataset_meta.path == image:
                     transforms = dataset_meta.coordinate_transformations
                     break
-        # Append old scale to metadata
         iohub_dict = {}
         if "iohub" in self.zattrs:
             iohub_dict = self.zattrs["iohub"]
@@ -1799,10 +1954,8 @@ class Position(NGFFNode):
             }
         )
         self.zattrs["iohub"] = iohub_dict
-        # Replace default identity transform with scale
         if transforms == [TransformationMeta(type="identity")]:
             transforms = [TransformationMeta(type="scale", scale=[1.0] * 5)]
-        # Add scale transform if not present
         if not any([transform.type == "scale" for transform in transforms]):
             transforms.append(
                 TransformationMeta(type="scale", scale=[1.0] * 5)
@@ -1857,19 +2010,18 @@ class Position(NGFFNode):
         """Create the labels subgroup if it doesn't exist."""
         if "labels" not in self._group:
             labels_group = self._group.create_group("labels", overwrite=False)
-            # Initialize empty labels metadata
             self._update_labels_metadata([])
             return labels_group
         return self._group["labels"]
 
-    def labels(self) -> Generator[tuple[str, LabelImage], None, None]:
+    def labels(self) -> Generator[tuple[str, PositionLabel], None, None]:
         """Returns a generator that iterates over the name and value
         of all the label images in the position.
 
         Yields
         ------
-        tuple[str, LabelImage]
-            Name and LabelImage object.
+        tuple[str, PositionLabel]
+            Name and PositionLabel object.
         """
         if self.labels_group is None:
             return
@@ -1888,7 +2040,7 @@ class Position(NGFFNode):
             return []
         return sorted(list(self.labels_group.group_keys()))
 
-    def get_label(self, name: str) -> LabelImage:
+    def get_label(self, name: str) -> PositionLabel:
         """Get a multiscale label image by name.
 
         Parameters
@@ -1898,7 +2050,7 @@ class Position(NGFFNode):
 
         Returns
         -------
-        LabelImage
+        PositionLabel
             Container object for the multiscale label image
 
         Raises
@@ -1918,7 +2070,7 @@ class Position(NGFFNode):
         zgroup = self.labels_group[name]
         label_axes = [ax for ax in self.axes if ax.type != "channel"]
 
-        return LabelImage(
+        return PositionLabel(
             group=zgroup,
             parse_meta=True,
             axes=label_axes,
@@ -1933,8 +2085,9 @@ class Position(NGFFNode):
         colors: dict[int, list[int]] | None = None,
         properties: list[dict[str, Any]] | None = None,
         chunks: tuple[int, ...] | None = None,
+        shards_ratio: tuple[int, ...] | None = None,
         pyramid_levels: int = 1,
-    ) -> LabelImage:
+    ) -> PositionLabel:
         """Create a new multiscale label image in this position.
 
         This creates an NGFF-compliant multiscale label image.
@@ -1952,12 +2105,16 @@ class Position(NGFFNode):
             Properties for each label value, must include "label-value" field
         chunks : tuple[int, ...], optional
             Chunk size for the zarr arrays
+        shards_ratio : tuple[int, ...], optional
+            Sharding ratio for each dimension, by default None.
+            Each shard contains the product of the ratios number of chunks.
+            No sharding will be used if not specified.
         pyramid_levels : int, optional
             Number of pyramid levels to create, by default 1
 
         Returns
         -------
-        LabelImage
+        PositionLabel
             The created multiscale label image
 
         Raises
@@ -2038,9 +2195,9 @@ class Position(NGFFNode):
             name, overwrite=self._overwrite
         )
 
-        # Create LabelImage with proper axes (TZYX, no channel)
+        # Create PositionLabel with proper axes (TZYX, no channel)
         label_axes = [ax for ax in self.axes if ax.type != "channel"]
-        label_image = LabelImage(
+        label_image = PositionLabel(
             group=label_group,
             parse_meta=False,
             axes=label_axes,
@@ -2050,7 +2207,9 @@ class Position(NGFFNode):
             overwriting_creation=self._overwrite,
         )
 
-        label_image.create_level("0", data, chunks=chunks)
+        label_image.create_label(
+            "0", data, chunks=chunks, shards_ratio=shards_ratio
+        )
 
         if pyramid_levels > 1:
             label_image.initialize_pyramid(pyramid_levels)

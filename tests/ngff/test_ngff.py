@@ -1569,14 +1569,14 @@ def test_labels_access_patterns(channels_and_random_5d, version):
         # Test has_labels property
         assert dataset.has_labels is True
 
-        # Test get_label() returns LabelImage
+        # Test get_label() returns PositionLabel
         cells = dataset.get_label("cells")
         nuclei = dataset.get_label("nuclei")
 
-        from iohub.ngff.nodes import LabelImage
+        from iohub.ngff.nodes import PositionLabel
 
-        assert isinstance(cells, LabelImage)
-        assert isinstance(nuclei, LabelImage)
+        assert isinstance(cells, PositionLabel)
+        assert isinstance(nuclei, PositionLabel)
 
         # Test level access patterns
         assert "0" in cells and "1" in cells  # Multiscale
@@ -1586,6 +1586,6 @@ def test_labels_access_patterns(channels_and_random_5d, version):
         label_names = []
         for name, label_img in dataset.labels():
             label_names.append(name)
-            assert isinstance(label_img, LabelImage)
+            assert isinstance(label_img, PositionLabel)
 
         assert sorted(label_names) == ["cells", "nuclei"]

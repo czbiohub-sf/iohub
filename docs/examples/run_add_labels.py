@@ -114,7 +114,7 @@ with open_ome_zarr(dataset_path, layout="fov", mode="r") as position:
 
     # Get highest resolution data
     high_res_cells = cells.data  # Gets level "0"
-    print(f"   High-res shape: {high_res_cells.shape}")
+    print(f"   Shape: {high_res_cells.shape}")
 
     # Access downscaled version (empty, like images)
     if "1" in cells:

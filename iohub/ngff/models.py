@@ -320,7 +320,7 @@ class LabelImageMeta(MetaBase):
     # MUST: multiscales with same levels as original image
     multiscales: list[MultiScaleMeta]
     # SHOULD: image-label with colors, properties, source
-    image_label: ImageLabelMeta = Field(alias="image-label")
+    image_label: PositionLabelMeta = Field(alias="image-label")
     # only for OME-NGFF v0.5
     version: Literal["0.5"] | None = None
     model_config = ConfigDict(extra="allow")
@@ -346,7 +346,7 @@ class LabelsMeta(MetaBase):
     # MUST: list of paths to labeled multiscale images
     labels: list[str]
     # MAY: metadata for individual labels
-    image_label: ImageLabelMeta | None = Field(
+    image_label: PositionLabelMeta | None = Field(
         alias="image-label", default=None
     )
 
@@ -366,7 +366,7 @@ class LabelColorMeta(MetaBase):
         return v
 
 
-class ImageLabelMeta(VersionMeta):
+class PositionLabelMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
 
     # SHOULD
