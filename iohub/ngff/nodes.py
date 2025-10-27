@@ -454,7 +454,7 @@ class NGFFMultiscalesNode(NGFFNode):
         tuple[int, ...]
             Chunk sizes for each dimension
         """
-        chunks = shape[-min(last_data_dims, len(shape)):]
+        chunks = shape[-min(last_data_dims, len(shape)) :]
         return _pad_shape(chunks, target=len(shape))
 
     def _create_compressor_options(self) -> dict:
