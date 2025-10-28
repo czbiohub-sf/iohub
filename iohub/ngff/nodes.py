@@ -42,6 +42,7 @@ from iohub.ngff.models import (
     WellIndexMeta,
     WindowDict,
 )
+from iohub.ngff.utils import _downsample_tensorstore
 
 _logger = logging.getLogger(__name__)
 
@@ -1076,6 +1077,80 @@ class Position(NGFFNode):
                 dtype=array.dtype,
                 chunks=chunks,
                 transform=transforms,
+            )
+
+    def compute_pyramid(
+        self,
+        levels: int | None = None,
+        method: str = "mean",
+        source_level: str = "0",
+    ) -> None:
+        """Compute pyramid by downsampling from source level.
+
+        Uses cascade downsampling where each level is derived from the
+        previous level to prevent aliasing artifacts and chunk boundary
+        issues that occur with large downsample factors.
+
+        Parameters
+        ----------
+        levels : int, optional
+            Number of pyramid levels. If None, auto-detects from existing
+            pyramid structure.
+        method : str, optional
+            Downsampling method: "mean", "median", "mode", "min", "max",
+            "stride". By default "mean".
+        source_level : str, optional
+            Source level to start cascade from, by default "0"
+
+        Raises
+        ------
+        ValueError
+            If pyramid structure doesn't exist or source_level not found
+
+        Notes
+        -----
+        Pyramid structure must exist before calling this method.
+        Use initialize_pyramid() first to create empty arrays:
+
+        Examples
+        --------
+        >>> # Create empty pyramid structure
+        >>> pos.initialize_pyramid(levels=4)
+        >>> # Fill pyramid with downsampled data
+        >>> pos.compute_pyramid(levels=4, method="mean")
+
+        >>> # Or auto-detect levels from an initialized pyramid structure
+        >>> pos.compute_pyramid(method="median")
+        """
+
+        if levels is None:
+            levels = len(self.array_keys())
+
+        if source_level not in self:
+            raise ValueError(f"Source level '{source_level}' not found")
+
+        start_level = int(source_level) + 1
+
+        for level in range(start_level, levels):
+            previous_level_array = self[str(level - 1)]
+            current_level_array = self[str(level)]
+
+            previous_ts = previous_level_array.tensorstore()
+            current_ts = current_level_array.tensorstore()
+
+            current_scale = self.get_effective_scale(str(level))
+            previous_scale = self.get_effective_scale(str(level - 1))
+
+            downsample_factors = [
+                int(round(current_scale[i] / previous_scale[i]))
+                for i in range(len(current_scale))
+            ]
+
+            _downsample_tensorstore(
+                source_ts=previous_ts,
+                target_ts=current_ts,
+                downsample_factors=downsample_factors,
+                method=method,
             )
 
     @property

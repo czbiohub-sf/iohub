@@ -1372,3 +1372,46 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
             dataset[arr_name].dask_array().compute(),
             nz_multiscales.images[0].data,
         )
+
+def test_compute_pyramid():
+    """Test pyramid computation with cascade downsampling."""
+    pytest.importorskip("tensorstore")
+    
+    with TemporaryDirectory() as tmpdir:
+        store_path = Path(tmpdir) / "test_pyramid.zarr"
+        
+        # Create position with data
+        data = np.random.randint(0, 255, size=(1, 2, 32, 128, 128), dtype=np.uint16)
+        
+        with open_ome_zarr(
+            store_path,
+            layout="fov",
+            mode="a",
+            channel_names=["ch1", "ch2"],
+        ) as pos:
+            pos.create_image("0", data)
+            
+            # Create empty pyramid structure
+            pos.initialize_pyramid(levels=3)
+            
+            # Verify pyramid structure exists but is empty
+            assert "1" in pos
+            assert "2" in pos
+            assert np.all(pos["1"][:] == 0)  # Empty
+            
+            # Compute pyramid
+            pos.compute_pyramid(levels=3, method="mean")
+            
+            # Verify pyramid is no longer empty
+            level_1_data = pos["1"][:]
+            assert not np.all(level_1_data == 0)  # Has data now
+            
+            # Verify shape is downscaled
+            expected_shape = (1, 2, 16, 64, 64)  # 2x downscaled
+            assert pos["1"].shape == expected_shape
+            
+            # Verify level 2 also has data
+            level_2_data = pos["2"][:]
+            assert not np.all(level_2_data == 0)
+            expected_shape_2 = (1, 2, 8, 32, 32)  # 4x downscaled
+            assert pos["2"].shape == expected_shape_2

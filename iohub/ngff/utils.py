@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import inspect
 import itertools
 import multiprocessing as mp
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
 from warnings import warn
 
 import click
@@ -13,6 +15,9 @@ from numpy.typing import DTypeLike, NDArray
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.nodes import TransformationMeta
+
+if TYPE_CHECKING:
+    import tensorstore as ts
 
 
 def create_empty_plate(
@@ -671,3 +676,49 @@ def _calculate_zyx_chunk_size(
         chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2)
     chunk_zyx_shape = tuple(map(int, chunk_zyx_shape))
     return chunk_zyx_shape
+
+
+def _downsample_tensorstore(
+    source_ts: ts.TensorStore,
+    target_ts: ts.TensorStore,
+    downsample_factors: list[int],
+    method: str = "mean",
+) -> None:
+    """Downsample source into target using tensorstore.
+
+    Writes data in chunks with transactions for consistency.
+
+    Parameters
+    ----------
+    source_ts : ts.TensorStore
+        Source tensorstore array to downsample from
+    target_ts : ts.TensorStore
+        Target tensorstore array to write downsampled data to
+    downsample_factors : list[int]
+        Downsampling factors for each dimension
+    method : str, optional
+        Downsampling method ("mean", "median", "mode", "min", "max",
+        "stride"), by default "mean"
+    """
+    try:
+        import tensorstore as ts
+    except ImportError:
+        raise ImportError(
+            "Tensorstore is required for downsampling. \
+            Please install it with `pip install tensorstore`."
+        )
+
+    downsampled = ts.downsample(
+        source_ts, downsample_factors=downsample_factors, method=method
+    )
+
+    step = target_ts.chunk_layout.write_chunk.shape[0]
+
+    for start in range(0, downsampled.shape[0], step):
+        with ts.Transaction() as txn:
+            target_with_txn = target_ts.with_transaction(txn)
+            downsampled_with_txn = downsampled.with_transaction(txn)
+            stop = min(start + step, downsampled.shape[0])
+            target_with_txn[start:stop].write(
+                downsampled_with_txn[start:stop]
+            ).result()
