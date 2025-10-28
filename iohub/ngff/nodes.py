@@ -42,7 +42,6 @@ from iohub.ngff.models import (
     WellIndexMeta,
     WindowDict,
 )
-from iohub.ngff.utils import _downsample_tensorstore
 
 _logger = logging.getLogger(__name__)
 
@@ -1122,6 +1121,7 @@ class Position(NGFFNode):
         >>> # Or auto-detect levels from an initialized pyramid structure
         >>> pos.compute_pyramid(method="median")
         """
+        from iohub.ngff.utils import _downsample_tensorstore
 
         if levels is None:
             levels = len(self.array_keys())
