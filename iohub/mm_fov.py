@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import overload
 
 from xarray import DataArray
 
@@ -118,10 +119,46 @@ class MicroManagerFOVMapping(BaseFOVMapping):
             )
         self._stage_positions = value
 
+    @overload
     @staticmethod
-    def _parse_hcs_position_label(label: str) -> tuple[str, str, str]:
-        """Parse a HCS position label and split it into (row, column, FOV)
-        components."""
+    def _parse_hcs_position_label(label: str) -> tuple[str, str, str]: ...
+
+    @overload
+    @staticmethod
+    def _parse_hcs_position_label(
+        label: list[str],
+    ) -> list[tuple[str, str, str]]: ...
+
+    @staticmethod
+    def _parse_hcs_position_label(
+        label: str | list[str],
+    ) -> tuple[str, str, str] | list[tuple[str, str, str]]:
+        """Parse HCS position label(s) into (row, column, fov) components.
+
+        Supports both single labels and lists of labels for flexible usage.
+
+        Parameters
+        ----------
+        label : str or list[str]
+            Single HCS position label or list of labels to parse
+
+        Returns
+        -------
+        tuple[str, str, str] or list[tuple[str, str, str]]
+            Parsed (row, column, fov) components. Returns single tuple for
+            string input, list of tuples for list input.
+
+        Raises
+        ------
+        ValueError
+            If any label doesn't match supported formats
+        """
+        if isinstance(label, list):
+            return [
+                MicroManagerFOVMapping._parse_hcs_position_label(lbl)
+                for lbl in label
+            ]
+
         # See https://chatgpt.com/share/e/68364412-fb4c-8002-8dcf-28127cfee37a
         pattern = re.compile(
             r"([A-Z])(\d+)-Site_(\d+)|"
@@ -191,7 +228,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
         except KeyError:
             raise ValueError("Stage positions do not have labels.")
 
-        return [self._parse_hcs_position_label(label) for label in labels]
+        return self._parse_hcs_position_label(labels)
 
     @property
     def zyx_scale(self) -> tuple[float, float, float]:
