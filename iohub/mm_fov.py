@@ -8,6 +8,14 @@ from xarray import DataArray
 
 from iohub.fov import BaseFOV, BaseFOVMapping
 
+# Compile regex pattern once at module level for efficiency
+# See https://chatgpt.com/share/e/68364412-fb4c-8002-8dcf-28127cfee37a
+_HCS_POSITION_PATTERN = re.compile(
+    r"([A-Z])(\d+)-Site_(\d+)|"
+    r"Pos-(\d+)-(\d+)_(\d+)|"
+    r"(\d+)-Pos(\d+)_?(\d+)?"
+)
+
 
 class MicroManagerFOV(BaseFOV):
     def __init__(self, parent: MicroManagerFOVMapping, key: int) -> None:
@@ -159,14 +167,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
                 for lbl in label
             ]
 
-        # See https://chatgpt.com/share/e/68364412-fb4c-8002-8dcf-28127cfee37a
-        pattern = re.compile(
-            r"([A-Z])(\d+)-Site_(\d+)|"
-            r"Pos-(\d+)-(\d+)_(\d+)|"
-            r"(\d+)-Pos(\d+)_?(\d+)?"
-        )
-
-        if (match := re.match(pattern, label)) is not None:
+        if (match := re.match(_HCS_POSITION_PATTERN, label)) is not None:
             if match.group(1):  # "A1-Site_0" case
                 return (match.group(1), match.group(2), match.group(3))
             elif match.group(4):  # "Pos-5-000_005" case
