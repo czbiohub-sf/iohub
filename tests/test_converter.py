@@ -60,7 +60,20 @@ def _check_chunks(
         case "XYZ" | None:
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
-            assert img.chunks == chunks
+            # Chunks may be adjusted to ensure compatibility with data dimensions
+            # Same logic as in convert.py _gen_chunks validation
+            expected_chunks = []
+            for chunk, dim in zip(chunks, img.shape):
+                if chunk > dim:
+                    expected_chunks.append(dim)
+                elif dim % chunk != 0:
+                    # Find largest divisor <= chunk
+                    while chunk > 1 and dim % chunk != 0:
+                        chunk -= 1
+                    expected_chunks.append(chunk)
+                else:
+                    expected_chunks.append(chunk)
+            assert img.chunks == tuple(expected_chunks)
         case _:
             assert False
 

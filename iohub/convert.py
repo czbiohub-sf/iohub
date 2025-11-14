@@ -248,6 +248,30 @@ class TIFFConverter:
                 f"Chunk type {type(input_chunks)} is not supported."
             )
 
+        # Validate and adjust chunks to be compatible with Dask as they
+        # need to divide evenly.
+        data_dims = [self.t, self.c, self.z, self.y, self.x]
+        for i, (chunk, dim) in enumerate(zip(chunks, data_dims)):
+            if chunk > dim:
+                _logger.warning(
+                    f"Chunk size {chunk} on axis {i} exceeds data dimension"
+                    f"{dim}."
+                    f"Adjusting to {dim} to prevent Dask alignment issues."
+                )
+                chunks[i] = dim
+            elif dim % chunk != 0:
+                original_chunk = chunk
+                while chunk > 1 and dim % chunk != 0:
+                    chunk -= 1
+                if chunk != original_chunk:
+                    _logger.warning(
+                        f"Chunk size {original_chunk} on axis {i} doesn't"
+                        f"divide"
+                        f"data dimension {dim} evenly. Adjusting to {chunk} "
+                        f"to prevent Dask alignment issues."
+                    )
+                    chunks[i] = chunk
+
         # limit chunks to MAX_CHUNK_SIZE bytes
         bytes_per_pixel = np.dtype(self.reader.dtype).itemsize
         # it's OK if a single image is larger than MAX_CHUNK_SIZE
