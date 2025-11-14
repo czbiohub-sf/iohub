@@ -1373,45 +1373,61 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
             nz_multiscales.images[0].data,
         )
 
-def test_compute_pyramid():
-    """Test pyramid computation with cascade downsampling."""
+
+def test_compute_pyramid(tmp_path):
+    """Test pyramid computation with automatic initialization and cascade downsampling."""
     pytest.importorskip("tensorstore")
-    
-    with TemporaryDirectory() as tmpdir:
-        store_path = Path(tmpdir) / "test_pyramid.zarr"
-        
-        # Create position with data
-        data = np.random.randint(0, 255, size=(1, 2, 32, 128, 128), dtype=np.uint16)
-        
-        with open_ome_zarr(
-            store_path,
-            layout="fov",
-            mode="a",
-            channel_names=["ch1", "ch2"],
-        ) as pos:
-            pos.create_image("0", data)
-            
-            # Create empty pyramid structure
-            pos.initialize_pyramid(levels=3)
-            
-            # Verify pyramid structure exists but is empty
-            assert "1" in pos
-            assert "2" in pos
-            assert np.all(pos["1"][:] == 0)  # Empty
-            
-            # Compute pyramid
-            pos.compute_pyramid(levels=3, method="mean")
-            
-            # Verify pyramid is no longer empty
-            level_1_data = pos["1"][:]
-            assert not np.all(level_1_data == 0)  # Has data now
-            
-            # Verify shape is downscaled
-            expected_shape = (1, 2, 16, 64, 64)  # 2x downscaled
-            assert pos["1"].shape == expected_shape
-            
-            # Verify level 2 also has data
-            level_2_data = pos["2"][:]
-            assert not np.all(level_2_data == 0)
-            expected_shape_2 = (1, 2, 8, 32, 32)  # 4x downscaled
-            assert pos["2"].shape == expected_shape_2
+
+    store_path = tmp_path / "test_pyramid.zarr"
+
+    rng = np.random.default_rng()
+    data = rng.integers(0, 255, size=(1, 2, 32, 128, 128), dtype=np.uint16)
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_image("0", data)
+
+        # Test 1: compute_pyramid automatically creates pyramid structure
+        pos.compute_pyramid(levels=3, method="mean")
+
+        # Verify pyramid structure was created and filled with data
+        assert "1" in pos
+        assert "2" in pos
+
+        level_1_data = pos["1"][:]
+        assert (
+            level_1_data.mean() > 0
+        ), "Level 1 should contain downsampled data"
+        assert pos["1"].shape == (1, 2, 16, 64, 64)  # 2x downscaled
+
+        # Verify level 2 also has data
+        level_2_data = pos["2"][:]
+        assert (
+            level_2_data.mean() > 0
+        ), "Level 2 should contain downsampled data"
+        assert pos["2"].shape == (1, 2, 8, 32, 32)  # 4x downscaled
+
+        # Test 2: Rebuilding pyramid with different levels
+        # This should delete old pyramid levels and create new ones
+        pos.compute_pyramid(levels=4, method="mean")
+
+        # Verify new level 3 exists and has data
+        assert "3" in pos
+        level_3_data = pos["3"][:]
+        assert (
+            level_3_data.mean() > 0
+        ), "Level 3 should contain downsampled data"
+        assert pos["3"].shape == (1, 2, 4, 16, 16)  # 8x downscaled
+
+        # Test 3: Recompute existing pyramid (levels=None auto-detects)
+        pos.compute_pyramid(method="median")
+
+        # Verify data is recomputed (still has data)
+        level_1_recomputed = pos["1"][:]
+        assert (
+            level_1_recomputed.mean() > 0
+        ), "Recomputed level 1 should have data"

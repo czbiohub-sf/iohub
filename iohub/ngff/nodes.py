@@ -200,7 +200,7 @@ class NGFFNode:
         """.. Warning: this does NOT clean up metadata!"""
         key = normalize_path(str(key))
         if key in self._member_names:
-            del self[key]
+            del self._group[key]
 
     def __contains__(self, key):
         key = normalize_path(str(key))
@@ -1037,7 +1037,7 @@ class Position(NGFFNode):
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
 
-    def initialize_pyramid(self, levels: int) -> None:
+    def _initialize_pyramid(self, levels: int) -> None:
         """
         Initializes the pyramid arrays with a down scaling of 2 per level.
         Decimals shapes are rounded up to ceiling.
@@ -1082,10 +1082,10 @@ class Position(NGFFNode):
         self,
         levels: int | None = None,
         method: str = "mean",
-        source_level: str = "0",
     ) -> None:
         """Compute pyramid by downsampling from source level.
 
+        Automatically creates or rebuilds pyramid structure as needed.
         Uses cascade downsampling where each level is derived from the
         previous level to prevent aliasing artifacts and chunk boundary
         issues that occur with large downsample factors.
@@ -1093,45 +1093,55 @@ class Position(NGFFNode):
         Parameters
         ----------
         levels : int, optional
-            Number of pyramid levels. If None, auto-detects from existing
-            pyramid structure.
+            Number of pyramid levels. If None, uses existing pyramid structure.
+            If provided and different from existing structure, automatically
+            rebuilds pyramid to match.
         method : str, optional
             Downsampling method: "mean", "median", "mode", "min", "max",
             "stride". By default "mean".
-        source_level : str, optional
-            Source level to start cascade from, by default "0"
 
         Raises
         ------
         ValueError
-            If pyramid structure doesn't exist or source_level not found
-
-        Notes
-        -----
-        Pyramid structure must exist before calling this method.
-        Use initialize_pyramid() first to create empty arrays:
+            If level 0 array doesn't exist or pyramid structure is invalid.
 
         Examples
         --------
-        >>> # Create empty pyramid structure
-        >>> pos.initialize_pyramid(levels=4)
-        >>> # Fill pyramid with downsampled data
+        >>> # Create and compute pyramid with 4 levels
         >>> pos.compute_pyramid(levels=4, method="mean")
 
-        >>> # Or auto-detect levels from an initialized pyramid structure
+        >>> # Recompute existing pyramid structure
         >>> pos.compute_pyramid(method="median")
         """
         from iohub.ngff.utils import _downsample_tensorstore
 
+        num_arrays = len(self.array_keys())
+        if num_arrays == 0:
+            raise ValueError(
+                "No level 0 array exists. Create base array before computing "
+                "pyramid."
+            )
+
         if levels is None:
-            levels = len(self.array_keys())
+            if num_arrays == 1:
+                raise ValueError(
+                    "Pyramid structure doesn't exist and levels=None. "
+                    "Specify 'levels' parameter to create pyramid."
+                )
+            levels = num_arrays
 
-        if source_level not in self:
-            raise ValueError(f"Source level '{source_level}' not found")
+        if num_arrays == 1:
+            self._initialize_pyramid(levels=levels)
+        elif num_arrays != levels:
+            # Pyramid exists but wrong size, rebuild it
+            # Delete only pyramid levels, preserve level 0
+            for key in list(self.array_keys()):
+                if key != "0":
+                    del self[key]
+            self._initialize_pyramid(levels=levels)
 
-        start_level = int(source_level) + 1
-
-        for level in range(start_level, levels):
+        # Compute pyramid data via cascade downsampling
+        for level in range(1, levels):
             previous_level_array = self[str(level - 1)]
             current_level_array = self[str(level)]
 

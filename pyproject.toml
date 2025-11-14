@@ -50,10 +50,14 @@ Documentation = "https://czbiohub-sf.github.io/iohub"
 Source = "https://github.com/czbiohub-sf/iohub"
 
 [project.optional-dependencies]
+tensorstore = [
+    "tensorstore>=0.1.64",
+]
 acquire-zarr = [
     "acquire-zarr",
 ]
 dev = [
+    "iohub[tensorstore]",
     "ngff-zarr[validate]",
     "black",
     "flake8",
