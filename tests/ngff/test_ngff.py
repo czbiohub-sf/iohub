@@ -1241,6 +1241,56 @@ def test_create_position(row, col, pos, version):
         assert (store_path / row / col / pos).is_dir()
         assert dataset[row][col].metadata.images[0].path == pos
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_positions(tmp_path, version):
+    positions = [x.split("/") for x in [
+        "A/1/002026",
+        "A/1/002027",
+        "A/1/002028",
+        "A/1/002029",
+        "A/1/002030",
+        "A/1/002031",
+        "A/1/002032",
+        "A/1/003021",
+        "A/1/003022",
+        "A/2/049031",
+        "A/2/049032",
+        "A/2/049033",
+        "A/2/049034",
+        "A/2/049035",
+        "A/2/049036",
+        "A/2/049037",
+        "A/2/049038",
+    ]]
+    single = open_ome_zarr(
+        tmp_path / "single.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+    batched = open_ome_zarr(
+        tmp_path / "batched.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+    for pos in positions:
+        single.create_position(*pos)
+    batched.create_positions(*zip(*positions))
+
+    if version == "0.4":
+        get_metadata = lambda x: x.zgroup.attrs
+    elif version == "0.5":
+        get_metadata = lambda x: x.zgroup.attrs["ome"]
+    
+    single_metadata = get_metadata(single)
+    batched_metadata = get_metadata(batched)
+
+    assert single_metadata == batched_metadata
+
+
 
 @given(
     channels_and_random_5d=_channels_and_random_5d(), version=ngff_versions_st

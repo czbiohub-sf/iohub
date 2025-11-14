@@ -1459,6 +1459,20 @@ class Well(NGFFNode):
         """
         return super().__getitem__(key)
 
+    def _create_position_nosync(self, name: str, acquisition: int = 0):
+        "create_position, but doesn't write the metadata yet."
+        pos_grp = self._group.create_group(name, overwrite=self._overwrite)
+        # build metadata
+        image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
+        if not hasattr(self, "metadata"):
+            self.metadata = WellGroupMeta(
+                images=[image_meta], version=self.version
+            )
+        else:
+            self.metadata.images.append(image_meta)
+        return Position(group=pos_grp, parse_meta=False, **self._child_attrs)
+
+
     def create_position(self, name: str, acquisition: int = 0):
         """Creates a new position group in the well group.
 
@@ -1469,17 +1483,10 @@ class Well(NGFFNode):
         acquisition : int, optional
             The index of the acquisition, by default 0
         """
-        pos_grp = self._group.create_group(name, overwrite=self._overwrite)
-        # build metadata
-        image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
-        if not hasattr(self, "metadata"):
-            self.metadata = WellGroupMeta(
-                images=[image_meta], version=self.version
-            )
-        else:
-            self.metadata.images.append(image_meta)
+        pos = self._create_position_nosync(name, acquisition=acquisition)
         self.dump_meta()
-        return Position(group=pos_grp, parse_meta=False, **self._child_attrs)
+        return pos
+        
 
     def positions(self):
         """Returns a generator that iterate over the name and value
@@ -1826,6 +1833,37 @@ class Plate(NGFFNode):
         well_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
         self.dump_meta()
         return Well(group=well_grp, parse_meta=False, **self._child_attrs)
+    
+    def create_positions(
+        self,
+        row_name: list[str],
+        col_name: list[str],
+        pos_name: list[str],
+        acquisition_index: list[str] | None = None,
+    ) -> list[Position]:
+        n = len(row_name)
+        if len(col_name) != n or len(pos_name) != n:
+            raise ValueError("Must pass same number of positions")
+        wells = set()
+        positions = []
+        for r, c, p in zip(row_name, col_name, pos_name):
+            r = normalize_path(r)
+            c = normalize_path(c)
+            well_path = os.path.join(r, c)
+            if well_path in self.zgroup:
+                well = self[well_path]
+            else:
+                well = self.create_well(
+                    r, c
+                )
+            wells.add(well)
+            positions.append(
+                well._create_position_nosync(p, acquisition=acquisition_index)
+            )
+        for well in wells:
+            well.dump_meta()
+        return positions
+
 
     def create_position(
         self,
