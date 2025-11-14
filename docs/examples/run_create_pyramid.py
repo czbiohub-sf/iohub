@@ -26,9 +26,6 @@ with open_ome_zarr(
     # Create full resolution image
     position.create_image("0", data)
 
-    # Create empty pyramid structure (3 levels: 0, 1, 2)
-    position.initialize_pyramid(levels=3)
-
     # Fill pyramid with downsampled data
     position.compute_pyramid(levels=3, method="mean")
 
