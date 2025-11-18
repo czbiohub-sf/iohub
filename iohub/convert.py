@@ -394,7 +394,8 @@ class TIFFConverter:
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
                 to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
-                self._convert_image_plane_metadata(fov, zarr_img.path)
+                # Skip image plane metadata conversion, throws error
+                # self._convet_image_plane_metadata(fov, zarr_img.path)
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
         self.reader.close()
