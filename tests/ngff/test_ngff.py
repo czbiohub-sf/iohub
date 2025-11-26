@@ -1280,16 +1280,22 @@ def test_create_positions(tmp_path, version):
         single.create_position(*pos)
     batched.create_positions(*zip(*positions))
 
+    # Collect positions and compare those
+
     if version == "0.4":
         get_metadata = lambda x: x.zgroup.attrs
     elif version == "0.5":
         get_metadata = lambda x: x.zgroup.attrs["ome"]
     
-    single_metadata = get_metadata(single)
-    batched_metadata = get_metadata(batched)
+    single_plate_metadata = get_metadata(single)
+    batched_plate_metadata = get_metadata(batched)
 
-    assert single_metadata == batched_metadata
+    assert single_plate_metadata == batched_plate_metadata
 
+    single_well_metadata = {k: get_metadata(v) for k, v in single.wells()}
+    batched_well_metadata = {k: get_metadata(v) for k, v in single.wells()}
+
+    assert single_well_metadata == batched_well_metadata
 
 
 @given(
