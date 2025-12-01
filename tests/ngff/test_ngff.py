@@ -1293,9 +1293,93 @@ def test_create_positions(tmp_path, version):
     assert single_plate_metadata == batched_plate_metadata
 
     single_well_metadata = {k: get_metadata(v) for k, v in single.wells()}
-    batched_well_metadata = {k: get_metadata(v) for k, v in single.wells()}
+    batched_well_metadata = {k: get_metadata(v) for k, v in batched.wells()}
 
     assert single_well_metadata == batched_well_metadata
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_positions_with_tuple_variations(tmp_path, version):
+    """Test create_positions with various tuple lengths (3-6 elements).
+
+    This tests the examples from the create_positions docstring, verifying that
+    calling create_positions is equivalent to calling create_position multiple
+    times with the same arguments.
+    """
+    # Mix of 3, 5, and 6 element tuples
+    positions = [
+        # 3-element tuples: automatic row/column indexing
+        ("A", "1", "0"),
+        ("A", "1", "1"),
+        ("A", "2", "0"),
+        # 5-element tuples: explicit row/column indices
+        ("B", "3", "0", 1, 2),  # row_index=1, col_index=2
+        ("B", "3", "1", 1, 2),  # same well indices
+        # 6-element tuples: explicit indices with acquisition
+        ("C", "4", "0", 0, 0, 0),  # acquisition 0
+        ("C", "4", "1", 0, 0, 1),  # acquisition 1
+        ("C", "5", "0", 0, 1, 0),  # different well, acquisition 0
+    ]
+
+    single = open_ome_zarr(
+        tmp_path / "single.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+    batched = open_ome_zarr(
+        tmp_path / "batched.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+
+    # Create positions individually
+    for pos_spec in positions:
+        if len(pos_spec) == 3:
+            row, col, pos = pos_spec
+            single.create_position(row, col, pos)
+        elif len(pos_spec) == 5:
+            row, col, pos, row_idx, col_idx = pos_spec
+            single.create_position(row, col, pos, row_index=row_idx, col_index=col_idx)
+        elif len(pos_spec) == 6:
+            row, col, pos, row_idx, col_idx, acq_idx = pos_spec
+            single.create_position(
+                row, col, pos,
+                row_index=row_idx,
+                col_index=col_idx,
+                acq_index=acq_idx
+            )
+
+    # Create positions in batch
+    batched.create_positions(positions)
+
+    # Verify metadata matches
+    if version == "0.4":
+        get_metadata = lambda x: dict(x.zgroup.attrs)
+    elif version == "0.5":
+        get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+
+    single_meta = get_metadata(single)
+    batched_meta = get_metadata(batched)
+    assert single_meta == batched_meta
+
+    # Verify well metadata matches
+    single_well_meta = {k: get_metadata(v) for k, v in single.wells()}
+    batched_well_meta = {k: get_metadata(v) for k, v in batched.wells()}
+    assert single_well_meta == batched_well_meta
+
+    # Verify acquisition indices were set correctly
+    for plate in [single, batched]:
+        well_c4 = plate["C/4"]
+        well_c5 = plate["C/5"]
+        assert len(well_c4.metadata.images) == 2  # Two positions in this well
+        assert well_c4.metadata.images[0].acquisition == 0
+        assert well_c4.metadata.images[1].acquisition == 1
+        assert len(well_c5.metadata.images) == 1
+        assert well_c5.metadata.images[0].acquisition == 0
 
 
 @given(
