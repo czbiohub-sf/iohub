@@ -199,8 +199,7 @@ class NGFFNode:
     def __delitem__(self, key):
         """.. Warning: this does NOT clean up metadata!"""
         key = normalize_path(str(key))
-        if key in self._member_names:
-            del self._group[key]
+        del self._group[key]
 
     def __contains__(self, key):
         key = normalize_path(str(key))

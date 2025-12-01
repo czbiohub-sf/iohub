@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -9,7 +8,7 @@ import pytest
 from ndtiff import Dataset
 from tifffile import TiffFile
 
-from iohub.convert import TIFFConverter
+from iohub.convert import TIFFConverter, _adjust_chunks_for_divisibility
 from iohub.mm_fov import MicroManagerFOV
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
@@ -60,20 +59,10 @@ def _check_chunks(
         case "XYZ" | None:
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
-            # Chunks may be adjusted to ensure compatibility with data dimensions
-            # Same logic as in convert.py _gen_chunks validation
-            expected_chunks = []
-            for chunk, dim in zip(chunks, img.shape):
-                if chunk > dim:
-                    expected_chunks.append(dim)
-                elif dim % chunk != 0:
-                    # Find largest divisor <= chunk
-                    while chunk > 1 and dim % chunk != 0:
-                        chunk -= 1
-                    expected_chunks.append(chunk)
-                else:
-                    expected_chunks.append(chunk)
-            assert img.chunks == tuple(expected_chunks)
+            expected = _adjust_chunks_for_divisibility(
+                list(chunks), list(img.shape)
+            )
+            assert img.chunks == tuple(expected)
         case _:
             assert False
 
@@ -248,3 +237,79 @@ def test_converter_ndtiff_v3_position_labels(tmpdir):
             "Pos1",
             "Pos2",
         ]
+
+
+class TestGenChunks:
+    """Unit tests for the TIFFConverter._gen_chunks method."""
+
+    @pytest.fixture
+    def make_mock_converter(self):
+        """Factory fixture to create mock converter with dimensions."""
+
+        def _make(t=1, c=1, z=10, y=256, x=256, dtype="uint16"):
+            class MockConverter:
+                pass
+
+            converter = MockConverter()
+            converter.t = t
+            converter.c = c
+            converter.z = z
+            converter.y = y
+            converter.x = x
+
+            class MockReader:
+                pass
+
+            converter.reader = MockReader()
+            converter.reader.dtype = dtype
+
+            converter._gen_chunks = TIFFConverter._gen_chunks.__get__(
+                converter
+            )
+            return converter
+
+        return _make
+
+    @pytest.mark.parametrize(
+        "z_dim,input_chunk,expected_z",
+        [
+            (15, 10, 5),  # 10 doesn't divide 15, adjust to 5
+            (7, 5, 1),  # prime - falls to 1
+            (16, 8, 8),  # divides evenly, no change
+            (100, 50, 50),  # divides evenly
+            (9, 4, 3),  # odd non-prime, adjust to 3
+        ],
+    )
+    def test_gen_chunks_divisibility(
+        self, make_mock_converter, z_dim, input_chunk, expected_z
+    ):
+        """Test chunks are adjusted to divide evenly into dimensions."""
+        converter = make_mock_converter(z=z_dim)
+        chunks = converter._gen_chunks((1, 1, input_chunk, 256, 256))
+        assert chunks[2] == expected_z
+        assert z_dim % chunks[2] == 0
+
+    def test_gen_chunks_max_chunk_size_then_divisibility(
+        self, make_mock_converter
+    ):
+        """Test divisibility check happens AFTER MAX_CHUNK_SIZE adjustment."""
+        # Large chunks that trigger MAX_CHUNK_SIZE, then need divisibility fix
+        # Z=15, large XY to trigger size limit, chunk should end up dividing 15
+        converter = make_mock_converter(z=15, y=2048, x=2048)
+        chunks = converter._gen_chunks((1, 1, 15, 2048, 2048))
+        assert 15 % chunks[2] == 0
+
+    @pytest.mark.parametrize("z_dim", [7, 11, 13, 17, 19, 23])  # prime numbers
+    def test_gen_chunks_prime_dimensions(self, make_mock_converter, z_dim):
+        """Test handling of prime dimension sizes - should fall to 1."""
+        converter = make_mock_converter(z=z_dim)
+        chunks = converter._gen_chunks((1, 1, z_dim - 1, 256, 256))
+        assert z_dim % chunks[2] == 0
+
+    @pytest.mark.parametrize("input_chunks", ["XY", "XYZ", None])
+    def test_gen_chunks_string_inputs(self, make_mock_converter, input_chunks):
+        """Test string chunk specifications."""
+        converter = make_mock_converter(z=10, y=256, x=256)
+        chunks = converter._gen_chunks(input_chunks)
+        assert len(chunks) == 5
+        assert all(isinstance(c, (int, np.integer)) for c in chunks)

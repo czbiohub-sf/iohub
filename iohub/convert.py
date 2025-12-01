@@ -20,6 +20,23 @@ _logger = logging.getLogger(__name__)
 MAX_CHUNK_SIZE = 500e6  # in bytes
 
 
+def _adjust_chunks_for_divisibility(
+    chunks: list[int], dims: list[int]
+) -> list[int]:
+    """Adjust chunks to divide evenly into dimensions for Dask."""
+    adjusted = []
+    for chunk, dim in zip(chunks, dims):
+        if chunk > dim:
+            adjusted.append(dim)
+        elif dim % chunk != 0:
+            while chunk > 1 and dim % chunk != 0:
+                chunk -= 1
+            adjusted.append(chunk)
+        else:
+            adjusted.append(chunk)
+    return adjusted
+
+
 def _create_grid_from_coordinates(
     xy_coords: list[tuple[float, float]], rows: int, columns: int
 ):
@@ -231,6 +248,13 @@ class TIFFConverter:
             self.pos_names.append(name)
 
     def _gen_chunks(self, input_chunks):
+        """Generate valid chunk sizes for the output Zarr array.
+
+        First limits chunk size to MAX_CHUNK_SIZE by halving Z, then adjusts
+        chunks to divide evenly into dimensions. Order matters because halving
+        Z (e.g. 10 -> 5 -> 2) may no longer divide evenly, so we validate
+        divisibility last.
+        """
         if not input_chunks:
             _logger.debug("No chunk size specified, using ZYX.")
             chunks = [1, 1, self.z, self.y, self.x]
@@ -248,39 +272,25 @@ class TIFFConverter:
                 f"Chunk type {type(input_chunks)} is not supported."
             )
 
-        # Validate and adjust chunks to be compatible with Dask as they
-        # need to divide evenly.
-        data_dims = [self.t, self.c, self.z, self.y, self.x]
-        for i, (chunk, dim) in enumerate(zip(chunks, data_dims)):
-            if chunk > dim:
-                _logger.warning(
-                    f"Chunk size {chunk} on axis {i} exceeds data dimension"
-                    f"{dim}."
-                    f"Adjusting to {dim} to prevent Dask alignment issues."
-                )
-                chunks[i] = dim
-            elif dim % chunk != 0:
-                original_chunk = chunk
-                while chunk > 1 and dim % chunk != 0:
-                    chunk -= 1
-                if chunk != original_chunk:
-                    _logger.warning(
-                        f"Chunk size {original_chunk} on axis {i} doesn't"
-                        f"divide"
-                        f"data dimension {dim} evenly. Adjusting to {chunk} "
-                        f"to prevent Dask alignment issues."
-                    )
-                    chunks[i] = chunk
-
-        # limit chunks to MAX_CHUNK_SIZE bytes
         bytes_per_pixel = np.dtype(self.reader.dtype).itemsize
-        # it's OK if a single image is larger than MAX_CHUNK_SIZE
         while (
             chunks[-3] > 1
             and np.prod(chunks, dtype=np.int64) * bytes_per_pixel
             > MAX_CHUNK_SIZE
         ):
             chunks[-3] = np.ceil(chunks[-3] / 2).astype(int)
+
+        data_dims = [self.t, self.c, self.z, self.y, self.x]
+        original_chunks = chunks.copy()
+        chunks = _adjust_chunks_for_divisibility(chunks, data_dims)
+        for i, (orig, adj, dim) in enumerate(
+            zip(original_chunks, chunks, data_dims)
+        ):
+            if orig != adj:
+                _logger.warning(
+                    f"Chunk size {orig} on axis {i} adjusted to {adj} "
+                    f"(dimension {dim})."
+                )
 
         _logger.debug(f"Zarr store chunk size will be set to {chunks}.")
 
