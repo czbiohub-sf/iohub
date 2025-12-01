@@ -1338,20 +1338,7 @@ def test_create_positions_with_tuple_variations(tmp_path, version):
 
     # Create positions individually
     for pos_spec in positions:
-        if len(pos_spec) == 3:
-            row, col, pos = pos_spec
-            single.create_position(row, col, pos)
-        elif len(pos_spec) == 5:
-            row, col, pos, row_idx, col_idx = pos_spec
-            single.create_position(row, col, pos, row_index=row_idx, col_index=col_idx)
-        elif len(pos_spec) == 6:
-            row, col, pos, row_idx, col_idx, acq_idx = pos_spec
-            single.create_position(
-                row, col, pos,
-                row_index=row_idx,
-                col_index=col_idx,
-                acq_index=acq_idx
-            )
+        single.create_position(*pos_spec)
 
     # Create positions in batch
     batched.create_positions(positions)
