@@ -1278,15 +1278,15 @@ def test_create_positions(tmp_path, version):
     )
     for pos in positions:
         single.create_position(*pos)
-    batched.create_positions(*zip(*positions))
+    batched.create_positions(positions)
 
     # Collect positions and compare those
 
     if version == "0.4":
-        get_metadata = lambda x: x.zgroup.attrs
+        get_metadata = lambda x: dict(x.zgroup.attrs)
     elif version == "0.5":
-        get_metadata = lambda x: x.zgroup.attrs["ome"]
-    
+        get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+
     single_plate_metadata = get_metadata(single)
     batched_plate_metadata = get_metadata(batched)
 

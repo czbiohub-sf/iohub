@@ -1836,17 +1836,19 @@ class Plate(NGFFNode):
     
     def create_positions(
         self,
-        row_name: list[str],
-        col_name: list[str],
-        pos_name: list[str],
-        acquisition_index: list[str] | None = None,
+        positions: list[tuple[str, str, str, int | None, int | None, int]]
     ) -> list[Position]:
-        n = len(row_name)
-        if len(col_name) != n or len(pos_name) != n:
-            raise ValueError("Must pass same number of positions")
+        positions = deepcopy(positions)  # We may mutate contents
         wells = set()
-        positions = []
-        for r, c, p in zip(row_name, col_name, pos_name):
+        positions_out = []
+        for r, c, p, *args in positions:
+            # Parse out arguments
+            well_args = args[:2]
+            acquisition_index = 0 # Default value for create_position
+            if len(args) == 3:
+                acquisition_index = args[2]
+            elif len(args) > 3:
+                raise ValueError(f"Passed too many fields for a position: {(r, c, p, *args)}")
             r = normalize_path(r)
             c = normalize_path(c)
             well_path = os.path.join(r, c)
@@ -1854,15 +1856,15 @@ class Plate(NGFFNode):
                 well = self[well_path]
             else:
                 well = self.create_well(
-                    r, c
+                    r, c, *well_args
                 )
             wells.add(well)
-            positions.append(
+            positions_out.append(
                 well._create_position_nosync(p, acquisition=acquisition_index)
             )
         for well in wells:
             well.dump_meta()
-        return positions
+        return positions_out
 
 
     def create_position(
