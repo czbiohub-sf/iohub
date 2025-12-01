@@ -1905,7 +1905,7 @@ class Plate(NGFFNode):
         ... ])
         """
         positions = deepcopy(positions)  # We may mutate contents
-        wells = set()
+        wells = {}  # Track wells by path to avoid duplicate objects
         positions_out = []
         for r, c, p, *args in positions:
             # Parse out arguments
@@ -1918,17 +1918,21 @@ class Plate(NGFFNode):
             r = normalize_path(r)
             c = normalize_path(c)
             well_path = os.path.join(r, c)
-            if well_path in self.zgroup:
+
+            # Get or create well, ensuring we reuse the same object
+            if well_path in wells:
+                well = wells[well_path]
+            elif well_path in self.zgroup:
                 well = self[well_path]
+                wells[well_path] = well
             else:
-                well = self.create_well(
-                    r, c, *well_args
-                )
-            wells.add(well)
+                well = self.create_well(r, c, *well_args)
+                wells[well_path] = well
+
             positions_out.append(
                 well._create_position_nosync(p, acquisition=acquisition_index)
             )
-        for well in wells:
+        for well in wells.values():
             well.dump_meta()
         return positions_out
 
