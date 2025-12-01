@@ -12,7 +12,7 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Generator, Literal, Sequence, Type, overload
+from typing import Generator, Literal, Sequence, Type, TypeAlias, overload
 
 import numpy as np
 import zarr.codecs
@@ -44,6 +44,14 @@ from iohub.ngff.models import (
 )
 
 _logger = logging.getLogger(__name__)
+
+# Type alias for position specification tuples in create_positions
+PositionSpec: TypeAlias = (
+    tuple[str, str, str]
+    | tuple[str, str, str, int | None]
+    | tuple[str, str, str, int | None, int | None]
+    | tuple[str, str, str, int | None, int | None, int]
+)
 
 
 def _pad_shape(shape: tuple[int, ...], target: int = 5):
@@ -1836,8 +1844,66 @@ class Plate(NGFFNode):
     
     def create_positions(
         self,
-        positions: list[tuple[str, str, str, int | None, int | None, int]]
+        positions: list[PositionSpec]
     ) -> list[Position]:
+        """Creates multiple position groups in the plate efficiently.
+
+        This is a vectorized version of :py:meth:`create_position` that creates
+        multiple positions in a single call. Wells are created as needed and
+        metadata is written in batches for better performance.
+
+        Parameters
+        ----------
+        positions : list[PositionSpec]
+            List of position specifications. Each tuple can have 3-6 elements:
+
+            - 3 elements: ``(row_name, col_name, pos_name)``
+            - 4 elements: ``(row_name, col_name, pos_name, row_index)``
+            - 5 elements: ``(row_name, col_name, pos_name, row_index, col_index)``
+            - 6 elements: ``(row_name, col_name, pos_name, row_index, col_index, acq_index)``
+
+            Where:
+
+            - row_name (str): Name key of the row
+            - col_name (str): Name key of the column
+            - pos_name (str): Name key of the position
+            - row_index (int | None): Index of the row (auto-assigned if None or omitted)
+            - col_index (int | None): Index of the column (auto-assigned if None or omitted)
+            - acq_index (int): Index of the acquisition (defaults to 0 if omitted)
+
+        Returns
+        -------
+        list[Position]
+            List of created Position node objects
+
+        See Also
+        --------
+        create_position : Create a single position group
+
+        Examples
+        --------
+        Create multiple positions with automatic row/column indexing:
+
+        >>> plate.create_positions([
+        ...     ("A", "1", "0"),
+        ...     ("A", "1", "1"),
+        ...     ("A", "2", "0"),
+        ... ])
+
+        Create positions with explicit row/column indices:
+
+        >>> plate.create_positions([
+        ...     ("B", "3", "0", 1, 2),      # row_index=1, col_index=2
+        ...     ("B", "3", "1", 1, 2),      # same well indices
+        ... ])
+
+        Create positions with specific acquisition indices:
+
+        >>> plate.create_positions([
+        ...     ("B", "3", "0", 1, 2, 0),   # acquisition 0
+        ...     ("B", "3", "1", 1, 2, 1),   # acquisition 1
+        ... ])
+        """
         positions = deepcopy(positions)  # We may mutate contents
         wells = set()
         positions_out = []
