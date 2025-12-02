@@ -1480,7 +1480,6 @@ class Well(NGFFNode):
             self.metadata.images.append(image_meta)
         return Position(group=pos_grp, parse_meta=False, **self._child_attrs)
 
-
     def create_position(self, name: str, acquisition: int = 0):
         """Creates a new position group in the well group.
 
@@ -1494,7 +1493,6 @@ class Well(NGFFNode):
         pos = self._create_position_nosync(name, acquisition=acquisition)
         self.dump_meta()
         return pos
-        
 
     def positions(self):
         """Returns a generator that iterate over the name and value
@@ -1841,10 +1839,9 @@ class Plate(NGFFNode):
         well_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
         self.dump_meta()
         return Well(group=well_grp, parse_meta=False, **self._child_attrs)
-    
+
     def create_positions(
-        self,
-        positions: list[PositionSpec]
+        self, positions: list[PositionSpec]
     ) -> list[Position]:
         """Creates multiple position groups in the plate efficiently.
 
@@ -1859,17 +1856,22 @@ class Plate(NGFFNode):
 
             - 3 elements: ``(row_name, col_name, pos_name)``
             - 4 elements: ``(row_name, col_name, pos_name, row_index)``
-            - 5 elements: ``(row_name, col_name, pos_name, row_index, col_index)``
-            - 6 elements: ``(row_name, col_name, pos_name, row_index, col_index, acq_index)``
+            - 5 elements: ``(row_name, col_name, pos_name, row_index,
+              col_index)``
+            - 6 elements: ``(row_name, col_name, pos_name, row_index, 
+              col_index, acq_index)``
 
             Where:
 
             - row_name (str): Name key of the row
             - col_name (str): Name key of the column
             - pos_name (str): Name key of the position
-            - row_index (int | None): Index of the row (auto-assigned if None or omitted)
-            - col_index (int | None): Index of the column (auto-assigned if None or omitted)
-            - acq_index (int): Index of the acquisition (defaults to 0 if omitted)
+            - row_index (int | None): Index of the row (auto-assigned if None
+              or omitted)
+            - col_index (int | None): Index of the column (auto-assigned if
+              None or omitted)
+            - acq_index (int): Index of the acquisition (defaults to 0 if
+              omitted)
 
         Returns
         -------
@@ -1910,11 +1912,14 @@ class Plate(NGFFNode):
         for r, c, p, *args in positions:
             # Parse out arguments
             well_args = args[:2]
-            acquisition_index = 0 # Default value for create_position
+            acquisition_index = 0  # Default value for create_position
             if len(args) == 3:
                 acquisition_index = args[2]
             elif len(args) > 3:
-                raise ValueError(f"Passed too many fields for a position: {(r, c, p, *args)}")
+                raise ValueError(
+                    "Passed too many fields for a position: "
+                    f"{(r, c, p, *args)}"
+                )
             r = normalize_path(r)
             c = normalize_path(c)
             well_path = os.path.join(r, c)
@@ -1935,7 +1940,6 @@ class Plate(NGFFNode):
         for well in wells.values():
             well.dump_meta()
         return positions_out
-
 
     def create_position(
         self,
@@ -2148,7 +2152,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate | Position | TiledPosition: ...
+) -> Plate | Position | TiledPosition:
+    ...
 
 
 @overload
@@ -2161,7 +2166,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Position: ...
+) -> Position:
+    ...
 
 
 @overload
@@ -2174,7 +2180,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> TiledPosition: ...
+) -> TiledPosition:
+    ...
 
 
 @overload
@@ -2187,7 +2194,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate: ...
+) -> Plate:
+    ...
 
 
 def open_ome_zarr(
