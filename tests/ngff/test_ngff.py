@@ -1411,8 +1411,8 @@ def test_compute_pyramid(tmp_path):
         ), "Level 2 should contain downsampled data"
         assert pos["2"].shape == (1, 2, 8, 32, 32)  # 4x downscaled
 
-        # Test 2: Rebuilding pyramid with different levels
-        # This should delete old pyramid levels and create new ones
+        # Test 2: Rebuilding pyramid with different levels requires delete
+        pos.delete_pyramid()
         pos.compute_pyramid(levels=4, method="mean")
 
         # Verify new level 3 exists and has data
@@ -1431,3 +1431,42 @@ def test_compute_pyramid(tmp_path):
         assert (
             level_1_recomputed.mean() > 0
         ), "Recomputed level 1 should have data"
+
+        # Test 4: Verify error when trying to change levels without delete
+        with pytest.raises(ValueError, match="delete_pyramid"):
+            pos.compute_pyramid(levels=2, method="mean")
+
+
+def test_delete_pyramid(tmp_path):
+    """Test delete_pyramid removes all pyramid levels except level 0."""
+    pytest.importorskip("tensorstore")
+
+    store_path = tmp_path / "test_delete_pyramid.zarr"
+
+    rng = np.random.default_rng()
+    data = rng.integers(0, 255, size=(1, 2, 16, 64, 64), dtype=np.uint16)
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_image("0", data)
+        pos.compute_pyramid(levels=3, method="mean")
+
+        # Verify pyramid exists
+        assert "0" in pos
+        assert "1" in pos
+        assert "2" in pos
+
+        # Delete pyramid
+        pos.delete_pyramid()
+
+        # Verify only level 0 remains
+        assert "0" in pos
+        assert "1" not in pos
+        assert "2" not in pos
+
+        # Verify level 0 data is preserved
+        assert_array_equal(pos["0"][:], data)

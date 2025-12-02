@@ -1084,17 +1084,14 @@ class Position(NGFFNode):
     ) -> None:
         """Compute pyramid by downsampling from source level.
 
-        Automatically creates or rebuilds pyramid structure as needed.
-        Uses cascade downsampling where each level is derived from the
-        previous level to prevent aliasing artifacts and chunk boundary
-        issues that occur with large downsample factors.
+        Creates pyramid structure if none exists. Uses cascade downsampling
+        where each level is derived from the previous level to prevent
+        aliasing artifacts and chunk boundary issues.
 
         Parameters
         ----------
         levels : int, optional
             Number of pyramid levels. If None, uses existing pyramid structure.
-            If provided and different from existing structure, automatically
-            rebuilds pyramid to match.
         method : str, optional
             Downsampling method: "mean", "median", "mode", "min", "max",
             "stride". By default "mean".
@@ -1102,7 +1099,8 @@ class Position(NGFFNode):
         Raises
         ------
         ValueError
-            If level 0 array doesn't exist or pyramid structure is invalid.
+            If level 0 array doesn't exist, pyramid structure is invalid,
+            or if a pyramid already exists with a different number of levels.
 
         Examples
         --------
@@ -1111,6 +1109,10 @@ class Position(NGFFNode):
 
         >>> # Recompute existing pyramid structure
         >>> pos.compute_pyramid(method="median")
+
+        >>> # Change pyramid levels (must delete first)
+        >>> pos.delete_pyramid()
+        >>> pos.compute_pyramid(levels=3, method="mean")
         """
         from iohub.ngff.utils import _downsample_tensorstore
 
@@ -1132,12 +1134,11 @@ class Position(NGFFNode):
         if num_arrays == 1:
             self._initialize_pyramid(levels=levels)
         elif num_arrays != levels:
-            # Pyramid exists but wrong size, rebuild it
-            # Delete only pyramid levels, preserve level 0
-            for key in list(self.array_keys()):
-                if key != "0":
-                    del self[key]
-            self._initialize_pyramid(levels=levels)
+            raise ValueError(
+                f"Pyramid structure exists with {num_arrays} levels but "
+                f"{levels} requested. Call delete_pyramid() first to remove "
+                "existing pyramid."
+            )
 
         # Compute pyramid data via cascade downsampling
         for level in range(1, levels):
@@ -1161,6 +1162,16 @@ class Position(NGFFNode):
                 downsample_factors=downsample_factors,
                 method=method,
             )
+
+    def delete_pyramid(self) -> None:
+        """Delete all pyramid levels except the base (level 0) array.
+
+        Use this before calling compute_pyramid() with different levels
+        on a position that already has a pyramid structure.
+        """
+        for key in list(self.array_keys()):
+            if key != "0":
+                del self[key]
 
     @property
     def scale(self) -> list[float]:
