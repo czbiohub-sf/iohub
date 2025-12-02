@@ -1858,7 +1858,7 @@ class Plate(NGFFNode):
             - 4 elements: ``(row_name, col_name, pos_name, row_index)``
             - 5 elements: ``(row_name, col_name, pos_name, row_index,
               col_index)``
-            - 6 elements: ``(row_name, col_name, pos_name, row_index, 
+            - 6 elements: ``(row_name, col_name, pos_name, row_index,
               col_index, acq_index)``
 
             Where:
@@ -2152,8 +2152,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate | Position | TiledPosition:
-    ...
+) -> Plate | Position | TiledPosition: ...
 
 
 @overload
@@ -2166,8 +2165,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Position:
-    ...
+) -> Position: ...
 
 
 @overload
@@ -2180,8 +2178,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> TiledPosition:
-    ...
+) -> TiledPosition: ...
 
 
 @overload
@@ -2194,8 +2191,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate:
-    ...
+) -> Plate: ...
 
 
 def open_ome_zarr(
