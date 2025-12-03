@@ -60,10 +60,6 @@ def _open_store(
     version: Literal["0.1", "0.4"],
     synchronizer=None,
 ):
-    if not os.path.isdir(store_path) and mode in ("r", "r+"):
-        raise FileNotFoundError(
-            f"Dataset directory not found at {store_path}."
-        )
     if version != "0.4":
         _logger.warning(
             "IOHub is only tested against OME-NGFF v0.4. "
@@ -77,6 +73,13 @@ def _open_store(
             store_path, dimension_separator=dimension_separator
         )
         root = zarr.open_group(store, mode=mode, synchronizer=synchronizer)
+    except zarr.errors.GroupNotFoundError as gnfe:
+        try:
+            root = zarr.open_group(store_path, mode=mode, synchronizer=synchronizer)
+        except Exception as e2:
+            raise FileNotFoundError(
+                f"Dataset directory not found at {store_path}."
+            ) from e2
     except Exception as e:
         raise RuntimeError(
             f"Cannot open Zarr root group at {store_path}"
@@ -332,20 +335,22 @@ class NGFFNode:
 class ImageArray(zarr.Array):
     """Container object for image stored as a zarr array (up to 5D)"""
 
-    def __init__(self, zarray: zarr.Array):
-        super().__init__(
-            store=zarray._store,
-            path=zarray._path,
-            read_only=zarray._read_only,
-            chunk_store=zarray._chunk_store,
-            synchronizer=zarray._synchronizer,
-            cache_metadata=zarray._cache_metadata,
-            cache_attrs=zarray._attrs.cache,
-            partial_decompress=zarray._partial_decompress,
-            write_empty_chunks=zarray._write_empty_chunks,
-            zarr_version=zarray._version,
-            meta_array=zarray._meta_array,
-        )
+    def __init__(self, zarray: zarr.Array = None, **kwargs):
+        if zarray is not None:
+            kwargs.update(
+                store=zarray._store,
+                path=zarray._path,
+                read_only=zarray._read_only,
+                chunk_store=zarray._chunk_store,
+                synchronizer=zarray._synchronizer,
+                cache_metadata=zarray._cache_metadata,
+                cache_attrs=zarray._attrs.cache,
+                partial_decompress=zarray._partial_decompress,
+                write_empty_chunks=zarray._write_empty_chunks,
+                zarr_version=zarray._version,
+                meta_array=zarray._meta_array,
+            )
+        super().__init__(**kwargs)
         self._get_dims()
 
     def _get_dims(self):
@@ -1965,19 +1970,19 @@ def open_ome_zarr(
         :py:class:`iohub.ngff.Plate`,
         or :py:class:`iohub.ngff.TiledPosition`)
     """
-    store_path = Path(store_path)
+    local_store_path = Path(store_path)
     if mode == "a":
-        mode = ("w-", "r+")[int(store_path.exists())]
+        mode = ("w-", "r+")[int(local_store_path.exists())]
     parse_meta = False
     if mode in ("r", "r+"):
         parse_meta = True
     elif mode == "w-":
-        if store_path.exists():
+        if local_store_path.exists():
             raise FileExistsError(store_path)
     elif mode == "w":
-        if store_path.exists():
+        if local_store_path.exists():
             if (
-                ".zarr" not in str(store_path.resolve())
+                ".zarr" not in str(local_store_path.resolve())
                 and not disable_path_checking
             ):
                 raise ValueError(
