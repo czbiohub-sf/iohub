@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -9,7 +8,7 @@ import pytest
 from ndtiff import Dataset
 from tifffile import TiffFile
 
-from iohub.convert import TIFFConverter
+from iohub.convert import TIFFConverter, _adjust_chunks_for_divisibility
 from iohub.mm_fov import MicroManagerFOV
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
@@ -60,7 +59,10 @@ def _check_chunks(
         case "XYZ" | None:
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
-            assert img.chunks == chunks
+            expected = _adjust_chunks_for_divisibility(
+                list(chunks), list(img.shape)
+            )
+            assert img.chunks == tuple(expected)
         case _:
             assert False
 
