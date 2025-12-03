@@ -446,9 +446,10 @@ def verify_transformation(
     transform_func,
     **kwargs,
 ):
-    with open_ome_zarr(input_store_path) as input_dataset, open_ome_zarr(
-        output_store_path
-    ) as output_dataset:
+    with (
+        open_ome_zarr(input_store_path) as input_dataset,
+        open_ome_zarr(output_store_path) as output_dataset,
+    ):
         position_key_tuple = "/".join(position_key_tuple)
         input_position = input_dataset[position_key_tuple]
         output_position = output_dataset[position_key_tuple]
