@@ -678,6 +678,36 @@ def _calculate_zyx_chunk_size(
     return chunk_zyx_shape
 
 
+def _adjust_chunks_for_divisibility(
+    chunks: list[int], dims: list[int]
+) -> list[int]:
+    """Adjust chunks to divide evenly into dimensions for Dask.
+
+    Parameters
+    ----------
+    chunks : list[int]
+        Chunk sizes for each dimension.
+    dims : list[int]
+        Dimension sizes for each dimension.
+
+    Returns
+    -------
+    list[int]
+        Adjusted chunk sizes that divide evenly into dimensions.
+    """
+    adjusted = []
+    for chunk, dim in zip(chunks, dims):
+        if chunk > dim:
+            adjusted.append(dim)
+        elif dim % chunk != 0:
+            while chunk > 1 and dim % chunk != 0:
+                chunk -= 1
+            adjusted.append(chunk)
+        else:
+            adjusted.append(chunk)
+    return adjusted
+
+
 def _downsample_tensorstore(
     source_ts: ts.TensorStore,
     target_ts: ts.TensorStore,
