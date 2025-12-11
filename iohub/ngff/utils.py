@@ -109,7 +109,7 @@ def create_empty_plate(
 
     # Limiting the chunking to 500MB
     if chunks is None:
-        chunk_zyx_shape = _calculate_zyx_chunk_size(
+        chunk_zyx_shape = _limit_zyx_chunk_size(
             shape,
             np.dtype(dtype).itemsize,
             max_chunk_size_bytes,
@@ -658,8 +658,8 @@ def _check_nan_n_zeros(input_array) -> bool:
     return False
 
 
-def _calculate_zyx_chunk_size(
-    shape, bytes_per_pixel, max_chunk_size_bytes
+def _limit_zyx_chunk_size(
+    shape: tuple[int], bytes_per_pixel: int, max_chunk_size_bytes: float
 ) -> tuple[int, int, int]:
     """
     Calculate the chunk size for ZYX dimensions based on the shape,
