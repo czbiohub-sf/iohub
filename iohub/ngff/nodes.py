@@ -1172,14 +1172,23 @@ class Position(NGFFNode):
             )
 
     def delete_pyramid(self) -> None:
-        """Delete all pyramid levels except the base (level 0) array.
+        """Delete all dataset pyramid levels except the base (level 0) array.
 
         Use this before calling compute_pyramid() with different levels
         on a position that already has a pyramid structure.
+
+        This method removes both the zarr arrays and updates the OME-NGFF
+        multiscales metadata to reflect the deletion.
         """
-        for key in list(self.array_keys()):
-            if key != "0":
-                del self[key]
+        multiscale = self.metadata.multiscales[0]
+
+        # Delete all pyramid levels (skip index 0)
+        for dataset in multiscale.datasets[1:]:
+            del self[dataset.path]
+
+        # Keep only the base level in metadata
+        multiscale.datasets = multiscale.datasets[:1]
+        self.dump_meta()
 
     @property
     def scale(self) -> list[float]:

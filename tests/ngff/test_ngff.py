@@ -1591,13 +1591,26 @@ def test_delete_pyramid(tmp_path):
         assert "1" in pos
         assert "2" in pos
 
+        # Verify metadata has all levels
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1", "2"]
+
         # Delete pyramid
         pos.delete_pyramid()
 
-        # Verify only level 0 remains
+        # Verify only level 0 remains in zarr arrays
         assert "0" in pos
         assert "1" not in pos
         assert "2" not in pos
 
+        # Verify metadata is also updated to only have level 0
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0"]
+
         # Verify level 0 data is preserved
         assert_array_equal(pos["0"][:], data)
+
+    # Verify metadata persists after reopening
+    with open_ome_zarr(store_path, mode="r") as pos:
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0"]
