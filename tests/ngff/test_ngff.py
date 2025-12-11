@@ -1503,3 +1503,114 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
             dataset[arr_name].dask_array().compute(),
             nz_multiscales.images[0].data,
         )
+
+
+def test_compute_pyramid(tmp_path):
+    """Test pyramid computation with automatic initialization and cascade downsampling."""
+    pytest.importorskip("tensorstore")
+
+    store_path = tmp_path / "test_pyramid.zarr"
+
+    rng = np.random.default_rng()
+    data = rng.integers(0, 255, size=(1, 2, 32, 128, 128), dtype=np.uint16)
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_image("0", data)
+
+        # Test 1: compute_pyramid automatically creates pyramid structure
+        pos.compute_pyramid(levels=3, method="mean")
+
+        # Verify pyramid structure was created and filled with data
+        assert "1" in pos
+        assert "2" in pos
+
+        level_1_data = pos["1"][:]
+        assert (
+            level_1_data.mean() > 0
+        ), "Level 1 should contain downsampled data"
+        assert pos["1"].shape == (1, 2, 16, 64, 64)  # 2x downscaled
+
+        # Verify level 2 also has data
+        level_2_data = pos["2"][:]
+        assert (
+            level_2_data.mean() > 0
+        ), "Level 2 should contain downsampled data"
+        assert pos["2"].shape == (1, 2, 8, 32, 32)  # 4x downscaled
+
+        # Test 2: Rebuilding pyramid with different levels requires delete
+        pos.delete_pyramid()
+        pos.compute_pyramid(levels=4, method="mean")
+
+        # Verify new level 3 exists and has data
+        assert "3" in pos
+        level_3_data = pos["3"][:]
+        assert (
+            level_3_data.mean() > 0
+        ), "Level 3 should contain downsampled data"
+        assert pos["3"].shape == (1, 2, 4, 16, 16)  # 8x downscaled
+
+        # Test 3: Recompute existing pyramid (levels=None auto-detects)
+        pos.compute_pyramid(method="median")
+
+        # Verify data is recomputed (still has data)
+        level_1_recomputed = pos["1"][:]
+        assert (
+            level_1_recomputed.mean() > 0
+        ), "Recomputed level 1 should have data"
+
+        # Test 4: Verify error when trying to change levels without delete
+        with pytest.raises(ValueError, match="delete_pyramid"):
+            pos.compute_pyramid(levels=2, method="mean")
+
+
+def test_delete_pyramid(tmp_path):
+    """Test delete_pyramid removes all pyramid levels except level 0."""
+    pytest.importorskip("tensorstore")
+
+    store_path = tmp_path / "test_delete_pyramid.zarr"
+
+    rng = np.random.default_rng()
+    data = rng.integers(0, 255, size=(1, 2, 16, 64, 64), dtype=np.uint16)
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_image("0", data)
+        pos.compute_pyramid(levels=3, method="mean")
+
+        # Verify pyramid exists
+        assert "0" in pos
+        assert "1" in pos
+        assert "2" in pos
+
+        # Verify metadata has all levels
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1", "2"]
+
+        # Delete pyramid
+        pos.delete_pyramid()
+
+        # Verify only level 0 remains in zarr arrays
+        assert "0" in pos
+        assert "1" not in pos
+        assert "2" not in pos
+
+        # Verify metadata is also updated to only have level 0
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0"]
+
+        # Verify level 0 data is preserved
+        assert_array_equal(pos["0"][:], data)
+
+    # Verify metadata persists after reopening
+    with open_ome_zarr(store_path, mode="r") as pos:
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0"]
