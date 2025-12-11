@@ -1187,7 +1187,7 @@ class Position(NGFFNode):
             del self[dataset.path]
 
         # Keep only the base level in metadata
-        multiscale.datasets = multiscale.datasets[:1]
+        multiscale.datasets = multiscale.datasets[0]
         self.dump_meta()
 
     @property
