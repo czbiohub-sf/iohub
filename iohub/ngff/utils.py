@@ -659,16 +659,36 @@ def _check_nan_n_zeros(input_array) -> bool:
 
 
 def _limit_zyx_chunk_size(
-    shape: tuple[int], bytes_per_pixel: int, max_chunk_size_bytes: float
+    shape: tuple[int],
+    bytes_per_pixel: int,
+    max_chunk_size_bytes: float,
+    chunks: tuple[int] | None = None,
 ) -> tuple[int, int, int]:
     """
     Calculate the chunk size for ZYX dimensions based on the shape,
     bytes per pixel of data, and desired max chunk size.
+
+    Parameters
+    ----------
+    shape : tuple[int]
+        The shape of the data (at least 3 dimensions for ZYX).
+    bytes_per_pixel : int
+        Number of bytes per pixel (e.g., 2 for uint16).
+    max_chunk_size_bytes : float
+        Maximum chunk size in bytes.
+    chunks : tuple[int] | None, optional
+        Initial chunk sizes to limit. If None, uses shape[-3:] as starting
+        chunk size. If provided, uses chunks[-3:] as starting point.
+
+    Returns
+    -------
+    tuple[int, int, int]
+        The limited ZYX chunk sizes.
     """
+    # Use provided chunks if available, otherwise start from shape
+    chunk_zyx_shape = list(chunks[-3:] if chunks else shape[-3:])
 
-    chunk_zyx_shape = list(shape[-3:])
-
-    # while XY image is larger than MAX_CHUNK_SIZE
+    # Reduce Z chunk size until total chunk is within limit
     while (
         chunk_zyx_shape[-3] > 1
         and np.prod(chunk_zyx_shape) * bytes_per_pixel > max_chunk_size_bytes
