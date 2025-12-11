@@ -187,7 +187,7 @@ def test_converter_ometiff_mock_hcs(mock_hcs_ome_tiff_reader, tmpdir):
 def test_converter_ometiff_mock_non_hcs(mock_non_hcs_ome_tiff_reader, tmpdir):
     data = mock_non_hcs_ome_tiff_reader
     output = tmpdir / "converted.zarr"
-    with pytest.raises(ValueError, match="HCS position labels"):
+    with pytest.raises(ValueError, match="HCS position label"):
         TIFFConverter(data, output, hcs_plate=True)
 
 

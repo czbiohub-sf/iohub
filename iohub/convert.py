@@ -23,6 +23,23 @@ _logger = logging.getLogger(__name__)
 MAX_CHUNK_SIZE = 500e6  # in bytes
 
 
+def _adjust_chunks_for_divisibility(
+    chunks: list[int], dims: list[int]
+) -> list[int]:
+    """Adjust chunks to divide evenly into dimensions for Dask."""
+    adjusted = []
+    for chunk, dim in zip(chunks, dims):
+        if chunk > dim:
+            adjusted.append(dim)
+        elif dim % chunk != 0:
+            while chunk > 1 and dim % chunk != 0:
+                chunk -= 1
+            adjusted.append(chunk)
+        else:
+            adjusted.append(chunk)
+    return adjusted
+
+
 def _create_grid_from_coordinates(
     xy_coords: list[tuple[float, float]], rows: int, columns: int
 ):
@@ -273,6 +290,18 @@ class TIFFConverter:
         chunks[-3:] = list(chunk_zyx_shape)
 
         # Adjust chunks to divide evenly into dimensions
+        chunks = _adjust_chunks_for_divisibility(chunks, data_dims)
+        for i, (orig, adj, dim) in enumerate(
+            zip(original_chunks, chunks, data_dims)
+        ):
+            if orig != adj:
+                _logger.warning(
+                    f"Chunk size {orig} on axis {i} adjusted to {adj} "
+                    f"(dimension {dim})."
+                )
+
+        data_dims = [self.t, self.c, self.z, self.y, self.x]
+        original_chunks = chunks.copy()
         chunks = _adjust_chunks_for_divisibility(chunks, data_dims)
         for i, (orig, adj, dim) in enumerate(
             zip(original_chunks, chunks, data_dims)

@@ -1242,6 +1242,137 @@ def test_create_position(row, col, pos, version):
         assert dataset[row][col].metadata.images[0].path == pos
 
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_positions(tmp_path, version):
+    positions = [
+        x.split("/")
+        for x in [
+            "A/1/002026",
+            "A/1/002027",
+            "A/1/002028",
+            "A/1/002029",
+            "A/1/002030",
+            "A/1/002031",
+            "A/1/002032",
+            "A/1/003021",
+            "A/1/003022",
+            "A/2/049031",
+            "A/2/049032",
+            "A/2/049033",
+            "A/2/049034",
+            "A/2/049035",
+            "A/2/049036",
+            "A/2/049037",
+            "A/2/049038",
+        ]
+    ]
+    single = open_ome_zarr(
+        tmp_path / "single.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+    batched = open_ome_zarr(
+        tmp_path / "batched.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+    for pos in positions:
+        single.create_position(*pos)
+    batched.create_positions(positions)
+
+    # Collect positions and compare those
+
+    if version == "0.4":
+        get_metadata = lambda x: dict(x.zgroup.attrs)
+    elif version == "0.5":
+        get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+
+    single_plate_metadata = get_metadata(single)
+    batched_plate_metadata = get_metadata(batched)
+
+    assert single_plate_metadata == batched_plate_metadata
+
+    single_well_metadata = {k: get_metadata(v) for k, v in single.wells()}
+    batched_well_metadata = {k: get_metadata(v) for k, v in batched.wells()}
+
+    assert single_well_metadata == batched_well_metadata
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_positions_with_tuple_variations(tmp_path, version):
+    """Test create_positions with various tuple lengths (3-6 elements).
+
+    This tests the examples from the create_positions docstring, verifying that
+    calling create_positions is equivalent to calling create_position multiple
+    times with the same arguments.
+    """
+    # Mix of 3, 5, and 6 element tuples
+    positions = [
+        # 3-element tuples: automatic row/column indexing
+        ("A", "1", "0"),
+        ("A", "1", "1"),
+        ("A", "2", "0"),
+        # 5-element tuples: explicit row/column indices
+        ("B", "3", "0", 1, 2),  # row_index=1, col_index=2
+        ("B", "3", "1", 1, 2),  # same well indices
+        # 6-element tuples: explicit indices with acquisition
+        ("C", "4", "0", 0, 0, 0),  # acquisition 0
+        ("C", "4", "1", 0, 0, 1),  # acquisition 1
+        ("C", "5", "0", 0, 1, 0),  # different well, acquisition 0
+    ]
+
+    single = open_ome_zarr(
+        tmp_path / "single.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+    batched = open_ome_zarr(
+        tmp_path / "batched.zarr",
+        layout="hcs",
+        mode="a",
+        channel_names=["GFP"],
+        version=version,
+    )
+
+    # Create positions individually
+    for pos_spec in positions:
+        single.create_position(*pos_spec)
+
+    # Create positions in batch
+    batched.create_positions(positions)
+
+    # Verify metadata matches
+    if version == "0.4":
+        get_metadata = lambda x: dict(x.zgroup.attrs)
+    elif version == "0.5":
+        get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+
+    single_meta = get_metadata(single)
+    batched_meta = get_metadata(batched)
+    assert single_meta == batched_meta
+
+    # Verify well metadata matches
+    single_well_meta = {k: get_metadata(v) for k, v in single.wells()}
+    batched_well_meta = {k: get_metadata(v) for k, v in batched.wells()}
+    assert single_well_meta == batched_well_meta
+
+    # Verify acquisition indices were set correctly
+    for plate in [single, batched]:
+        well_c4 = plate["C/4"]
+        well_c5 = plate["C/5"]
+        assert len(well_c4.metadata.images) == 2  # Two positions in this well
+        assert well_c4.metadata.images[0].acquisition == 0
+        assert well_c4.metadata.images[1].acquisition == 1
+        assert len(well_c5.metadata.images) == 1
+        assert well_c5.metadata.images[0].acquisition == 0
+
+
 @given(
     channels_and_random_5d=_channels_and_random_5d(), version=ngff_versions_st
 )
