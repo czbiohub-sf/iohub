@@ -1180,14 +1180,12 @@ class Position(NGFFNode):
         This method removes both the zarr arrays and updates the OME-NGFF
         multiscales metadata to reflect the deletion.
         """
-        multiscale = self.metadata.multiscales[0]
+        _multiscale = self.metadata.multiscales[0]
 
-        # Delete all pyramid levels (skip index 0)
-        for dataset in multiscale.datasets[1:]:
+        for dataset in _multiscale.datasets[1:]:
             del self[dataset.path]
 
-        # Keep only the base level in metadata
-        multiscale.datasets = multiscale.datasets[0]
+        _multiscale.datasets = _multiscale.datasets[:1]
         self.dump_meta()
 
     @property
