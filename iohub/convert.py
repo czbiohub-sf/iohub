@@ -278,7 +278,7 @@ class TIFFConverter:
             and np.prod(chunks, dtype=np.int64) * bytes_per_pixel
             > MAX_CHUNK_SIZE
         ):
-            chunks[-3] = np.ceil(chunks[-3] / 2).astype(int)
+            chunks[-3] = int(np.ceil(chunks[-3] / 2))
 
         data_dims = [self.t, self.c, self.z, self.y, self.x]
         original_chunks = chunks.copy()
