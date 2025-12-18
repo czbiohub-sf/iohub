@@ -1503,3 +1503,134 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
             dataset[arr_name].dask_array().compute(),
             nz_multiscales.images[0].data,
         )
+
+
+def test_initialize_pyramid(tmp_path):
+    """Test initialize_pyramid creates pyramid structure with correct shapes and metadata."""
+    store_path = tmp_path / "test_init_pyramid.zarr"
+    shape = (1, 2, 32, 64, 64)
+    scale = (1.0, 1.0, 2.0, 0.5, 0.5)
+    levels = 3
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_zeros(
+            "0",
+            shape=shape,
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=list(scale))],
+        )
+
+        pos.initialize_pyramid(levels=levels)
+
+        # Verify all levels created
+        assert len(pos.array_keys()) == levels
+        for level in range(levels):
+            assert str(level) in pos.array_keys()
+
+        # Verify shapes are downsampled correctly (ZYX only)
+        assert pos["0"].shape == shape
+        assert pos["1"].shape == (1, 2, 16, 32, 32)  # 2x downscaled in ZYX
+        assert pos["2"].shape == (1, 2, 8, 16, 16)  # 4x downscaled in ZYX
+
+        # Verify metadata has all levels
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1", "2"]
+
+        # Verify scale transforms are updated for each level
+        for level in range(levels):
+            level_scale = (
+                pos.metadata.multiscales[0]
+                .datasets[level]
+                .coordinate_transformations[0]
+                .scale
+            )
+            expected_factor = 2**level
+            assert level_scale[-3:] == [
+                scale[-3] * expected_factor,
+                scale[-2] * expected_factor,
+                scale[-1] * expected_factor,
+            ]
+
+
+def test_compute_pyramid(tmp_path):
+    """Test pyramid computation fills levels with downsampled data."""
+    pytest.importorskip("tensorstore")
+
+    store_path = tmp_path / "test_pyramid.zarr"
+
+    rng = np.random.default_rng()
+    data = rng.integers(0, 255, size=(1, 2, 32, 64, 64), dtype=np.uint16)
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_image("0", data)
+        pos.compute_pyramid(levels=3, method="mean")
+
+        # Verify pyramid levels contain actual downsampled data
+        assert pos["1"][:].mean() > 0
+        assert pos["2"][:].mean() > 0
+
+        # Recompute with levels=None auto-detects existing pyramid
+        pos.compute_pyramid(method="median")
+        assert pos["1"][:].mean() > 0
+
+        # Changing levels without delete raises error
+        with pytest.raises(ValueError, match="delete_pyramid"):
+            pos.compute_pyramid(levels=2, method="mean")
+
+
+def test_delete_pyramid(tmp_path):
+    """Test delete_pyramid removes all pyramid levels except level 0."""
+    pytest.importorskip("tensorstore")
+
+    store_path = tmp_path / "test_delete_pyramid.zarr"
+
+    rng = np.random.default_rng()
+    data = rng.integers(0, 255, size=(1, 2, 16, 64, 64), dtype=np.uint16)
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_image("0", data)
+        pos.compute_pyramid(levels=3, method="mean")
+
+        # Verify pyramid exists
+        assert "0" in pos
+        assert "1" in pos
+        assert "2" in pos
+
+        # Verify metadata has all levels
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1", "2"]
+
+        # Delete pyramid
+        pos.delete_pyramid()
+
+        # Verify only level 0 remains in zarr arrays
+        assert "0" in pos
+        assert "1" not in pos
+        assert "2" not in pos
+
+        # Verify metadata is also updated to only have level 0
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0"]
+
+        # Verify level 0 data is preserved
+        assert_array_equal(pos["0"][:], data)
+
+    # Verify metadata persists after reopening
+    with open_ome_zarr(store_path, mode="r") as pos:
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0"]
