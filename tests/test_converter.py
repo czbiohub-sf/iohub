@@ -59,9 +59,7 @@ def _check_chunks(
         case "XYZ" | None:
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
-            expected = _adjust_chunks_for_divisibility(
-                img.shape, chunks
-            )
+            expected = _adjust_chunks_for_divisibility(img.shape, chunks)
             assert img.chunks == expected
         case _:
             assert False

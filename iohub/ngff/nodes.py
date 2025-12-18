@@ -1044,7 +1044,7 @@ class Position(NGFFNode):
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
 
-    def _initialize_pyramid(self, levels: int) -> None:
+    def initialize_pyramid(self, levels: int) -> None:
         """
         Initializes the pyramid arrays with a down scaling of 2 per level.
         Decimals shapes are rounded up to ceiling.
@@ -1140,7 +1140,7 @@ class Position(NGFFNode):
             levels = num_arrays
 
         if num_arrays == 1:
-            self._initialize_pyramid(levels=levels)
+            self.initialize_pyramid(levels=levels)
         elif num_arrays != levels:
             raise ValueError(
                 f"Pyramid structure exists with {num_arrays} levels but "

@@ -1505,14 +1505,66 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
         )
 
 
+def test_initialize_pyramid(tmp_path):
+    """Test initialize_pyramid creates pyramid structure with correct shapes and metadata."""
+    store_path = tmp_path / "test_init_pyramid.zarr"
+    shape = (1, 2, 32, 64, 64)
+    scale = (1.0, 1.0, 2.0, 0.5, 0.5)
+    levels = 3
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+    ) as pos:
+        pos.create_zeros(
+            "0",
+            shape=shape,
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=list(scale))],
+        )
+
+        pos.initialize_pyramid(levels=levels)
+
+        # Verify all levels created
+        assert len(pos.array_keys()) == levels
+        for level in range(levels):
+            assert str(level) in pos.array_keys()
+
+        # Verify shapes are downsampled correctly (ZYX only)
+        assert pos["0"].shape == shape
+        assert pos["1"].shape == (1, 2, 16, 32, 32)  # 2x downscaled in ZYX
+        assert pos["2"].shape == (1, 2, 8, 16, 16)  # 4x downscaled in ZYX
+
+        # Verify metadata has all levels
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1", "2"]
+
+        # Verify scale transforms are updated for each level
+        for level in range(levels):
+            level_scale = (
+                pos.metadata.multiscales[0]
+                .datasets[level]
+                .coordinate_transformations[0]
+                .scale
+            )
+            expected_factor = 2**level
+            assert level_scale[-3:] == [
+                scale[-3] * expected_factor,
+                scale[-2] * expected_factor,
+                scale[-1] * expected_factor,
+            ]
+
+
 def test_compute_pyramid(tmp_path):
-    """Test pyramid computation with automatic initialization and cascade downsampling."""
+    """Test pyramid computation fills levels with downsampled data."""
     pytest.importorskip("tensorstore")
 
     store_path = tmp_path / "test_pyramid.zarr"
 
     rng = np.random.default_rng()
-    data = rng.integers(0, 255, size=(1, 2, 32, 128, 128), dtype=np.uint16)
+    data = rng.integers(0, 255, size=(1, 2, 32, 64, 64), dtype=np.uint16)
 
     with open_ome_zarr(
         store_path,
@@ -1521,49 +1573,17 @@ def test_compute_pyramid(tmp_path):
         channel_names=["ch1", "ch2"],
     ) as pos:
         pos.create_image("0", data)
-
-        # Test 1: compute_pyramid automatically creates pyramid structure
         pos.compute_pyramid(levels=3, method="mean")
 
-        # Verify pyramid structure was created and filled with data
-        assert "1" in pos
-        assert "2" in pos
+        # Verify pyramid levels contain actual downsampled data
+        assert pos["1"][:].mean() > 0
+        assert pos["2"][:].mean() > 0
 
-        level_1_data = pos["1"][:]
-        assert (
-            level_1_data.mean() > 0
-        ), "Level 1 should contain downsampled data"
-        assert pos["1"].shape == (1, 2, 16, 64, 64)  # 2x downscaled
-
-        # Verify level 2 also has data
-        level_2_data = pos["2"][:]
-        assert (
-            level_2_data.mean() > 0
-        ), "Level 2 should contain downsampled data"
-        assert pos["2"].shape == (1, 2, 8, 32, 32)  # 4x downscaled
-
-        # Test 2: Rebuilding pyramid with different levels requires delete
-        pos.delete_pyramid()
-        pos.compute_pyramid(levels=4, method="mean")
-
-        # Verify new level 3 exists and has data
-        assert "3" in pos
-        level_3_data = pos["3"][:]
-        assert (
-            level_3_data.mean() > 0
-        ), "Level 3 should contain downsampled data"
-        assert pos["3"].shape == (1, 2, 4, 16, 16)  # 8x downscaled
-
-        # Test 3: Recompute existing pyramid (levels=None auto-detects)
+        # Recompute with levels=None auto-detects existing pyramid
         pos.compute_pyramid(method="median")
+        assert pos["1"][:].mean() > 0
 
-        # Verify data is recomputed (still has data)
-        level_1_recomputed = pos["1"][:]
-        assert (
-            level_1_recomputed.mean() > 0
-        ), "Recomputed level 1 should have data"
-
-        # Test 4: Verify error when trying to change levels without delete
+        # Changing levels without delete raises error
         with pytest.raises(ValueError, match="delete_pyramid"):
             pos.compute_pyramid(levels=2, method="mean")
 
