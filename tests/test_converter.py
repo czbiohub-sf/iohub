@@ -60,9 +60,9 @@ def _check_chunks(
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
             expected = _adjust_chunks_for_divisibility(
-                list(chunks), list(img.shape)
+                img.shape, chunks
             )
-            assert img.chunks == tuple(expected)
+            assert img.chunks == expected
         case _:
             assert False
 

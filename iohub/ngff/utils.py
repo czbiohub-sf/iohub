@@ -659,10 +659,10 @@ def _check_nan_n_zeros(input_array) -> bool:
 
 
 def _limit_zyx_chunk_size(
-    shape: tuple[int],
+    shape: tuple[int, ...],
     bytes_per_pixel: int,
     max_chunk_size_bytes: float,
-    chunks: tuple[int] | None = None,
+    chunks: tuple[int, ...] | None = None,
 ) -> tuple[int, int, int]:
     """
     Calculate the chunk size for ZYX dimensions based on the shape,
@@ -699,24 +699,26 @@ def _limit_zyx_chunk_size(
 
 
 def _adjust_chunks_for_divisibility(
-    chunks: list[int], dims: list[int]
-) -> list[int]:
+    shape: tuple[int, ...], chunks: tuple[int, ...]
+) -> tuple[int, ...]:
     """Adjust chunks to divide evenly into dimensions for Dask.
 
     Parameters
     ----------
-    chunks : list[int]
-        Chunk sizes for each dimension.
-    dims : list[int]
+    shape : tuple[int, ...]
         Dimension sizes for each dimension.
+    chunks : tuple[int, ...]
+        Chunk sizes for each dimension.
 
     Returns
     -------
-    list[int]
+    tuple[int, ...]
         Adjusted chunk sizes that divide evenly into dimensions.
     """
+    shape = list(shape)
+    chunks = list(chunks)
     adjusted = []
-    for chunk, dim in zip(chunks, dims):
+    for chunk, dim in zip(chunks, shape):
         if chunk > dim:
             adjusted.append(dim)
         elif dim % chunk != 0:
@@ -725,7 +727,7 @@ def _adjust_chunks_for_divisibility(
             adjusted.append(chunk)
         else:
             adjusted.append(chunk)
-    return adjusted
+    return tuple(adjusted)
 
 
 def _downsample_tensorstore(

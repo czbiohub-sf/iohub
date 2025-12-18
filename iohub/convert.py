@@ -263,20 +263,20 @@ class TIFFConverter:
                 f"Chunk type {type(input_chunks)} is not supported."
             )
 
-        data_dims = [self.t, self.c, self.z, self.y, self.x]
+        shape = (self.t, self.c, self.z, self.y, self.x)
         original_chunks = chunks.copy()
 
         # Limit chunk size to MAX_CHUNK_SIZE by halving Z
         bytes_per_pixel = np.dtype(self.reader.dtype).itemsize
         chunk_zyx_shape = _limit_zyx_chunk_size(
-            data_dims, bytes_per_pixel, MAX_CHUNK_SIZE, chunks=tuple(chunks)
+            shape, bytes_per_pixel, MAX_CHUNK_SIZE, chunks=chunks
         )
         chunks[-3:] = list(chunk_zyx_shape)
 
         # Adjust chunks to divide evenly into dimensions
-        chunks = _adjust_chunks_for_divisibility(chunks, data_dims)
+        chunks = _adjust_chunks_for_divisibility(shape, chunks)
         for i, (orig, adj, dim) in enumerate(
-            zip(original_chunks, chunks, data_dims)
+            zip(original_chunks, chunks, shape)
         ):
             if orig != adj:
                 _logger.warning(
