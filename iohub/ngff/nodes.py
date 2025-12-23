@@ -60,16 +60,35 @@ def _pad_shape(shape: tuple[int, ...], target: int = 5):
     return (1,) * pad + shape
 
 
+def _is_remote_url(path: str | Path) -> bool:
+    """Check if path is a remote URL (http, https, s3, gs, az)."""
+    url_str = str(path)
+    return url_str.startswith(
+        ('http://', 'https://', 's3://', 'gs://', 'az://')
+    )
+
+
 def _open_store(
     store_path: str | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
     version: Literal["0.4", "0.5"],
 ):
-    store_path = Path(store_path).resolve()
-    if not store_path.exists() and mode in ("r", "r+"):
-        raise FileNotFoundError(
-            f"Dataset directory not found at {str(store_path)}."
-        )
+    is_remote = _is_remote_url(store_path)
+
+    if is_remote:
+        if mode not in ("r",):
+            raise NotImplementedError(
+                f"Write mode '{mode}' not supported for remote URLs. "
+                "Use mode='r' for read-only access."
+            )
+    else:
+        # Local path: existing behavior
+        store_path = Path(store_path).resolve()
+        if not store_path.exists() and mode in ("r", "r+"):
+            raise FileNotFoundError(
+                f"Dataset directory not found at {str(store_path)}."
+            )
+
     if version not in ("0.4", "0.5"):
         _logger.warning(
             "IOHub is only tested against OME-NGFF v0.4 and v0.5. "
@@ -77,7 +96,10 @@ def _open_store(
         )
     try:
         zarr_format = None
-        if mode in ("w", "w-") or (mode == "a" and not store_path.exists()):
+        if not is_remote and (
+            mode in ("w", "w-")
+            or (mode == "a" and not Path(store_path).exists())
+        ):
             zarr_format = 3 if version == "0.5" else 2
         root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
@@ -190,7 +212,7 @@ class NGFFNode:
     def __getitem__(self, key):
         key = normalize_path(str(key))
         znode = self.zgroup.get(key)
-        if not znode:
+        if znode is None:
             raise KeyError(key)
         levels = len(key.split("/")) - 1
         item_type = self._MEMBER_TYPE
@@ -1707,9 +1729,10 @@ class Plate(NGFFNode):
         name = " ".join(attr.split("_")).strip()
         msg = f"Cannot determine {name}:"
         try:
-            row_grp = next(self.zgroup.groups())[1]
-            well_grp = next(row_grp.groups())[1]
-            pos_grp = next(well_grp.groups())[1]
+            pos_grp = self._get_first_position_group()
+            if pos_grp is None:
+                _logger.warning(f"{msg} No position is found in the dataset.")
+                return
         except StopIteration:
             _logger.warning(f"{msg} No position is found in the dataset.")
             return
@@ -1718,6 +1741,23 @@ class Plate(NGFFNode):
             setattr(self, attr, getattr(pos, attr))
         except AttributeError:
             _logger.warning(f"{msg} Invalid metadata at the first position")
+
+    def _get_first_position_group(self):
+        """Get the first position group using metadata."""
+        if not self.metadata or not self.metadata.wells:
+            raise ValueError(
+                "Plate metadata required to determine first position"
+            )
+
+        well_path = self.metadata.wells[0].path
+        well = Well(self.zgroup[well_path], parse_meta=True)
+
+        if not well.metadata or not well.metadata.images:
+            raise ValueError(
+                "Well metadata required to determine first position"
+            )
+
+        return self.zgroup[f"{well_path}/{well.metadata.images[0].path}"]
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
@@ -2100,10 +2140,21 @@ class Plate(NGFFNode):
 
 
 def _check_file_mode(
-    store_path: Path,
+    store_path: str | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
     disable_path_checking: bool,
 ) -> bool:
+    if _is_remote_url(store_path):
+        # Remote URLs: only read mode supported, always parse metadata
+        if mode not in ("r",):
+            raise NotImplementedError(
+                f"Write mode '{mode}' not supported for remote URLs. "
+                "Use mode='r' for read-only access."
+            )
+        return True  # parse_meta = True for read mode
+
+    # Local paths: existing behavior
+    store_path = Path(store_path)
     if mode == "a":
         mode = "r+" if store_path.exists() else "w-"
     parse_meta = False
@@ -2265,7 +2316,9 @@ def open_ome_zarr(
         :py:class:`iohub.ngff.Plate`,
         or :py:class:`iohub.ngff.TiledPosition`)
     """
-    store_path = Path(store_path)
+    # Don't convert to Path for remote URLs
+    if not _is_remote_url(store_path):
+        store_path = Path(store_path)
     parse_meta = _check_file_mode(
         store_path, mode, disable_path_checking=disable_path_checking
     )
