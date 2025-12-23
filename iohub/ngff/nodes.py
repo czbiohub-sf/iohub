@@ -294,15 +294,82 @@ class NGFFNode:
         """
         return not self.group_keys()
 
+    def _build_tree_lines(
+        self,
+        prefix: str = "",
+        is_last: bool = True,
+        level: int | None = None,
+        current_level: int = 0,
+    ) -> list[str]:
+        """Build tree representation using OME-NGFF metadata.
+
+        Traverses the hierarchy using `_member_names` (metadata-based) rather
+        than filesystem directory listing. This enables tree printing for
+        remote stores (HTTP, S3, GCS) where directory listing may be
+        unavailable.
+
+        Parameters
+        ----------
+        prefix : str
+            Indentation prefix for current level
+        is_last : bool
+            Whether this node is the last child of its parent
+        level : int, optional
+            Maximum depth to traverse, by default None (unlimited)
+        current_level : int
+            Current depth in the tree (used internally for recursion)
+
+        Returns
+        -------
+        list[str]
+            Lines of the tree representation with box-drawing characters
+        """
+        lines = []
+        connector = "└── " if is_last else "├── "
+        node_name = self.zgroup.basename or self.zgroup.name
+        lines.append(f"{prefix}{connector}{node_name}")
+
+        if level is not None and current_level >= level:
+            return lines
+
+        members = list(self._member_names)
+        new_prefix = prefix + ("    " if is_last else "│   ")
+
+        for i, name in enumerate(members):
+            is_last_member = i == len(members) - 1
+            member = self[name]
+            if isinstance(member, ImageArray):
+                connector = "└── " if is_last_member else "├── "
+                shape_parts = [
+                    f"{a.name}: {s}" for a, s in zip(self.axes, member.shape)
+                ]
+                shape_str = f" ({', '.join(shape_parts)})"
+                lines.append(f"{new_prefix}{connector}{name}{shape_str}")
+            else:
+                lines.extend(
+                    member._build_tree_lines(
+                        new_prefix, is_last_member, level, current_level + 1
+                    )
+                )
+
+        return lines
+
     def print_tree(self, level: int | None = None):
         """Print hierarchy of the node to stdout.
+
+        Uses OME-NGFF metadata to traverse the hierarchy, enabling tree
+        printing for both local and remote stores. Array shapes are displayed
+        inline with axis labels.
 
         Parameters
         ----------
         level : int, optional
-            Maximum depth to show, by default None
+            Maximum depth to show, by default None (unlimited)
         """
-        print(self.zgroup.tree(level=level))
+        lines = self._build_tree_lines(level=level)
+        if lines:
+            lines[0] = self.zgroup.basename or self.zgroup.name
+        print("\n".join(lines))
 
     def iteritems(self):
         for key in self._member_names:
@@ -615,6 +682,7 @@ class Position(NGFFNode):
         axes: list[AxisMeta] | None = None,
         version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
+        **kwargs,  # Absorbs extra attrs from parent hierarchy
     ):
         super().__init__(
             group=group,
@@ -662,7 +730,8 @@ class Position(NGFFNode):
 
     @property
     def _member_names(self):
-        return self.array_keys()
+        """Array names from position metadata."""
+        return sorted(ds.path for ds in self.metadata.multiscales[0].datasets)
 
     @property
     def data(self):
@@ -1451,6 +1520,7 @@ class Well(NGFFNode):
         axes: list[AxisMeta] | None = None,
         version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
+        **kwargs,  # Absorbs extra attrs from parent hierarchy
     ):
         super().__init__(
             group=group,
@@ -1488,6 +1558,11 @@ class Well(NGFFNode):
             Container object for the position group
         """
         return super().__getitem__(key)
+
+    @property
+    def _member_names(self):
+        """Position names from well metadata."""
+        return sorted(img.path for img in self.metadata.images)
 
     def _create_position_nosync(self, name: str, acquisition: int = 0):
         "create_position, but doesn't write the metadata yet."
@@ -1563,6 +1638,7 @@ class Row(NGFFNode):
         axes: list[AxisMeta] | None = None,
         version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
+        _plate_wells: list[WellIndexMeta] | None = None,
     ):
         super().__init__(
             group=group,
@@ -1572,6 +1648,7 @@ class Row(NGFFNode):
             version=version,
             overwriting_creation=overwriting_creation,
         )
+        self._plate_wells = _plate_wells
 
     def __getitem__(self, key: str):
         """Get a well member of the row.
@@ -1588,6 +1665,18 @@ class Row(NGFFNode):
         """
         return super().__getitem__(key)
 
+    @property
+    def _member_names(self):
+        """Column names from plate metadata."""
+        row_name = self.zgroup.basename
+        return sorted(
+            {
+                well.path.split("/")[1]
+                for well in self._plate_wells
+                if well.path.startswith(f"{row_name}/")
+            }
+        )
+
     def wells(self):
         """Returns a generator that iterate over the name and value
         of all the wells in the row.
@@ -1602,6 +1691,13 @@ class Row(NGFFNode):
     def _parse_meta(self):
         # this node does not have NGFF metadata
         return
+
+    @property
+    def _child_attrs(self):
+        """Attributes to pass to Well children (exclude _plate_wells)."""
+        attrs = super()._child_attrs.copy()
+        attrs.pop("_plate_wells", None)
+        return attrs
 
 
 class Plate(NGFFNode):
@@ -1759,6 +1855,22 @@ class Plate(NGFFNode):
 
         return self.zgroup[f"{well_path}/{well.metadata.images[0].path}"]
 
+    @property
+    def _member_names(self):
+        """Row names from plate metadata."""
+        return sorted(row.name for row in self.metadata.rows)
+
+    @property
+    def _child_attrs(self):
+        """Attributes to pass on when constructing child type instances."""
+        attrs = super()._child_attrs
+        # Pass only wells list - Row doesn't need full plate metadata
+        try:
+            attrs["_plate_wells"] = self.metadata.wells
+        except AttributeError:
+            pass
+        return attrs
+
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
 
@@ -1845,8 +1957,10 @@ class Plate(NGFFNode):
         # normalize input
         row_name = normalize_path(row_name)
         col_name = normalize_path(col_name)
-        if row_name in self:
-            if col_name in self[row_name]:
+        # Check filesystem directly (not via _member_names/metadata)
+        # to ensure consistency during creation when metadata may be stale
+        if row_name in self.zgroup:
+            if col_name in self.zgroup[row_name]:
                 raise FileExistsError(
                     f"Well '{row_name}/{col_name}' already exists."
                 )
@@ -1864,15 +1978,15 @@ class Plate(NGFFNode):
             self._build_meta(row_meta, col_meta, well_index_meta)
         else:
             self.metadata.wells.append(well_index_meta)
-        # create new row if needed
-        if row_name not in self:
+        # create new row if needed (check filesystem directly)
+        if row_name not in self.zgroup:
             row_grp = self.zgroup.create_group(
                 row_meta.name, overwrite=self._overwrite
             )
             if row_meta not in self.metadata.rows:
                 self.metadata.rows.append(row_meta)
         else:
-            row_grp = self[row_name].zgroup
+            row_grp = self.zgroup[row_name]
         if col_meta not in self.metadata.columns:
             self.metadata.columns.append(col_meta)
         # create well

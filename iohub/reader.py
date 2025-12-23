@@ -15,7 +15,13 @@ from iohub._deprecated.zarrfile import ZarrReader
 from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
-from iohub.ngff.nodes import NGFFNode, Plate, Position, open_ome_zarr
+from iohub.ngff.nodes import (
+    NGFFNode,
+    Plate,
+    Position,
+    _is_remote_url,
+    open_ome_zarr,
+)
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -185,25 +191,35 @@ def read_images(
         raise ValueError(f"Reader of type {data_type} is not implemented")
 
 
-def print_info(path: StrOrBytesPath, verbose=False):
+def print_info(path: StrOrBytesPath | str, verbose=False):
     """Print summary information for a dataset.
 
     Parameters
     ----------
-    path : StrOrBytesPath
-        Path to the dataset
+    path : StrOrBytesPath | str
+        Path to the dataset (local path or remote URL)
     verbose : bool, optional
         Show usage guide to open dataset in Python
         and full tree for HCS Plates in OME-Zarr,
         by default False
     """
-    path = Path(path).resolve()
+    is_remote = _is_remote_url(path)
+    if not is_remote:
+        path = Path(path).resolve()
+
     try:
-        fmt, extra_info = _infer_format(path)
-        if fmt == "omezarr" and extra_info in ("0.4", "0.5"):
-            reader = open_ome_zarr(path, mode="r", version=extra_info)
+        if is_remote:
+            # Remote URLs only support OME-Zarr
+            reader = open_ome_zarr(path, mode="r")
+            fmt, extra_info = "omezarr", reader.zattrs.get("ome", {}).get(
+                "version", reader.zattrs.get("plate", {}).get("version")
+            )
         else:
-            reader = read_images(path, data_type=fmt)
+            fmt, extra_info = _infer_format(path)
+            if fmt == "omezarr" and extra_info in ("0.4", "0.5"):
+                reader = open_ome_zarr(path, mode="r", version=extra_info)
+            else:
+                reader = read_images(path, data_type=fmt)
     except (ValueError, RuntimeError):
         print("Error: No compatible dataset is found.")
         return
@@ -271,13 +287,23 @@ def print_info(path: StrOrBytesPath, verbose=False):
                     p["0"].nbytes for _, p in positions
                 )
                 msgs.append(f"Positions:\t\t {len(positions)}")
-                msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
+                first_pos = positions[0][1]
+                shape_str = ", ".join(
+                    f"{a.name}={s}"
+                    for a, s in zip(first_pos.axes, first_pos["0"].shape)
+                )
+                msgs.append(f"Shape:\t\t\t ({shape_str})")
+                msgs.append(f"Chunk size:\t\t {first_pos['0'].chunks}")
                 msgs.append(
                     f"No. bytes decompressed:\t\t {total_bytes_uncompressed} "
                     f"[{sizeof_fmt(total_bytes_uncompressed)}]"
                 )
         else:
             total_bytes_uncompressed = reader["0"].nbytes
+            shape_str = ", ".join(
+                f"{a.name}={s}" for a, s in zip(reader.axes, reader["0"].shape)
+            )
+            msgs.append(f"Shape:\t\t\t ({shape_str})")
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
             msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
             msgs.append(
