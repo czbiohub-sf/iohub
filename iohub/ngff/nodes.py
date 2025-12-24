@@ -18,6 +18,8 @@ import numpy as np
 import zarr.codecs
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
+from rich.console import Console
+from rich.tree import Tree as RichTree
 from zarr.core.chunk_key_encodings import ChunkKeyEncodingParams
 from zarr.storage._utils import normalize_path
 
@@ -217,6 +219,8 @@ class NGFFNode:
         levels = len(key.split("/")) - 1
         item_type = self._MEMBER_TYPE
         for _ in range(levels):
+            if issubclass(item_type, ImageArray):
+                break
             item_type = item_type._MEMBER_TYPE
         if issubclass(item_type, ImageArray):
             return item_type.from_zarr_array(znode)
@@ -294,82 +298,34 @@ class NGFFNode:
         """
         return not self.group_keys()
 
-    def _build_tree_lines(
+    def _build_tree(
         self,
-        prefix: str = "",
-        is_last: bool = True,
+        parent: RichTree | None = None,
         level: int | None = None,
         current_level: int = 0,
-    ) -> list[str]:
-        """Build tree representation using OME-NGFF metadata.
-
-        Traverses the hierarchy using `_member_names` (metadata-based) rather
-        than filesystem directory listing. This enables tree printing for
-        remote stores (HTTP, S3, GCS) where directory listing may be
-        unavailable.
-
-        Parameters
-        ----------
-        prefix : str
-            Indentation prefix for current level
-        is_last : bool
-            Whether this node is the last child of its parent
-        level : int, optional
-            Maximum depth to traverse, by default None (unlimited)
-        current_level : int
-            Current depth in the tree (used internally for recursion)
-
-        Returns
-        -------
-        list[str]
-            Lines of the tree representation with box-drawing characters
-        """
-        lines = []
-        connector = "└── " if is_last else "├── "
-        node_name = self.zgroup.basename or self.zgroup.name
-        lines.append(f"{prefix}{connector}{node_name}")
+    ) -> RichTree:
+        """Build tree using OME-NGFF metadata (works for remote stores)."""
+        name = self.zgroup.basename or self.zgroup.name
+        tree = parent.add(name) if parent else RichTree(name)
 
         if level is not None and current_level >= level:
-            return lines
+            return tree
 
-        members = list(self._member_names)
-        new_prefix = prefix + ("    " if is_last else "│   ")
-
-        for i, name in enumerate(members):
-            is_last_member = i == len(members) - 1
-            member = self[name]
+        for member_name in self._member_names:
+            member = self[member_name]
             if isinstance(member, ImageArray):
-                connector = "└── " if is_last_member else "├── "
-                shape_parts = [
+                shape = ", ".join(
                     f"{a.name}: {s}" for a, s in zip(self.axes, member.shape)
-                ]
-                shape_str = f" ({', '.join(shape_parts)})"
-                lines.append(f"{new_prefix}{connector}{name}{shape_str}")
-            else:
-                lines.extend(
-                    member._build_tree_lines(
-                        new_prefix, is_last_member, level, current_level + 1
-                    )
                 )
+                tree.add(f"{member_name} ({shape})")
+            else:
+                member._build_tree(tree, level, current_level + 1)
 
-        return lines
+        return tree
 
     def print_tree(self, level: int | None = None):
-        """Print hierarchy of the node to stdout.
-
-        Uses OME-NGFF metadata to traverse the hierarchy, enabling tree
-        printing for both local and remote stores. Array shapes are displayed
-        inline with axis labels.
-
-        Parameters
-        ----------
-        level : int, optional
-            Maximum depth to show, by default None (unlimited)
-        """
-        lines = self._build_tree_lines(level=level)
-        if lines:
-            lines[0] = self.zgroup.basename or self.zgroup.name
-        print("\n".join(lines))
+        """Print hierarchy using OME-NGFF metadata"""
+        Console().print(self._build_tree(level=level))
 
     def iteritems(self):
         for key in self._member_names:

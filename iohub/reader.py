@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING, Literal
 import natsort
 import tifffile as tiff
 import zarr
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from iohub._deprecated.reader_base import ReaderBase
 from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
@@ -15,6 +18,7 @@ from iohub._deprecated.zarrfile import ZarrReader
 from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
+from iohub.ngff.models import SpaceAxisMeta
 from iohub.ngff.nodes import (
     NGFFNode,
     Plate,
@@ -191,6 +195,40 @@ def read_images(
         raise ValueError(f"Reader of type {data_type} is not implemented")
 
 
+def _create_summary_table() -> Table:
+    """Create a two-column key-value table for summary display."""
+    table = Table(show_header=False, box=None, padding=(0, 1), expand=True)
+    table.add_column("Property", style="cyan", no_wrap=True, width=22)
+    table.add_column("Value", overflow="fold")
+    return table
+
+
+def _format_axes(axes: list) -> str:
+    """Format axes as comma-separated string with types."""
+    return ", ".join(f"{a.name} ({a.type})" for a in axes)
+
+
+def _format_channels(names: list) -> str:
+    """Format channel names as comma-separated string."""
+    return ", ".join(str(n) for n in names)
+
+
+_UNIT_ABBREV = {
+    "micrometer": "µm",
+    "nanometer": "nm",
+    "millimeter": "mm",
+    "meter": "m",
+}
+
+
+def _get_space_unit(axes: list) -> str | None:
+    """Get the unit from the first space axis, abbreviated for display."""
+    for ax in axes:
+        if isinstance(ax, SpaceAxisMeta):
+            return _UNIT_ABBREV.get(ax.unit, ax.unit)
+    return None
+
+
 def print_info(path: StrOrBytesPath | str, verbose=False):
     """Print summary information for a dataset.
 
@@ -259,69 +297,64 @@ def print_info(path: StrOrBytesPath | str, verbose=False):
             )
         print(str.join("\n", msgs))
     elif isinstance(reader, NGFFNode):
-        msgs.extend(
-            [
-                sum_msg,
-                fmt_msg,
-                "".join(
-                    ["Axes:\t\t\t "]
-                    + [f"{a.name} ({a.type}); " for a in reader.axes]
-                ),
-                ch_msg,
-            ]
-        )
+        console = Console()
+
+        # Print tree first (if verbose or Position)
+        if verbose or isinstance(reader, Position):
+            console.print("[bold]Zarr hierarchy:[/bold]")
+            reader.print_tree()
+            console.print()
+
+        # Build summary table
+        table = _create_summary_table()
+        fmt_str = f"{fmt} v{extra_info}" if extra_info else fmt
+        table.add_row("Format", fmt_str)
+        table.add_row("Axes", _format_axes(reader.axes))
+        table.add_row("Channel names", _format_channels(reader.channel_names))
+
         if isinstance(reader, Plate):
             meta = reader.metadata
-            msgs.extend(
-                [
-                    f"Row names:\t\t {[r.name for r in meta.rows]}",
-                    f"Column names:\t\t {[c.name for c in meta.columns]}",
-                    f"Wells:\t\t\t {len(meta.wells)}",
-                ]
-            )
+            table.add_row("Row names", ", ".join(r.name for r in meta.rows))
+            col_names = ", ".join(c.name for c in meta.columns)
+            table.add_row("Column names", col_names)
+            table.add_row("Wells", str(len(meta.wells)))
             if verbose:
-                print("Zarr hierarchy:")
-                reader.print_tree()
                 positions = list(reader.positions())
-                total_bytes_uncompressed = sum(
-                    p["0"].nbytes for _, p in positions
-                )
-                msgs.append(f"Positions:\t\t {len(positions)}")
                 first_pos = positions[0][1]
-                shape_str = ", ".join(
-                    f"{a.name}={s}"
-                    for a, s in zip(first_pos.axes, first_pos["0"].shape)
-                )
-                msgs.append(f"Shape:\t\t\t ({shape_str})")
-                msgs.append(f"Chunk size:\t\t {first_pos['0'].chunks}")
-                msgs.append(
-                    f"No. bytes decompressed:\t\t {total_bytes_uncompressed} "
-                    f"[{sizeof_fmt(total_bytes_uncompressed)}]"
+                first_array = list(first_pos._member_names)[0]
+                total_bytes = sum(p[first_array].nbytes for _, p in positions)
+                table.add_row("Positions", str(len(positions)))
+                table.add_row("Chunk size", str(first_pos[first_array].chunks))
+                table.add_row(
+                    "Bytes (decompressed)",
+                    f"{total_bytes} [{sizeof_fmt(total_bytes)}]",
                 )
         else:
-            total_bytes_uncompressed = reader["0"].nbytes
-            shape_str = ", ".join(
-                f"{a.name}={s}" for a, s in zip(reader.axes, reader["0"].shape)
+            first_array = list(reader._member_names)[0]
+            total_bytes = reader[first_array].nbytes
+            space_unit = _get_space_unit(reader.axes)
+            unit_str = f" ({space_unit})" if space_unit else ""
+            scale_label = f"(Z, Y, X) scale{unit_str}"
+            table.add_row(scale_label, str(tuple(reader.scale[2:])))
+            table.add_row("Chunk size", str(reader[first_array].chunks))
+            table.add_row(
+                "Bytes (decompressed)",
+                f"{total_bytes} [{sizeof_fmt(total_bytes)}]",
             )
-            msgs.append(f"Shape:\t\t\t ({shape_str})")
-            msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
-            msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
-            msgs.append(
-                f"No. bytes decompressed:\t\t {total_bytes_uncompressed} "
-                f"[{sizeof_fmt(total_bytes_uncompressed)}]"
-            )
+
+        # Print summary panel
+        console.print(
+            Panel(table, title="[bold]Summary[/bold]", border_style="blue")
+        )
+
+        # Print usage code (if verbose)
         if verbose:
-            msgs.extend(
-                [
-                    code_msg,
-                    ">>> from iohub import open_ome_zarr",
-                    f">>> dataset = open_ome_zarr('{path}', mode='r')",
-                ]
-            )
-        if isinstance(reader, Position):
-            print("Zarr hierarchy:")
-            reader.print_tree()
-        print("\n".join(msgs))
+            console.print()
+            console.print("[dim]This dataset can be opened with:[/dim]")
+            console.print("[green]>>> from iohub import open_ome_zarr[/green]")
+            code = f">>> dataset = open_ome_zarr('{path}', mode='r')"
+            console.print(f"[green]{code}[/green]")
+
         reader.close()
 
 
