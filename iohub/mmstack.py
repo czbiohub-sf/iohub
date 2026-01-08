@@ -258,9 +258,14 @@ class MMStack(MicroManagerFOVMapping):
         self._z_step_size = z_step_size
         self.height = self._mm_meta["Summary"]["Height"]
         self.width = self._mm_meta["Summary"]["Width"]
-        self._t_scale = (
-            float(self._mm_meta["Summary"].get("Interval_ms", 1e3)) / 1e3
-        )
+        t_scale = float(self._mm_meta["Summary"].get("Interval_ms", 1e3)) / 1e3
+        if t_scale == 0:
+            t_scale = 1.0
+            _logger.warning(
+                "Time scale is set to 0.0 in the metadata, "
+                "using 1.0 instead."
+            )
+        self._t_scale = t_scale
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
