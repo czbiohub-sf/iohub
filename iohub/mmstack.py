@@ -108,6 +108,13 @@ class MMStack(MicroManagerFOVMapping):
             (axis, size)
             for axis, size in zip(series.get_axes(), series.get_shape())
         )
+        _rgb = False
+        if "S" in raw_dims and "C" not in raw_dims:
+            # Map samples "S" from RGB images to channels "C"
+            # in datasets that don't already have a channel dimension
+            _rgb = True
+            _channels = raw_dims.pop("S")
+            raw_dims["C"] = _channels
         axes = ("R", "T", "C", "Z", "Y", "X")
         dims = dict((ax, raw_dims.get(ax, 1)) for ax in axes)
         _logger.debug(f"Got dataset dimensions from tifffile: {dims}.")
@@ -129,6 +136,9 @@ class MMStack(MicroManagerFOVMapping):
         xarr = img.expand_dims(
             [ax for ax in axes if ax not in img.dims]
         ).transpose(*axes)
+        # Rename RGB channels
+        if _rgb and self.channels == 3:
+            self.channel_names = ["Red", "Green", "Blue"]
         if self.channels > len(self.channel_names):
             for c in range(self.channels):
                 if c >= len(self.channel_names):
