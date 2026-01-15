@@ -12,7 +12,7 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Generator, Literal, Sequence, Type, overload
+from typing import Any, Callable, Generator, Literal, Sequence, Type, overload, TypeAlias
 
 import numpy as np
 import zarr.codecs
@@ -48,6 +48,14 @@ from iohub.ngff.models import (
 )
 
 _logger = logging.getLogger(__name__)
+
+# Type alias for position specification tuples in create_positions
+PositionSpec: TypeAlias = (
+    tuple[str, str, str]
+    | tuple[str, str, str, int | None]
+    | tuple[str, str, str, int | None, int | None]
+    | tuple[str, str, str, int | None, int | None, int]
+)
 
 
 def _pad_shape(shape: tuple[int, ...], target: int = 5):
@@ -2385,6 +2393,19 @@ class Well(NGFFNode):
         """
         return super().__getitem__(key)
 
+    def _create_position_nosync(self, name: str, acquisition: int = 0):
+        "create_position, but doesn't write the metadata yet."
+        pos_grp = self._group.create_group(name, overwrite=self._overwrite)
+        # build metadata
+        image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
+        if not hasattr(self, "metadata"):
+            self.metadata = WellGroupMeta(
+                images=[image_meta], version=self.version
+            )
+        else:
+            self.metadata.images.append(image_meta)
+        return Position(group=pos_grp, parse_meta=False, **self._child_attrs)
+
     def create_position(self, name: str, acquisition: int = 0):
         """Creates a new position group in the well group.
 
@@ -2395,17 +2416,9 @@ class Well(NGFFNode):
         acquisition : int, optional
             The index of the acquisition, by default 0
         """
-        pos_grp = self._group.create_group(name, overwrite=self._overwrite)
-        # build metadata
-        image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
-        if not hasattr(self, "metadata"):
-            self.metadata = WellGroupMeta(
-                images=[image_meta], version=self.version
-            )
-        else:
-            self.metadata.images.append(image_meta)
+        pos = self._create_position_nosync(name, acquisition=acquisition)
         self.dump_meta()
-        return Position(group=pos_grp, parse_meta=False, **self._child_attrs)
+        return pos
 
     def positions(self):
         """Returns a generator that iterate over the name and value
@@ -2752,6 +2765,107 @@ class Plate(NGFFNode):
         well_grp = row_grp.create_group(col_name, overwrite=self._overwrite)
         self.dump_meta()
         return Well(group=well_grp, parse_meta=False, **self._child_attrs)
+
+    def create_positions(
+        self, positions: list[PositionSpec]
+    ) -> list[Position]:
+        """Creates multiple position groups in the plate efficiently.
+
+        This is a vectorized version of :py:meth:`create_position` that creates
+        multiple positions in a single call. Wells are created as needed and
+        metadata is written in batches for better performance.
+
+        Parameters
+        ----------
+        positions : list[PositionSpec]
+            List of position specifications. Each tuple can have 3-6 elements:
+
+            - 3 elements: ``(row_name, col_name, pos_name)``
+            - 4 elements: ``(row_name, col_name, pos_name, row_index)``
+            - 5 elements: ``(row_name, col_name, pos_name, row_index,
+              col_index)``
+            - 6 elements: ``(row_name, col_name, pos_name, row_index,
+              col_index, acq_index)``
+
+            Where:
+
+            - row_name (str): Name key of the row
+            - col_name (str): Name key of the column
+            - pos_name (str): Name key of the position
+            - row_index (int | None): Index of the row (auto-assigned if None
+              or omitted)
+            - col_index (int | None): Index of the column (auto-assigned if
+              None or omitted)
+            - acq_index (int): Index of the acquisition (defaults to 0 if
+              omitted)
+
+        Returns
+        -------
+        list[Position]
+            List of created Position node objects
+
+        See Also
+        --------
+        create_position : Create a single position group
+
+        Examples
+        --------
+        Create multiple positions with automatic row/column indexing:
+
+        >>> plate.create_positions([
+        ...     ("A", "1", "0"),
+        ...     ("A", "1", "1"),
+        ...     ("A", "2", "0"),
+        ... ])
+
+        Create positions with explicit row/column indices:
+
+        >>> plate.create_positions([
+        ...     ("B", "3", "0", 1, 2),      # row_index=1, col_index=2
+        ...     ("B", "3", "1", 1, 2),      # same well indices
+        ... ])
+
+        Create positions with specific acquisition indices:
+
+        >>> plate.create_positions([
+        ...     ("B", "3", "0", 1, 2, 0),   # acquisition 0
+        ...     ("B", "3", "1", 1, 2, 1),   # acquisition 1
+        ... ])
+        """
+        positions = deepcopy(positions)  # We may mutate contents
+        wells = {}  # Track wells by path to avoid duplicate objects
+        positions_out = []
+        for r, c, p, *args in positions:
+            # Parse out arguments
+            well_args = args[:2]
+            acquisition_index = 0  # Default value for create_position
+            if len(args) == 3:
+                acquisition_index = args[2]
+            elif len(args) > 3:
+                raise ValueError(
+                    "Passed too many fields for a position: "
+                    f"{(r, c, p, *args)}"
+                )
+            r = normalize_path(r)
+            c = normalize_path(c)
+            well_path = os.path.join(r, c)
+
+            # Get or create well, ensuring we reuse the same object
+            if well_path in wells:
+                well = wells[well_path]
+            elif well_path in self.zgroup:
+                well = self[well_path]
+                wells[well_path] = well
+            else:
+                well = self.create_well(r, c, *well_args)
+                wells[well_path] = well
+
+            positions_out.append(
+                well._create_position_nosync(p, acquisition=acquisition_index)
+            )
+        for well in wells.values():
+            well.dump_meta()
+        return positions_out
 
     def create_position(
         self,

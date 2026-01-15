@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import io
-import json
 import logging
 from copy import copy
 from pathlib import Path
@@ -9,13 +7,11 @@ from typing import TYPE_CHECKING, Iterable
 from warnings import catch_warnings, filterwarnings
 
 import dask.array as da
-import fsspec
 import numpy as np
 import zarr
-import zarr.storage
 from natsort import natsorted
 from numpy.typing import ArrayLike
-from tifffile import TiffFile, ZarrTiffStore
+from tifffile import TiffFile
 from xarray import DataArray
 
 from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
@@ -33,34 +29,6 @@ def _normalize_mm_pos_key(key: str | int) -> int:
         return int(key)
     except TypeError:
         raise TypeError("Micro-Manager position keys must be integers.")
-
-
-def _tiff_to_fsspec_store(
-    zarr_tiff_store: ZarrTiffStore, root_uri: str
-) -> zarr.storage.FsspecStore:
-    """Bridge tifffile (zarr-python v2 interface) with zarr-python v3.
-
-    Parameters
-    ----------
-    zarr_tiff_store : ZarrTiffStore
-        Zarr (v2) wrapper for a TIFF series
-    root_uri : str
-        `file://` URI to the directory containing the TIFF files
-
-    Returns
-    -------
-    zarr.storage.FsspecStore
-        Zarr (v3) wrapper for a TIFF series
-    """
-    spec_container = io.StringIO()
-    zarr_tiff_store.write_fsspec(spec_container, url=root_uri)
-    fs, _ = fsspec.url_to_fs(
-        "reference://",
-        fo=json.loads(spec_container.getvalue()),
-        target_protocol="file",
-        asynchronous=True,
-    )
-    return zarr.storage.FsspecStore(fs=fs)
 
 
 def find_first_ome_tiff_in_mmstack(data_path: Path) -> Path:
@@ -152,10 +120,8 @@ class MMStack(MicroManagerFOVMapping):
             self.width,
         ) = dims.values()
         self._set_mm_meta(self._first_tif.micromanager_metadata)
-        zarr_tiff_store = series.aszarr(multiscales=True)
-        self._store = _tiff_to_fsspec_store(
-            zarr_tiff_store, root_uri=self._root.as_uri()
-        )
+        # tifffile.zarr.ZarrTiffStore is a native zarr v3 store
+        self._store = series.aszarr(multiscales=True)
         _logger.debug(f"Opened {self._store}.")
         data = da.from_zarr(zarr.open(self._store, mode="r")["0"])
         self.dtype = data.dtype
@@ -281,20 +247,24 @@ class MMStack(MicroManagerFOVMapping):
             for ch in self._mm_meta["Summary"].get("ChNames", []):
                 self.channel_names.append(ch)
         z_step_size = float(self._mm_meta["Summary"].get("z-step_um", 1.0))
-        if z_step_size == 0:
-            if self.slices == 1:
-                z_step_size = 1.0
-            else:
+        if z_step_size == 0.0:
+            z_step_size = 1.0
+            if self.slices != 1:
                 _logger.warning(
-                    f"Z-step size is {z_step_size} um in the metadata, "
-                    "Using 1.0 um instead."
+                    "Z-step size is set to 0.0 um in the metadata, "
+                    "using 1.0 um instead."
                 )
         self._z_step_size = z_step_size
         self.height = self._mm_meta["Summary"]["Height"]
         self.width = self._mm_meta["Summary"]["Width"]
-        self._t_scale = (
-            float(self._mm_meta["Summary"].get("Interval_ms", 1e3)) / 1e3
-        )
+        t_scale = float(self._mm_meta["Summary"].get("Interval_ms", 1e3)) / 1e3
+        if t_scale == 0.0:
+            t_scale = 1.0
+            _logger.warning(
+                "Time scale is set to 0.0 in the metadata, "
+                "using 1.0 instead."
+            )
+        self._t_scale = t_scale
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
