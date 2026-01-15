@@ -1067,6 +1067,12 @@ class Position(NGFFNode):
                 _scale_integers(array.chunks, factor), len(shape)
             )
 
+            # TODO: first check if array is sharded?
+            shards = array.shards[:-3] + _scale_integers(
+                array.shards[-3:], factor
+            )
+            shards_ratio = tuple(s // c for c, s in zip(chunks, shards))
+
             transforms = deepcopy(
                 self.metadata.multiscales[0]
                 .datasets[0]
@@ -1082,6 +1088,7 @@ class Position(NGFFNode):
                 shape=shape,
                 dtype=array.dtype,
                 chunks=chunks,
+                shards_ratio=shards_ratio,
                 transform=transforms,
             )
 
@@ -2254,7 +2261,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate | Position | TiledPosition: ...
+) -> Plate | Position | TiledPosition:
+    ...
 
 
 @overload
@@ -2267,7 +2275,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Position: ...
+) -> Position:
+    ...
 
 
 @overload
@@ -2280,7 +2289,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> TiledPosition: ...
+) -> TiledPosition:
+    ...
 
 
 @overload
@@ -2293,7 +2303,8 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate: ...
+) -> Plate:
+    ...
 
 
 def open_ome_zarr(
