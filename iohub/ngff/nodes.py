@@ -12,7 +12,16 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Generator, Literal, Sequence, Type, overload, TypeAlias
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    Literal,
+    Sequence,
+    Type,
+    TypeAlias,
+    overload,
+)
 
 import numpy as np
 import zarr.codecs
