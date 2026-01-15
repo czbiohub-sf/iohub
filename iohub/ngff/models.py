@@ -369,12 +369,12 @@ class LabelColorMeta(MetaBase):
 class PositionLabelMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
 
-    # SHOULD
-    colors: list[LabelColorMeta]
-    # MAY
-    properties: list[dict[str, Any]]
-    # MAY
-    source: dict[str, Any]
+    # SHOULD (optional per NGFF spec)
+    colors: list[LabelColorMeta] = Field(default_factory=list)
+    # MAY (optional per NGFF spec)
+    properties: list[dict[str, Any]] = Field(default_factory=list)
+    # MAY (optional per NGFF spec)
+    source: dict[str, Any] | None = Field(default=None)
 
     @field_validator("colors")
     @classmethod
@@ -386,7 +386,14 @@ class PositionLabelMeta(VersionMeta):
     @field_validator("properties")
     @classmethod
     def validate_properties(cls, v):
-        # Properties are arbitrary dictionaries, no specific validation needed
+        # Validate that properties have required 'label-value' field per NGFF spec
+        if not v:
+            return v
+        for i, prop in enumerate(v):
+            if "label-value" not in prop and "label_value" not in prop:
+                raise ValueError(
+                    f"Property {i} must include 'label-value' field per NGFF spec"
+                )
         return v
 
 

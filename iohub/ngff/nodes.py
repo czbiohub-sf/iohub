@@ -363,8 +363,7 @@ class NGFFMultiscalesNode(NGFFNode):
     """Base class for nodes managing multiscale pyramids.
 
     Provides common functionality for Position (5D images) and
-    PositionLabel (4D labels). Eliminates code duplication in pyramid
-    management, array access, and compression.
+    PositionLabel (4D labels).
     """
 
     @property
@@ -1304,11 +1303,20 @@ class PositionLabel(NGFFMultiscalesNode):
                 if len(rgba) == 3:
                     rgba = rgba + [255]  # Add alpha
 
-                # Convert to 0-1 range for Pydantic
-                # But will be serialized as 0-255
+                # Convert to 0-1 range for Pydantic (serialized as 0-255)
+                # Validate bounds and handle numpy integer types
                 rgba_normalized = []
                 for val in rgba:
-                    if isinstance(val, int) and val > 1:
+                    # Convert numpy types to Python types
+                    if hasattr(val, "item"):
+                        val = val.item()
+                    # Validate bounds
+                    if not (0 <= val <= 255):
+                        raise ValueError(
+                            f"Color values must be 0-255, got {val}"
+                        )
+                    # Normalize: values > 1 are assumed 0-255 scale
+                    if isinstance(val, int) or val > 1:
                         rgba_normalized.append(val / 255.0)
                     else:
                         rgba_normalized.append(float(val))
@@ -1326,6 +1334,10 @@ class PositionLabel(NGFFMultiscalesNode):
                     prop = prop.copy()
                     prop["label-value"] = prop.pop("label_id")
                 elif "label-value" not in prop:
+                    _logger.warning(
+                        f"Skipping property without 'label-value' field: "
+                        f"{list(prop.keys())}"
+                    )
                     continue
                 label_properties.append(prop)
 
@@ -2005,8 +2017,7 @@ class Position(NGFFMultiscalesNode):
             List of dimension names for the label array
         """
         # Labels use TZYX dimensions (no channel dimension)
-        label_axes = [ax for ax in self.axes if ax.type != "channel"]
-        return [ax.name for ax in label_axes[:ndims]]
+        return [ax.name for ax in self.label_axes[:ndims]]
 
     @property
     def labels_group(self) -> zarr.Group | None:
@@ -2014,6 +2025,11 @@ class Position(NGFFMultiscalesNode):
         if "labels" in self._group:
             return self._group["labels"]
         return None
+
+    @property
+    def label_axes(self) -> list[AxisMeta]:
+        """Axes for labels (TZYX, excluding channel dimension)."""
+        return [ax for ax in self.axes if ax.type != "channel"]
 
     @property
     def has_labels(self) -> bool:
@@ -2080,17 +2096,15 @@ class Position(NGFFMultiscalesNode):
 
         if name not in self.labels_group:
             raise KeyError(
-                f"Label '{name}' not found.",
-                "Available labels: {self.label_names()}",
+                f"Label '{name}' not found. Available labels: {self.label_names()}"
             )
 
         zgroup = self.labels_group[name]
-        label_axes = [ax for ax in self.axes if ax.type != "channel"]
 
         return PositionLabel(
             group=zgroup,
             parse_meta=True,
-            axes=label_axes,
+            axes=self.label_axes,
             version=self.version,
             overwriting_creation=self._overwrite,
         )
@@ -2204,6 +2218,14 @@ class Position(NGFFMultiscalesNode):
                 f"Label data must be an integer dtype, got {data.dtype}."
             )
 
+        # Validate dimensionality (TZYX, no channel)
+        expected_dims = len(self.label_axes)
+        if len(data.shape) != expected_dims:
+            raise ValueError(
+                f"Label data must be {expected_dims}D (TZYX), "
+                f"got {len(data.shape)}D shape: {data.shape}"
+            )
+
         # Create labels group if it doesn't exist
         labels_group = self.create_labels_group()
 
@@ -2213,11 +2235,10 @@ class Position(NGFFMultiscalesNode):
         )
 
         # Create PositionLabel with proper axes (TZYX, no channel)
-        label_axes = [ax for ax in self.axes if ax.type != "channel"]
         label_image = PositionLabel(
             group=label_group,
             parse_meta=False,
-            axes=label_axes,
+            axes=self.label_axes,
             version=self.version,
             colors=colors,
             properties=properties,
