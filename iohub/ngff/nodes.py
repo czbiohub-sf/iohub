@@ -12,16 +12,7 @@ import shutil
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
-from typing import (
-    Any,
-    Callable,
-    Generator,
-    Literal,
-    Sequence,
-    Type,
-    TypeAlias,
-    overload,
-)
+from typing import Any, Callable, Generator, Literal, Sequence, Type, overload, TypeAlias
 
 import numpy as np
 import zarr.codecs
@@ -1243,11 +1234,9 @@ class PositionLabel(NGFFMultiscalesNode):
         source_array = self[source_level]
 
         for level in range(1, levels):
-            (
-                downscaled_shape,
-                downscaled_chunks,
-                transforms,
-            ) = self._calculate_pyramid_params(source_array, level)
+            downscaled_shape, downscaled_chunks, transforms = (
+                self._calculate_pyramid_params(source_array, level)
+            )
 
             self.create_zeros(
                 level=str(level),
@@ -3089,8 +3078,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate | Position | TiledPosition:
-    ...
+) -> Plate | Position | TiledPosition: ...
 
 
 @overload
@@ -3103,8 +3091,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Position:
-    ...
+) -> Position: ...
 
 
 @overload
@@ -3117,8 +3104,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> TiledPosition:
-    ...
+) -> TiledPosition: ...
 
 
 @overload
@@ -3131,8 +3117,7 @@ def open_ome_zarr(
     version: Literal["0.4", "0.5"] = "0.4",
     disable_path_checking: bool = False,
     **kwargs,
-) -> Plate:
-    ...
+) -> Plate: ...
 
 
 def open_ome_zarr(
