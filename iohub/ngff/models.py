@@ -386,13 +386,15 @@ class PositionLabelMeta(VersionMeta):
     @field_validator("properties")
     @classmethod
     def validate_properties(cls, v):
-        # Validate that properties have required 'label-value' field per NGFF spec
+        # Validate that properties have required 'label-value'
+        # field per NGFF spec
         if not v:
             return v
         for i, prop in enumerate(v):
             if "label-value" not in prop and "label_value" not in prop:
                 raise ValueError(
-                    f"Property {i} must include 'label-value' field per NGFF spec"
+                    f"Property {i} must include 'label-value' field "
+                    "per NGFF spec"
                 )
         return v
 

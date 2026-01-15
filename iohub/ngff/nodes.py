@@ -2096,7 +2096,8 @@ class Position(NGFFMultiscalesNode):
 
         if name not in self.labels_group:
             raise KeyError(
-                f"Label '{name}' not found. Available labels: {self.label_names()}"
+                f"Label '{name}' not found. "
+                f"Available labels: {self.label_names()}"
             )
 
         zgroup = self.labels_group[name]
