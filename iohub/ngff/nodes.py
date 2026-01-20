@@ -1067,6 +1067,14 @@ class Position(NGFFNode):
                 _scale_integers(array.chunks, factor), len(shape)
             )
 
+            if array.shards is not None:
+                shards = array.shards[:-3] + _scale_integers(
+                    array.shards[-3:], factor
+                )
+                shards_ratio = tuple(s // c for c, s in zip(chunks, shards))
+            else:
+                shards_ratio = None
+
             transforms = deepcopy(
                 self.metadata.multiscales[0]
                 .datasets[0]
@@ -1082,6 +1090,7 @@ class Position(NGFFNode):
                 shape=shape,
                 dtype=array.dtype,
                 chunks=chunks,
+                shards_ratio=shards_ratio,
                 transform=transforms,
             )
 
