@@ -591,11 +591,9 @@ def process_single_position(
     # Check for invalid times
     time_ubound = input_data_shape[0] - 1
     if np.max(input_time_indices) > time_ubound:
-        raise ValueError(
-            f"""input_time_indices = {input_time_indices} includes
+        raise ValueError(f"""input_time_indices = {input_time_indices} includes
             a time index beyond the maximum index of
-            the dataset = {time_ubound}"""
-        )
+            the dataset = {time_ubound}""")
 
     # Write extra metadata to the output store
     extra_metadata = kwargs.pop("extra_metadata", None)
@@ -755,10 +753,8 @@ def _downsample_tensorstore(
     try:
         import tensorstore as ts
     except ImportError:
-        raise ImportError(
-            "Tensorstore is required for downsampling. \
-            Please install it with `pip install tensorstore`."
-        )
+        raise ImportError("Tensorstore is required for downsampling. \
+            Please install it with `pip install tensorstore`.")
 
     downsampled = ts.downsample(
         source_ts, downsample_factors=downsample_factors, method=method

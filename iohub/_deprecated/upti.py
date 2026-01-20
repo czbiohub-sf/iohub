@@ -28,7 +28,7 @@ class UPTIReader(ReaderBase):
             self.files = glob.glob(os.path.join(folder, "*.tif"))
         info_img = tiff.imread(self.files[0])
         self.dtype = info_img.dtype
-        (self.height, self.width) = info_img.shape
+        self.height, self.width = info_img.shape
         self.positions = 1
         self.frames = 1
         self.patterns = 0
