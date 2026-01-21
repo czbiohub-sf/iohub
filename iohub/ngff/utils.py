@@ -69,7 +69,7 @@ def create_empty_plate(
     ...     store_path=Path("/path/to/store"),
     ...     position_keys=[("A", "1", "0"), ("A", "1", "1")],
     ...     channel_names=["DAPI", "FITC"],
-    ...     shape=(1, 1, 256, 256, 256)
+    ...     shape=(1, 1, 256, 256, 256),
     ... )
 
     Create a plate with custom chunk size and scale:
@@ -79,7 +79,7 @@ def create_empty_plate(
     ...     channel_names=["DAPI"],
     ...     shape=(1, 1, 256, 256, 256),
     ...     chunks=(1, 1, 128, 128, 128),
-    ...     scale=(1, 1, 0.5, 0.5, 0.5)
+    ...     scale=(1, 1, 0.5, 0.5, 0.5),
     ... )
 
     Create a plate with sharding:
@@ -91,7 +91,7 @@ def create_empty_plate(
     ...     chunks=(1, 1, 8, 128, 128),
     ...     scale=(1, 1, 0.5, 0.5, 0.5),
     ...     shards_ratio=(10, 1, 8, 16, 16),
-    ...     version="0.5"
+    ...     version="0.5",
     ... )
 
     Notes

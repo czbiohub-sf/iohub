@@ -1746,25 +1746,31 @@ class Plate(NGFFNode):
         --------
         Create multiple positions with automatic row/column indexing:
 
-        >>> plate.create_positions([
-        ...     ("A", "1", "0"),
-        ...     ("A", "1", "1"),
-        ...     ("A", "2", "0"),
-        ... ])
+        >>> plate.create_positions(
+        ...     [
+        ...         ("A", "1", "0"),
+        ...         ("A", "1", "1"),
+        ...         ("A", "2", "0"),
+        ...     ]
+        ... )
 
         Create positions with explicit row/column indices:
 
-        >>> plate.create_positions([
-        ...     ("B", "3", "0", 1, 2),      # row_index=1, col_index=2
-        ...     ("B", "3", "1", 1, 2),      # same well indices
-        ... ])
+        >>> plate.create_positions(
+        ...     [
+        ...         ("B", "3", "0", 1, 2),  # row_index=1, col_index=2
+        ...         ("B", "3", "1", 1, 2),  # same well indices
+        ...     ]
+        ... )
 
         Create positions with specific acquisition indices:
 
-        >>> plate.create_positions([
-        ...     ("B", "3", "0", 1, 2, 0),   # acquisition 0
-        ...     ("B", "3", "1", 1, 2, 1),   # acquisition 1
-        ... ])
+        >>> plate.create_positions(
+        ...     [
+        ...         ("B", "3", "0", 1, 2, 0),  # acquisition 0
+        ...         ("B", "3", "1", 1, 2, 1),  # acquisition 1
+        ...     ]
+        ... )
         """
         positions = deepcopy(positions)  # We may mutate contents
         wells = {}  # Track wells by path to avoid duplicate objects

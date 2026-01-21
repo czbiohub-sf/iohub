@@ -102,6 +102,12 @@ fallback-version = "0.0.0"
 [tool.ruff]
 line-length = 120
 
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E203", "E731"]

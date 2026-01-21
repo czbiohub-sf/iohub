@@ -175,8 +175,8 @@ def rename_wells_command(zarrfile, csvfile):
 
     The CSV file must have two columns with old and new names in the form:
     ```
-    A/1,B/2
-    A/2,B/2
+    A / 1, B / 2
+    A / 2, B / 2
     ```
     """
     rename_wells(zarrfile, csvfile)
