@@ -11,9 +11,7 @@ from iohub.rename_wells import rename_wells
 
 VERSION = __version__
 
-_DATASET_PATH = click.Path(
-    exists=True, file_okay=False, resolve_path=True, path_type=pathlib.Path
-)
+_DATASET_PATH = click.Path(exists=True, file_okay=False, resolve_path=True, path_type=pathlib.Path)
 
 
 @click.group()
@@ -35,8 +33,7 @@ def cli():
     "--verbose",
     "-v",
     is_flag=True,
-    help="Show usage guide to open dataset in Python "
-    "and full tree for HCS Plates in OME-Zarr",
+    help="Show usage guide to open dataset in Python and full tree for HCS Plates in OME-Zarr",
 )
 def info(files, verbose):
     """View basic metadata of a list of FILES.
@@ -147,12 +144,8 @@ def set_scale(
     if image is None:
         image = "0"
     for input_position_dirpath in input_position_dirpaths:
-        with open_ome_zarr(
-            input_position_dirpath, layout="fov", mode="r+"
-        ) as dataset:
-            for name, value in zip(
-                ["t", "z", "y", "x"], [t_scale, z_scale, y_scale, x_scale]
-            ):
+        with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
+            for name, value in zip(["t", "z", "y", "x"], [t_scale, z_scale, y_scale, x_scale]):
                 if value is None:
                     continue
                 dataset.set_scale(image, name, value)

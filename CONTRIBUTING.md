@@ -69,19 +69,19 @@ or describe the bug fixed or feature implemented in the PR.
 
 ### Setting up development environment
 
-For local development, first install [Git](https://git-scm.com/)
-and Python with an environment management tool
-(e.g. [miniforge](https://github.com/conda-forge/miniforge), a minimal community distribution of Conda).
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 
-If you use Conda, set up an environment with:
+#### Install uv
 
 ```sh
-conda create -n iohub-dev python=3.11
-conda activate iohub-dev
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-If you have push permission to the repository,
-clone the repository (the code blocks below are shell commands):
+Or see [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for other methods.
+
+#### Clone the repository
+
+If you have push permission to the repository:
 
 ```sh
 cd # to the directory you want to work in
@@ -91,13 +91,51 @@ git clone https://github.com/czbiohub-sf/iohub.git
 Otherwise, you can follow [these instructions](https://docs.github.com/en/get-started/quickstart/fork-a-repo)
 to [fork](https://github.com/czbiohub-sf/iohub/fork) the repository.
 
-Then install the package in editable mode with the development dependencies.
-Remove acquire-zarr if you do not have glibc version 2.35 or later,
-for example on the Bruno cluster (Rocky Linux 8).
+#### Install dependencies
 
 ```sh
-cd iohub/ # or the renamed project root directory
-pip install -e ".[dev,acquire-zarr]"
+cd iohub/
+uv sync --all-extras --all-groups
+```
+
+#### Dependency groups
+
+The project uses [dependency groups](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-groups) for development tools and [optional dependencies](https://docs.astral.sh/uv/concepts/projects/dependencies/#optional-dependencies) for user-facing extras.
+
+**Full installation (recommended):**
+
+```sh
+uv sync --all-extras --all-groups
+```
+
+**Selective installation:**
+
+| Group | Purpose |
+|-------|---------|
+| `test` | Testing tools (pytest, hypothesis, etc.) |
+| `acquire-zarr` | Acquire-zarr reader (requires glibc 2.35+) |
+| `doc` | Documentation (sphinx, etc.) |
+| `pre-commit` | Pre-commit hooks |
+| `dev` | Includes test, acquire-zarr, doc, pre-commit |
+
+| Extra | Purpose |
+|-------|---------|
+| `tensorstore` | TensorStore array access |
+
+**Examples:**
+
+```sh
+# Install specific groups
+uv sync --group test --group doc
+
+# Install specific extras
+uv sync --extra tensorstore
+
+# Combine groups and extras
+uv sync --group test --extra tensorstore
+
+# On older glibc systems (e.g., Rocky Linux 8), omit acquire-zarr:
+uv sync --group test --group doc --group pre-commit --all-extras
 ```
 
 Then make the changes and [track them with Git](https://docs.github.com/en/get-started/using-git/about-git#example-contribute-to-an-existing-repository).
@@ -106,20 +144,20 @@ Then make the changes and [track them with Git](https://docs.github.com/en/get-s
 
 #### Prerequisites
 
-Install a forked version of `sphinx-polyversion` due to an incompatibility with `setuptools_scm`.
+Install documentation dependencies and a [forked version of `sphinx-polyversion`](https://github.com/ziw-liu/sphinx-polyversion/tree/iohub-staging) (temporary fix for compatibility):
 
 ```shell
-pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging 
+uv sync --group doc
+uv pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging
 ```
 
 #### Building the HTML version locally
 
-Inside `/docs` folder
+Inside `/docs` folder:
 
 ```shell
-pip install "/PATH/TO/iohub[doc]"
 make clean
-sphinx-polyversion poly.py -vvv --local
+uv run sphinx-polyversion poly.py -vvv --local
 ```
 
 Generated HTML documentation can be found in
@@ -138,8 +176,7 @@ and output (stdout, matplotlib plot) are rendered in HTML.
 They can also be executed as plain Python scripts
 or interactive code blocks in some IDEs (VS Code, PyCharm, Spyder etc.).
 
-See the syntax documentation
-[here](https://sphinx-gallery.github.io/stable/syntax.html).
+See the [syntax documentation](https://sphinx-gallery.github.io/stable/syntax.html).
 
 ### Testing
 
@@ -148,7 +185,7 @@ Local test runs and coverage check can be invoked by:
 
 ```sh
 # in the project root directory
-pytest --cov=iohub tests/
+uv run pytest --cov=iohub tests/
 ```
 
 `iohub` uses [Hypothesis](https://hypothesis.readthedocs.io/en/latest/index.html)
@@ -158,12 +195,28 @@ for how this can reveal more bugs.
 
 ### Code style
 
-We use [pre-commit](https://pre-commit.com/) to sort imports with [isort](https://github.com/PyCQA/isort), format code with [black](https://black.readthedocs.io/en/stable/), and lint with [flake8](https://github.com/PyCQA/flake8) automatically prior to each commit. To minimize test errors when submitting pull requests, please install pre-commit in your environment as follows:
+We use [pre-commit](https://pre-commit.com/) to automatically format and lint code prior to each commit. To minimize test errors when submitting pull requests, install the pre-commit hooks:
 
 ```bash
-pre-commit install
+# Using uvx (recommended - no need to install pre-commit as a dependency)
+uvx pre-commit install
+
+# Or using prek (https://github.com/tweag/prek - a faster pre-commit runner)
+uvx prek install
+
+# Or if you prefer to sync the pre-commit group
+uv sync --group pre-commit
+uv run pre-commit install
 ```
 
-When these packages are executed within the project root directory, they should automatically use the [project settings](./pyproject.toml).
+To run pre-commit manually on all files:
+
+```bash
+uvx pre-commit run --all-files
+# or
+uvx prek run --all-files
+```
+
+When these tools are executed within the project root directory, they should automatically use the [project settings](./pyproject.toml).
 
 [NumPy style docstrings](https://numpydoc.readthedocs.io/en/latest/format.html) are used for API documentation.

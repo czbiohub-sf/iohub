@@ -72,12 +72,7 @@ def test_pyramid(tmp_path: Path, ndim: int) -> None:
         assert np.all(ratio[:-3] == 1)  # time and channel aren't scaled
         assert np.all(ratio[-3:] == 2**level)
 
-        level_scale = np.asarray(
-            fov.metadata.multiscales[0]
-            .datasets[level]
-            .coordinate_transformations[0]
-            .scale
-        )
+        level_scale = np.asarray(fov.metadata.multiscales[0].datasets[level].coordinate_transformations[0].scale)
         assert np.all(level_scale[:-3] == 1)
         assert np.allclose(level_scale[-3:] / scale, 2**level)
 

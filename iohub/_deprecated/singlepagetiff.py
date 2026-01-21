@@ -37,10 +37,7 @@ class MicromanagerSequenceReader(ReaderBase):
         """
 
         if not os.path.isdir(folder):
-            raise NotImplementedError(
-                "supplied path for singlepage tiff sequence reader "
-                "is not a folder"
-            )
+            raise NotImplementedError("supplied path for singlepage tiff sequence reader is not a folder")
         self._strict = strict
 
         self.log = logging.getLogger(__name__)
@@ -61,10 +58,7 @@ class MicromanagerSequenceReader(ReaderBase):
         if sub_dirs:
             pos_path = os.path.join(folder, sub_dirs[0])
         else:
-            raise AttributeError(
-                "supplied folder does not contain position "
-                "or default subdirectories"
-            )
+            raise AttributeError("supplied folder does not contain position or default subdirectories")
 
         self._set_mm_meta(pos_path)
 
@@ -133,9 +127,7 @@ class MicromanagerSequenceReader(ReaderBase):
     def get_image(self, p: int, t: int, c: int, z: int):
         zarray = self.get_zarr(p)
         dim_slices = [slice(None)] * 3
-        for i, (dim, idx) in enumerate(
-            zip((self.frames, self.channels, self.slices), (t, c, z))
-        ):
+        for i, (dim, idx) in enumerate(zip((self.frames, self.channels, self.slices), (t, c, z))):
             if dim > 0:
                 dim_slices[i] = slice(idx, idx + 1)
 
@@ -156,9 +148,7 @@ class MicromanagerSequenceReader(ReaderBase):
 
         """
         if position not in self.positions.keys():
-            self.log.info(
-                f"position {position} not yet extracted, extracting ..."
-            )
+            self.log.info(f"position {position} not yet extracted, extracting ...")
             self._create_stores(position)
         return np.array(self.positions[position])
 
@@ -214,9 +204,7 @@ class MicromanagerSequenceReader(ReaderBase):
                         array = zarr.open(store, mode="r")[:]
                         z[c[1], c[2], c[3]] = array
                     except Exception:
-                        self.log.error(
-                            f"error reading file {fn} for coordinate {c}"
-                        )
+                        self.log.error(f"error reading file {fn} for coordinate {c}")
 
         # check that the array was assigned
         if self._strict:
@@ -252,32 +240,19 @@ class MicromanagerSequenceReader(ReaderBase):
             Coordinates follow (p, t, c, z) indexing.
         """
 
-        positions = [
-            p
-            for p in os.listdir(folder)
-            if os.path.isdir(os.path.join(folder, p))
-        ]
+        positions = [p for p in os.listdir(folder) if os.path.isdir(os.path.join(folder, p))]
         if not positions:
-            raise FileNotFoundError(
-                "no position subfolder found in supplied folder"
-            )
+            raise FileNotFoundError("no position subfolder found in supplied folder")
 
-        metadatas = [
-            os.path.join(folder, position, "metadata.txt")
-            for position in positions
-        ]
+        metadatas = [os.path.join(folder, position, "metadata.txt") for position in positions]
         if not metadatas:
-            raise FileNotFoundError(
-                "no metadata.txt file found in position directories"
-            )
+            raise FileNotFoundError("no metadata.txt file found in position directories")
 
         coord_filename_map = {}
         for idx, metadata in enumerate(metadatas):
             with open(metadata, "r") as m:
                 j = json.load(m)
-                coord_filename_map.update(
-                    self._extract_coord_to_filename(j, folder, positions[idx])
-                )
+                coord_filename_map.update(self._extract_coord_to_filename(j, folder, positions[idx]))
         self.num_positions = len(positions)
 
         return coord_filename_map
@@ -339,25 +314,17 @@ class MicromanagerSequenceReader(ReaderBase):
             try:
                 # for mm2-gamma. 'FileName' key contains position folder
                 if "-".join(c.split("-")[1:]) in meta:
-                    filepath = json_[meta["-".join(c.split("-")[1:])]][
-                        "FileName"
-                    ]
+                    filepath = json_[meta["-".join(c.split("-")[1:])]]["FileName"]
                 # for mm1, 'FileName' key does not contain position folder
                 else:
                     filepath = json_[c]["FileName"]
-                    filepath = os.path.join(
-                        position, filepath
-                    )  # position name is explicitly supplied
+                    filepath = os.path.join(position, filepath)  # position name is explicitly supplied
             except KeyError as ke:
-                self.log.error(
-                    f"metadata for supplied image coordinate {c} not found"
-                )
+                self.log.error(f"metadata for supplied image coordinate {c} not found")
                 raise ke
 
             coordinate = (pos_idx, time_idx, ch_idx, z_idx)
-            coord_to_filename[coordinate] = os.path.join(
-                parent_folder, filepath
-            )
+            coord_to_filename[coordinate] = os.path.join(parent_folder, filepath)
 
         return coord_to_filename
 
@@ -376,9 +343,7 @@ class MicromanagerSequenceReader(ReaderBase):
         """
 
         sub_dir_path = glob.glob(os.path.join(f, "*/"))
-        sub_dir_name = [
-            os.path.split(subdir[:-1])[1] for subdir in sub_dir_path
-        ]
+        sub_dir_name = [os.path.split(subdir[:-1])[1] for subdir in sub_dir_path]
         #    assert subDirName, 'No sub directories found'
         return natsort.natsorted(sub_dir_name)
 
@@ -430,12 +395,8 @@ class MicromanagerSequenceReader(ReaderBase):
 
         """
         self.z_step_size = self._mm_meta["Summary"]["z-step_um"]
-        self.width = int(
-            self._mm_meta["Summary"]["UserData"]["Width"]["PropVal"]
-        )
-        self.height = int(
-            self._mm_meta["Summary"]["UserData"]["Height"]["PropVal"]
-        )
+        self.width = int(self._mm_meta["Summary"]["UserData"]["Width"]["PropVal"])
+        self.height = int(self._mm_meta["Summary"]["UserData"]["Height"]["PropVal"])
         self.time_stamp = self._mm_meta["Summary"]["StartTime"]
 
     def _mm2gamma_meta_parser(self):

@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
+from iohub._version import __version__
 
 from iohub import open_ome_zarr
-from iohub._version import __version__
 from iohub.cli.cli import cli
 from tests.conftest import (
     hcs_ref,
@@ -126,9 +126,7 @@ def test_cli_set_scale(caplog):
         store_path = Path(store_path)
         position_path = Path(store_path) / "B" / "03" / "0"
 
-        with open_ome_zarr(
-            position_path, layout="fov", mode="r+"
-        ) as input_dataset:
+        with open_ome_zarr(position_path, layout="fov", mode="r+") as input_dataset:
             old_scale = input_dataset.scale
 
         random_z = random.uniform(0, 1)
@@ -153,9 +151,7 @@ def test_cli_set_scale(caplog):
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
             assert output_dataset.scale != old_scale
-            for i, record in enumerate(
-                output_dataset.zattrs["iohub"]["previous_transforms"]
-            ):
+            for i, record in enumerate(output_dataset.zattrs["iohub"]["previous_transforms"]):
                 for transform in record["transforms"]:
                     if transform["type"] == "scale":
                         assert transform["scale"][-3:][i] == old_scale[-3:][i]
@@ -174,9 +170,7 @@ def test_cli_set_scale(caplog):
         )
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert output_dataset.scale[-1] == 0.1
-            for transform in output_dataset.zattrs["iohub"][
-                "previous_transforms"
-            ][-1]["transforms"]:
+            for transform in output_dataset.zattrs["iohub"]["previous_transforms"][-1]["transforms"]:
                 if transform["type"] == "scale":
                     assert transform["scale"][-1] == 0.5
 

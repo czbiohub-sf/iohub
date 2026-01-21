@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=77.0.0", "wheel", "setuptools_scm[toml]"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling", "uv-dynamic-versioning>=0.7.0"]
 
 [project]
 name = "iohub"
@@ -52,20 +52,20 @@ Source = "https://github.com/czbiohub-sf/iohub"
 tensorstore = [
     "tensorstore>=0.1.64",
 ]
-acquire-zarr = [
-    "acquire-zarr",
-]
-dev = [
+
+[dependency-groups]
+test = [
     "iohub[tensorstore]",
     "ngff-zarr[validate]",
-    "black",
-    "flake8",
     "pytest>=5.0.0",
     "pytest-cov",
     "hypothesis>=6.61.0",
     "requests>=2.22.0",
     "wget>=3.2",
     "ome-zarr>=0.12.0",
+]
+acquire-zarr = [
+    "acquire-zarr",
 ]
 doc = [
     "matplotlib",
@@ -77,21 +77,31 @@ doc = [
     "sphinx-sitemap>=2.5.0",
     "sphinx-gallery>=0.13.0",
 ]
+pre-commit = [
+    "pre-commit",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "acquire-zarr" },
+    { include-group = "doc" },
+    { include-group = "pre-commit" },
+]
 
 [project.scripts]
 iohub = "iohub.cli.cli:cli"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["iohub"]
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
-[tool.setuptools_scm]
-version_scheme = "release-branch-semver"
-write_to = "iohub/_version.py"
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
 
-[tool.black]
-line-length = 79
+[tool.ruff]
+line-length = 120
 
-[tool.isort]
-profile = "black"
-line_length = 79
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E203", "E731"]

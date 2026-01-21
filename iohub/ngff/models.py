@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Data model classes with validation for OME-NGFF metadata.
 Developed against OME-NGFF v0.4/0.5.2 and ome-zarr v0.9.
@@ -8,6 +6,8 @@ Attributes are 'snake_case' with aliases to match NGFF names in JSON output.
 See https://ngff.openmicroscopy.org/0.4/index.html#naming-style
 about 'camelCase' inconsistency.
 """
+
+from __future__ import annotations
 
 import re
 from typing import Annotated, Any, Literal, Optional
@@ -25,14 +25,10 @@ from pydantic import (
     model_validator,
 )
 from pydantic_extra_types.color import Color, ColorType
-
-# TODO: remove when drop Python < 3.12
 from typing_extensions import Self, TypedDict
 
 
-def unique_validator(
-    data: list[BaseModel], field: str | list[str]
-) -> list[BaseModel]:
+def unique_validator(data: list[BaseModel], field: str | list[str]) -> list[BaseModel]:
     """Called by validators to ensure the uniqueness of certain fields.
 
     Parameters
@@ -81,9 +77,7 @@ def alpha_numeric_validator(data: str) -> str:
         raised if the string contains characters other than [a-zA-z0-9]
     """
     if not data.isalnum():
-        raise ValueError(
-            f"The path name must be alphanumerical! Got: '{data}'."
-        )
+        raise ValueError(f"The path name must be alphanumerical! Got: '{data}'.")
     return data
 
 
@@ -188,19 +182,11 @@ class TransformationMeta(MetaBase):
 
     @model_validator(mode="after")
     def no_extra_method(self) -> Self:
-        methods = sum(
-            bool(m is not None)
-            for m in [self.translation, self.scale, self.path]
-        )
+        methods = sum(bool(m is not None) for m in [self.translation, self.scale, self.path])
         if self.type == "identity" and methods > 0:
-            raise ValueError(
-                "Method should not be specified for identity transformation!"
-            )
+            raise ValueError("Method should not be specified for identity transformation!")
         elif self.translation and self.scale:
-            raise ValueError(
-                "'translation' and 'scale' cannot be provided "
-                f"in the same `{type(self).__name__}`!"
-            )
+            raise ValueError(f"'translation' and 'scale' cannot be provided in the same `{type(self).__name__}`!")
         return self
 
 
@@ -210,9 +196,7 @@ class DatasetMeta(MetaBase):
     # MUST
     path: str
     # MUST
-    coordinate_transformations: list[TransformationMeta] = Field(
-        alias=str("coordinateTransformations")
-    )
+    coordinate_transformations: list[TransformationMeta] = Field(alias=str("coordinateTransformations"))
 
 
 class VersionMeta(MetaBase):
@@ -354,15 +338,11 @@ class AcquisitionMeta(MetaBase):
     # SHOULD
     name: str | None = None
     # SHOULD
-    maximum_field_count: PositiveInt | None = Field(
-        alias="maximumfieldcount", default=None
-    )
+    maximum_field_count: PositiveInt | None = Field(alias="maximumfieldcount", default=None)
     # MAY
     description: str | None = None
     # MAY
-    start_time: NonNegativeInt | None = Field(
-        alias=str("starttime"), default=None
-    )
+    start_time: NonNegativeInt | None = Field(alias=str("starttime"), default=None)
     # MAY
     end_time: NonNegativeInt | None = Field(alias=str("endtime"), default=None)
 
@@ -370,9 +350,7 @@ class AcquisitionMeta(MetaBase):
     def end_after_start(self) -> Self:
         if self.start_time is not None and self.end_time is not None:
             if self.start_time > self.end_time:
-                raise ValueError(
-                    "The acquisition end time must be after the start time!"
-                )
+                raise ValueError("The acquisition end time must be after the start time!")
         return self
 
 
@@ -398,9 +376,7 @@ class WellIndexMeta(MetaBase):
         # MUST
         # regex: one line that is exactly two words separated by one '/'
         if len(re.findall(r"^\w+\/\w+$", v)) != 1:
-            raise ValueError(
-                f"The well path '{v}' is not in the form of 'row/column'!"
-            )
+            raise ValueError(f"The well path '{v}' is not in the form of 'row/column'!")
         return v
 
 
