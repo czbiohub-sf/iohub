@@ -2,8 +2,7 @@ import pathlib
 
 import click
 
-from iohub import open_ome_zarr
-from iohub._version import __version__
+from iohub import __version__, open_ome_zarr
 from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info

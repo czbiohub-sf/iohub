@@ -5,9 +5,8 @@ from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
-from iohub._version import __version__
 
-from iohub import open_ome_zarr
+from iohub import __version__, open_ome_zarr
 from iohub.cli.cli import cli
 from tests.conftest import (
     hcs_ref,
