@@ -586,11 +586,9 @@ def process_single_position(
     # Check for invalid times
     time_ubound = input_data_shape[0] - 1
     if np.max(input_time_indices) > time_ubound:
-        raise ValueError(
-            f"""input_time_indices = {input_time_indices} includes
+        raise ValueError(f"""input_time_indices = {input_time_indices} includes
             a time index beyond the maximum index of
-            the dataset = {time_ubound}"""
-        )
+            the dataset = {time_ubound}""")
 
     # Write extra metadata to the output store
     extra_metadata = kwargs.pop("extra_metadata", None)
