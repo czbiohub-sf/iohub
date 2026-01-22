@@ -353,7 +353,7 @@ class TIFFConverter:
         pos = self.writer.create_position(row_name, col_name, pos_name)
         self.zarr_position_names.append(pos.zgroup.name)
         _ = pos.create_zeros(**arr_kwargs)
-        # Store original MM position label, set omero.name to HCS FOV name (#353, #354)
+        # Store original MM position label, set omero.name to HCS FOV name
         original_mm_label = self.pos_names[len(self.zarr_position_names) - 1]
         iohub_meta = pos.zattrs.get("iohub", {})
         iohub_meta["mm_position_label"] = original_mm_label
