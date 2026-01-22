@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from datetime import datetime
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Iterable, Literal
@@ -132,11 +133,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
     @property
     def t_scale(self) -> float:
-        _logger.warning(
-            "NDTiff does not store the planned time interval. "
-            "Returning 1.0 as a placeholder."
-        )
-        return 1.0
+        return self._t_scale
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
@@ -191,6 +188,32 @@ class NDTiffDataset(MicroManagerFOVMapping):
                     position_metadata["Label"] = position
 
                 pm_metadata["StagePositions"].append(position_metadata)
+
+        # Compute time scale
+        self._t_scale = 1.0
+        if self.frames > 1:
+            _acq_times, _t_idx = [], []
+            for t_idx in range(self.frames):
+                try:
+                    img_metadata = self.get_image_metadata(
+                        p_idx, t_idx, c_idx, 0
+                    )
+                except ValueError:
+                    continue
+                # Note: Timestamp key differs between Micro-manager versions
+                timestamp = img_metadata.get("TimeReceivedByCore")
+                if timestamp is not None:
+                    acq_time = datetime.strptime(
+                        timestamp, "%Y-%m-%d %H:%M:%S.%f"
+                    ).timestamp()
+                    _acq_times.append(acq_time)
+                    _t_idx.append(t_idx)
+            if len(_acq_times) > 1:
+                # find slope of _acq_times vs _t_idx
+                _acq_times = np.array(_acq_times, dtype=float)
+                _t_idx = np.array(_t_idx, dtype=float)
+                slope, _ = np.polyfit(_t_idx, _acq_times, 1)
+                self._t_scale = float(slope)
 
         return {"Summary": pm_metadata}
 
