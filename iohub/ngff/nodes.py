@@ -18,6 +18,8 @@ import numpy as np
 import zarr.codecs
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
+from rich.console import Console
+from rich.tree import Tree as RichTree
 from zarr.core.chunk_key_encodings import ChunkKeyEncodingParams
 from zarr.storage._utils import normalize_path
 
@@ -60,16 +62,35 @@ def _pad_shape(shape: tuple[int, ...], target: int = 5):
     return (1,) * pad + shape
 
 
+def _is_remote_url(path: str | Path) -> bool:
+    """Check if path is a remote URL (http, https, s3, gs, az)."""
+    url_str = str(path)
+    return url_str.startswith(
+        ('http://', 'https://', 's3://', 'gs://', 'az://')
+    )
+
+
 def _open_store(
     store_path: str | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
     version: Literal["0.4", "0.5"],
 ):
-    store_path = Path(store_path).resolve()
-    if not store_path.exists() and mode in ("r", "r+"):
-        raise FileNotFoundError(
-            f"Dataset directory not found at {str(store_path)}."
-        )
+    is_remote = _is_remote_url(store_path)
+
+    if is_remote:
+        if mode not in ("r",):
+            raise NotImplementedError(
+                f"Write mode '{mode}' not supported for remote URLs. "
+                "Use mode='r' for read-only access."
+            )
+    else:
+        # Local path: existing behavior
+        store_path = Path(store_path).resolve()
+        if not store_path.exists() and mode in ("r", "r+"):
+            raise FileNotFoundError(
+                f"Dataset directory not found at {str(store_path)}."
+            )
+
     if version not in ("0.4", "0.5"):
         _logger.warning(
             "IOHub is only tested against OME-NGFF v0.4 and v0.5. "
@@ -77,7 +98,10 @@ def _open_store(
         )
     try:
         zarr_format = None
-        if mode in ("w", "w-") or (mode == "a" and not store_path.exists()):
+        if not is_remote and (
+            mode in ("w", "w-")
+            or (mode == "a" and not Path(store_path).exists())
+        ):
             zarr_format = 3 if version == "0.5" else 2
         root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
@@ -190,11 +214,13 @@ class NGFFNode:
     def __getitem__(self, key):
         key = normalize_path(str(key))
         znode = self.zgroup.get(key)
-        if not znode:
+        if znode is None:
             raise KeyError(key)
         levels = len(key.split("/")) - 1
         item_type = self._MEMBER_TYPE
         for _ in range(levels):
+            if issubclass(item_type, ImageArray):
+                break
             item_type = item_type._MEMBER_TYPE
         if issubclass(item_type, ImageArray):
             return item_type.from_zarr_array(znode)
@@ -271,15 +297,34 @@ class NGFFNode:
         """
         return not self.group_keys()
 
-    def print_tree(self, level: int | None = None):
-        """Print hierarchy of the node to stdout.
+    def _build_tree(
+        self,
+        parent: RichTree | None = None,
+        level: int | None = None,
+        current_level: int = 0,
+    ) -> RichTree:
+        """Build tree using OME-NGFF metadata (works for remote stores)."""
+        name = self.zgroup.basename or self.zgroup.name
+        tree = parent.add(name) if parent else RichTree(name)
 
-        Parameters
-        ----------
-        level : int, optional
-            Maximum depth to show, by default None
-        """
-        print(self.zgroup.tree(level=level))
+        if level is not None and current_level >= level:
+            return tree
+
+        for member_name in self._member_names:
+            member = self[member_name]
+            if isinstance(member, ImageArray):
+                shape = ", ".join(
+                    f"{a.name}: {s}" for a, s in zip(self.axes, member.shape)
+                )
+                tree.add(f"{member_name} ({shape})")
+            else:
+                member._build_tree(tree, level, current_level + 1)
+
+        return tree
+
+    def print_tree(self, level: int | None = None):
+        """Print hierarchy using OME-NGFF metadata"""
+        Console().print(self._build_tree(level=level))
 
     def iteritems(self):
         for key in self._member_names:
@@ -592,6 +637,7 @@ class Position(NGFFNode):
         axes: list[AxisMeta] | None = None,
         version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
+        **kwargs,  # Absorbs extra attrs from parent hierarchy
     ):
         super().__init__(
             group=group,
@@ -639,7 +685,8 @@ class Position(NGFFNode):
 
     @property
     def _member_names(self):
-        return self.array_keys()
+        """Array names from position metadata."""
+        return sorted(ds.path for ds in self.metadata.multiscales[0].datasets)
 
     @property
     def data(self):
@@ -1540,6 +1587,7 @@ class Well(NGFFNode):
         axes: list[AxisMeta] | None = None,
         version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
+        **kwargs,  # Absorbs extra attrs from parent hierarchy
     ):
         super().__init__(
             group=group,
@@ -1577,6 +1625,11 @@ class Well(NGFFNode):
             Container object for the position group
         """
         return super().__getitem__(key)
+
+    @property
+    def _member_names(self):
+        """Position names from well metadata."""
+        return sorted(img.path for img in self.metadata.images)
 
     def _create_position_nosync(self, name: str, acquisition: int = 0):
         "create_position, but doesn't write the metadata yet."
@@ -1652,6 +1705,7 @@ class Row(NGFFNode):
         axes: list[AxisMeta] | None = None,
         version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
+        _plate_wells: list[WellIndexMeta] | None = None,
     ):
         super().__init__(
             group=group,
@@ -1661,6 +1715,7 @@ class Row(NGFFNode):
             version=version,
             overwriting_creation=overwriting_creation,
         )
+        self._plate_wells = _plate_wells
 
     def __getitem__(self, key: str):
         """Get a well member of the row.
@@ -1677,6 +1732,18 @@ class Row(NGFFNode):
         """
         return super().__getitem__(key)
 
+    @property
+    def _member_names(self):
+        """Column names from plate metadata."""
+        row_name = self.zgroup.basename
+        return sorted(
+            {
+                well.path.split("/")[1]
+                for well in self._plate_wells
+                if well.path.startswith(f"{row_name}/")
+            }
+        )
+
     def wells(self):
         """Returns a generator that iterate over the name and value
         of all the wells in the row.
@@ -1691,6 +1758,13 @@ class Row(NGFFNode):
     def _parse_meta(self):
         # this node does not have NGFF metadata
         return
+
+    @property
+    def _child_attrs(self):
+        """Attributes to pass to Well children (exclude _plate_wells)."""
+        attrs = super()._child_attrs.copy()
+        attrs.pop("_plate_wells", None)
+        return attrs
 
 
 class Plate(NGFFNode):
@@ -1818,9 +1892,10 @@ class Plate(NGFFNode):
         name = " ".join(attr.split("_")).strip()
         msg = f"Cannot determine {name}:"
         try:
-            row_grp = next(self.zgroup.groups())[1]
-            well_grp = next(row_grp.groups())[1]
-            pos_grp = next(well_grp.groups())[1]
+            pos_grp = self._get_first_position_group()
+            if pos_grp is None:
+                _logger.warning(f"{msg} No position is found in the dataset.")
+                return
         except StopIteration:
             _logger.warning(f"{msg} No position is found in the dataset.")
             return
@@ -1829,6 +1904,39 @@ class Plate(NGFFNode):
             setattr(self, attr, getattr(pos, attr))
         except AttributeError:
             _logger.warning(f"{msg} Invalid metadata at the first position")
+
+    def _get_first_position_group(self):
+        """Get the first position group using metadata."""
+        if not self.metadata or not self.metadata.wells:
+            raise ValueError(
+                "Plate metadata required to determine first position"
+            )
+
+        well_path = self.metadata.wells[0].path
+        well = Well(self.zgroup[well_path], parse_meta=True)
+
+        if not well.metadata or not well.metadata.images:
+            raise ValueError(
+                "Well metadata required to determine first position"
+            )
+
+        return self.zgroup[f"{well_path}/{well.metadata.images[0].path}"]
+
+    @property
+    def _member_names(self):
+        """Row names from plate metadata."""
+        return sorted(row.name for row in self.metadata.rows)
+
+    @property
+    def _child_attrs(self):
+        """Attributes to pass on when constructing child type instances."""
+        attrs = super()._child_attrs
+        # Pass only wells list - Row doesn't need full plate metadata
+        try:
+            attrs["_plate_wells"] = self.metadata.wells
+        except AttributeError:
+            pass
+        return attrs
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
@@ -1916,8 +2024,10 @@ class Plate(NGFFNode):
         # normalize input
         row_name = normalize_path(row_name)
         col_name = normalize_path(col_name)
-        if row_name in self:
-            if col_name in self[row_name]:
+        # Check filesystem directly (not via _member_names/metadata)
+        # to ensure consistency during creation when metadata may be stale
+        if row_name in self.zgroup:
+            if col_name in self.zgroup[row_name]:
                 raise FileExistsError(
                     f"Well '{row_name}/{col_name}' already exists."
                 )
@@ -1935,15 +2045,15 @@ class Plate(NGFFNode):
             self._build_meta(row_meta, col_meta, well_index_meta)
         else:
             self.metadata.wells.append(well_index_meta)
-        # create new row if needed
-        if row_name not in self:
+        # create new row if needed (check filesystem directly)
+        if row_name not in self.zgroup:
             row_grp = self.zgroup.create_group(
                 row_meta.name, overwrite=self._overwrite
             )
             if row_meta not in self.metadata.rows:
                 self.metadata.rows.append(row_meta)
         else:
-            row_grp = self[row_name].zgroup
+            row_grp = self.zgroup[row_name]
         if col_meta not in self.metadata.columns:
             self.metadata.columns.append(col_meta)
         # create well
@@ -2211,10 +2321,21 @@ class Plate(NGFFNode):
 
 
 def _check_file_mode(
-    store_path: Path,
+    store_path: str | Path,
     mode: Literal["r", "r+", "a", "w", "w-"],
     disable_path_checking: bool,
 ) -> bool:
+    if _is_remote_url(store_path):
+        # Remote URLs: only read mode supported, always parse metadata
+        if mode not in ("r",):
+            raise NotImplementedError(
+                f"Write mode '{mode}' not supported for remote URLs. "
+                "Use mode='r' for read-only access."
+            )
+        return True  # parse_meta = True for read mode
+
+    # Local paths: existing behavior
+    store_path = Path(store_path)
     if mode == "a":
         mode = "r+" if store_path.exists() else "w-"
     parse_meta = False
@@ -2376,7 +2497,9 @@ def open_ome_zarr(
         :py:class:`iohub.ngff.Plate`,
         or :py:class:`iohub.ngff.TiledPosition`)
     """
-    store_path = Path(store_path)
+    # Don't convert to Path for remote URLs
+    if not _is_remote_url(store_path):
+        store_path = Path(store_path)
     parse_meta = _check_file_mode(
         store_path, mode, disable_path_checking=disable_path_checking
     )

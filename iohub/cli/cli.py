@@ -6,6 +6,7 @@ from iohub import open_ome_zarr
 from iohub._version import __version__
 from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
+from iohub.ngff.nodes import _is_remote_url
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
 
@@ -14,6 +15,24 @@ VERSION = __version__
 _DATASET_PATH = click.Path(
     exists=True, file_okay=False, resolve_path=True, path_type=pathlib.Path
 )
+
+
+class _PathOrURL(click.ParamType):
+    """Accepts local directory paths or remote URLs."""
+
+    name = "PATH_OR_URL"
+
+    def convert(self, value, param, ctx):
+        if value is None:
+            return None
+        if _is_remote_url(value):
+            return value
+        path = pathlib.Path(value).resolve()
+        if not path.exists():
+            self.fail(f"'{value}' does not exist.", param, ctx)
+        if not path.is_dir():
+            self.fail(f"'{value}' is not a directory.", param, ctx)
+        return path
 
 
 @click.group()
@@ -29,7 +48,7 @@ def cli():
     "files",
     nargs=-1,
     required=True,
-    type=_DATASET_PATH,
+    type=_PathOrURL(),
 )
 @click.option(
     "--verbose",
@@ -39,14 +58,13 @@ def cli():
     "and full tree for HCS Plates in OME-Zarr",
 )
 def info(files, verbose):
-    """View basic metadata of a list of FILES.
+    """View basic metadata of a list of FILES or URLs.
 
-    Supported formats are Micro-Manager-acquired TIFF datasets
-    (single-page TIFF, multi-page OME-TIFF, NDTIFF)
-    and OME-Zarr (v0.1 linear HCS layout and all v0.4 layouts).
+    Supported formats: Micro-Manager TIFFs, OME-Zarr (v0.4/v0.5),
+    and remote URLs (HTTP/HTTPS, S3, GCS).
     """
     for file in files:
-        click.echo(f"Reading file:\t {file}")
+        click.echo(f"Reading:\t {file}")
         print_info(file, verbose=verbose)
 
 
