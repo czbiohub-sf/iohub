@@ -178,9 +178,23 @@ def test_converter_ometiff_mock_hcs(mock_hcs_ome_tiff_reader, tmpdir):
     output = tmpdir / "converted.zarr"
     converter = TIFFConverter(data, output, hcs_plate=True)
     converter()
+
+    # Expected mapping: NGFF path -> original MM label
+    expected_mm_labels = {
+        "A/1/0": "A1-Site_0",
+        "A/1/1": "A1-Site_1",
+        "B/4/0": "B4-Site_0",
+        "H/12/0": "H12-Site_0",
+    }
+
     with open_ome_zarr(output, mode="r") as plate:
         assert expected_ngff_name == {name for name, _ in plate.positions()}
-
+        
+        # Verify omero.name and mm_position_label (#353, #354)
+        for pos_name, pos in plate.positions():
+            fov = pos_name.split("/")[-1]
+            assert pos.metadata.omero.name == fov
+            assert pos.zattrs["iohub"]["mm_position_label"] == expected_mm_labels[pos_name]
 
 def test_converter_ometiff_mock_non_hcs(mock_non_hcs_ome_tiff_reader, tmpdir):
     data = mock_non_hcs_ome_tiff_reader
