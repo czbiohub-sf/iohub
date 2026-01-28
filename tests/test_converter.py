@@ -311,3 +311,50 @@ class TestGenChunks:
         chunks = converter._gen_chunks(input_chunks)
         assert len(chunks) == 5
         assert all(isinstance(c, (int, np.integer)) for c in chunks)
+
+
+@pytest.mark.parametrize(
+    "shape,target_chunks",
+    [
+        # Shape where target chunk > dask default (128MB), triggering issue
+        ((1, 1, 100, 1024, 1024), (1, 1, 100, 1024, 1024)),
+        # Smaller shape that still tests the rechunking path
+        ((1, 1, 50, 512, 512), (1, 1, 50, 512, 512)),
+    ],
+)
+def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
+    """Test that rechunking from XY to XYZ chunks preserves all data.
+
+    Regression test for https://github.com/czbiohub-sf/iohub/issues/367
+    """
+    import dask
+    import dask.array as da
+    from dask.array import to_zarr
+
+    data = np.arange(np.prod(shape), dtype=np.uint16).reshape(shape)
+
+    # Source chunks: XY (one Z slice per chunk) - like TIFF reader
+    source_chunks = (1, 1, 1, shape[3], shape[4])
+    dask_data = da.from_array(data, chunks=source_chunks)
+
+    output = tmpdir / "test_rechunk.zarr"
+    with open_ome_zarr(
+        output, layout="hcs", mode="w-", channel_names=["test"], version="0.5"
+    ) as writer:
+        pos = writer.create_position("0", "0", "0")
+        zarr_img = pos.create_zeros(
+            name="0", shape=shape, dtype=np.uint16, chunks=target_chunks
+        )
+
+        # Rechunk and write with `array.chunk-size` config
+        chunk_size_bytes = int(np.prod(target_chunks) * 2)
+        with dask.config.set({"array.chunk-size": chunk_size_bytes}):
+            to_zarr(dask_data.rechunk(target_chunks), zarr_img)
+
+    # Verify data integrity
+    with open_ome_zarr(output, layout="hcs", mode="r") as reader:
+        written = reader["0/0/0"]["0"][:]
+
+    np.testing.assert_array_equal(
+        data, written, err_msg="Data lost during XY to XYZ rechunking"
+    )
