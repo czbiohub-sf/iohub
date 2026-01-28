@@ -54,9 +54,7 @@ def _array_to_blosc_buffer(
 
     with open(out_path, "wb") as f:
         while len(arr_bytes) > 0:
-            compressed_chunk = blosc2.compress2(
-                arr_bytes[:chunk_size], **kwargs
-            )
+            compressed_chunk = blosc2.compress2(arr_bytes[:chunk_size], **kwargs)
             f.write(compressed_chunk)
             arr_bytes = arr_bytes[chunk_size:]
 
@@ -96,9 +94,7 @@ def blosc_buffer_to_array(
             if not blosc_header:
                 break
 
-            chunk_size, compress_chunk_size, _ = blosc2.get_cbuffer_sizes(
-                blosc_header
-            )
+            chunk_size, compress_chunk_size, _ = blosc2.get_cbuffer_sizes(blosc_header)
 
             # move to before the header and read chunk
             f.seek(f.tell() - header_size)
@@ -186,9 +182,7 @@ class ClearControlFOV(BaseFOV):
         for index_filepath in self._root.glob("*.index.txt"):
             with open(index_filepath, "rb") as f:
                 if index_filepath.stat().st_size > minimum_size:
-                    f.seek(
-                        -minimum_size, 2
-                    )  # goes to a little bit before the last line
+                    f.seek(-minimum_size, 2)  # goes to a little bit before the last line
                 last_line = f.readlines()[-1].decode("utf-8")
 
                 values = list(numbers.findall(last_line))
@@ -214,12 +208,7 @@ class ClearControlFOV(BaseFOV):
     def channel_names(self) -> list[str]:
         """Return sorted channels name."""
         suffix = ".index.txt"
-        return sorted(
-            [
-                p.name.removesuffix(suffix)
-                for p in self._root.glob(f"*{suffix}")
-            ]
-        )
+        return sorted([p.name.removesuffix(suffix) for p in self._root.glob(f"*{suffix}")])
 
     def _read_volume(
         self,
@@ -258,23 +247,11 @@ class ClearControlFOV(BaseFOV):
                 if self._missing_value is None:
                     raise ValueError(f"{volume_path} not found.")
                 else:
-                    warnings.warn(
-                        f"{volume_path} not found. "
-                        f"Filled with {self._missing_value}"
-                    )
-                    return np.full(
-                        volume_name, self._missing_value, dtype=self._dtype
-                    )
-            return blosc_buffer_to_array(
-                volume_path, volume_shape, dtype=self._dtype
-            )
+                    warnings.warn(f"{volume_path} not found. Filled with {self._missing_value}")
+                    return np.full(volume_name, self._missing_value, dtype=self._dtype)
+            return blosc_buffer_to_array(volume_path, volume_shape, dtype=self._dtype)
 
-        return np.stack(
-            [
-                self._read_volume(volume_shape, ch, time_point)
-                for ch in channels
-            ]
-        )
+        return np.stack([self._read_volume(volume_shape, ch, time_point) for ch in channels])
 
     @staticmethod
     def _fix_indexing(indexing: ArrayIndex) -> ArrayIndex:
@@ -290,9 +267,7 @@ class ClearControlFOV(BaseFOV):
 
         return indexing
 
-    def __getitem__(
-        self, key: Union[ArrayIndex, tuple[ArrayIndex, ...]]
-    ) -> np.ndarray:
+    def __getitem__(self, key: Union[ArrayIndex, tuple[ArrayIndex, ...]]) -> np.ndarray:
         """Lazily load array as indexed.
 
         Parameters
@@ -348,18 +323,11 @@ class ClearControlFOV(BaseFOV):
             T, C = key
             # single time point
             if isinstance(T, int):
-                return self._read_volume(
-                    volume_shape, channels[C], time_pts[T]
-                )
+                return self._read_volume(volume_shape, channels[C], time_pts[T])
 
             # multiple time points
             elif isinstance(T, (list, slice, np.ndarray)):
-                return np.stack(
-                    [
-                        self._read_volume(volume_shape, channels[C], t)
-                        for t in time_pts[T]
-                    ]
-                )
+                return np.stack([self._read_volume(volume_shape, channels[C], t) for t in time_pts[T]])
 
             else:
                 raise err_msg
@@ -403,16 +371,12 @@ class ClearControlFOV(BaseFOV):
         cc_metadata = []
         for path in self._root.glob("*.metadata.txt"):
             with open(path, mode="r") as f:
-                channel_metadata = pd.DataFrame(
-                    [json.loads(s) for s in f.readlines()]
-                )
+                channel_metadata = pd.DataFrame([json.loads(s) for s in f.readlines()])
             cc_metadata.append(channel_metadata)
 
         cc_metadata = pd.concat(cc_metadata)
 
-        time_delta = cc_metadata.groupby("Channel")[
-            "TimeStampInNanoSeconds"
-        ].diff()
+        time_delta = cc_metadata.groupby("Channel")["TimeStampInNanoSeconds"].diff()
         acquisition_type = cc_metadata["AcquisitionType"].iat[0]
 
         metadata = {
@@ -495,8 +459,6 @@ def create_mock_clear_control_dataset(path: "StrOrBytesPath") -> None:
                 out_path = channel_dir / f"{str(t).zfill(6)}.blc"
                 time_stamp = 45_000_000 * t
                 _array_to_blosc_buffer(array[t, c], out_path, overwrite=True)
-                volume_metadata = dict(
-                    Channel=ch, TimeStampInNanoSeconds=time_stamp, **metadata
-                )
+                volume_metadata = dict(Channel=ch, TimeStampInNanoSeconds=time_stamp, **metadata)
                 mt_f.write(f"{json.dumps(volume_metadata)}\n")
                 idx_f.write(f"{t} {time_stamp / 1_000_000:.4f} {shape_str}\n")

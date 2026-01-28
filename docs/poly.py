@@ -79,7 +79,7 @@ def main_factory(name: str):
     return Pip.factory(
         venv=Path(".venv") / name,
         args=PIP_ARGS + ["importlib_metadata"],
-        creator=VenvWrapper(),
+        creator=VenvWrapper(symlinks=True),
     )
 
 
@@ -97,7 +97,7 @@ ENVIRONMENT = (
                 "sphinxcontrib-qthelp<=1.0.3",
                 "sphinxcontrib-serializinghtml<=1.1.5",
             ],
-            creator=VenvWrapper(),
+            creator=VenvWrapper(symlinks=True),
         ),
         "v0.2.0": main_factory("v0.2.0"),
         "v0.2.1": main_factory("v0.2.1"),
@@ -108,7 +108,7 @@ ENVIRONMENT = (
     else Pip.factory(
         venv=Path(".venv") / "local",
         args=PIP_ARGS + ["importlib_metadata"],
-        creator=VenvWrapper(),
+        creator=VenvWrapper(symlinks=True),
     )
 )
 

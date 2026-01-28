@@ -41,9 +41,7 @@ extensions = [
 ]
 
 # default url is a dummy for local build
-html_baseurl = os.environ.get(
-    "GITHUB_PAGES_URL", f"file://{os.path.dirname(source_dir)}/build/html/"
-)
+html_baseurl = os.environ.get("GITHUB_PAGES_URL", f"file://{os.path.dirname(source_dir)}/build/html/")
 sitemap_locales = ["en"]
 sitemap_url_scheme = "{link}"
 

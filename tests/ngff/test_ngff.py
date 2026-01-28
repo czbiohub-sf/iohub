@@ -44,30 +44,20 @@ z_dim_st = st.integers(1, 4)
 y_dim_st = st.integers(1, 32)
 x_dim_st = st.integers(1, 32)
 channel_names_st = c_dim_st.flatmap(
-    (
-        lambda c_dim: st.lists(
-            short_text_st, min_size=c_dim, max_size=c_dim, unique=True
-        )
-    )
+    (lambda c_dim: st.lists(short_text_st, min_size=c_dim, max_size=c_dim, unique=True))
 )
 ngff_versions_st = st.sampled_from(["0.4", "0.5"])
 short_alpha_numeric = st.text(
-    alphabet=list(
-        string.ascii_lowercase + string.ascii_uppercase + string.digits
-    ),
+    alphabet=list(string.ascii_lowercase + string.ascii_uppercase + string.digits),
     min_size=1,
     max_size=16,
 )
 if os.name == "nt":
     # Windows does not allow certain file names
     _INVALID_NT_FILE_NAMES = (
-        ["CON", "PRN", "AUX", "NUL"]
-        + ["COM" + str(i) for i in range(10)]
-        + ["LPT" + str(i) for i in range(10)]
+        ["CON", "PRN", "AUX", "NUL"] + ["COM" + str(i) for i in range(10)] + ["LPT" + str(i) for i in range(10)]
     )
-    short_alpha_numeric = short_alpha_numeric.filter(
-        lambda x: x not in _INVALID_NT_FILE_NAMES
-    )
+    short_alpha_numeric = short_alpha_numeric.filter(lambda x: x not in _INVALID_NT_FILE_NAMES)
 tiles_rc_st = st.tuples(t_dim_st, t_dim_st)
 plate_axis_names_st = st.lists(
     short_alpha_numeric,
@@ -102,17 +92,13 @@ def _random_array_shape_and_dtype_with_channels(draw, c_dim: int):
 @st.composite
 def _channels_and_random_5d_shape_and_dtype(draw):
     channel_names = draw(channel_names_st)
-    shape, dtype = draw(
-        _random_array_shape_and_dtype_with_channels(c_dim=len(channel_names))
-    )
+    shape, dtype = draw(_random_array_shape_and_dtype_with_channels(c_dim=len(channel_names)))
     return channel_names, shape, dtype
 
 
 @st.composite
 def _channels_and_random_5d(draw):
-    channel_names, shape, dtype = draw(
-        _channels_and_random_5d_shape_and_dtype()
-    )
+    channel_names, shape, dtype = draw(_channels_and_random_5d_shape_and_dtype())
     random_5d = draw(npst.arrays(dtype, shape=shape))
     return channel_names, random_5d
 
@@ -300,9 +286,7 @@ def _temp_ome_zarr_plate(
             version=version,
         )
         for position in position_list:
-            pos = dataset.create_position(
-                position[0], position[1], position[2]
-            )
+            pos = dataset.create_position(position[0], position[1], position[2])
             pos.create_image(arr_name, image_5d, **kwargs)
         yield dataset
     finally:
@@ -323,14 +307,10 @@ def _temp_ome_zarr_plate(
 def test_write_ome_zarr(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.__setitem__()`"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(
-        random_5d, channel_names, arr_name, version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
         assert_allclose(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
-        ext_reader = ome_zarr.reader.Reader(
-            ome_zarr.io.parse_url(dataset.zgroup.store.root)
-        )
+        ext_reader = ome_zarr.reader.Reader(ome_zarr.io.parse_url(dataset.zgroup.store.root))
         node = list(ext_reader())[0]
         assert node.metadata["channel_names"] == channel_names
         assert node.specs[0].datasets == [arr_name]
@@ -393,13 +373,9 @@ def test_create_zeros(ch_shape_dtype, arr_name, version):
 def test_ome_zarr_to_dask(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.data` to dask"""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         assert_allclose(dataset.data.dask_array().compute(), random_5d)
-    with _temp_ome_zarr(
-        random_5d, channel_names, arr_name, version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
         assert_allclose(dataset[arr_name].dask_array().compute(), random_5d)
 
 
@@ -430,9 +406,7 @@ def test_writing_sharded(channels_and_random_5d):
     ) as dataset:
         assert_array_equal(dataset["0"].numpy(), random_5d)
         assert dataset["0"].chunks == chunks
-        assert dataset["0"].shards == tuple(
-            c * s for c, s in zip(chunks, shards_ratio)
-        )
+        assert dataset["0"].shards == tuple(c * s for c, s in zip(chunks, shards_ratio))
 
 
 @given(
@@ -449,14 +423,10 @@ def test_position_data(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.data`"""
     channel_names, random_5d = channels_and_random_5d
     assume(arr_name != "0")
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         assert_allclose(dataset.data.numpy(), random_5d)
     with pytest.raises(KeyError):
-        with _temp_ome_zarr(
-            random_5d, channel_names, arr_name, version=version
-        ) as dataset:
+        with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
             _ = dataset.data
 
 
@@ -471,29 +441,19 @@ def test_position_data(channels_and_random_5d, arr_name, version):
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_ome_zarr_to_tensorstore(
-    channels_and_random_5d, arr_name, version, concurrency
-):
+def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name, version, concurrency):
     """Test `iohub.ngff.Position.data` to tensorstore"""
     import tensorstore as ts
 
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(
-        random_5d, channel_names, arr_name, version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
         tstore = dataset[arr_name].tensorstore(
-            context=(
-                ts.Context({"data_copy_concurrency": {"limit": concurrency}})
-                if concurrency is not None
-                else None
-            )
+            context=(ts.Context({"data_copy_concurrency": {"limit": concurrency}}) if concurrency is not None else None)
         )
         assert_array_equal(tstore, random_5d)
         zeros = np.zeros_like(random_5d)
         tstore[...].write(zeros).result()
-        with open_ome_zarr(
-            dataset.zgroup.store.root, mode="r"
-        ) as read_only_dataset:
+        with open_ome_zarr(dataset.zgroup.store.root, mode="r") as read_only_dataset:
             assert_array_equal(read_only_dataset[arr_name].numpy(), zeros)
             read_only_tstore = read_only_dataset[arr_name].tensorstore()
             with pytest.raises(ValueError):
@@ -514,9 +474,7 @@ def test_append_channel(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.append_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
-        random_5d[:, :-1], channel_names[:-1], arr_name, version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d[:, :-1], channel_names[:-1], arr_name, version=version) as dataset:
         dataset.append_channel(channel_names[-1], resize_arrays=True)
         dataset[arr_name][:, -1] = random_5d[:, -1]
         assert_allclose(dataset[arr_name][:], random_5d)
@@ -533,15 +491,11 @@ def test_append_channel(channels_and_random_5d, arr_name, version):
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_rename_channel(
-    channels_and_random_5d, arr_name, new_channel, version
-):
+def test_rename_channel(channels_and_random_5d, arr_name, new_channel, version):
     """Test `iohub.ngff.Position.rename_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(new_channel not in channel_names)
-    with _temp_ome_zarr(
-        random_5d, channel_names, arr_name, version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
         dataset.rename_channel(old=channel_names[0], new=new_channel)
         assert new_channel in dataset.channel_names
         assert dataset.metadata.omero.channels[0].label == new_channel
@@ -558,9 +512,7 @@ def test_rename_well(channels_and_random_5d, arr_name, version):
     channel_names, random_5d = channels_and_random_5d
 
     position_list = [("A", "1", "0"), ("C", "4", "0")]
-    with _temp_ome_zarr_plate(
-        random_5d, channel_names, arr_name, position_list, version
-    ) as dataset:
+    with _temp_ome_zarr_plate(random_5d, channel_names, arr_name, position_list, version) as dataset:
         assert dataset.zgroup["A/1"]
         with pytest.raises(KeyError):
             dataset.zgroup["B/2"]
@@ -616,13 +568,9 @@ def test_update_channel(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.update_channel()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with _temp_ome_zarr(
-        random_5d[:, :-1], channel_names[:-1], arr_name, version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d[:, :-1], channel_names[:-1], arr_name, version=version) as dataset:
         for i, ch in enumerate(dataset.channel_names):
-            dataset.update_channel(
-                chan_name=ch, target=arr_name, data=random_5d[:, -1]
-            )
+            dataset.update_channel(chan_name=ch, target=arr_name, data=random_5d[:, -1])
             assert_allclose(dataset[arr_name][:, i], random_5d[:, -1])
 
 
@@ -641,9 +589,7 @@ def test_write_more_channels(channels_and_random_5d, arr_name, version):
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
     with pytest.raises(ValueError):
-        with _temp_ome_zarr(
-            random_5d, channel_names[:-1], arr_name, version=version
-        ) as _:
+        with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name, version=version) as _:
             pass
 
 
@@ -654,33 +600,18 @@ def test_write_more_channels(channels_and_random_5d, arr_name, version):
 def test_set_transform_image(ch_shape_dtype, arr_name):
     """Test `iohub.ngff.Position.set_transform()`"""
     channel_names, shape, dtype = ch_shape_dtype
-    transform = [
-        TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))
-    ] * len(channel_names)
+    transform = [TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))] * len(channel_names)
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
-        with open_ome_zarr(
-            store_path, layout="fov", mode="w-", channel_names=channel_names
-        ) as dataset:
+        with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=channel_names) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-            assert dataset.metadata.multiscales[0].datasets[
-                0
-            ].coordinate_transformations == [
-                TransformationMeta(
-                    type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0)
-                )
+            assert dataset.metadata.multiscales[0].datasets[0].coordinate_transformations == [
+                TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0))
             ]
             dataset.set_transform(image=arr_name, transform=transform)
-            assert (
-                dataset.metadata.multiscales[0]
-                .datasets[0]
-                .coordinate_transformations
-                == transform
-            )
+            assert dataset.metadata.multiscales[0].datasets[0].coordinate_transformations == transform
         # read data with an external reader
-        ext_reader = ome_zarr.reader.Reader(
-            ome_zarr.io.parse_url(dataset.zgroup.store.root)
-        )
+        ext_reader = ome_zarr.reader.Reader(ome_zarr.io.parse_url(dataset.zgroup.store.root))
         node = list(ext_reader())[0]
         assert node.metadata["coordinateTransformations"][0] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
@@ -691,25 +622,17 @@ input_transformations = [
     ([TransformationMeta(type="identity")], []),
     ([TransformationMeta(type="scale", scale=(1.0, 2.0, 3.0, 4.0, 5.0))], []),
     (
-        [
-            TransformationMeta(
-                type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0)
-            )
-        ],
+        [TransformationMeta(type="translation", translation=(1.0, 2.0, 3.0, 4.0, 5.0))],
         [],
     ),
     (
         [
             TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
-            TransformationMeta(
-                type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
-            ),
+            TransformationMeta(type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)),
         ],
         [
             TransformationMeta(type="scale", scale=(2.0, 2.0, 2.0, 2.0, 2.0)),
-            TransformationMeta(
-                type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)
-            ),
+            TransformationMeta(type="translation", translation=(1.0, 1.0, 1.0, 1.0, 1.0)),
         ],
     ),
 ]
@@ -729,19 +652,14 @@ target_translations = [
 
 @pytest.mark.parametrize(
     "transforms",
-    [
-        (saved, target)
-        for saved, target in zip(input_transformations, target_scales)
-    ],
+    [(saved, target) for saved, target in zip(input_transformations, target_scales)],
 )
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
     version=ngff_versions_st,
 )
-def test_get_effective_scale_image(
-    transforms, ch_shape_dtype, arr_name, version
-):
+def test_get_effective_scale_image(transforms, ch_shape_dtype, arr_name, version):
     """Test `iohub.ngff.Position.get_effective_scale()`"""
     (fov_transform, img_transform), expected_scale = transforms
     channel_names, shape, dtype = ch_shape_dtype
@@ -763,19 +681,14 @@ def test_get_effective_scale_image(
 
 @pytest.mark.parametrize(
     "transforms",
-    [
-        (saved, target)
-        for saved, target in zip(input_transformations, target_translations)
-    ],
+    [(saved, target) for saved, target in zip(input_transformations, target_translations)],
 )
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
     version=ngff_versions_st,
 )
-def test_get_effective_translation_image(
-    transforms, ch_shape_dtype, arr_name, version
-):
+def test_get_effective_translation_image(transforms, ch_shape_dtype, arr_name, version):
     """Test `iohub.ngff.Position.get_effective_translation()`"""
     (fov_transform, img_transform), expected_translation = transforms
     channel_names, shape, dtype = ch_shape_dtype
@@ -803,9 +716,7 @@ def test_get_effective_translation_image(
 def test_set_transform_fov(ch_shape_dtype, arr_name, version):
     """Test `iohub.ngff.Position.set_transform()`"""
     channel_names, shape, dtype = ch_shape_dtype
-    transform = [
-        TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))
-    ] * len(channel_names)
+    transform = [TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))] * len(channel_names)
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "ome.zarr")
         with open_ome_zarr(
@@ -816,15 +727,9 @@ def test_set_transform_fov(ch_shape_dtype, arr_name, version):
             version=version,
         ) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-            assert (
-                dataset.metadata.multiscales[0].coordinate_transformations
-                == None
-            )
+            assert dataset.metadata.multiscales[0].coordinate_transformations is None
             dataset.set_transform(image="*", transform=transform)
-            assert (
-                dataset.metadata.multiscales[0].coordinate_transformations
-                == transform
-            )
+            assert dataset.metadata.multiscales[0].coordinate_transformations == transform
         # read data with plain zarr
         group = zarr.open(store_path)
         if version == "0.4":
@@ -858,32 +763,22 @@ def test_set_scale(image_name, version):
                 shape=(1, 2, 4, 8, 16),
                 dtype=int,
                 transform=[
-                    TransformationMeta(
-                        type="translation", translation=translation
-                    ),
+                    TransformationMeta(type="translation", translation=translation),
                     TransformationMeta(type="scale", scale=scale),
                 ],
             )
             with pytest.raises(ValueError):
-                dataset.set_scale(
-                    image=image_name, axis_name="z", new_scale=-1.0
-                )
+                dataset.set_scale(image=image_name, axis_name="z", new_scale=-1.0)
             with pytest.raises(KeyError):
-                dataset.set_scale(
-                    image="nonexistent", axis_name="z", new_scale=9.0
-                )
+                dataset.set_scale(image="nonexistent", axis_name="z", new_scale=9.0)
             assert dataset.scale[-3] == 3.0
-            dataset.set_scale(
-                image=image_name, axis_name="z", new_scale=new_scale
-            )
+            dataset.set_scale(image=image_name, axis_name="z", new_scale=new_scale)
             if image_name == "*":
                 assert dataset.scale[-3] == new_scale * 3.0
             else:
                 assert dataset.scale[-3] == new_scale
             assert dataset.get_effective_translation(array_name) == translation
-            for tf in dataset.zattrs["iohub"]["previous_transforms"][0][
-                "transforms"
-            ]:
+            for tf in dataset.zattrs["iohub"]["previous_transforms"][0]["transforms"]:
                 if tf["type"] == "scale":
                     assert tf["scale"] == scale
 
@@ -902,17 +797,13 @@ def test_set_contrast_limits(channel_names, version):
             version=version,
         )
         # Create a simple small array - exact shape/dtype doesn't matter
-        dataset.create_zeros(
-            "data", shape=(1, len(channel_names), 1, 4, 4), dtype=float
-        )
+        dataset.create_zeros("data", shape=(1, len(channel_names), 1, 4, 4), dtype=float)
 
         # Store the initial window settings for all channels
         initial_windows = {}
         for ch_name in channel_names:
             ch_idx = dataset.get_channel_index(ch_name)
-            initial_windows[ch_name] = dataset.metadata.omero.channels[
-                ch_idx
-            ].window
+            initial_windows[ch_name] = dataset.metadata.omero.channels[ch_idx].window
 
         # Test setting contrast limits for the first channel only
         target_channel = channel_names[0]
@@ -934,10 +825,7 @@ def test_set_contrast_limits(channel_names, version):
         # Check that other channels were not affected (if any exist)
         for ch_name in channel_names[1:]:
             ch_idx = dataset.get_channel_index(ch_name)
-            assert (
-                dataset.metadata.omero.channels[ch_idx].window
-                == initial_windows[ch_name]
-            )
+            assert dataset.metadata.omero.channels[ch_idx].window == initial_windows[ch_name]
 
 
 @given(channel_names=channel_names_st, version=ngff_versions_st)
@@ -969,9 +857,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
     with TemporaryDirectory() as temp_dir:
         channel_names, random_5d = channels_and_random_5d
         store_path = os.path.join(temp_dir, "tiled.zarr")
-        with open_ome_zarr(
-            store_path, layout="tiled", mode="a", channel_names=channel_names
-        ) as dataset:
+        with open_ome_zarr(store_path, layout="tiled", mode="a", channel_names=channel_names) as dataset:
             tiles = dataset.make_tiles(
                 name=arr_name,
                 grid_shape=(int(grid_shape[0]), int(grid_shape[1])),
@@ -986,9 +872,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
                 grid_shape[-2] * random_5d.shape[-2],
                 grid_shape[-1] * random_5d.shape[-1],
             )
-            assert tiles.tile_shape == _pad_shape(
-                random_5d.shape[-2:], target=5
-            )
+            assert tiles.tile_shape == _pad_shape(random_5d.shape[-2:], target=5)
             assert tiles.dtype == random_5d.dtype
             for args in ((1.01, 1), (0, 0, 0)):
                 with pytest.raises(TypeError):
@@ -1009,9 +893,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_write_read_tiles(
-    channels_and_random_5d, grid_shape, arr_name, version
-):
+def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name, version):
     """Test `iohub.ngff.TiledPosition.write_tile()` and `...get_tile()`"""
     channel_names, random_5d = channels_and_random_5d
 
@@ -1019,11 +901,7 @@ def test_write_read_tiles(
         for row in range(tiles.rows):
             for column in range(tiles.columns):
                 yield (
-                    (
-                        random_5d
-                        / (tiles.rows * tiles.columns + 1)
-                        * (row * column + 1)
-                    ).astype(random_5d.dtype),
+                    (random_5d / (tiles.rows * tiles.columns + 1) * (row * column + 1)).astype(random_5d.dtype),
                     row,
                     column,
                 )
@@ -1046,9 +924,7 @@ def test_write_read_tiles(
             )
             for data, row, column in _tile_data(tiles):
                 tiles.write_tile(data, row, column)
-        with open_ome_zarr(
-            store_path, layout="tiled", mode="r", channel_names=channel_names
-        ) as dataset:
+        with open_ome_zarr(store_path, layout="tiled", mode="r", channel_names=channel_names) as dataset:
             for data, row, column in _tile_data(tiles):
                 read = tiles.get_tile(row, column)
                 assert_allclose(data, read)
@@ -1060,9 +936,7 @@ def test_create_hcs(channel_names):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        dataset = open_ome_zarr(
-            store_path, layout="hcs", mode="a", channel_names=channel_names
-        )
+        dataset = open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=channel_names)
         assert os.path.isdir(store_path)
         assert dataset.channel_names == channel_names
 
@@ -1082,9 +956,7 @@ def test_open_hcs_create_empty(version):
         assert dataset.zgroup.store.root.resolve() == store_path.resolve()
         dataset.close()
         with pytest.raises(FileExistsError):
-            _ = open_ome_zarr(
-                store_path, layout="hcs", mode="w-", channel_names=["GFP"]
-            )
+            _ = open_ome_zarr(store_path, layout="hcs", mode="w-", channel_names=["GFP"])
         with pytest.raises(ValueError):
             _ = open_ome_zarr(store_path, layout="hcs", mode="x")
         with pytest.raises(FileNotFoundError):
@@ -1138,14 +1010,10 @@ def test_ngff_node_contains_cross_platform(caplog):
                 assert "b" not in dataset
             case "Windows" | "Darwin":
                 assert "b" in dataset
-                assert any(
-                    "Key 'b' matched" in r.message for r in caplog.records
-                )
+                assert any("Key 'b' matched" in r.message for r in caplog.records)
 
 
-@given(
-    row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric
-)
+@given(row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric)
 @settings(max_examples=16, deadline=2000)
 def test_modify_hcs_ref(row: str, col: str, pos: str):
     """Test `iohub.ngff.open_ome_zarr()`"""
@@ -1172,26 +1040,18 @@ def test_create_well(row_names: list[str], col_names: list[str]):
     """Test `iohub.ngff.Plate.create_well()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = os.path.join(temp_dir, "hcs.zarr")
-        dataset = open_ome_zarr(
-            store_path, layout="hcs", mode="a", channel_names=["GFP"]
-        )
+        dataset = open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=["GFP"])
         for row_name in row_names:
             for col_name in col_names:
                 dataset.create_well(row_name, col_name)
-        assert [
-            c["name"] for c in dataset.zattrs["plate"]["columns"]
-        ] == col_names
-        assert [
-            r["name"] for r in dataset.zattrs["plate"]["rows"]
-        ] == row_names
+        assert [c["name"] for c in dataset.zattrs["plate"]["columns"]] == col_names
+        assert [r["name"] for r in dataset.zattrs["plate"]["rows"]] == row_names
 
 
 def test_create_case_sensitive_well(tmp_path):
     """Test `iohub.ngff.Plate.create_well()` with case-sensitive names."""
     store_path = tmp_path / "hcs.zarr"
-    with open_ome_zarr(
-        store_path, layout="hcs", mode="w-", channel_names=["1", "2"]
-    ) as dataset:
+    with open_ome_zarr(store_path, layout="hcs", mode="w-", channel_names=["1", "2"]) as dataset:
         well = dataset.create_well("A", "B")
         fov = well.create_position("0")
         fov.create_zeros("0", shape=(1, 2, 3, 4, 5), dtype=int)
@@ -1373,23 +1233,17 @@ def test_create_positions_with_tuple_variations(tmp_path, version):
         assert well_c5.metadata.images[0].acquisition == 0
 
 
-@given(
-    channels_and_random_5d=_channels_and_random_5d(), version=ngff_versions_st
-)
+@given(channels_and_random_5d=_channels_and_random_5d(), version=ngff_versions_st)
 def test_position_scale(channels_and_random_5d, version):
     """Test `iohub.ngff.Position.scale`"""
     channel_names, random_5d = channels_and_random_5d
     scale = list(range(1, 6))
     transform = [TransformationMeta(type="scale", scale=scale)]
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", transform=transform, version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", transform=transform, version=version) as dataset:
         assert dataset.scale == scale
 
 
-@pytest.mark.skip(
-    reason="https://github.com/zarr-developers/zarr-python/issues/2407"
-)
+@pytest.mark.skip(reason="https://github.com/zarr-developers/zarr-python/issues/2407")
 def test_combine_fovs_to_hcs():
     fovs = {}
     fov_paths = ("A/1/0", "B/1/0", "H/12/9")
@@ -1419,17 +1273,13 @@ def test_hcs_external_reader(tmp_path):
     store_path = tmp_path / "hcs.zarr"
     fov_name_parts = (("A", "1", "7"), ("B", "1", "7"), ("H", "12", "7"))
     y_size, x_size = (128, 100)
-    with open_ome_zarr(
-        store_path, layout="hcs", mode="a", channel_names=["A", "B"]
-    ) as dataset:
+    with open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=["A", "B"]) as dataset:
         for name in fov_name_parts:
             fov = dataset.create_position(*name)
             fov.create_zeros("0", shape=(1, 2, 3, y_size, x_size), dtype=int)
         n_rows = len(dataset.metadata.rows)
         n_cols = len(dataset.metadata.columns)
-    plate = list(ome_zarr.reader.Reader(ome_zarr.io.parse_url(store_path))())[
-        0
-    ]
+    plate = list(ome_zarr.reader.Reader(ome_zarr.io.parse_url(store_path))())[0]
     assert plate.data[0].shape == (1, 2, 3, y_size * n_rows, x_size * n_cols)
     assert plate.data[0].dtype == int
     assert not plate.data[0].any()
@@ -1448,17 +1298,13 @@ def test_read_empty_hcs_v05(empty_ome_zarr_hcs_v05):
                     position[resolution].numpy(),
                     np.zeros((50, 48, 64), dtype=np.uint16),
                 )
-        assert len(list(dataset.positions())) == len(rows) * len(cols) * len(
-            fovs
-        )
+        assert len(list(dataset.positions())) == len(rows) * len(cols) * len(fovs)
 
 
 def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
     """Test that `iohub.ngff.open_ome_zarr()` can read OME-Zarr 0.5."""
     pytest.importorskip("acquire_zarr")
-    with open_ome_zarr(
-        aqz_ome_zarr_05, layout="fov", mode="r", version="0.5"
-    ) as dataset:
+    with open_ome_zarr(aqz_ome_zarr_05, layout="fov", mode="r", version="0.5") as dataset:
         assert dataset.version == "0.5"
         assert dataset.data.shape == (32, 4, 10, 48, 64)
         assert dataset.data.chunks == (16, 1, 10, 16, 16)
@@ -1469,15 +1315,9 @@ def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
 
         multiscale = dataset.zattrs["ome"]["multiscales"][0]
         assert len(multiscale["datasets"]) == 3
-        assert multiscale["datasets"][0]["coordinateTransformations"][0][
-            "scale"
-        ] == [1.0, 1.0, 1.0, 1.0, 1.0]
-        assert multiscale["datasets"][1]["coordinateTransformations"][0][
-            "scale"
-        ] == [1.0, 1.0, 1.0, 2.0, 2.0]
-        assert multiscale["datasets"][2]["coordinateTransformations"][0][
-            "scale"
-        ] == [1.0, 1.0, 1.0, 4.0, 4.0]
+        assert multiscale["datasets"][0]["coordinateTransformations"][0]["scale"] == [1.0, 1.0, 1.0, 1.0, 1.0]
+        assert multiscale["datasets"][1]["coordinateTransformations"][0]["scale"] == [1.0, 1.0, 1.0, 2.0, 2.0]
+        assert multiscale["datasets"][2]["coordinateTransformations"][0]["scale"] == [1.0, 1.0, 1.0, 4.0, 4.0]
         assert 1 < dataset["0"].numpy().mean() < np.iinfo(np.uint16).max
 
 
@@ -1493,12 +1333,8 @@ def test_acquire_zarr_ome_zarr_05(aqz_ome_zarr_05):
 def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
     """Test that image written with iohub can be read with ngff-zarr."""
     channel_names, random_5d = channels_and_random_5d
-    with _temp_ome_zarr(
-        random_5d, channel_names, arr_name=arr_name, version=version
-    ) as dataset:
-        nz_multiscales = from_ngff_zarr(
-            dataset.zgroup.store.root, validate=True
-        )
+    with _temp_ome_zarr(random_5d, channel_names, arr_name=arr_name, version=version) as dataset:
+        nz_multiscales = from_ngff_zarr(dataset.zgroup.store.root, validate=True)
         assert_allclose(
             dataset[arr_name].dask_array().compute(),
             nz_multiscales.images[0].data,

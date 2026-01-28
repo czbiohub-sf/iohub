@@ -36,9 +36,7 @@ class ReaderBase:
     @micromanager_metadata.setter
     def micromanager_metadata(self, value):
         if not isinstance(value, dict):
-            raise TypeError(
-                f"Type of `mm_meta` should be `dict`, got `{type(value)}`."
-            )
+            raise TypeError(f"Type of `mm_meta` should be `dict`, got `{type(value)}`.")
         self._mm_meta = value
 
     @property
@@ -52,9 +50,7 @@ class ReaderBase:
     @stage_positions.setter
     def stage_positions(self, value):
         if not isinstance(value, list):
-            raise TypeError(
-                f"Type of `mm_meta` should be `dict`, got `{type(value)}`."
-            )
+            raise TypeError(f"Type of `mm_meta` should be `dict`, got `{type(value)}`.")
         self._stage_positions = value
 
     def get_zarr(self, position: int) -> zarr.Array:
@@ -130,23 +126,17 @@ class ReaderBase:
             raise ValueError("Stage position metadata not available.")
         try:
             # Look for "'A1-Site_0', 'H12-Site_1', ... " format
-            labels = [
-                pos["Label"].split("-Site_") for pos in self.stage_positions
-            ]
+            labels = [pos["Label"].split("-Site_") for pos in self.stage_positions]
             return [(well[0], well[1:], fov) for well, fov in labels]
         except Exception:
             try:
                 # Look for "'1-Pos000_000', '2-Pos000_001', ... "
                 # and split into ('1', '000_000'), ...
-                labels = [
-                    pos["Label"].split("-Pos") for pos in self.stage_positions
-                ]
+                labels = [pos["Label"].split("-Pos") for pos in self.stage_positions]
                 # remove underscore from FOV name, i.e. '000_000'
                 # collect all wells in row '0' so output is
                 # ('0', '1', '000000')
-                return [
-                    ("0", col, fov.replace("_", "")) for col, fov in labels
-                ]
+                return [("0", col, fov.replace("_", "")) for col, fov in labels]
             except Exception:
                 labels = [pos.get("Label") for pos in self.stage_positions]
                 raise ValueError(

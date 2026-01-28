@@ -1,9 +1,32 @@
 # iohub
 
-[![PyPI - Python version](https://img.shields.io/pypi/pyversions/iohub)](https://pypi.org/project/iohub)
-[![PyPI - iohub version](https://img.shields.io/pypi/v/iohub.svg)](https://pypi.org/project/iohub)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15022067.svg)](https://doi.org/10.5281/zenodo.15022067)
-[![Docs deployment](https://github.com/czbiohub-sf/iohub/actions/workflows/docs.yml/badge.svg)](https://czbiohub-sf.github.io/iohub)
+|              |                                                                                                                                                                             |
+| :----------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+|  **Status**  | [![Docs][badge-docs]][link-docs] [![Tests][badge-tests]][link-tests]                                                                                                        |
+| **Package**  | [![PyPI][badge-pypi]][link-pypi] [![Python][badge-python]][link-pypi]                                                                                                       |
+|   **Meta**   | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license]  |
+|   **Cite**   | [![DOI][badge-doi]][link-doi]                                                                                                                                               |
+
+[badge-docs]: https://github.com/czbiohub-sf/iohub/actions/workflows/docs.yml/badge.svg
+[badge-tests]: https://github.com/czbiohub-sf/iohub/actions/workflows/test.yml/badge.svg
+[badge-pypi]: https://img.shields.io/pypi/v/iohub.svg
+[badge-python]: https://img.shields.io/pypi/pyversions/iohub
+[badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
+[badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
+[badge-ruff]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
+[badge-prek]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/j178/prek/master/docs/assets/badge-v0.json
+[badge-license]: https://img.shields.io/badge/License-BSD--3--Clause-blue.svg
+[badge-doi]: https://zenodo.org/badge/DOI/10.5281/zenodo.15022067.svg
+
+[link-docs]: https://czbiohub-sf.github.io/iohub
+[link-tests]: https://github.com/czbiohub-sf/iohub/actions/workflows/test.yml
+[link-pypi]: https://pypi.org/project/iohub
+[link-hatch]: https://github.com/pypa/hatch
+[link-uv]: https://github.com/astral-sh/uv
+[link-ruff]: https://github.com/astral-sh/ruff
+[link-prek]: https://github.com/j178/prek
+[link-license]: https://opensource.org/licenses/BSD-3-Clause
+[link-doi]: https://doi.org/10.5281/zenodo.15022067
 
 N-dimensional bioimaging produces data and metadata in various formats,
 and iohub aims to become a unified Python interface to the most common formats
@@ -28,20 +51,25 @@ used at the Biohub and in the broader imaging community.
 
 ### Installation
 
-Install a released version of iohub from PyPI with pip:
+Install iohub from PyPI:
 
 ```sh
 pip install iohub
 ```
 
-Or install the latest Git version:
+With optional TensorStore support:
 
 ```sh
-git clone https://github.com/czbiohub-sf/iohub.git
-pip install /path/to/iohub
+pip install "iohub[tensorstore]"
 ```
 
-> For more details about installation, see the [related section in the contribution guide](CONTRIBUTING.md#setting-up-developing-environment).
+Or install the latest development version:
+
+```sh
+pip install git+https://github.com/czbiohub-sf/iohub.git
+```
+
+> For development setup, see the [contributing guide](CONTRIBUTING.md#setting-up-development-environment).
 
 ### Command-line interface
 

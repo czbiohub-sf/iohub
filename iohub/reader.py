@@ -62,9 +62,7 @@ def _check_single_page_tiff(src: Path):
             files = (src / sub_dirs[0]).glob("*.tif")
             try:
                 with tiff.TiffFile(next(files)) as tf:
-                    if (
-                        len(tf.pages) == 1
-                    ):  # and tf.pages[0].is_multipage is False:
+                    if len(tf.pages) == 1:  # and tf.pages[0].is_multipage is False:
                         return True
             except StopIteration:
                 pass
@@ -102,9 +100,7 @@ def _check_ndtiff(src: Path):
 
 def _get_sub_dirs(directory: Path) -> list[str]:
     """ """
-    sub_dir_name = [
-        subdir.name for subdir in directory.iterdir() if subdir.is_dir()
-    ]
+    sub_dir_name = [subdir.name for subdir in directory.iterdir() if subdir.is_dir()]
     #    assert subDirName, 'No sub directories found'
     return natsort.natsorted(sub_dir_name)
 
@@ -121,18 +117,13 @@ def _infer_format(path: Path):
     elif _check_single_page_tiff(path):
         data_type = "singlepagetiff"
     else:
-        raise RuntimeError(
-            "Failed to infer data type: "
-            f"No compatible data found under {path}."
-        )
+        raise RuntimeError(f"Failed to infer data type: No compatible data found under {path}.")
     return (data_type, extra_info)
 
 
 def read_images(
     path: StrOrBytesPath,
-    data_type: Literal[
-        "singlepagetiff", "ometiff", "ndtiff", "omezarr"
-    ] = None,
+    data_type: Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"] = None,
 ) -> ReaderBase | BaseFOVMapping:
     """Read image arrays and metadata from a Micro-Manager dataset.
     Supported formats are Micro-Manager-acquired TIFF datasets
@@ -217,12 +208,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
     msgs = []
     if isinstance(reader, BaseFOVMapping):
         _, first_fov = next(iter(reader))
-        shape_msg = ", ".join(
-            [
-                f"{a}={s}"
-                for s, a in zip(first_fov.shape, ("T", "C", "Z", "Y", "X"))
-            ]
-        )
+        shape_msg = ", ".join([f"{a}={s}" for s, a in zip(first_fov.shape, ("T", "C", "Z", "Y", "X"))])
         msgs.extend(
             [
                 sum_msg,
@@ -247,10 +233,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
             [
                 sum_msg,
                 fmt_msg,
-                "".join(
-                    ["Axes:\t\t\t "]
-                    + [f"{a.name} ({a.type}); " for a in reader.axes]
-                ),
+                "".join(["Axes:\t\t\t "] + [f"{a.name} ({a.type}); " for a in reader.axes]),
                 ch_msg,
             ]
         )
@@ -267,22 +250,18 @@ def print_info(path: StrOrBytesPath, verbose=False):
                 print("Zarr hierarchy:")
                 reader.print_tree()
                 positions = list(reader.positions())
-                total_bytes_uncompressed = sum(
-                    p["0"].nbytes for _, p in positions
-                )
+                total_bytes_uncompressed = sum(p["0"].nbytes for _, p in positions)
                 msgs.append(f"Positions:\t\t {len(positions)}")
                 msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
                 msgs.append(
-                    f"No. bytes decompressed:\t\t {total_bytes_uncompressed} "
-                    f"[{sizeof_fmt(total_bytes_uncompressed)}]"
+                    f"No. bytes decompressed:\t\t {total_bytes_uncompressed} [{sizeof_fmt(total_bytes_uncompressed)}]"
                 )
         else:
             total_bytes_uncompressed = reader["0"].nbytes
             msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
             msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
             msgs.append(
-                f"No. bytes decompressed:\t\t {total_bytes_uncompressed} "
-                f"[{sizeof_fmt(total_bytes_uncompressed)}]"
+                f"No. bytes decompressed:\t\t {total_bytes_uncompressed} [{sizeof_fmt(total_bytes_uncompressed)}]"
             )
         if verbose:
             msgs.extend(
