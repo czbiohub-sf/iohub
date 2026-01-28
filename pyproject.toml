@@ -77,14 +77,10 @@ doc = [
     "sphinx-sitemap>=2.5.0",
     "sphinx-gallery>=0.13.0",
 ]
-pre-commit = [
-    "pre-commit",
-]
 dev = [
     { include-group = "test" },
     { include-group = "acquire-zarr" },
     { include-group = "doc" },
-    { include-group = "pre-commit" },
 ]
 
 [project.scripts]

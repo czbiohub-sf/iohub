@@ -14,12 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Run pre-commit hooks
-        run: uvx prek run -a
+      - uses: j178/prek-action@v1
 
   tests:
     runs-on: ubuntu-latest

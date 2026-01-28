@@ -73,11 +73,7 @@ This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
 
 #### Install uv
 
-```sh
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Or see [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/) for other methods.
+See [uv installation docs](https://docs.astral.sh/uv/getting-started/installation/).
 
 #### Clone the repository
 
@@ -93,22 +89,26 @@ to [fork](https://github.com/czbiohub-sf/iohub/fork) the repository.
 
 #### Install dependencies
 
+First, create a virtual environment with a supported Python version (3.11-3.13):
+
 ```sh
 cd iohub/
-uv sync --all-extras --all-groups
+uv venv -p 3.13  # or 3.11, 3.12
 ```
+
+This makes a virtual environment in the `.venv` where the dependencies for `iohub` will be installed.
+
+Then sync dependencies:
+
+```sh
+uv sync
+```
+
+> **Note**: `uv sync` installs the [`dev` group by default](https://docs.astral.sh/uv/concepts/projects/sync/#syncing-development-dependencies), which includes all development dependencies. iohub currently supports Python 3.11-3.13—if `uv sync` fails to resolve dependencies, ensure you've created a venv with a supported version as shown above. See [dependency groups](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-groups) for more details.
 
 #### Dependency groups
 
 The project uses [dependency groups](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-groups) for development tools and [optional dependencies](https://docs.astral.sh/uv/concepts/projects/dependencies/#optional-dependencies) for user-facing extras.
-
-**Full installation (recommended):**
-
-```sh
-uv sync --all-extras --all-groups
-```
-
-**Selective installation:**
 
 | Group | Purpose |
 |-------|---------|
@@ -116,27 +116,9 @@ uv sync --all-extras --all-groups
 | `acquire-zarr` | Acquire-zarr reader (requires glibc 2.35+) |
 | `doc` | Documentation (sphinx, etc.) |
 | `pre-commit` | Pre-commit hooks |
-| `dev` | Includes test, acquire-zarr, doc, pre-commit |
+| `dev` | Includes test, acquire-zarr, doc, pre-commit (installed by default via `uv sync`) |
 
-| Extra | Purpose |
-|-------|---------|
-| `tensorstore` | TensorStore array access |
-
-**Examples:**
-
-```sh
-# Install specific groups
-uv sync --group test --group doc
-
-# Install specific extras
-uv sync --extra tensorstore
-
-# Combine groups and extras
-uv sync --group test --extra tensorstore
-
-# On older glibc systems (e.g., Rocky Linux 8), omit acquire-zarr:
-uv sync --group test --group doc --group pre-commit --all-extras
-```
+> **Note**: On older glibc systems (e.g., Rocky Linux 8), `acquire-zarr` won't work. Use `uv sync --no-group acquire-zarr` instead.
 
 Then make the changes and [track them with Git](https://docs.github.com/en/get-started/using-git/about-git#example-contribute-to-an-existing-repository).
 
@@ -144,25 +126,22 @@ Then make the changes and [track them with Git](https://docs.github.com/en/get-s
 
 #### Prerequisites
 
-Install documentation dependencies and a [forked version of `sphinx-polyversion`](https://github.com/ziw-liu/sphinx-polyversion/tree/iohub-staging) (temporary fix for compatibility):
+Install the [forked version of `sphinx-polyversion`](https://github.com/ziw-liu/sphinx-polyversion/tree/iohub-staging) (temporary fix for compatibility):
 
 ```shell
-uv sync --group doc
 uv pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging
 ```
 
 #### Building the HTML version locally
 
-Inside `/docs` folder:
+Inside the `docs/` folder:
 
 ```shell
 make clean
 uv run sphinx-polyversion poly.py -vvv --local
 ```
 
-Generated HTML documentation can be found in
-the ``build/html`` directory. Open ``build/html/index.html`` to view the home
-page for the documentation.
+Generated HTML documentation can be found in the `build/` directory.
 
 #### Writing examples
 
@@ -195,26 +174,19 @@ for how this can reveal more bugs.
 
 ### Code style
 
-We use [pre-commit](https://pre-commit.com/) to automatically format and lint code prior to each commit. To minimize test errors when submitting pull requests, install the pre-commit hooks:
+We use [prek](https://github.com/j178/prek) (a faster [pre-commit](https://pre-commit.com/) runner) to automatically format and lint code prior to each commit. To minimize test errors when submitting pull requests, install the hooks:
 
 ```bash
-# Using uvx (recommended - no need to install pre-commit as a dependency)
-uvx pre-commit install
-
-# Or using prek (https://github.com/tweag/prek - a faster pre-commit runner)
 uvx prek install
-
-# Or if you prefer to sync the pre-commit group
-uv sync --group pre-commit
-uv run pre-commit install
 ```
 
-To run pre-commit manually on all files:
+> `uvx` runs tools in isolated, cached environments, no binaries added to your PATH and no dependencies installed in your project venv.
+
+To run manually:
 
 ```bash
-uvx pre-commit run --all-files
-# or
-uvx prek run --all-files
+uvx prek run              # run on staged files only
+uvx prek run --all-files  # run on all files
 ```
 
 When these tools are executed within the project root directory, they should automatically use the [project settings](./pyproject.toml).
