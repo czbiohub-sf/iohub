@@ -4,6 +4,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import Literal
 
+import dask
 import numpy as np
 from dask.array import to_zarr
 from tqdm import tqdm
@@ -303,7 +304,7 @@ class TIFFConverter:
             layout="hcs",
             mode="w-",
             channel_names=self.reader.channel_names,
-            version="0.4",
+            version="0.5",
         )
         self.zarr_position_names = []
         arr_kwargs = {
@@ -408,6 +409,12 @@ class TIFFConverter:
         """
         _logger.debug("Setting up Zarr store.")
         self._init_zarr_arrays()
+        # Calculate chunk size in bytes for dask config
+        # This prevents data loss when rechunking to zarr chunks
+        # See: https://github.com/czbiohub-sf/iohub/issues/367
+        chunk_size_bytes = int(
+            np.prod(self.chunks) * np.dtype(self.reader.dtype).itemsize
+        )
         # Run through every coordinate and convert in acquisition order
         _logger.debug("Converting images.")
         with logging_redirect_tqdm():
@@ -419,7 +426,8 @@ class TIFFConverter:
                 ncols=80,
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
-                to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
+                with dask.config.set({"array.chunk-size": chunk_size_bytes}):
+                    to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
                 self._convert_image_plane_metadata(fov, zarr_img.path)
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
