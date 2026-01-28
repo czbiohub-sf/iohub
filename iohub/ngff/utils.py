@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import inspect
 import itertools
 import multiprocessing as mp
 from collections import defaultdict
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, Union
+from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
 from warnings import warn
 
 import click
@@ -13,6 +15,9 @@ from numpy.typing import DTypeLike, NDArray
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.nodes import TransformationMeta
+
+if TYPE_CHECKING:
+    import tensorstore as ts
 
 
 def create_empty_plate(
@@ -104,7 +109,7 @@ def create_empty_plate(
 
     # Limiting the chunking to 500MB
     if chunks is None:
-        chunk_zyx_shape = _calculate_zyx_chunk_size(
+        chunk_zyx_shape = _limit_zyx_chunk_size(
             shape,
             np.dtype(dtype).itemsize,
             max_chunk_size_bytes,
@@ -557,11 +562,9 @@ def process_single_position(
     # Check for invalid times
     time_ubound = input_data_shape[0] - 1
     if np.max(input_time_indices) > time_ubound:
-        raise ValueError(
-            f"""input_time_indices = {input_time_indices} includes
+        raise ValueError(f"""input_time_indices = {input_time_indices} includes
             a time index beyond the maximum index of
-            the dataset = {time_ubound}"""
-        )
+            the dataset = {time_ubound}""")
 
     # Write extra metadata to the output store
     extra_metadata = kwargs.pop("extra_metadata", None)
@@ -622,16 +625,117 @@ def _check_nan_n_zeros(input_array) -> bool:
     return False
 
 
-def _calculate_zyx_chunk_size(shape, bytes_per_pixel, max_chunk_size_bytes) -> tuple[int, int, int]:
+def _limit_zyx_chunk_size(
+    shape: tuple[int, ...],
+    bytes_per_pixel: int,
+    max_chunk_size_bytes: float,
+    chunks: tuple[int, ...] | None = None,
+) -> tuple[int, int, int]:
     """
     Calculate the chunk size for ZYX dimensions based on the shape,
     bytes per pixel of data, and desired max chunk size.
+
+    Parameters
+    ----------
+    shape : tuple[int]
+        The shape of the data (at least 3 dimensions for ZYX).
+    bytes_per_pixel : int
+        Number of bytes per pixel (e.g., 2 for uint16).
+    max_chunk_size_bytes : float
+        Maximum chunk size in bytes.
+    chunks : tuple[int] | None, optional
+        Initial chunk sizes to limit. If None, uses shape[-3:] as starting
+        chunk size. If provided, uses chunks[-3:] as starting point.
+
+    Returns
+    -------
+    tuple[int, int, int]
+        The limited ZYX chunk sizes.
     """
+    # Use provided chunks if available, otherwise start from shape
+    chunk_zyx_shape = list(chunks[-3:] if chunks else shape[-3:])
 
-    chunk_zyx_shape = list(shape[-3:])
-
-    # while XY image is larger than MAX_CHUNK_SIZE
-    while chunk_zyx_shape[-3] > 1 and np.prod(chunk_zyx_shape) * bytes_per_pixel > max_chunk_size_bytes:
+    # Reduce Z chunk size until total chunk is within limit
+    while (
+        chunk_zyx_shape[-3] > 1
+        and np.prod(chunk_zyx_shape) * bytes_per_pixel > max_chunk_size_bytes
+    ):
         chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2)
     chunk_zyx_shape = tuple(map(int, chunk_zyx_shape))
     return chunk_zyx_shape
+
+
+def _adjust_chunks_for_divisibility(
+    shape: tuple[int, ...], chunks: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Adjust chunks to divide evenly into dimensions for Dask.
+
+    Parameters
+    ----------
+    shape : tuple[int, ...]
+        Dimension sizes for each dimension.
+    chunks : tuple[int, ...]
+        Chunk sizes for each dimension.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Adjusted chunk sizes that divide evenly into dimensions.
+    """
+    shape = list(shape)
+    chunks = list(chunks)
+    adjusted = []
+    for chunk, dim in zip(chunks, shape):
+        if chunk > dim:
+            adjusted.append(dim)
+        elif dim % chunk != 0:
+            while chunk > 1 and dim % chunk != 0:
+                chunk -= 1
+            adjusted.append(chunk)
+        else:
+            adjusted.append(chunk)
+    return tuple(adjusted)
+
+
+def _downsample_tensorstore(
+    source_ts: ts.TensorStore,
+    target_ts: ts.TensorStore,
+    downsample_factors: list[int],
+    method: str = "mean",
+) -> None:
+    """Downsample source into target using tensorstore.
+
+    Writes data in chunks with transactions for consistency.
+
+    Parameters
+    ----------
+    source_ts : ts.TensorStore
+        Source tensorstore array to downsample from
+    target_ts : ts.TensorStore
+        Target tensorstore array to write downsampled data to
+    downsample_factors : list[int]
+        Downsampling factors for each dimension
+    method : str, optional
+        Downsampling method ("mean", "median", "mode", "min", "max",
+        "stride"), by default "mean"
+    """
+    try:
+        import tensorstore as ts
+    except ImportError:
+        raise ImportError("Tensorstore is required for downsampling. \
+            Please install it with `pip install tensorstore`.")
+
+    downsampled = ts.downsample(
+        source_ts, downsample_factors=downsample_factors, method=method
+    )
+
+    step = target_ts.chunk_layout.write_chunk.shape[0]
+
+    for start in range(0, downsampled.shape[0], step):
+        with ts.Transaction() as txn:
+            target_with_txn = target_ts.with_transaction(txn)
+            downsampled_with_txn = downsampled.with_transaction(txn)
+            stop = min(start + step, downsampled.shape[0])
+            target_with_txn[start:stop].write(
+                downsampled_with_txn[start:stop]
+            ).result()

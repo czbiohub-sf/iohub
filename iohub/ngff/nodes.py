@@ -200,8 +200,7 @@ class NGFFNode:
     def __delitem__(self, key):
         """.. Warning: this does NOT clean up metadata!"""
         key = normalize_path(str(key))
-        if key in self._member_names:
-            del self[key]
+        del self._group[key]
 
     def __contains__(self, key):
         key = normalize_path(str(key))
@@ -984,7 +983,19 @@ class Position(NGFFNode):
 
             chunks = _pad_shape(_scale_integers(array.chunks, factor), len(shape))
 
-            transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
+            if array.shards is not None:
+                shards = array.shards[:-3] + _scale_integers(
+                    array.shards[-3:], factor
+                )
+                shards_ratio = tuple(s // c for c, s in zip(chunks, shards))
+            else:
+                shards_ratio = None
+
+            transforms = deepcopy(
+                self.metadata.multiscales[0]
+                .datasets[0]
+                .coordinate_transformations
+            )
             for tr in transforms:
                 if tr.type == "scale":
                     for i in range(len(tr.scale))[-3:]:
@@ -995,8 +1006,112 @@ class Position(NGFFNode):
                 shape=shape,
                 dtype=array.dtype,
                 chunks=chunks,
+                shards_ratio=shards_ratio,
                 transform=transforms,
             )
+
+    def compute_pyramid(
+        self,
+        levels: int | None = None,
+        method: str = "mean",
+    ) -> None:
+        """Compute pyramid by downsampling from source level.
+
+        Creates pyramid structure if none exists. Uses cascade downsampling
+        where each level is derived from the previous level to prevent
+        aliasing artifacts and chunk boundary issues.
+
+        Parameters
+        ----------
+        levels : int, optional
+            Number of pyramid levels. If None, uses existing pyramid structure.
+        method : str, optional
+            Downsampling method: "mean", "median", "mode", "min", "max",
+            "stride". By default "mean".
+
+        Raises
+        ------
+        ValueError
+            If level 0 array doesn't exist, pyramid structure is invalid,
+            or if a pyramid already exists with a different number of levels.
+
+        Examples
+        --------
+        >>> # Create and compute pyramid with 4 levels
+        >>> pos.compute_pyramid(levels=4, method="mean")
+
+        >>> # Recompute existing pyramid structure
+        >>> pos.compute_pyramid(method="median")
+
+        >>> # Change pyramid levels (must delete first)
+        >>> pos.delete_pyramid()
+        >>> pos.compute_pyramid(levels=3, method="mean")
+        """
+        from iohub.ngff.utils import _downsample_tensorstore
+
+        num_arrays = len(self.array_keys())
+        if num_arrays == 0:
+            raise ValueError(
+                "No level 0 array exists. Create base array before computing "
+                "pyramid."
+            )
+
+        if levels is None:
+            if num_arrays == 1:
+                raise ValueError(
+                    "Pyramid structure doesn't exist and levels=None. "
+                    "Specify 'levels' parameter to create pyramid."
+                )
+            levels = num_arrays
+
+        if num_arrays == 1:
+            self.initialize_pyramid(levels=levels)
+        elif num_arrays != levels:
+            raise ValueError(
+                f"Pyramid structure exists with {num_arrays} levels but "
+                f"{levels} requested. Call delete_pyramid() first to remove "
+                "existing pyramid."
+            )
+
+        # Compute pyramid data via cascade downsampling
+        for level in range(1, levels):
+            previous_level_array = self[str(level - 1)]
+            current_level_array = self[str(level)]
+
+            previous_ts = previous_level_array.tensorstore()
+            current_ts = current_level_array.tensorstore()
+
+            current_scale = self.get_effective_scale(str(level))
+            previous_scale = self.get_effective_scale(str(level - 1))
+
+            downsample_factors = [
+                int(round(current_scale[i] / previous_scale[i]))
+                for i in range(len(current_scale))
+            ]
+
+            _downsample_tensorstore(
+                source_ts=previous_ts,
+                target_ts=current_ts,
+                downsample_factors=downsample_factors,
+                method=method,
+            )
+
+    def delete_pyramid(self) -> None:
+        """Delete all dataset pyramid levels except the base (level 0) array.
+
+        Use this before calling compute_pyramid() with different levels
+        on a position that already has a pyramid structure.
+
+        This method removes both the zarr arrays and updates the OME-NGFF
+        multiscales metadata to reflect the deletion.
+        """
+        _multiscale = self.metadata.multiscales[0]
+
+        for dataset in _multiscale.datasets[1:]:
+            del self[dataset.path]
+
+        _multiscale.datasets = _multiscale.datasets[:1]
+        self.dump_meta()
 
     @property
     def scale(self) -> list[float]:

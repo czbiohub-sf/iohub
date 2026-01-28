@@ -12,6 +12,10 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import Position, open_ome_zarr
+from iohub.ngff.utils import (
+    _adjust_chunks_for_divisibility,
+    _limit_zyx_chunk_size,
+)
 from iohub.reader import MMStack, NDTiffDataset, read_images
 
 __all__ = ["TIFFConverter"]
@@ -20,22 +24,9 @@ _logger = logging.getLogger(__name__)
 MAX_CHUNK_SIZE = 500e6  # in bytes
 
 
-def _adjust_chunks_for_divisibility(chunks: list[int], dims: list[int]) -> list[int]:
-    """Adjust chunks to divide evenly into dimensions for Dask."""
-    adjusted = []
-    for chunk, dim in zip(chunks, dims):
-        if chunk > dim:
-            adjusted.append(dim)
-        elif dim % chunk != 0:
-            while chunk > 1 and dim % chunk != 0:
-                chunk -= 1
-            adjusted.append(chunk)
-        else:
-            adjusted.append(chunk)
-    return adjusted
-
-
-def _create_grid_from_coordinates(xy_coords: list[tuple[float, float]], rows: int, columns: int):
+def _create_grid_from_coordinates(
+    xy_coords: list[tuple[float, float]], rows: int, columns: int
+):
     """Create a grid from XY-position coordinates.
 
     Parameters
@@ -228,15 +219,19 @@ class TIFFConverter:
     def _gen_chunks(self, input_chunks):
         """Generate valid chunk sizes for the output Zarr array.
 
-        First limits chunk size to MAX_CHUNK_SIZE by halving Z, then adjusts
-        chunks to divide evenly into dimensions. Order matters because halving
-        Z (e.g. 10 -> 5 -> 2) may no longer divide evenly, so we validate
-        divisibility last.
+        input_chunks may be a string ("XY", "XYZ") or a tuple of chunk
+        dimensions. Chunk size will be limited to MAX_CHUNK_SIZE and adjusted
+        to divide evenly into dimensions.
         """
         if not input_chunks:
             _logger.debug("No chunk size specified, using ZYX.")
             chunks = [1, 1, self.z, self.y, self.x]
         elif isinstance(input_chunks, tuple):
+            if not len(input_chunks) == 5:
+                raise ValueError(
+                    "Input chunks must be a tuple of 5 dimensions, got "
+                    f"{len(input_chunks)} dimensions."
+                )
             chunks = list(input_chunks)
         elif isinstance(input_chunks, str):
             if input_chunks.lower() == "xy":
@@ -248,14 +243,21 @@ class TIFFConverter:
         else:
             raise TypeError(f"Chunk type {type(input_chunks)} is not supported.")
 
-        bytes_per_pixel = np.dtype(self.reader.dtype).itemsize
-        while chunks[-3] > 1 and np.prod(chunks, dtype=np.int64) * bytes_per_pixel > MAX_CHUNK_SIZE:
-            chunks[-3] = int(np.ceil(chunks[-3] / 2))
-
-        data_dims = [self.t, self.c, self.z, self.y, self.x]
+        shape = (self.t, self.c, self.z, self.y, self.x)
         original_chunks = chunks.copy()
-        chunks = _adjust_chunks_for_divisibility(chunks, data_dims)
-        for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, data_dims)):
+
+        # Limit chunk size to MAX_CHUNK_SIZE by halving Z
+        bytes_per_pixel = np.dtype(self.reader.dtype).itemsize
+        chunk_zyx_shape = _limit_zyx_chunk_size(
+            shape, bytes_per_pixel, MAX_CHUNK_SIZE, chunks=chunks
+        )
+        chunks[-3:] = list(chunk_zyx_shape)
+
+        # Adjust chunks to divide evenly into dimensions
+        chunks = _adjust_chunks_for_divisibility(shape, chunks)
+        for i, (orig, adj, dim) in enumerate(
+            zip(original_chunks, chunks, shape)
+        ):
             if orig != adj:
                 _logger.warning(f"Chunk size {orig} on axis {i} adjusted to {adj} (dimension {dim}).")
 
