@@ -351,7 +351,7 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
         with dask.config.set({"array.chunk-size": chunk_size_bytes}):
             to_zarr(dask_data.rechunk(target_chunks), zarr_img)
 
-    # Verify data integrity
+    # Make sure data is preserved
     with open_ome_zarr(output, layout="hcs", mode="r") as reader:
         written = reader["0/0/0"]["0"][:]
 
