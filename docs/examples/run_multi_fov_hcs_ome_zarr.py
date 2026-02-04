@@ -47,9 +47,7 @@ with open_ome_zarr(
     # This affects the tile arrangement in visualization
     for row, col, fov in position_list:
         position = dataset.create_position(row, col, fov)
-        position["0"] = np.random.randint(
-            0, np.iinfo(np.uint16).max, size=(5, 3, 2, 32, 32), dtype=np.uint16
-        )
+        position["0"] = np.random.randint(0, np.iinfo(np.uint16).max, size=(5, 3, 2, 32, 32), dtype=np.uint16)
     # Print dataset summary
     dataset.print_tree()
 
@@ -60,9 +58,7 @@ with open_ome_zarr(store_path, mode="r+") as dataset:
     for name, position in dataset.positions():
         print(f"Appending a channel to position: {name}")
         position.append_channel("Segmentation", resize_arrays=True)
-        position["0"][:, 3] = np.random.randint(
-            0, np.iinfo(np.uint16).max, size=(5, 2, 32, 32), dtype=np.uint16
-        )
+        position["0"][:, 3] = np.random.randint(0, np.iinfo(np.uint16).max, size=(5, 2, 32, 32), dtype=np.uint16)
     dataset.print_tree()
 
 # %%

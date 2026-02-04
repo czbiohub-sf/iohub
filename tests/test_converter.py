@@ -30,27 +30,19 @@ def pytest_generate_tests(metafunc):
     if "grid_layout" in metafunc.fixturenames:
         metafunc.parametrize("grid_layout", [True, False])
     if "chunks" in metafunc.fixturenames:
-        metafunc.parametrize(
-            "chunks", ["XY", "XYZ", (1, 1, 3, 256, 256), None]
-        )
+        metafunc.parametrize("chunks", ["XY", "XYZ", (1, 1, 3, 256, 256), None])
 
 
 def _check_scale_transform(fov: MicroManagerFOV, position: Position) -> None:
     """Check scale transformation of the highest resolution level."""
-    tf = (
-        position.metadata.multiscales[0]
-        .datasets[0]
-        .coordinate_transformations[0]
-    )
+    tf = position.metadata.multiscales[0].datasets[0].coordinate_transformations[0]
     assert tf.type == "scale"
     assert tf.scale[0] == fov.t_scale
     assert tf.scale[1] == 1.0
     assert tf.scale[2:] == list(fov.zyx_scale)
 
 
-def _check_chunks(
-    position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] | None
-) -> None:
+def _check_chunks(position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] | None) -> None:
     """Check chunk size of the highest resolution level."""
     img = position["0"]
     match chunks:
@@ -76,15 +68,11 @@ def _check_result(
         intensity = 0
         if grid_layout and converter.p > 1:
             assert len(result) < converter.p
-        for (_, example_fov), (pos_name, pos) in zip(
-            converter.reader, result.positions(), strict=True
-        ):
+        for (_, example_fov), (pos_name, pos) in zip(converter.reader, result.positions(), strict=True):
             _check_scale_transform(example_fov, pos)
             _check_chunks(pos, chunks)
             intensity += pos["0"][:].sum()
-            with open(
-                output / pos_name / "0" / "image_plane_metadata.json"
-            ) as f:
+            with open(output / pos_name / "0" / "image_plane_metadata.json") as f:
                 metadata = json.load(f)
                 key = "0/0/0"
                 assert key in metadata
@@ -102,18 +90,12 @@ def test_converter_inputs(mm2gamma_ome_tiff, tmpdir):
 def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     output = tmpdir / "converted.zarr"
-    converter = TIFFConverter(
-        mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks
-    )
+    converter = TIFFConverter(mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks)
     assert isinstance(converter.reader, MMStack)
     with TiffFile(next(mm2gamma_ome_tiff.glob("*.tif*"))) as tf:
         raw_array = tf.asarray()
-        assert (
-            converter.summary_metadata == tf.micromanager_metadata["Summary"]
-        )
-    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-        raw_array.shape
-    )
+        assert converter.summary_metadata == tf.micromanager_metadata["Summary"]
+    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(raw_array.shape)
     assert list(converter.metadata.keys()) == [
         "iohub_version",
         "Summary",
@@ -137,9 +119,7 @@ def example_ome_tiff() -> Path:
 
 
 @pytest.fixture(scope="function")
-def mock_hcs_ome_tiff_reader(
-    example_ome_tiff, monkeypatch: pytest.MonkeyPatch
-):
+def mock_hcs_ome_tiff_reader(example_ome_tiff, monkeypatch: pytest.MonkeyPatch):
     # dataset with 4 positions without HCS site names
     mock_stage_positions = [
         {"Label": "A1-Site_0"},
@@ -156,9 +136,7 @@ def mock_hcs_ome_tiff_reader(
 
 
 @pytest.fixture(scope="function")
-def mock_non_hcs_ome_tiff_reader(
-    example_ome_tiff, monkeypatch: pytest.MonkeyPatch
-):
+def mock_non_hcs_ome_tiff_reader(example_ome_tiff, monkeypatch: pytest.MonkeyPatch):
     # dataset with 4 positions without HCS site names
     mock_stage_positions = [
         {"Label": "0"},
@@ -202,14 +180,10 @@ def test_converter_ometiff_hcs_numerical(example_ome_tiff, tmpdir):
 def test_converter_ndtiff(ndtiff_datasets: Path, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     output = tmpdir / "converted.zarr"
-    converter = TIFFConverter(
-        ndtiff_datasets, output, grid_layout=grid_layout, chunks=chunks
-    )
+    converter = TIFFConverter(ndtiff_datasets, output, grid_layout=grid_layout, chunks=chunks)
     assert isinstance(converter.reader, NDTiffDataset)
     raw_array = np.asarray(Dataset(str(ndtiff_datasets)).as_array())
-    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-        raw_array.shape
-    )
+    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(raw_array.shape)
     assert list(converter.metadata.keys()) == [
         "iohub_version",
         "Summary",

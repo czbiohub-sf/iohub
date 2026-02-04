@@ -95,12 +95,8 @@ class UPTIReader(ReaderBase):
             self.file_map[(pattern_idx, state_idx, z)] = file
 
             # sorts list by pattern 0 --> state_0, state_1, state_2, state_3
-            self.channel_names.sort(
-                key=lambda x: re.sub(r"pattern_\d\d\d", "", x)
-            )
-            self.channel_names.sort(
-                key=lambda x: re.sub(r"State_\d\d\d", "", x)
-            )
+            self.channel_names.sort(key=lambda x: re.sub(r"pattern_\d\d\d", "", x))
+            self.channel_names.sort(key=lambda x: re.sub(r"State_\d\d\d", "", x))
 
     def _create_position_array(self, pos):
         """
@@ -152,9 +148,7 @@ class UPTIReader(ReaderBase):
         """
 
         chan_name = self.channel_names[c]
-        pattern = int(
-            re.search(r"pattern_\d\d\d", chan_name).group(0).strip("pattern_")
-        )
+        pattern = int(re.search(r"pattern_\d\d\d", chan_name).group(0).strip("pattern_"))
         state = re.search(r"State_\d\d\d", chan_name)
         state_idx = 0 if not state else int(state.group(0).strip("State_"))
 
@@ -177,10 +171,7 @@ class UPTIReader(ReaderBase):
 
         """
         if position > self.positions - 1:
-            raise ValueError(
-                "Entered position is greater than "
-                "the number of positions in the data"
-            )
+            raise ValueError("Entered position is greater than the number of positions in the data")
 
         if position not in self.position_arrays.keys():
             self._create_position_array(position)
@@ -202,10 +193,7 @@ class UPTIReader(ReaderBase):
         """
 
         if position > self.positions - 1:
-            raise ValueError(
-                "Entered position is greater than "
-                "the number of positions in the data"
-            )
+            raise ValueError("Entered position is greater than the number of positions in the data")
 
         # if position hasn't been initialized in memory, do that.
         if position not in self.position_arrays.keys():

@@ -47,9 +47,7 @@ def test_output_dims_incomplete():
     """
     test that output dimensions are correct for interrupted data
     """
-    mmr = MicromanagerSequenceReader(
-        mm2gamma_singlepage_tiffs_incomplete, extract_data=True
-    )
+    mmr = MicromanagerSequenceReader(mm2gamma_singlepage_tiffs_incomplete, extract_data=True)
     assert mmr.get_zarr(0).shape[0] == mmr.frames
     assert mmr.get_zarr(0).shape[1] == mmr.channels
     assert mmr.get_zarr(0).shape[2] == mmr.slices

@@ -24,18 +24,13 @@ class MicroManagerFOV(BaseFOV):
 
     def __repr__(self) -> str:
         return (
-            f"Type: {type(self)}\n"
-            f"Parent: {self.parent}\n"
-            f"FOV key: {self._position}\n"
-            f"Data:\n"
+            f"Type: {type(self)}\nParent: {self.parent}\nFOV key: {self._position}\nData:\n"
         ) + self.xdata.__repr__()
 
     def __eq__(self, other: BaseFOV) -> bool:
         if not isinstance(other, type(self)):
             return False
-        return (self._position == other._position) and (
-            self.root.absolute() == other.root.absolute()
-        )
+        return (self._position == other._position) and (self.root.absolute() == other.root.absolute())
 
     @property
     def parent(self) -> MicroManagerFOVMapping:
@@ -104,9 +99,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
     @micromanager_metadata.setter
     def micromanager_metadata(self, value):
         if not isinstance(value, dict):
-            raise TypeError(
-                f"Type of `mm_meta` should be `dict`, got `{type(value)}`."
-            )
+            raise TypeError(f"Type of `mm_meta` should be `dict`, got `{type(value)}`.")
         self._mm_meta = value
 
     @property
@@ -121,10 +114,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
     @stage_positions.setter
     def stage_positions(self, value):
         if not isinstance(value, list):
-            raise TypeError(
-                "Type of `stage_position` should be `list`, "
-                f"got `{type(value)}`."
-            )
+            raise TypeError(f"Type of `stage_position` should be `list`, got `{type(value)}`.")
         self._stage_positions = value
 
     @overload
@@ -162,10 +152,7 @@ class MicroManagerFOVMapping(BaseFOVMapping):
             If any label doesn't match supported formats
         """
         if isinstance(label, list):
-            return [
-                MicroManagerFOVMapping._parse_hcs_position_label(lbl)
-                for lbl in label
-            ]
+            return [MicroManagerFOVMapping._parse_hcs_position_label(lbl) for lbl in label]
 
         if (match := re.match(_HCS_POSITION_PATTERN, label)) is not None:
             if match.group(1):  # "A1-Site_0" case
