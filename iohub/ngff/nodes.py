@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Generator, Literal, Sequence, Type, TypeAlias, overload
 
 import numpy as np
+import xarray as xr
 import zarr.codecs
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
@@ -984,18 +985,12 @@ class Position(NGFFNode):
             chunks = _pad_shape(_scale_integers(array.chunks, factor), len(shape))
 
             if array.shards is not None:
-                shards = array.shards[:-3] + _scale_integers(
-                    array.shards[-3:], factor
-                )
+                shards = array.shards[:-3] + _scale_integers(array.shards[-3:], factor)
                 shards_ratio = tuple(s // c for c, s in zip(chunks, shards))
             else:
                 shards_ratio = None
 
-            transforms = deepcopy(
-                self.metadata.multiscales[0]
-                .datasets[0]
-                .coordinate_transformations
-            )
+            transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
             for tr in transforms:
                 if tr.type == "scale":
                     for i in range(len(tr.scale))[-3:]:
@@ -1051,16 +1046,12 @@ class Position(NGFFNode):
 
         num_arrays = len(self.array_keys())
         if num_arrays == 0:
-            raise ValueError(
-                "No level 0 array exists. Create base array before computing "
-                "pyramid."
-            )
+            raise ValueError("No level 0 array exists. Create base array before computing pyramid.")
 
         if levels is None:
             if num_arrays == 1:
                 raise ValueError(
-                    "Pyramid structure doesn't exist and levels=None. "
-                    "Specify 'levels' parameter to create pyramid."
+                    "Pyramid structure doesn't exist and levels=None. Specify 'levels' parameter to create pyramid."
                 )
             levels = num_arrays
 
@@ -1084,10 +1075,7 @@ class Position(NGFFNode):
             current_scale = self.get_effective_scale(str(level))
             previous_scale = self.get_effective_scale(str(level - 1))
 
-            downsample_factors = [
-                int(round(current_scale[i] / previous_scale[i]))
-                for i in range(len(current_scale))
-            ]
+            downsample_factors = [int(round(current_scale[i] / previous_scale[i])) for i in range(len(current_scale))]
 
             _downsample_tensorstore(
                 source_ts=previous_ts,
@@ -1327,6 +1315,55 @@ class Position(NGFFNode):
         channel_index = self.get_channel_index(channel_name)
         self.metadata.omero.channels[channel_index].window = window
         self.dump_meta()
+
+    def to_xarray(self) -> xr.DataArray:
+        """Export full Position data as a labeled xarray.DataArray (TCZYX).
+
+        The DataArray is backed by a dask array (lazy, no data loaded
+        until ``.values`` or ``.compute()`` is called).
+
+        Coordinate units follow CF conventions: each coordinate carries
+        its own ``attrs["units"]`` (e.g. ``xa.coords["Z"].attrs["units"]
+        == "micrometer"``). ``xa.attrs`` is reserved for value-level
+        metadata (e.g. ``xa.attrs["units"] = "nanometer"`` for ret).
+
+        Returns
+        -------
+        xr.DataArray
+            5D labeled array with coordinates derived from
+            channel names and physical scales/units.
+        """
+        all_channel_names = [ch.label for ch in self.metadata.omero.channels]
+        scale = self.scale
+        translation = self.get_effective_translation(self.metadata.multiscales[0].datasets[0].path)
+
+        data = self.data.dask_array()
+        T, C, Z, Y, X = data.shape
+
+        # Build axis unit lookup from OME metadata
+        axis_units = {}
+        for axis in self.axes:
+            unit = getattr(axis, "unit", None)
+            if unit is not None:
+                axis_units[axis.name.upper()] = unit
+
+        # CF convention: units live in per-coordinate attrs
+        physical = {"T": (T, 0), "Z": (Z, 2), "Y": (Y, 3), "X": (X, 4)}
+        coords = {"C": ("C", all_channel_names)}
+        for dim, (size, idx) in physical.items():
+            values = np.arange(size) * scale[idx] + translation[idx]
+            attrs = {"units": axis_units[dim]} if dim in axis_units else {}
+            coords[dim] = (dim, values, attrs)
+
+        # Restore any previously saved DataArray attrs from zarr
+        saved_attrs = dict(self.zattrs.get("iohub_xarray_attrs", {}))
+
+        return xr.DataArray(
+            data,
+            dims=("T", "C", "Z", "Y", "X"),
+            coords=coords,
+            attrs=saved_attrs,
+        )
 
 
 class TiledPosition(Position):
