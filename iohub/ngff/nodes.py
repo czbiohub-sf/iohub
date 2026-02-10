@@ -1460,11 +1460,8 @@ class Position(NGFFNode):
         t_coords = data_array.coords["t"].values
         t_indices = np.round((t_coords - translation[0]) / scale[0]).astype(int)
 
-        # Write each (T, C) slice into the zarr array
-        img = self[image]
-        for xa_t, zarr_t in enumerate(t_indices):
-            for xa_c, zarr_c in enumerate(c_indices):
-                img[zarr_t, zarr_c] = np_data[xa_t, xa_c]
+        arr = self[image]
+        arr.oindex[t_indices, c_indices] = np_data
 
         # Persist DataArray attrs to zarr for round-tripping
         if data_array.attrs:
