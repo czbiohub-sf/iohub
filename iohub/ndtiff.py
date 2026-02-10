@@ -36,9 +36,7 @@ class NDTiffFOV(MicroManagerFOV):
     def dtype(self) -> np.dtype:
         return self._xdata.dtype
 
-    def __getitem__(
-        self, key: int | slice | tuple[int | slice, ...]
-    ) -> ArrayLike:
+    def __getitem__(self, key: int | slice | tuple[int | slice, ...]) -> ArrayLike:
         return self._xdata[key]
 
     @property
@@ -60,26 +58,19 @@ class NDTiffDataset(MicroManagerFOVMapping):
         super().__init__()
         data_path = Path(data_path)
         if not data_path.is_dir():
-            raise FileNotFoundError(
-                f"{data_path} is not a valid NDTiff dataset."
-            )
+            raise FileNotFoundError(f"{data_path} is not a valid NDTiff dataset.")
         self.dataset = Dataset(str(data_path))
         self._root = data_path
         self.dirname = data_path.name
         self._axes = self.dataset.axes
         if any([a for a in self._axes.keys() if a not in self._ndtiff_axes]):
             raise NotImplementedError(
-                f"Custom axis names {self._axes.keys()} are not supported. "
-                f"Supported axes are: {self._ndtiff_axes}"
+                f"Custom axis names {self._axes.keys()} are not supported. Supported axes are: {self._ndtiff_axes}"
             )
         self._str_posistion_axis = self._check_str_axis("position")
         self._str_channel_axis = self._check_str_axis("channel")
-        self.frames = (
-            len(self._axes["time"]) if "time" in self._axes.keys() else 1
-        )
-        self.channels = (
-            len(self._axes["channel"]) if "channel" in self._axes.keys() else 1
-        )
+        self.frames = len(self._axes["time"]) if "time" in self._axes.keys() else 1
+        self.channels = len(self._axes["channel"]) if "channel" in self._axes.keys() else 1
         self.slices = len(self._axes["z"]) if "z" in self._axes.keys() else 1
         self.height = self.dataset.image_height
         self.width = self.dataset.image_width
@@ -91,15 +82,10 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self.channel_names = self._ndtiff_channel_names
         if self.channel_names[0] is None or self.channel_names[0] == 0:
             self.channel_names = [f"Channel{i}" for i in range(self.channels)]
-            _logger.warning(
-                "No channel names found in metadata. Using defaults: "
-                f"{self.channel_names}"
-            )
+            _logger.warning(f"No channel names found in metadata. Using defaults: {self.channel_names}")
         self.stage_positions = self._mm_meta["Summary"]["StagePositions"]
         z_step_size = float(self._mm_meta["Summary"]["z-step_um"] or 1.0)
-        xy_pixel_size = float(
-            self._mm_meta["Summary"].get("PixelSize_um") or 1.0
-        )
+        xy_pixel_size = float(self._mm_meta["Summary"].get("PixelSize_um") or 1.0)
         self._zyx_scale = (z_step_size, xy_pixel_size, xy_pixel_size)
         self._gather_xdata()
 
@@ -132,10 +118,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
     @property
     def t_scale(self) -> float:
-        _logger.warning(
-            "NDTiff does not store the planned time interval. "
-            "Returning 1.0 as a placeholder."
-        )
+        _logger.warning("NDTiff does not store the planned time interval. Returning 1.0 as a placeholder.")
         return 1.0
 
     def _get_summary_metadata(self):
@@ -151,15 +134,9 @@ class NDTiffDataset(MicroManagerFOVMapping):
                 break
 
         try:
-            z0 = self.get_image_metadata(p_idx, 0, c_idx, 0)[
-                "ZPosition_um_Intended"
-            ]
-            z1 = self.get_image_metadata(p_idx, 0, c_idx, 1)[
-                "ZPosition_um_Intended"
-            ]
-            pm_metadata["z-step_um"] = np.around(
-                abs(z1 - z0), decimals=3
-            ).astype(float)
+            z0 = self.get_image_metadata(p_idx, 0, c_idx, 0)["ZPosition_um_Intended"]
+            z1 = self.get_image_metadata(p_idx, 0, c_idx, 1)["ZPosition_um_Intended"]
+            pm_metadata["z-step_um"] = np.around(abs(z1 - z0), decimals=3).astype(float)
         # Will raise KeyError if dataset does not have z slices
         # Will raise ValueError if dataset has only one z slice
         except (KeyError, ValueError):
@@ -243,17 +220,11 @@ class NDTiffDataset(MicroManagerFOVMapping):
                     coord_sample = next(iter(self._axes[axis]))
                     if coord == 0 and isinstance(coord_sample, str):
                         coords[i] = coord_sample
-                        warnings.warn(
-                            f"Indices of {axis} are string-valued. "
-                            f"Returning data at {axis} = {coord}"
-                        )
+                        warnings.warn(f"Indices of {axis} are string-valued. Returning data at {axis} = {coord}")
                     else:
                         # If the coordinate is not part of the axis and
                         # nonzero, a ValueError will be raised
-                        raise ValueError(
-                            f"Image coordinate {axis} = {coord} is not "
-                            "part of this dataset."
-                        )
+                        raise ValueError(f"Image coordinate {axis} = {coord} is not part of this dataset.")
 
             # The axis is not part of the dataset axes
             else:
@@ -266,9 +237,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
                     # If coord != 0 is requested and the axis is not part of
                     # the dataset, ValueError will be raised
                     else:
-                        raise ValueError(
-                            f"Axis {axis} is not part of this dataset"
-                        )
+                        raise ValueError(f"Axis {axis} is not part of this dataset")
 
         return tuple(coords)
 
@@ -279,14 +248,12 @@ class NDTiffDataset(MicroManagerFOVMapping):
         if "position" in self._axes.keys():
             if key not in self._axes["position"]:
                 raise ValueError(
-                    f"Position index {key} is not part of this dataset. "
-                    f'Valid positions are: {self._axes["position"]}'
+                    f"Position index {key} is not part of this dataset. Valid positions are: {self._axes['position']}"
                 )
         else:
             if key not in (0, None):
                 warnings.warn(
-                    f"Position index {key} is not part of this dataset. "
-                    "Returning data at the default position."
+                    f"Position index {key} is not part of this dataset. Returning data at the default position."
                 )
                 key = None
         return key
@@ -317,9 +284,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
     def xdata(self) -> XDataset:
         return self._xdata
 
-    def get_image_metadata(
-        self, p: int | str, t: int, c: int | str, z: int
-    ) -> dict | None:
+    def get_image_metadata(self, p: int | str, t: int, c: int | str, z: int) -> dict | None:
         """Return image plane metadata at the requested PTCZ coordinates
 
         Parameters
@@ -345,19 +310,11 @@ class NDTiffDataset(MicroManagerFOVMapping):
         try:
             p, t, c, z = self._check_coordinates(p, t, c, z)
         except ValueError as e:
-            _logger.debug(
-                f"Error checking coordinates at position {p}, time {t}, "
-                f"channel {c}, z {z}: {e}"
-            )
+            _logger.debug(f"Error checking coordinates at position {p}, time {t}, channel {c}, z {z}: {e}")
         if self.dataset.has_image(position=p, time=t, channel=c, z=z):
             try:
-                metadata = self.dataset.read_metadata(
-                    position=p, time=t, channel=c, z=z
-                )
+                metadata = self.dataset.read_metadata(position=p, time=t, channel=c, z=z)
             except (JSONDecodeError, UnicodeDecodeError):
                 # acquisition crashed before metadata was written
-                _logger.warning(
-                    f"Unable to decode metadata for position {p}, "
-                    f"time {t}, channel {c}, z {z}"
-                )
+                _logger.warning(f"Unable to decode metadata for position {p}, time {t}, channel {c}, z {z}")
         return metadata

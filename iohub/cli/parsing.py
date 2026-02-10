@@ -7,12 +7,10 @@ from natsort import natsorted
 from iohub.ngff import Plate, open_ome_zarr
 
 
-def _validate_and_process_paths(
-    ctx: click.Context, opt: click.Option, value: List[str]
-) -> list[Path]:
+def _validate_and_process_paths(ctx: click.Context, opt: click.Option, value: List[str]) -> list[Path]:
     # Sort and validate the input paths,
     # expanding plates into lists of positions
-    input_paths = [Path(path) for path in natsorted(value)]
+    input_paths = [p for p in map(Path, natsorted(value)) if p.is_dir()]
     for path in input_paths:
         with open_ome_zarr(path, mode="r") as dataset:
             if isinstance(dataset, Plate):
@@ -77,9 +75,7 @@ class OptionEatAll(click.Option):
 
         retval = super(OptionEatAll, self).add_to_parser(parser, ctx)
         for name in self.opts:
-            our_parser = parser._long_opt.get(name) or parser._short_opt.get(
-                name
-            )
+            our_parser = parser._long_opt.get(name) or parser._short_opt.get(name)
             if our_parser:
                 self._eat_all_parser = our_parser
                 self._previous_parser_process = our_parser.process

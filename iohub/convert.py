@@ -120,9 +120,7 @@ class TIFFConverter:
             MMStack,
             NDTiffDataset,
         ):
-            raise TypeError(
-                f"Reader type {reader_type} not supported for conversion."
-            )
+            raise TypeError(f"Reader type {reader_type} not supported for conversion.")
         _logger.debug("Finished initializing data.")
         self.summary_metadata = self.reader.micromanager_summary
         self.save_name = output_dir.name
@@ -139,23 +137,16 @@ class TIFFConverter:
         self.hcs_plate = hcs_plate
         self._check_hcs_sites()
         self._get_pos_names()
-        _logger.info(
-            f"Found Dataset {input_dir} with "
-            f"dimensions (P, T, C, Z, Y, X): {self.dim}"
-        )
+        _logger.info(f"Found Dataset {input_dir} with dimensions (P, T, C, Z, Y, X): {self.dim}")
         self.metadata = dict()
         self.metadata["iohub_version"] = version("iohub")
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
             if hcs_plate:
-                raise ValueError(
-                    "grid_layout and hcs_plate must not be both true"
-                )
+                raise ValueError("grid_layout and hcs_plate must not be both true")
             _logger.info("Generating HCS plate level grid.")
             try:
-                self.position_grid = _create_grid_from_coordinates(
-                    *self._get_position_coords()
-                )
+                self.position_grid = _create_grid_from_coordinates(*self._get_position_coords())
             except ValueError as e:
                 _logger.warning(f"Failed to generate grid layout: {e}")
                 self._make_default_grid()
@@ -172,18 +163,13 @@ class TIFFConverter:
                 self.hcs_sites = self.reader.hcs_position_labels
                 self.hcs_plate = True
             except ValueError:
-                _logger.debug(
-                    "HCS sites not detected, "
-                    "dumping all position into a single row."
-                )
+                _logger.debug("HCS sites not detected, dumping all position into a single row.")
 
     def _make_default_grid(self):
         if isinstance(self.reader, NDTiffDataset):
             self.position_grid = np.array([self.pos_names])
         else:
-            self.position_grid = np.expand_dims(
-                np.arange(self.p, dtype=int), axis=0
-            )
+            self.position_grid = np.expand_dims(np.arange(self.p, dtype=int), axis=0)
 
     def _get_position_coords(self):
         """Get the position coordinates from the reader metadata.
@@ -208,17 +194,13 @@ class TIFFConverter:
                 xy_stage = pos["DefaultXYStage"]
                 stage_pos = pos[xy_stage]
             except KeyError:
-                raise ValueError(
-                    f"Stage position is not available for position {idx}"
-                )
+                raise ValueError(f"Stage position is not available for position {idx}")
             xy_coords.append(stage_pos)
             try:
                 rows.add(pos["GridRow"])
                 cols.add(pos["GridCol"])
             except KeyError:
-                raise ValueError(
-                    f"Grid indices not available for position {idx}"
-                )
+                raise ValueError(f"Grid indices not available for position {idx}")
 
         return xy_coords, len(rows), len(cols)
 
@@ -259,9 +241,7 @@ class TIFFConverter:
             else:
                 raise ValueError(f"{input_chunks} chunks are not supported.")
         else:
-            raise TypeError(
-                f"Chunk type {type(input_chunks)} is not supported."
-            )
+            raise TypeError(f"Chunk type {type(input_chunks)} is not supported.")
 
         shape = (self.t, self.c, self.z, self.y, self.x)
         original_chunks = chunks.copy()
@@ -279,10 +259,7 @@ class TIFFConverter:
             zip(original_chunks, chunks, shape)
         ):
             if orig != adj:
-                _logger.warning(
-                    f"Chunk size {orig} on axis {i} adjusted to {adj} "
-                    f"(dimension {dim})."
-                )
+                _logger.warning(f"Chunk size {orig} on axis {i} adjusted to {adj} (dimension {dim}).")
 
         _logger.debug(f"Zarr store chunk size will be set to {chunks}.")
 
@@ -327,27 +304,19 @@ class TIFFConverter:
     def _init_hcs_arrays(self, arr_kwargs):
         for row, col, fov in self.hcs_sites:
             self._create_zeros_array(row, col, fov, arr_kwargs)
-        _logger.info(
-            "Created HCS NGFF layout from Micro-Manager HCS position labels."
-        )
+        _logger.info("Created HCS NGFF layout from Micro-Manager HCS position labels.")
         self.writer.print_tree()
 
     def _init_grid_arrays(self, arr_kwargs):
         for row, columns in enumerate(self.position_grid):
             for column in columns:
-                self._create_zeros_array(
-                    str(row), str(column), "0", arr_kwargs
-                )
+                self._create_zeros_array(str(row), str(column), "0", arr_kwargs)
 
-    def _create_zeros_array(
-        self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict
-    ) -> Position:
+    def _create_zeros_array(self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict) -> Position:
         pos = self.writer.create_position(row_name, col_name, pos_name)
         self.zarr_position_names.append(pos.zgroup.name)
         _ = pos.create_zeros(**arr_kwargs)
-        pos.metadata.omero.name = self.pos_names[
-            len(self.zarr_position_names) - 1
-        ]
+        pos.metadata.omero.name = self.pos_names[len(self.zarr_position_names) - 1]
         pos.dump_meta()
 
     def _convert_image_plane_metadata(self, fov, zarr_name: str):
@@ -363,11 +332,7 @@ class TIFFConverter:
         ):
             c_key = c_idx
             if isinstance(self.reader, NDTiffDataset):
-                c_key = (
-                    self.reader.channel_names[c_idx]
-                    if self.reader.str_channel_axis
-                    else c_idx
-                )
+                c_key = self.reader.channel_names[c_idx] if self.reader.str_channel_axis else c_idx
             missing_data_warning_issued = False
             for z_idx in range(self.z):
                 metadata = fov.frame_metadata(t=t_idx, c=c_key, z=z_idx)
@@ -382,9 +347,7 @@ class TIFFConverter:
                     continue
                 if not sorted_keys:
                     # Sort keys, ordering keys without dashes first
-                    sorted_keys = sorted(
-                        metadata.keys(), key=lambda x: ("-" in x, x)
-                    )
+                    sorted_keys = sorted(metadata.keys(), key=lambda x: ("-" in x, x))
 
                 sorted_metadata = {key: metadata[key] for key in sorted_keys}
                 # T/C/Z

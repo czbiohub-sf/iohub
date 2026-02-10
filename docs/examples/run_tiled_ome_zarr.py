@@ -29,13 +29,9 @@ grid_shape = (2, 3)
 tile_shape = (5, 2, 3, 32, 32)
 
 
-with open_ome_zarr(
-    store_path, layout="tiled", mode="a", channel_names=["DAPI", "GFP"]
-) as dataset:
+with open_ome_zarr(store_path, layout="tiled", mode="a", channel_names=["DAPI", "GFP"]) as dataset:
     dtype = np.uint16
-    tiles = dataset.make_tiles(
-        "tiled_raw", grid_shape=grid_shape, tile_shape=tile_shape, dtype=dtype
-    )
+    tiles = dataset.make_tiles("tiled_raw", grid_shape=grid_shape, tile_shape=tile_shape, dtype=dtype)
     for row in range(grid_shape[0]):
         for column in range(grid_shape[1]):
             # each tile will be filled with different constant values

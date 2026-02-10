@@ -67,7 +67,6 @@ def test_missing_axes(axes: list[str], missing: list[int]) -> None:
 
 
 def test_fov_dict() -> None:
-
     good_collection = FOVDict(
         {
             "488": FOV(["y", "x"]),

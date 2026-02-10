@@ -24,9 +24,7 @@ def test_detect_ome_tiff(data_path):
     assert isinstance(reader, MMStack)
 
 
-@pytest.mark.parametrize(
-    "data_path", ndtiff_v2_datasets + [ndtiff_v3_labeled_positions]
-)
+@pytest.mark.parametrize("data_path", ndtiff_v2_datasets + [ndtiff_v3_labeled_positions])
 def test_detect_ndtiff(data_path):
     reader = read_images(data_path)
     assert isinstance(reader, NDTiffDataset)
