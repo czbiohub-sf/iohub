@@ -1356,7 +1356,8 @@ class Position(NGFFNode):
             coords[dim] = (dim, values, attrs)
 
         # Restore any previously saved DataArray attrs from zarr
-        saved_attrs = dict(self.zattrs.get("iohub_xarray_attrs", {}))
+        iohub_dict = self.zattrs.get("iohub", {})
+        saved_attrs = dict(iohub_dict.get("xarray_attrs", {}))
 
         return xr.DataArray(
             data,
@@ -1467,7 +1468,9 @@ class Position(NGFFNode):
 
         # Persist DataArray attrs to zarr for round-tripping
         if data_array.attrs:
-            self.zattrs["iohub_xarray_attrs"] = dict(data_array.attrs)
+            iohub_dict = dict(self.zattrs.get("iohub", {}))
+            iohub_dict["xarray_attrs"] = dict(data_array.attrs)
+            self.zattrs["iohub"] = iohub_dict
 
 
 class TiledPosition(Position):
