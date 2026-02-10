@@ -9,6 +9,11 @@ import pytest
 from wget import download
 
 
+@pytest.fixture
+def rng():
+    return np.random.default_rng(42)
+
+
 def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
     ghfs = fsspec.filesystem(
         "github",

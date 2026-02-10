@@ -13,11 +13,10 @@ from numpy.testing import assert_allclose, assert_array_equal
 
 from iohub.ngff.nodes import open_ome_zarr
 
-RNG = np.random.default_rng(42)
 SHAPE_SMALL = (1, 1, 1, 8, 8)
 
 
-def _make_position(tmp_dir, channel_names, shape, scales=None, name="test.zarr"):
+def _make_position(rng, tmp_dir, channel_names, shape, scales=None, name="test.zarr"):
     """Create a Position with random float32 data and optional scales."""
     pos = open_ome_zarr(
         os.path.join(tmp_dir, name),
@@ -25,19 +24,19 @@ def _make_position(tmp_dir, channel_names, shape, scales=None, name="test.zarr")
         mode="w-",
         channel_names=channel_names,
     )
-    data = RNG.random(shape).astype(np.float32)
+    data = rng.random(shape).astype(np.float32)
     pos.create_image("0", data)
     for axis, val in (scales or {}).items():
         pos.set_scale("0", axis, val)
     return pos, data
 
 
-def _make_xarray(channels, shape=SHAPE_SMALL, scales=None, coord_units=None, attrs=None):
+def _make_xarray(rng, channels, shape=SHAPE_SMALL, scales=None, coord_units=None, attrs=None):
     """Build a tczyx DataArray with CF-convention coordinate units."""
     T, _, Z, Y, X = shape[0], None, shape[2], shape[3], shape[4]
     C = len(channels)
     scales = scales or {}
-    data = RNG.random((T, C, Z, Y, X)).astype(np.float32)
+    data = rng.random((T, C, Z, Y, X)).astype(np.float32)
     coord_units = coord_units or {"t": "second", "z": "micrometer", "y": "micrometer", "x": "micrometer"}
     dims_info = {
         "t": (T, scales.get("t", 1.0)),
@@ -53,9 +52,9 @@ def _make_xarray(channels, shape=SHAPE_SMALL, scales=None, coord_units=None, att
 
 
 class TestToXarray:
-    def test_dims_shape_and_data(self):
+    def test_dims_shape_and_data(self, rng):
         with TemporaryDirectory() as tmp:
-            pos, data = _make_position(tmp, ["GFP", "RFP"], (2, 2, 3, 16, 16))
+            pos, data = _make_position(rng, tmp, ["GFP", "RFP"], (2, 2, 3, 16, 16))
             xa = pos.to_xarray()
             assert xa.dims == ("t", "c", "z", "y", "x")
             assert xa.shape == (2, 2, 3, 16, 16)
@@ -63,9 +62,10 @@ class TestToXarray:
             assert_array_equal(xa.values, data)
             pos.close()
 
-    def test_channel_and_physical_coordinates(self):
+    def test_channel_and_physical_coordinates(self, rng):
         with TemporaryDirectory() as tmp:
             pos, _ = _make_position(
+                rng,
                 tmp,
                 ["BF", "GFP"],
                 (2, 2, 4, 16, 16),
@@ -78,18 +78,19 @@ class TestToXarray:
             assert_allclose(xa.coords["y"].values, np.arange(16) * 0.65)
             pos.close()
 
-    def test_coordinate_units_cf(self):
+    def test_coordinate_units_cf(self, rng):
         with TemporaryDirectory() as tmp:
-            pos, _ = _make_position(tmp, ["ch1"], SHAPE_SMALL)
+            pos, _ = _make_position(rng, tmp, ["ch1"], SHAPE_SMALL)
             xa = pos.to_xarray()
             assert xa.coords["t"].attrs["units"] == "second"
             assert xa.coords["z"].attrs["units"] == "micrometer"
             assert "units" not in xa.coords["c"].attrs
             pos.close()
 
-    def test_sel_by_channel_and_time(self):
+    def test_sel_by_channel_and_time(self, rng):
         with TemporaryDirectory() as tmp:
             pos, data = _make_position(
+                rng,
                 tmp,
                 ["BF", "GFP", "RFP"],
                 (4, 3, 1, 8, 8),
@@ -103,9 +104,10 @@ class TestToXarray:
 
 
 class TestWriteXarray:
-    def test_roundtrip_data_and_scales(self):
+    def test_roundtrip_data_and_scales(self, rng):
         with TemporaryDirectory() as tmp:
-            pos, data = _make_position(
+            pos, _ = _make_position(
+                rng,
                 tmp,
                 ["GFP", "RFP"],
                 (2, 2, 3, 16, 16),
@@ -128,9 +130,10 @@ class TestWriteXarray:
             for dim in ("t", "z", "y", "x"):
                 assert_allclose(xa1.coords[dim].values, xa2.coords[dim].values)
 
-    def test_roundtrip_coordinate_units(self):
+    def test_roundtrip_coordinate_units(self, rng):
         with TemporaryDirectory() as tmp:
             xa = _make_xarray(
+                rng,
                 ["ch1"],
                 coord_units={
                     "t": "millisecond",
@@ -150,9 +153,9 @@ class TestWriteXarray:
             assert xa2.coords["t"].attrs["units"] == "millisecond"
             assert xa2.coords["z"].attrs["units"] == "nanometer"
 
-    def test_roundtrip_value_attrs(self):
+    def test_roundtrip_value_attrs(self, rng):
         with TemporaryDirectory() as tmp:
-            xa = _make_xarray(["ch1"], attrs={"units": "nanometer", "quantity": "OPL"})
+            xa = _make_xarray(rng, ["ch1"], attrs={"units": "nanometer", "quantity": "OPL"})
             path = os.path.join(tmp, "v.zarr")
             with open_ome_zarr(path, layout="fov", mode="w-", channel_names=["ch1"]) as pos:
                 pos.write_xarray(xa)
@@ -161,9 +164,9 @@ class TestWriteXarray:
             assert xa2.attrs["units"] == "nanometer"
             assert xa2.attrs["quantity"] == "OPL"
 
-    def test_unknown_channel_raises(self):
+    def test_unknown_channel_raises(self, rng):
         with TemporaryDirectory() as tmp:
-            xa = _make_xarray(["GFP"])
+            xa = _make_xarray(rng, ["GFP"])
             with open_ome_zarr(
                 os.path.join(tmp, "e.zarr"),
                 layout="fov",
@@ -209,11 +212,11 @@ class TestWriteXarray:
                 assert_allclose(xa2.coords["t"].values, [10.0])
                 assert_allclose(xa2.coords["y"].values, xa.coords["y"].values, atol=1e-6)
 
-    def test_write_channel_subset(self):
+    def test_write_channel_subset(self, rng):
         """Write channels one at a time into a multi-channel position."""
         with TemporaryDirectory() as tmp:
             channels = ["Phase", "Ret", "Ori"]
-            per_ch = {ch: RNG.random(SHAPE_SMALL).astype(np.float32) for ch in channels}
+            per_ch = {ch: rng.random(SHAPE_SMALL).astype(np.float32) for ch in channels}
 
             with open_ome_zarr(
                 os.path.join(tmp, "p.zarr"),
@@ -238,11 +241,11 @@ class TestWriteXarray:
                 for ch, vals in per_ch.items():
                     assert_array_equal(result.sel(c=ch).values, vals[:, 0])
 
-    def test_write_time_subset(self):
+    def test_write_time_subset(self, rng):
         """Write timepoints into a pre-allocated array."""
         with TemporaryDirectory() as tmp:
-            t0 = RNG.random(SHAPE_SMALL).astype(np.float32)
-            t1 = RNG.random(SHAPE_SMALL).astype(np.float32)
+            t0 = rng.random(SHAPE_SMALL).astype(np.float32)
+            t1 = rng.random(SHAPE_SMALL).astype(np.float32)
             coords = {"c": ("c", ["ch1"]), "z": ("z", [0.0]), "y": ("y", np.arange(8.0)), "x": ("x", np.arange(8.0))}
 
             with open_ome_zarr(
@@ -263,10 +266,10 @@ class TestWriteXarray:
                 assert_array_equal(result.sel(t=0.0, c="ch1").values, t0[0, 0])
                 assert_array_equal(result.sel(t=1.0, c="ch1").values, t1[0, 0])
 
-    def test_hcs_plate(self):
+    def test_hcs_plate(self, rng):
         with TemporaryDirectory() as tmp:
             channels = ["GFP", "RFP"]
-            xa = _make_xarray(channels, shape=(2, 2, 3, 16, 16))
+            xa = _make_xarray(rng, channels, shape=(2, 2, 3, 16, 16))
             with open_ome_zarr(
                 os.path.join(tmp, "p.zarr"),
                 layout="hcs",
@@ -279,12 +282,12 @@ class TestWriteXarray:
             assert_array_equal(xa.values, xa2.values)
             assert list(xa2.coords["c"].values) == channels
 
-    def test_waveorder_pattern(self):
+    def test_waveorder_pattern(self, rng):
         """Read BF, compute Phase+Retardance, write channel-by-channel."""
         with TemporaryDirectory() as tmp:
             # Create input
             in_path = os.path.join(tmp, "in.zarr")
-            in_data = RNG.random((2, 1, 4, 16, 16)).astype(np.float32)
+            in_data = rng.random((2, 1, 4, 16, 16)).astype(np.float32)
             with open_ome_zarr(
                 in_path,
                 layout="fov",
