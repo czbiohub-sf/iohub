@@ -1333,7 +1333,7 @@ class Position(NGFFNode):
             5D labeled array with coordinates derived from
             channel names and physical scales/units.
         """
-        all_channel_names = [ch.label for ch in self.metadata.omero.channels]
+        all_channel_names = self.channel_names
         scale = self.scale
         translation = self.get_effective_translation(self.metadata.multiscales[0].datasets[0].path)
 
