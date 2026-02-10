@@ -10,7 +10,7 @@ from iohub.ngff import Plate, open_ome_zarr
 def _validate_and_process_paths(ctx: click.Context, opt: click.Option, value: List[str]) -> list[Path]:
     # Sort and validate the input paths,
     # expanding plates into lists of positions
-    input_paths = [Path(path) for path in natsorted(value)]
+    input_paths = [p for p in map(Path, natsorted(value)) if p.is_dir()]
     for path in input_paths:
         with open_ome_zarr(path, mode="r") as dataset:
             if isinstance(dataset, Plate):

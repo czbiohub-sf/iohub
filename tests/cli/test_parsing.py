@@ -38,6 +38,16 @@ def test_validate_and_process_paths(tmpdir):
     )
     assert len(processed) == 2
 
+    # Check that non-directory paths (e.g. zarr.json) are filtered out
+    zarr_json = plate_path / "A" / "1" / "zarr.json"
+    zarr_json.write_text("{}", encoding="utf-8")
+    processed = _validate_and_process_paths(
+        ctx,
+        opt,
+        [str(plate_path / "A" / "1" / "0"), str(zarr_json)],
+    )
+    assert len(processed) == 1
+
 
 def test_option_eat_all():
     @click.command()
