@@ -1317,13 +1317,13 @@ class Position(NGFFNode):
         self.dump_meta()
 
     def to_xarray(self) -> xr.DataArray:
-        """Export full Position data as a labeled xarray.DataArray (TCZYX).
+        """Export full Position data as a labeled xarray.DataArray (tczyx).
 
         The DataArray is backed by a dask array (lazy, no data loaded
         until ``.values`` or ``.compute()`` is called).
 
         Coordinate units follow CF conventions: each coordinate carries
-        its own ``attrs["units"]`` (e.g. ``xa.coords["Z"].attrs["units"]
+        its own ``attrs["units"]`` (e.g. ``xa.coords["z"].attrs["units"]
         == "micrometer"``). ``xa.attrs`` is reserved for value-level
         metadata (e.g. ``xa.attrs["units"] = "nanometer"`` for ret).
 
@@ -1345,11 +1345,11 @@ class Position(NGFFNode):
         for axis in self.axes:
             unit = getattr(axis, "unit", None)
             if unit is not None:
-                axis_units[axis.name.upper()] = unit
+                axis_units[axis.name.lower()] = unit
 
         # CF convention: units live in per-coordinate attrs
-        physical = {"T": (T, 0), "Z": (Z, 2), "Y": (Y, 3), "X": (X, 4)}
-        coords = {"C": ("C", all_channel_names)}
+        physical = {"t": (T, 0), "z": (Z, 2), "y": (Y, 3), "x": (X, 4)}
+        coords = {"c": ("c", all_channel_names)}
         for dim, (size, idx) in physical.items():
             values = np.arange(size) * scale[idx] + translation[idx]
             attrs = {"units": axis_units[dim]} if dim in axis_units else {}
@@ -1360,7 +1360,7 @@ class Position(NGFFNode):
 
         return xr.DataArray(
             data,
-            dims=("T", "C", "Z", "Y", "X"),
+            dims=("t", "c", "z", "y", "x"),
             coords=coords,
             attrs=saved_attrs,
         )
@@ -1378,18 +1378,18 @@ class Position(NGFFNode):
         Parameters
         ----------
         data_array : xr.DataArray
-            5D labeled array with TCZYX dimensions.
-            The "C" coordinate must be a subset of this Position's
-            channel names. "T" coordinates are mapped to time indices
+            5D labeled array with tczyx dimensions.
+            The "c" coordinate must be a subset of this Position's
+            channel names. "t" coordinates are mapped to time indices
             via the scale and translation.
         image : str, optional
             Name of the image array to write to, by default "0".
         """
-        if tuple(data_array.dims) != ("T", "C", "Z", "Y", "X"):
-            raise ValueError(f"DataArray dims must be ('T', 'C', 'Z', 'Y', 'X'), got {data_array.dims}")
+        if tuple(data_array.dims) != ("t", "c", "z", "y", "x"):
+            raise ValueError(f"DataArray dims must be ('t', 'c', 'z', 'y', 'x'), got {data_array.dims}")
 
         # Validate channels are a subset
-        xa_channels = list(data_array.coords["C"].values)
+        xa_channels = list(data_array.coords["c"].values)
         for ch in xa_channels:
             if ch not in self.channel_names:
                 raise ValueError(f"Channel '{ch}' not in this Position's channel names {self.channel_names}")
@@ -1400,26 +1400,26 @@ class Position(NGFFNode):
                 return 1.0
             return float(coord_values[1] - coord_values[0])
 
-        t_scale = _coord_scale(data_array.coords["T"].values)
-        z_scale = _coord_scale(data_array.coords["Z"].values)
-        y_scale = _coord_scale(data_array.coords["Y"].values)
-        x_scale = _coord_scale(data_array.coords["X"].values)
+        t_scale = _coord_scale(data_array.coords["t"].values)
+        z_scale = _coord_scale(data_array.coords["z"].values)
+        y_scale = _coord_scale(data_array.coords["y"].values)
+        x_scale = _coord_scale(data_array.coords["x"].values)
 
-        t_trans = float(data_array.coords["T"].values[0])
-        z_trans = float(data_array.coords["Z"].values[0])
-        y_trans = float(data_array.coords["Y"].values[0])
-        x_trans = float(data_array.coords["X"].values[0])
+        t_trans = float(data_array.coords["t"].values[0])
+        z_trans = float(data_array.coords["z"].values[0])
+        y_trans = float(data_array.coords["y"].values[0])
+        x_trans = float(data_array.coords["x"].values[0])
 
         # Read coordinate units from per-coordinate attrs (CF convention)
         def _coord_unit(dim, default):
             return data_array.coords[dim].attrs.get("units", default)
 
         self.axes = [
-            TimeAxisMeta(name="T", unit=_coord_unit("T", "second")),
+            TimeAxisMeta(name="T", unit=_coord_unit("t", "second")),
             ChannelAxisMeta(name="C"),
-            SpaceAxisMeta(name="Z", unit=_coord_unit("Z", "micrometer")),
-            SpaceAxisMeta(name="Y", unit=_coord_unit("Y", "micrometer")),
-            SpaceAxisMeta(name="X", unit=_coord_unit("X", "micrometer")),
+            SpaceAxisMeta(name="Z", unit=_coord_unit("z", "micrometer")),
+            SpaceAxisMeta(name="Y", unit=_coord_unit("y", "micrometer")),
+            SpaceAxisMeta(name="X", unit=_coord_unit("x", "micrometer")),
         ]
 
         transforms = [
@@ -1436,11 +1436,11 @@ class Position(NGFFNode):
                 )
             )
 
-        np_data = np.asarray(data_array.values)
+        np_data = data_array.values
 
         # Create image array if it doesn't exist yet
         if image not in self:
-            T_full = len(data_array.coords["T"])
+            T_full = len(data_array.coords["t"])
             _, _, Z, Y, X = np_data.shape
             full_shape = (T_full, len(self.channel_names), Z, Y, X)
             self.create_zeros(
@@ -1456,7 +1456,7 @@ class Position(NGFFNode):
         # Map T coordinates to indices using scale and translation
         scale = self.get_effective_scale(image)
         translation = self.get_effective_translation(image)
-        t_coords = data_array.coords["T"].values
+        t_coords = data_array.coords["t"].values
         t_indices = np.round((t_coords - translation[0]) / scale[0]).astype(int)
 
         # Write each (T, C) slice into the zarr array

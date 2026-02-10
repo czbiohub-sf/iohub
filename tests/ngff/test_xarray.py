@@ -33,23 +33,23 @@ def _make_position(tmp_dir, channel_names, shape, scales=None, name="test.zarr")
 
 
 def _make_xarray(channels, shape=SHAPE_SMALL, scales=None, coord_units=None, attrs=None):
-    """Build a TCZYX DataArray with CF-convention coordinate units."""
+    """Build a tczyx DataArray with CF-convention coordinate units."""
     T, _, Z, Y, X = shape[0], None, shape[2], shape[3], shape[4]
     C = len(channels)
     scales = scales or {}
     data = RNG.random((T, C, Z, Y, X)).astype(np.float32)
-    coord_units = coord_units or {"T": "second", "Z": "micrometer", "Y": "micrometer", "X": "micrometer"}
+    coord_units = coord_units or {"t": "second", "z": "micrometer", "y": "micrometer", "x": "micrometer"}
     dims_info = {
-        "T": (T, scales.get("T", 1.0)),
-        "Z": (Z, scales.get("Z", 1.0)),
-        "Y": (Y, scales.get("Y", 0.65)),
-        "X": (X, scales.get("X", 0.65)),
+        "t": (T, scales.get("t", 1.0)),
+        "z": (Z, scales.get("z", 1.0)),
+        "y": (Y, scales.get("y", 0.65)),
+        "x": (X, scales.get("x", 0.65)),
     }
-    coords = {"C": ("C", channels)}
+    coords = {"c": ("c", channels)}
     for dim, (size, sc) in dims_info.items():
         unit_attrs = {"units": coord_units[dim]} if dim in coord_units else {}
         coords[dim] = (dim, np.arange(size) * sc, unit_attrs)
-    return xr.DataArray(data, dims=("T", "C", "Z", "Y", "X"), coords=coords, attrs=attrs or {})
+    return xr.DataArray(data, dims=("t", "c", "z", "y", "x"), coords=coords, attrs=attrs or {})
 
 
 class TestToXarray:
@@ -57,7 +57,7 @@ class TestToXarray:
         with TemporaryDirectory() as tmp:
             pos, data = _make_position(tmp, ["GFP", "RFP"], (2, 2, 3, 16, 16))
             xa = pos.to_xarray()
-            assert xa.dims == ("T", "C", "Z", "Y", "X")
+            assert xa.dims == ("t", "c", "z", "y", "x")
             assert xa.shape == (2, 2, 3, 16, 16)
             assert isinstance(xa.data, da.Array)
             assert_array_equal(xa.values, data)
@@ -72,19 +72,19 @@ class TestToXarray:
                 scales={"T": 0.5, "Z": 2.0, "Y": 0.65, "X": 0.65},
             )
             xa = pos.to_xarray()
-            assert list(xa.coords["C"].values) == ["BF", "GFP"]
-            assert_allclose(xa.coords["T"].values, [0.0, 0.5])
-            assert_allclose(xa.coords["Z"].values, np.arange(4) * 2.0)
-            assert_allclose(xa.coords["Y"].values, np.arange(16) * 0.65)
+            assert list(xa.coords["c"].values) == ["BF", "GFP"]
+            assert_allclose(xa.coords["t"].values, [0.0, 0.5])
+            assert_allclose(xa.coords["z"].values, np.arange(4) * 2.0)
+            assert_allclose(xa.coords["y"].values, np.arange(16) * 0.65)
             pos.close()
 
     def test_coordinate_units_cf(self):
         with TemporaryDirectory() as tmp:
             pos, _ = _make_position(tmp, ["ch1"], SHAPE_SMALL)
             xa = pos.to_xarray()
-            assert xa.coords["T"].attrs["units"] == "second"
-            assert xa.coords["Z"].attrs["units"] == "micrometer"
-            assert "units" not in xa.coords["C"].attrs
+            assert xa.coords["t"].attrs["units"] == "second"
+            assert xa.coords["z"].attrs["units"] == "micrometer"
+            assert "units" not in xa.coords["c"].attrs
             pos.close()
 
     def test_sel_by_channel_and_time(self):
@@ -96,9 +96,9 @@ class TestToXarray:
                 scales={"T": 0.5},
             )
             xa = pos.to_xarray()
-            assert_array_equal(xa.sel(C="BF").values, data[:, 0])
-            assert list(xa.sel(C=["BF", "RFP"]).coords["C"].values) == ["BF", "RFP"]
-            assert_array_equal(xa.sel(T=1.0).values, data[2])
+            assert_array_equal(xa.sel(c="BF").values, data[:, 0])
+            assert list(xa.sel(c=["BF", "RFP"]).coords["c"].values) == ["BF", "RFP"]
+            assert_array_equal(xa.sel(t=1.0).values, data[2])
             pos.close()
 
 
@@ -125,7 +125,7 @@ class TestWriteXarray:
                 xa2 = pos2.to_xarray()
 
             assert_array_equal(xa1.values, xa2.values)
-            for dim in ("T", "Z", "Y", "X"):
+            for dim in ("t", "z", "y", "x"):
                 assert_allclose(xa1.coords[dim].values, xa2.coords[dim].values)
 
     def test_roundtrip_coordinate_units(self):
@@ -133,10 +133,10 @@ class TestWriteXarray:
             xa = _make_xarray(
                 ["ch1"],
                 coord_units={
-                    "T": "millisecond",
-                    "Z": "nanometer",
-                    "Y": "nanometer",
-                    "X": "nanometer",
+                    "t": "millisecond",
+                    "z": "nanometer",
+                    "y": "nanometer",
+                    "x": "nanometer",
                 },
             )
             with open_ome_zarr(
@@ -147,8 +147,8 @@ class TestWriteXarray:
             ) as pos:
                 pos.write_xarray(xa)
                 xa2 = pos.to_xarray()
-            assert xa2.coords["T"].attrs["units"] == "millisecond"
-            assert xa2.coords["Z"].attrs["units"] == "nanometer"
+            assert xa2.coords["t"].attrs["units"] == "millisecond"
+            assert xa2.coords["z"].attrs["units"] == "nanometer"
 
     def test_roundtrip_value_attrs(self):
         with TemporaryDirectory() as tmp:
@@ -174,7 +174,7 @@ class TestWriteXarray:
                     pos.write_xarray(xa)
 
     def test_wrong_dims_raises(self):
-        bad = xr.DataArray(np.zeros((2, 3)), dims=("X", "Y"))
+        bad = xr.DataArray(np.zeros((2, 3)), dims=("x", "y"))
         with TemporaryDirectory() as tmp:
             with open_ome_zarr(
                 os.path.join(tmp, "e.zarr"),
@@ -189,13 +189,13 @@ class TestWriteXarray:
         with TemporaryDirectory() as tmp:
             xa = xr.DataArray(
                 np.zeros((1, 1, 1, 4, 4), dtype=np.float32),
-                dims=("T", "C", "Z", "Y", "X"),
+                dims=("t", "c", "z", "y", "x"),
                 coords={
-                    "T": ("T", [10.0], {"units": "second"}),
-                    "C": ("C", ["ch1"]),
-                    "Z": ("Z", [5.0], {"units": "micrometer"}),
-                    "Y": ("Y", [100.0, 100.65, 101.3, 101.95], {"units": "micrometer"}),
-                    "X": ("X", [200.0, 200.65, 201.3, 201.95], {"units": "micrometer"}),
+                    "t": ("t", [10.0], {"units": "second"}),
+                    "c": ("c", ["ch1"]),
+                    "z": ("z", [5.0], {"units": "micrometer"}),
+                    "y": ("y", [100.0, 100.65, 101.3, 101.95], {"units": "micrometer"}),
+                    "x": ("x", [200.0, 200.65, 201.3, 201.95], {"units": "micrometer"}),
                 },
             )
             with open_ome_zarr(
@@ -206,8 +206,8 @@ class TestWriteXarray:
             ) as pos:
                 pos.write_xarray(xa)
                 xa2 = pos.to_xarray()
-                assert_allclose(xa2.coords["T"].values, [10.0])
-                assert_allclose(xa2.coords["Y"].values, xa.coords["Y"].values, atol=1e-6)
+                assert_allclose(xa2.coords["t"].values, [10.0])
+                assert_allclose(xa2.coords["y"].values, xa.coords["y"].values, atol=1e-6)
 
     def test_write_channel_subset(self):
         """Write channels one at a time into a multi-channel position."""
@@ -224,26 +224,26 @@ class TestWriteXarray:
                 for ch, vals in per_ch.items():
                     xa = xr.DataArray(
                         vals,
-                        dims=("T", "C", "Z", "Y", "X"),
+                        dims=("t", "c", "z", "y", "x"),
                         coords={
-                            "T": ("T", [0.0]),
-                            "C": ("C", [ch]),
-                            "Z": ("Z", [0.0]),
-                            "Y": ("Y", np.arange(8.0)),
-                            "X": ("X", np.arange(8.0)),
+                            "t": ("t", [0.0]),
+                            "c": ("c", [ch]),
+                            "z": ("z", [0.0]),
+                            "y": ("y", np.arange(8.0)),
+                            "x": ("x", np.arange(8.0)),
                         },
                     )
                     pos.write_xarray(xa)
                 result = pos.to_xarray()
                 for ch, vals in per_ch.items():
-                    assert_array_equal(result.sel(C=ch).values, vals[:, 0])
+                    assert_array_equal(result.sel(c=ch).values, vals[:, 0])
 
     def test_write_time_subset(self):
         """Write timepoints into a pre-allocated array."""
         with TemporaryDirectory() as tmp:
             t0 = RNG.random(SHAPE_SMALL).astype(np.float32)
             t1 = RNG.random(SHAPE_SMALL).astype(np.float32)
-            coords = {"C": ("C", ["ch1"]), "Z": ("Z", [0.0]), "Y": ("Y", np.arange(8.0)), "X": ("X", np.arange(8.0))}
+            coords = {"c": ("c", ["ch1"]), "z": ("z", [0.0]), "y": ("y", np.arange(8.0)), "x": ("x", np.arange(8.0))}
 
             with open_ome_zarr(
                 os.path.join(tmp, "t.zarr"),
@@ -255,13 +255,13 @@ class TestWriteXarray:
                 for t_coord, data in [(0.0, t0), (1.0, t1)]:
                     xa = xr.DataArray(
                         data,
-                        dims=("T", "C", "Z", "Y", "X"),
-                        coords={"T": ("T", [t_coord]), **coords},
+                        dims=("t", "c", "z", "y", "x"),
+                        coords={"t": ("t", [t_coord]), **coords},
                     )
                     pos.write_xarray(xa)
                 result = pos.to_xarray()
-                assert_array_equal(result.sel(T=0.0, C="ch1").values, t0[0, 0])
-                assert_array_equal(result.sel(T=1.0, C="ch1").values, t1[0, 0])
+                assert_array_equal(result.sel(t=0.0, c="ch1").values, t0[0, 0])
+                assert_array_equal(result.sel(t=1.0, c="ch1").values, t1[0, 0])
 
     def test_hcs_plate(self):
         with TemporaryDirectory() as tmp:
@@ -277,7 +277,7 @@ class TestWriteXarray:
                 pos.write_xarray(xa)
                 xa2 = pos.to_xarray()
             assert_array_equal(xa.values, xa2.values)
-            assert list(xa2.coords["C"].values) == channels
+            assert list(xa2.coords["c"].values) == channels
 
     def test_waveorder_pattern(self):
         """Read BF, compute Phase+Retardance, write channel-by-channel."""
@@ -298,7 +298,7 @@ class TestWriteXarray:
 
             # Read, process, write
             with open_ome_zarr(in_path, mode="r") as p:
-                bf = p.to_xarray().sel(C=["BF"])
+                bf = p.to_xarray().sel(c=["BF"])
                 phase = np.sin(bf.values).astype(np.float32)
                 ret = np.cos(bf.values).astype(np.float32)
 
@@ -312,13 +312,13 @@ class TestWriteXarray:
                 for name, vals in [("Phase", phase), ("Ret", ret)]:
                     xa = xr.DataArray(
                         vals,
-                        dims=("T", "C", "Z", "Y", "X"),
+                        dims=("t", "c", "z", "y", "x"),
                         coords={
-                            "T": bf.coords["T"],
-                            "C": ("C", [name]),
-                            "Z": bf.coords["Z"],
-                            "Y": bf.coords["Y"],
-                            "X": bf.coords["X"],
+                            "t": bf.coords["t"],
+                            "c": ("c", [name]),
+                            "z": bf.coords["z"],
+                            "y": bf.coords["y"],
+                            "x": bf.coords["x"],
                         },
                     )
                     p.write_xarray(xa)
@@ -326,5 +326,5 @@ class TestWriteXarray:
             with open_ome_zarr(out_path, mode="r") as p:
                 result = p.to_xarray()
             assert result.shape == (2, 2, 4, 16, 16)
-            assert_array_equal(result.sel(C="Phase").values, phase[:, 0])
-            assert_allclose(result.coords["Z"].values, np.arange(4) * 2.0)
+            assert_array_equal(result.sel(c="Phase").values, phase[:, 0])
+            assert_allclose(result.coords["z"].values, np.arange(4) * 2.0)
