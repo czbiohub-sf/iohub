@@ -33,7 +33,7 @@ OUTPUT_DIR = "docs/build"
 SOURCE_DIR = "docs/"
 
 #: Arguments to pass to `pip install`
-PIP_ARGS = [".[doc]"]
+PIP_ARGS = [".[doc,tensorstore]"]
 
 #: Mock data used for building local version
 MOCK_DATA = {
