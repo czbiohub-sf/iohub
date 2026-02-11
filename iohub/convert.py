@@ -1,5 +1,6 @@
 import json
 import logging
+from importlib.metadata import version as _get_package_version
 from pathlib import Path
 from typing import Literal
 
@@ -10,7 +11,6 @@ from tqdm import tqdm
 from tqdm.contrib.itertools import product
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-from iohub._version import __version__
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import Position, open_ome_zarr
 from iohub.ngff.utils import (
@@ -145,7 +145,7 @@ class TIFFConverter:
         self._get_pos_names()
         _logger.info(f"Found Dataset {input_dir} with dimensions (P, T, C, Z, Y, X): {self.dim}")
         self.metadata = dict()
-        self.metadata["iohub_version"] = __version__
+        self.metadata["iohub_version"] = _get_package_version("iohub")
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
             if hcs_plate:
