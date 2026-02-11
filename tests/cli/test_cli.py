@@ -120,6 +120,28 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     assert "Converting" in result.output
 
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_cli_convert_version(version, tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
+    runner = CliRunner()
+    output_dir = tmpdir / "converted.zarr"
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", version]
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code == 0, result.output
+    with open_ome_zarr(output_dir, mode="r") as store:
+        assert store.version == version
+
+
+def test_cli_convert_invalid_version(tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
+    runner = CliRunner()
+    output_dir = tmpdir / "converted.zarr"
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", "0.3"]
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output
+
+
 def test_cli_set_scale(caplog):
     with _temp_copy(hcs_ref) as store_path:
         store_path = Path(store_path)

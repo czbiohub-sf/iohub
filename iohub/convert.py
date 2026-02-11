@@ -1,6 +1,5 @@
 import json
 import logging
-from importlib.metadata import version
 from pathlib import Path
 from typing import Literal
 
@@ -11,6 +10,7 @@ from tqdm import tqdm
 from tqdm.contrib.itertools import product
 from tqdm.contrib.logging import logging_redirect_tqdm
 
+from iohub._version import __version__
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import Position, open_ome_zarr
 from iohub.ngff.utils import (
@@ -25,9 +25,7 @@ _logger = logging.getLogger(__name__)
 MAX_CHUNK_SIZE = 500e6  # in bytes
 
 
-def _create_grid_from_coordinates(
-    xy_coords: list[tuple[float, float]], rows: int, columns: int
-):
+def _create_grid_from_coordinates(xy_coords: list[tuple[float, float]], rows: int, columns: int):
     """Create a grid from XY-position coordinates.
 
     Parameters
@@ -94,6 +92,9 @@ class TIFFConverter:
         HCS Site Generator in Micro-Manager (only available for OME-TIFF),
         and is ignored for other formats, by default None
         (attempt to apply to OME-TIFF datasets, disable this with ``False``)
+    version : Literal["0.4", "0.5"], optional
+        OME-NGFF version for the output Zarr store, by default "0.4".
+        Version "0.4" uses Zarr v2 format, version "0.5" uses Zarr v3 format.
 
     Notes
     -----
@@ -109,7 +110,11 @@ class TIFFConverter:
         grid_layout: int = False,
         chunks: tuple[int] | Literal["XY", "XYZ"] = None,
         hcs_plate: bool = None,
+        version: Literal["0.4", "0.5"] = "0.4",
     ):
+        if version not in ("0.4", "0.5"):
+            raise ValueError(f"Unsupported OME-NGFF version '{version}'. Supported versions are '0.4' and '0.5'.")
+        self.version = version
         _logger.debug("Checking output.")
         output_dir = Path(output_dir)
         if ".zarr" not in output_dir.suffixes:
@@ -140,7 +145,7 @@ class TIFFConverter:
         self._get_pos_names()
         _logger.info(f"Found Dataset {input_dir} with dimensions (P, T, C, Z, Y, X): {self.dim}")
         self.metadata = dict()
-        self.metadata["iohub_version"] = version("iohub")
+        self.metadata["iohub_version"] = __version__
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
             if hcs_plate:
@@ -229,10 +234,7 @@ class TIFFConverter:
             chunks = [1, 1, self.z, self.y, self.x]
         elif isinstance(input_chunks, tuple):
             if not len(input_chunks) == 5:
-                raise ValueError(
-                    "Input chunks must be a tuple of 5 dimensions, got "
-                    f"{len(input_chunks)} dimensions."
-                )
+                raise ValueError(f"Input chunks must be a tuple of 5 dimensions, got {len(input_chunks)} dimensions.")
             chunks = list(input_chunks)
         elif isinstance(input_chunks, str):
             if input_chunks.lower() == "xy":
@@ -249,16 +251,12 @@ class TIFFConverter:
 
         # Limit chunk size to MAX_CHUNK_SIZE by halving Z
         bytes_per_pixel = np.dtype(self.reader.dtype).itemsize
-        chunk_zyx_shape = _limit_zyx_chunk_size(
-            shape, bytes_per_pixel, MAX_CHUNK_SIZE, chunks=chunks
-        )
+        chunk_zyx_shape = _limit_zyx_chunk_size(shape, bytes_per_pixel, MAX_CHUNK_SIZE, chunks=chunks)
         chunks[-3:] = list(chunk_zyx_shape)
 
         # Adjust chunks to divide evenly into dimensions
         chunks = _adjust_chunks_for_divisibility(shape, chunks)
-        for i, (orig, adj, dim) in enumerate(
-            zip(original_chunks, chunks, shape)
-        ):
+        for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, shape)):
             if orig != adj:
                 _logger.warning(f"Chunk size {orig} on axis {i} adjusted to {adj} (dimension {dim}).")
 
@@ -276,12 +274,14 @@ class TIFFConverter:
         ]
 
     def _init_zarr_arrays(self):
+        zarr_format = 3 if self.version == "0.5" else 2
+        _logger.info(f"Converting to OME-Zarr version {self.version} (Zarr format v{zarr_format}).")
         self.writer = open_ome_zarr(
             self.output_dir,
             layout="hcs",
             mode="w-",
             channel_names=self.reader.channel_names,
-            version="0.5",
+            version=self.version,
         )
         self.zarr_position_names = []
         arr_kwargs = {
@@ -375,12 +375,10 @@ class TIFFConverter:
         # Calculate chunk size in bytes for dask config
         # This prevents data loss when rechunking to zarr chunks
         # See: https://github.com/czbiohub-sf/iohub/issues/367
-        chunk_size_bytes = int(
-            np.prod(self.chunks) * np.dtype(self.reader.dtype).itemsize
-        )
+        chunk_size_bytes = int(np.prod(self.chunks) * np.dtype(self.reader.dtype).itemsize)
         # Run through every coordinate and convert in acquisition order
         _logger.debug("Converting images.")
-        with logging_redirect_tqdm():
+        with logging_redirect_tqdm(), dask.config.set({"array.chunk-size": chunk_size_bytes}):
             for zarr_pos_name, (_, fov) in tqdm(
                 zip(self.zarr_position_names, self.reader, strict=True),
                 total=len(self.reader),
@@ -389,8 +387,7 @@ class TIFFConverter:
                 ncols=80,
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
-                with dask.config.set({"array.chunk-size": chunk_size_bytes}):
-                    to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
+                to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
                 self._convert_image_plane_metadata(fov, zarr_img.path)
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()

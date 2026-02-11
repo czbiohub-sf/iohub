@@ -235,9 +235,7 @@ class TestGenChunks:
             converter.reader = MockReader()
             converter.reader.dtype = dtype
 
-            converter._gen_chunks = TIFFConverter._gen_chunks.__get__(
-                converter
-            )
+            converter._gen_chunks = TIFFConverter._gen_chunks.__get__(converter)
             return converter
 
         return _make
@@ -252,18 +250,14 @@ class TestGenChunks:
             (9, 4, 3),  # odd non-prime, adjust to 3
         ],
     )
-    def test_gen_chunks_divisibility(
-        self, make_mock_converter, z_dim, input_chunk, expected_z
-    ):
+    def test_gen_chunks_divisibility(self, make_mock_converter, z_dim, input_chunk, expected_z):
         """Test chunks are adjusted to divide evenly into dimensions."""
         converter = make_mock_converter(z=z_dim)
         chunks = converter._gen_chunks((1, 1, input_chunk, 256, 256))
         assert chunks[2] == expected_z
         assert z_dim % chunks[2] == 0
 
-    def test_gen_chunks_max_chunk_size_then_divisibility(
-        self, make_mock_converter
-    ):
+    def test_gen_chunks_max_chunk_size_then_divisibility(self, make_mock_converter):
         """Test divisibility check happens AFTER MAX_CHUNK_SIZE adjustment."""
         # Large chunks that trigger MAX_CHUNK_SIZE, then need divisibility fix
         # Z=15, large XY to trigger size limit, chunk should end up dividing 15
@@ -312,13 +306,9 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
     dask_data = da.from_array(data, chunks=source_chunks)
 
     output = tmpdir / "test_rechunk.zarr"
-    with open_ome_zarr(
-        output, layout="hcs", mode="w-", channel_names=["test"], version="0.5"
-    ) as writer:
+    with open_ome_zarr(output, layout="hcs", mode="w-", channel_names=["test"], version="0.5") as writer:
         pos = writer.create_position("0", "0", "0")
-        zarr_img = pos.create_zeros(
-            name="0", shape=shape, dtype=np.uint16, chunks=target_chunks
-        )
+        zarr_img = pos.create_zeros(name="0", shape=shape, dtype=np.uint16, chunks=target_chunks)
 
         # Rechunk and write with `array.chunk-size` config
         chunk_size_bytes = int(np.prod(target_chunks) * 2)
@@ -329,6 +319,66 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
     with open_ome_zarr(output, layout="hcs", mode="r") as reader:
         written = reader["0/0/0"]["0"][:]
 
-    np.testing.assert_array_equal(
-        data, written, err_msg="Data lost during XY to XYZ rechunking"
+    np.testing.assert_array_equal(data, written, err_msg="Data lost during XY to XYZ rechunking")
+
+
+class TestVersionParameter:
+    """Tests for the OME-NGFF version parameter on TIFFConverter."""
+
+    def test_default_version(self, example_ome_tiff, tmpdir):
+        """Default version should be '0.4'."""
+        output = tmpdir / "converted.zarr"
+        converter = TIFFConverter(example_ome_tiff, output)
+        assert converter.version == "0.4"
+
+    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
+    def test_explicit_version(self, example_ome_tiff, tmpdir, ver):
+        """Explicit version should be stored on the converter."""
+        output = tmpdir / f"converted_{ver}.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        assert converter.version == ver
+
+    def test_invalid_version_raises(self, example_ome_tiff, tmpdir):
+        """Invalid version strings should raise ValueError."""
+        output = tmpdir / "converted.zarr"
+        with pytest.raises(ValueError, match="Unsupported OME-NGFF version"):
+            TIFFConverter(example_ome_tiff, output, version="0.3")
+
+    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
+    def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver):
+        """Conversion should produce a correct store and preserve pixel data."""
+        logging.getLogger("tifffile").setLevel(logging.ERROR)
+        output = tmpdir / f"converted_{ver}.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        from tifffile import TiffFile
+
+        with TiffFile(next(example_ome_tiff.glob("*.tif*"))) as tf:
+            expected_sum = tf.asarray().sum()
+        converter()
+        with open_ome_zarr(output, mode="r") as result:
+            assert result.version == ver
+            intensity = sum(pos["0"][:].sum() for _, pos in result.positions())
+            assert intensity == expected_sum
+
+    @pytest.mark.parametrize(
+        "ver,expected_zarr_format",
+        [("0.4", 2), ("0.5", 3)],
     )
+    def test_version_produces_correct_zarr_format(self, example_ome_tiff, tmpdir, ver, expected_zarr_format):
+        """Version should produce the corresponding Zarr format."""
+        logging.getLogger("tifffile").setLevel(logging.ERROR)
+        output = tmpdir / f"converted_{ver}.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        converter()
+        with open_ome_zarr(output, mode="r") as result:
+            assert result.zgroup.metadata.zarr_format == expected_zarr_format
+
+    def test_version_logs_info(self, example_ome_tiff, tmpdir, caplog):
+        """Version should be logged during conversion."""
+        logging.getLogger("tifffile").setLevel(logging.ERROR)
+        output = tmpdir / "converted.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version="0.5")
+        with caplog.at_level(logging.INFO, logger="iohub.convert"):
+            converter()
+        assert "OME-Zarr version 0.5" in caplog.text
+        assert "Zarr format v3" in caplog.text

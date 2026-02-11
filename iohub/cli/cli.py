@@ -77,13 +77,22 @@ def info(files, verbose):
     help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
     "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
 )
-def convert(input, output, grid_layout, chunks):
+@click.option(
+    "--ome-zarr-version",
+    "-v",
+    required=False,
+    default="0.4",
+    type=click.Choice(["0.4", "0.5"]),
+    help="OME-NGFF version for the output Zarr store. '0.4' uses Zarr v2 format, '0.5' uses Zarr v3 format.",
+)
+def convert(input, output, grid_layout, chunks, ome_zarr_version):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
     converter = TIFFConverter(
         input_dir=input,
         output_dir=output,
         grid_layout=grid_layout,
         chunks=chunks,
+        version=ome_zarr_version,
     )
     converter()
 
