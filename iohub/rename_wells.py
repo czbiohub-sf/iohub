@@ -41,10 +41,7 @@ def rename_wells(zarr_store_path: str | Path, csv_file_path: str | Path):
     with open(csv_file_path, mode="r", encoding="utf-8-sig") as csv_file:
         for row in csv.reader(csv_file):
             if len(row) != 2:
-                raise ValueError(
-                    f"Invalid row format: {row}."
-                    f"Each row must have two columns."
-                )
+                raise ValueError(f"Invalid row format: {row}.Each row must have two columns.")
             name_pair_list.append([row[0].strip(), row[1].strip()])
 
     # rename each well while catching errors

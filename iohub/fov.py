@@ -38,10 +38,7 @@ class BaseFOV(ABC):
             return []
 
         elif len(self.axes_names) > 5:
-            raise ValueError(
-                f"{self.__name__} does not support more than 5 axes. "
-                f"Found {len(self.axes_names)}"
-            )
+            raise ValueError(f"{self.__name__} does not support more than 5 axes. Found {len(self.axes_names)}")
 
         axes = set(ax[:1].upper() for ax in self.axes_names)
 
@@ -72,9 +69,7 @@ class BaseFOV(ABC):
             seq = tuple(seq)
 
         if len(seq) != len(_AXES_PREFIX):
-            raise RuntimeError(
-                f"Failed to pad raw axes {self.axes_names} to {_AXES_PREFIX}"
-            )
+            raise RuntimeError(f"Failed to pad raw axes {self.axes_names} to {_AXES_PREFIX}")
 
         return seq
 
@@ -180,15 +175,11 @@ class FOVDict(BaseFOVMapping):
     def _safe_insert(self, key: str, value: BaseFOV) -> None:
         """Checks if types are correct and key is unique."""
         if not isinstance(key, str):
-            raise TypeError(
-                f"{self.__class__.__name__} key must be str. "
-                f"Found {key} with type {type(key)}"
-            )
+            raise TypeError(f"{self.__class__.__name__} key must be str. Found {key} with type {type(key)}")
 
         if not isinstance(value, BaseFOV):
             raise TypeError(
-                f"{self.__class__.__name__} value must subclass BaseFOV. "
-                f"Found {key} with value type {type(value)}"
+                f"{self.__class__.__name__} value must subclass BaseFOV. Found {key} with value type {type(value)}"
             )
 
         if key in self:

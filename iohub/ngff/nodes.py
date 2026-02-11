@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Generator, Literal, Sequence, Type, TypeAlias, overload
 
 import numpy as np
+import xarray as xr
 import zarr.codecs
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
@@ -67,13 +68,10 @@ def _open_store(
 ):
     store_path = Path(store_path).resolve()
     if not store_path.exists() and mode in ("r", "r+"):
-        raise FileNotFoundError(
-            f"Dataset directory not found at {str(store_path)}."
-        )
+        raise FileNotFoundError(f"Dataset directory not found at {str(store_path)}.")
     if version not in ("0.4", "0.5"):
         _logger.warning(
-            "IOHub is only tested against OME-NGFF v0.4 and v0.5. "
-            f"Requested version {version} may not work properly."
+            f"IOHub is only tested against OME-NGFF v0.4 and v0.5. Requested version {version} may not work properly."
         )
     try:
         zarr_format = None
@@ -81,9 +79,7 @@ def _open_store(
             zarr_format = 3 if version == "0.5" else 2
         root = zarr.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except Exception as e:
-        raise RuntimeError(
-            f"Cannot open Zarr root group at {str(store_path)}"
-        ) from e
+        raise RuntimeError(f"Cannot open Zarr root group at {str(store_path)}") from e
     return root
 
 
@@ -119,9 +115,7 @@ class NGFFNode:
         if channel_names:
             self._channel_names = channel_names
         elif not parse_meta:
-            raise ValueError(
-                "Channel names need to be provided or in metadata."
-            )
+            raise ValueError("Channel names need to be provided or in metadata.")
         if axes:
             self.axes = axes
         self._group = group
@@ -218,8 +212,7 @@ class NGFFNode:
                 continue
             if key != name:
                 _logger.warning(
-                    f"Key '{key}' matched member '{name}'. "
-                    "This may not work on case-sensitive filesystems."
+                    f"Key '{key}' matched member '{name}'. This may not work on case-sensitive filesystems."
                 )
             return True
         return False
@@ -286,11 +279,7 @@ class NGFFNode:
             try:
                 yield key, self[key]
             except Exception:
-                _logger.warning(
-                    "Skipped item at {}: invalid {}.".format(
-                        key, type(self._MEMBER_TYPE)
-                    )
-                )
+                _logger.warning("Skipped item at {}: invalid {}.".format(key, type(self._MEMBER_TYPE)))
 
     def get_channel_index(self, name: str):
         """Get the index of a given channel in the channel list.
@@ -307,20 +296,14 @@ class NGFFNode:
         """
         if not hasattr(self, "_channel_names"):
             raise AttributeError(
-                "Channel names are not set for this NGFF node. "
-                f"Cannot get the index for channel name '{name}'"
+                f"Channel names are not set for this NGFF node. Cannot get the index for channel name '{name}'"
             )
         if name not in self._channel_names:
-            raise ValueError(
-                f"Channel {name} is not in "
-                f"the existing channels: {self._channel_names}"
-            )
+            raise ValueError(f"Channel {name} is not in the existing channels: {self._channel_names}")
         return self._channel_names.index(name)
 
     def _warn_invalid_meta(self):
-        msg = "Zarr group at {} does not have valid metadata for {}".format(
-            self._group.path, type(self)
-        )
+        msg = "Zarr group at {} does not have valid metadata for {}".format(self._group.path, type(self))
         _logger.warning(msg)
 
     def _parse_meta(self):
@@ -417,9 +400,7 @@ class ImageArray(zarr.Array):
         }
         if "read" in kwargs or "write" in kwargs:
             raise ValueError("Cannot override file mode for the Zarr store.")
-        zarr_dataset = ts.open(
-            ts_spec, read=True, write=not self.read_only, **kwargs
-        ).result()
+        zarr_dataset = ts.open(ts_spec, read=True, write=not self.read_only, **kwargs).result()
         return zarr_dataset
 
 
@@ -529,15 +510,9 @@ class TiledImageArray(ImageArray):
         if pre_dims is not None:
             try:
                 if len(pre_dims) != len(pad):
-                    raise IndexError(
-                        f"Length of `pre_dims` should be {len(pad)}, "
-                        f"got {len(pre_dims)}."
-                    )
+                    raise IndexError(f"Length of `pre_dims` should be {len(pad)}, got {len(pre_dims)}.")
             except TypeError:
-                raise TypeError(
-                    "Argument `pre_dims` should be a sequence, "
-                    f"got type {type(pre_dims)}."
-                )
+                raise TypeError(f"Argument `pre_dims` should be a sequence, got type {type(pre_dims)}.")
             for i, sel in enumerate(pre_dims):
                 if isinstance(sel, int):
                     sel = slice(sel)
@@ -605,24 +580,15 @@ class Position(NGFFNode):
     def _set_meta(self):
         self.axes = self.metadata.multiscales[0].axes
         if self.metadata.omero is not None:
-            self._channel_names = [
-                c.label for c in self.metadata.omero.channels
-            ]
+            self._channel_names = [c.label for c in self.metadata.omero.channels]
         else:
-            _logger.warning(
-                "OMERO metadata not found. "
-                "Using channel indices as channel names."
-            )
-            example_image: ImageArray = self[
-                self.metadata.multiscales[0].datasets[0].path
-            ]
+            _logger.warning("OMERO metadata not found. Using channel indices as channel names.")
+            example_image: ImageArray = self[self.metadata.multiscales[0].datasets[0].path]
             self._channel_names = list(range(example_image.channels))
 
     def _parse_meta(self):
         try:
-            self.metadata = ImagesMeta.model_validate(
-                self.maybe_wrapped_ome_attrs
-            )
+            self.metadata = ImagesMeta.model_validate(self.maybe_wrapped_ome_attrs)
             self._set_meta()
         except ValidationError as e:
             _logger.warning(str(e))
@@ -669,10 +635,7 @@ class Position(NGFFNode):
         try:
             return self["0"]
         except KeyError:
-            raise KeyError(
-                "There is no array named '0' "
-                f"in the group of: {self.array_keys()}"
-            )
+            raise KeyError(f"There is no array named '0' in the group of: {self.array_keys()}")
 
     def __getitem__(self, key: int | str) -> ImageArray:
         """Get an image array member of the position.
@@ -695,9 +658,7 @@ class Position(NGFFNode):
         """Write an up-to-5D image with default settings."""
         key = normalize_path(str(key))
         if not isinstance(value, np.ndarray):
-            raise TypeError(
-                f"Value must be a NumPy array. Got type {type(value)}."
-            )
+            raise TypeError(f"Value must be a NumPy array. Got type {type(value)}.")
         self.create_image(key, value)
 
     def images(self) -> Generator[tuple[str, ImageArray]]:
@@ -809,10 +770,7 @@ class Position(NGFFNode):
             self._check_shape(shape)
         if shards_ratio:
             if len(shards_ratio) != len(shape):
-                raise ValueError(
-                    f"Sharding ratio length {len(shards_ratio)} "
-                    f"does not match shape length {len(shape)}."
-                )
+                raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
             shards = tuple(c * s for c, s in zip(chunks, shards_ratio))
         else:
             shards = None
@@ -825,11 +783,7 @@ class Position(NGFFNode):
                 shards=shards,
                 overwrite=self._overwrite,
                 fill_value=0,
-                dimension_names=(
-                    [ax.name for ax in self.axes]
-                    if self._zarr_format == 3
-                    else None
-                ),
+                dimension_names=([ax.name for ax in self.axes] if self._zarr_format == 3 else None),
                 chunk_key_encoding=ChunkKeyEncodingParams(
                     name="default" if self._zarr_format == 3 else "v2",
                     separator="/",
@@ -847,25 +801,16 @@ class Position(NGFFNode):
 
     def _check_shape(self, data_shape: tuple[int, ...]) -> None:
         if len(data_shape) != len(self.axes):
-            raise ValueError(
-                f"Image has {len(data_shape)} dimensions, "
-                f"while the dataset has {len(self.axes)}."
-            )
+            raise ValueError(f"Image has {len(data_shape)} dimensions, while the dataset has {len(self.axes)}.")
         num_ch = len(self.channel_names)
         if ch_axis := self._find_axis("channel"):
-            msg = (
-                f"Image has {data_shape[ch_axis]} channels, "
-                f"while the dataset  has {num_ch}."
-            )
+            msg = f"Image has {data_shape[ch_axis]} channels, while the dataset  has {num_ch}."
             if data_shape[ch_axis] > num_ch:
                 raise ValueError(msg)
             elif data_shape[ch_axis] < num_ch:
                 _logger.warning(msg)
         else:
-            _logger.info(
-                "Dataset channel axis is not set. "
-                "Skipping channel shape check."
-            )
+            _logger.info("Dataset channel axis is not set. Skipping channel shape check.")
 
     def _create_compressor_options(self):
         shuffle = zarr.codecs.BloscShuffle.bitshuffle
@@ -880,11 +825,7 @@ class Position(NGFFNode):
         else:
             from numcodecs import Blosc
 
-            return {
-                "compressor": Blosc(
-                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                )
-            }
+            return {"compressor": Blosc(cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE)}
 
     def _create_image_meta(
         self,
@@ -893,12 +834,8 @@ class Position(NGFFNode):
         extra_meta: dict | None = None,
     ):
         if not transform:
-            transform = [
-                TransformationMeta(type="scale", scale=[1.0] * len(self.axes))
-            ]
-        dataset_meta = DatasetMeta(
-            path=name, coordinate_transformations=transform
-        )
+            transform = [TransformationMeta(type="scale", scale=[1.0] * len(self.axes))]
+        dataset_meta = DatasetMeta(path=name, coordinate_transformations=transform)
         if not hasattr(self, "metadata"):
             self.metadata = ImagesMeta(
                 multiscales=[
@@ -914,10 +851,7 @@ class Position(NGFFNode):
                 omero=self._omero_meta(id=0, name=self._group.basename),
                 version="0.5" if self.version == "0.5" else None,
             )
-        elif (
-            dataset_meta.path
-            not in self.metadata.multiscales[0].get_dataset_paths()
-        ):
+        elif dataset_meta.path not in self.metadata.multiscales[0].get_dataset_paths():
             self.metadata.multiscales[0].datasets.append(dataset_meta)
         self.dump_meta()
 
@@ -930,16 +864,10 @@ class Position(NGFFNode):
         if not clims:
             clims = [None] * len(self.channel_names)
         channels = []
-        for i, (channel_name, clim) in enumerate(
-            zip(self.channel_names, clims)
-        ):
+        for i, (channel_name, clim) in enumerate(zip(self.channel_names, clims)):
             if i == 0:
                 first_chan = True
-            channels.append(
-                channel_display_settings(
-                    channel_name, clim=clim, first_chan=first_chan
-                )
-            )
+            channels.append(channel_display_settings(channel_name, clim=clim, first_chan=first_chan))
         omero_meta = OMEROMeta(
             version=self.version,
             id=id,
@@ -957,10 +885,7 @@ class Position(NGFFNode):
 
     def _get_channel_axis(self):
         if (ch_ax := self._find_axis("channel")) is None:
-            raise KeyError(
-                "Axis 'channel' does not exist. "
-                "Please update `self.axes` first."
-            )
+            raise KeyError("Axis 'channel' does not exist. Please update `self.axes` first.")
         else:
             return ch_ax
 
@@ -988,14 +913,10 @@ class Position(NGFFNode):
                 elif ch_ax == len(shape):
                     shape = _pad_shape(tuple(shape), target=len(shape) + 1)
                 else:
-                    raise IndexError(
-                        f"Cannot infer channel axis for shape {shape}."
-                    )
+                    raise IndexError(f"Cannot infer channel axis for shape {shape}.")
                 img.resize(shape)
         if "omero" in self.metadata.model_dump().keys():
-            self.metadata.omero.channels.append(
-                channel_display_settings(chan_name)
-            )
+            self.metadata.omero.channels.append(channel_display_settings(chan_name))
             self.dump_meta()
 
     def rename_channel(self, old: str, new: str):
@@ -1059,27 +980,17 @@ class Position(NGFFNode):
         for level in range(1, levels):
             factor = 2**level
 
-            shape = array.shape[:-3] + _scale_integers(
-                array.shape[-3:], factor
-            )
+            shape = array.shape[:-3] + _scale_integers(array.shape[-3:], factor)
 
-            chunks = _pad_shape(
-                _scale_integers(array.chunks, factor), len(shape)
-            )
+            chunks = _pad_shape(_scale_integers(array.chunks, factor), len(shape))
 
             if array.shards is not None:
-                shards = array.shards[:-3] + _scale_integers(
-                    array.shards[-3:], factor
-                )
+                shards = array.shards[:-3] + _scale_integers(array.shards[-3:], factor)
                 shards_ratio = tuple(s // c for c, s in zip(chunks, shards))
             else:
                 shards_ratio = None
 
-            transforms = deepcopy(
-                self.metadata.multiscales[0]
-                .datasets[0]
-                .coordinate_transformations
-            )
+            transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
             for tr in transforms:
                 if tr.type == "scale":
                     for i in range(len(tr.scale))[-3:]:
@@ -1135,16 +1046,12 @@ class Position(NGFFNode):
 
         num_arrays = len(self.array_keys())
         if num_arrays == 0:
-            raise ValueError(
-                "No level 0 array exists. Create base array before computing "
-                "pyramid."
-            )
+            raise ValueError("No level 0 array exists. Create base array before computing pyramid.")
 
         if levels is None:
             if num_arrays == 1:
                 raise ValueError(
-                    "Pyramid structure doesn't exist and levels=None. "
-                    "Specify 'levels' parameter to create pyramid."
+                    "Pyramid structure doesn't exist and levels=None. Specify 'levels' parameter to create pyramid."
                 )
             levels = num_arrays
 
@@ -1168,10 +1075,7 @@ class Position(NGFFNode):
             current_scale = self.get_effective_scale(str(level))
             previous_scale = self.get_effective_scale(str(level - 1))
 
-            downsample_factors = [
-                int(round(current_scale[i] / previous_scale[i]))
-                for i in range(len(current_scale))
-            ]
+            downsample_factors = [int(round(current_scale[i] / previous_scale[i])) for i in range(len(current_scale))]
 
             _downsample_tensorstore(
                 source_ts=previous_ts,
@@ -1203,9 +1107,7 @@ class Position(NGFFNode):
         Helper function for scale transform metadata of
         highest resolution scale.
         """
-        return self.get_effective_scale(
-            self.metadata.multiscales[0].datasets[0].path
-        )
+        return self.get_effective_scale(self.metadata.multiscales[0].datasets[0].path)
 
     @property
     def axis_names(self) -> list[str]:
@@ -1214,9 +1116,7 @@ class Position(NGFFNode):
 
         Returns lowercase axis names.
         """
-        return [
-            axis.name.lower() for axis in self.metadata.multiscales[0].axes
-        ]
+        return [axis.name.lower() for axis in self.metadata.multiscales[0].axes]
 
     def get_axis_index(self, axis_name: str) -> int:
         """
@@ -1234,9 +1134,7 @@ class Position(NGFFNode):
         """
         return self.axis_names.index(axis_name.lower())
 
-    def _get_all_transforms(
-        self, image: str | Literal["*"]
-    ) -> list[TransformationMeta]:
+    def _get_all_transforms(self, image: str | Literal["*"]) -> list[TransformationMeta]:
         """Get all transforms metadata
         for one image array or the whole FOV.
 
@@ -1252,26 +1150,14 @@ class Position(NGFFNode):
             All transforms applicable to this image or FOV.
         """
         transforms: list[TransformationMeta] = (
-            [
-                t
-                for t in self.metadata.multiscales[
-                    0
-                ].coordinate_transformations
-            ]
-            if self.metadata.multiscales[0].coordinate_transformations
-            is not None
+            [t for t in self.metadata.multiscales[0].coordinate_transformations]
+            if self.metadata.multiscales[0].coordinate_transformations is not None
             else []
         )
         if image != "*" and image in self:
-            for i, dataset_meta in enumerate(
-                self.metadata.multiscales[0].datasets
-            ):
+            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
                 if dataset_meta.path == image:
-                    transforms.extend(
-                        self.metadata.multiscales[0]
-                        .datasets[i]
-                        .coordinate_transformations
-                    )
+                    transforms.extend(self.metadata.multiscales[0].datasets[i].coordinate_transformations)
         elif image != "*":
             raise ValueError(f"Key {image} not recognized.")
         return transforms
@@ -1351,9 +1237,7 @@ class Position(NGFFNode):
         if image == "*":
             self.metadata.multiscales[0].coordinate_transformations = transform
         elif image in self:
-            for i, dataset_meta in enumerate(
-                self.metadata.multiscales[0].datasets
-            ):
+            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
                 if dataset_meta.path == image:
                     self.metadata.multiscales[0].datasets[i] = DatasetMeta(
                         path=image, coordinate_transformations=transform
@@ -1362,9 +1246,7 @@ class Position(NGFFNode):
             raise ValueError(f"Key {image} not recognized.")
         self.dump_meta()
 
-    def set_scale(
-        self, image: str | Literal["*"], axis_name: str, new_scale: float
-    ):
+    def set_scale(self, image: str | Literal["*"], axis_name: str, new_scale: float):
         """Set the scale for a named axis.
         Either one image array or the whole FOV.
 
@@ -1379,17 +1261,13 @@ class Position(NGFFNode):
             Value of the new scale.
         """
         if new_scale <= 0:
-            raise ValueError(
-                f"New scale {axis_name}: {new_scale} is not positive!"
-            )
+            raise ValueError(f"New scale {axis_name}: {new_scale} is not positive!")
         if image not in self and image != "*":
             raise KeyError(f"Image {image} not found.")
         axis_index = self.get_axis_index(axis_name)
         # Update scale while preserving existing transforms
         if image == "*":
-            transforms = (
-                self.metadata.multiscales[0].coordinate_transformations or []
-            )
+            transforms = self.metadata.multiscales[0].coordinate_transformations or []
         else:
             for dataset_meta in self.metadata.multiscales[0].datasets:
                 if dataset_meta.path == image:
@@ -1404,9 +1282,7 @@ class Position(NGFFNode):
         iohub_dict["previous_transforms"].append(
             {
                 "image": image,
-                "transforms": [
-                    t.model_dump(**TO_DICT_SETTINGS) for t in transforms
-                ],
+                "transforms": [t.model_dump(**TO_DICT_SETTINGS) for t in transforms],
                 "modified": datetime.now().isoformat(),
             }
         )
@@ -1416,19 +1292,14 @@ class Position(NGFFNode):
             transforms = [TransformationMeta(type="scale", scale=[1.0] * 5)]
         # Add scale transform if not present
         if not any([transform.type == "scale" for transform in transforms]):
-            transforms.append(
-                TransformationMeta(type="scale", scale=[1.0] * 5)
-            )
+            transforms.append(TransformationMeta(type="scale", scale=[1.0] * 5))
         new_transforms = []
         for transform in transforms:
             if transform.type == "scale":
                 old_scale = transform.scale[axis_index]
                 transform.scale[axis_index] = new_scale
             new_transforms.append(transform)
-        _logger.info(
-            f"Updating scale for axis {axis_name} "
-            f"from {old_scale} to {new_scale}."
-        )
+        _logger.info(f"Updating scale for axis {axis_name} from {old_scale} to {new_scale}.")
         self.set_transform(image, new_transforms)
 
     def set_contrast_limits(self, channel_name: str, window: WindowDict):
@@ -1444,6 +1315,159 @@ class Position(NGFFNode):
         channel_index = self.get_channel_index(channel_name)
         self.metadata.omero.channels[channel_index].window = window
         self.dump_meta()
+
+    def to_xarray(self) -> xr.DataArray:
+        """Export full Position data as a labeled xarray.DataArray (tczyx).
+
+        The DataArray is backed by a dask array (lazy, no data loaded
+        until ``.values`` or ``.compute()`` is called).
+
+        Coordinate units follow CF conventions: each coordinate carries
+        its own ``attrs["units"]`` (e.g. ``xa.coords["z"].attrs["units"]
+        == "micrometer"``). ``xa.attrs`` is reserved for value-level
+        metadata (e.g. ``xa.attrs["units"] = "nanometer"`` for ret).
+
+        Returns
+        -------
+        xr.DataArray
+            5D labeled array with coordinates derived from
+            channel names and physical scales/units.
+        """
+        all_channel_names = self.channel_names
+        scale = self.scale
+        translation = self.get_effective_translation(self.metadata.multiscales[0].datasets[0].path)
+
+        data = self.data.dask_array()
+        T, C, Z, Y, X = data.shape
+
+        # Build axis unit lookup from OME metadata
+        axis_units = {}
+        for axis in self.axes:
+            unit = getattr(axis, "unit", None)
+            if unit is not None:
+                axis_units[axis.name.lower()] = unit
+
+        # CF convention: units live in per-coordinate attrs
+        physical = {"t": (T, 0), "z": (Z, 2), "y": (Y, 3), "x": (X, 4)}
+        coords = {"c": ("c", all_channel_names)}
+        for dim, (size, idx) in physical.items():
+            values = np.arange(size) * scale[idx] + translation[idx]
+            attrs = {"units": axis_units[dim]} if dim in axis_units else {}
+            coords[dim] = (dim, values, attrs)
+
+        # Restore any previously saved DataArray attrs from zarr
+        iohub_dict = self.zattrs.get("iohub", {})
+        saved_attrs = dict(iohub_dict.get("xarray_attrs", {}))
+
+        return xr.DataArray(
+            data,
+            dims=("t", "c", "z", "y", "x"),
+            coords=coords,
+            attrs=saved_attrs,
+        )
+
+    def write_xarray(self, data_array: xr.DataArray, image: str = "0") -> None:
+        """Write an xarray.DataArray into this Position.
+
+        Supports writing a subset of channels and/or timepoints.
+        The image array is created on first call; subsequent calls
+        write into the existing array at the correct indices.
+
+        Scales, translations, axis units, and DataArray attrs are
+        set from the first write and updated on subsequent writes.
+
+        Parameters
+        ----------
+        data_array : xr.DataArray
+            5D labeled array with tczyx dimensions.
+            The "c" coordinate must be a subset of this Position's
+            channel names. "t" coordinates are mapped to time indices
+            via the scale and translation.
+        image : str, optional
+            Name of the image array to write to, by default "0".
+        """
+        if tuple(data_array.dims) != ("t", "c", "z", "y", "x"):
+            raise ValueError(f"DataArray dims must be ('t', 'c', 'z', 'y', 'x'), got {data_array.dims}")
+
+        # Validate channels are a subset
+        xa_channels = list(data_array.coords["c"].values)
+        for ch in xa_channels:
+            if ch not in self.channel_names:
+                raise ValueError(f"Channel '{ch}' not in this Position's channel names {self.channel_names}")
+
+        # Infer scales and translations from coordinates
+        def _coord_scale(coord_values):
+            if len(coord_values) < 2:
+                return 1.0
+            return float(coord_values[1] - coord_values[0])
+
+        t_scale = _coord_scale(data_array.coords["t"].values)
+        z_scale = _coord_scale(data_array.coords["z"].values)
+        y_scale = _coord_scale(data_array.coords["y"].values)
+        x_scale = _coord_scale(data_array.coords["x"].values)
+
+        t_trans = float(data_array.coords["t"].values[0])
+        z_trans = float(data_array.coords["z"].values[0])
+        y_trans = float(data_array.coords["y"].values[0])
+        x_trans = float(data_array.coords["x"].values[0])
+
+        # Read coordinate units from per-coordinate attrs (CF convention)
+        def _coord_unit(dim, default):
+            return data_array.coords[dim].attrs.get("units", default)
+
+        self.axes = [
+            TimeAxisMeta(name="T", unit=_coord_unit("t", "second")),
+            ChannelAxisMeta(name="C"),
+            SpaceAxisMeta(name="Z", unit=_coord_unit("z", "micrometer")),
+            SpaceAxisMeta(name="Y", unit=_coord_unit("y", "micrometer")),
+            SpaceAxisMeta(name="X", unit=_coord_unit("x", "micrometer")),
+        ]
+
+        transforms = [
+            TransformationMeta(
+                type="scale",
+                scale=[t_scale, 1.0, z_scale, y_scale, x_scale],
+            )
+        ]
+        if any(v != 0.0 for v in [t_trans, z_trans, y_trans, x_trans]):
+            transforms.append(
+                TransformationMeta(
+                    type="translation",
+                    translation=[t_trans, 0.0, z_trans, y_trans, x_trans],
+                )
+            )
+
+        np_data = data_array.values
+
+        # Create image array if it doesn't exist yet
+        if image not in self:
+            T_full = len(data_array.coords["t"])
+            _, _, Z, Y, X = np_data.shape
+            full_shape = (T_full, len(self.channel_names), Z, Y, X)
+            self.create_zeros(
+                image,
+                shape=full_shape,
+                dtype=np_data.dtype,
+                transform=transforms,
+            )
+
+        # Map channel names to indices
+        c_indices = [self.get_channel_index(ch) for ch in xa_channels]
+
+        # Map T coordinates to indices using scale and translation
+        scale = self.get_effective_scale(image)
+        translation = self.get_effective_translation(image)
+        t_coords = data_array.coords["t"].values
+        t_indices = np.round((t_coords - translation[0]) / scale[0]).astype(int)
+
+        arr = self[image]
+        arr.oindex[t_indices, c_indices] = np_data
+
+        # Persist DataArray attrs to zarr for round-tripping
+        if data_array.attrs:
+            iohub_dict = dict(self.zattrs.get("iohub", {}))
+            iohub_dict["xarray_attrs"] = dict(data_array.attrs)
+            self.zattrs["iohub"] = iohub_dict
 
 
 class TiledPosition(Position):
@@ -1488,12 +1512,8 @@ class TiledPosition(Position):
         -------
         TiledImageArray
         """
-        xy_shape = tuple(
-            int(i) for i in np.array(grid_shape) * np.array(tile_shape[-2:])
-        )
-        chunks = self._default_chunks(
-            shape=tile_shape, last_data_dims=chunk_dims
-        )
+        xy_shape = tuple(int(i) for i in np.array(grid_shape) * np.array(tile_shape[-2:]))
+        chunks = self._default_chunks(shape=tile_shape, last_data_dims=chunk_dims)
         return TiledImageArray.from_zarr_array(
             self.create_zeros(
                 name=name,
@@ -1584,9 +1604,7 @@ class Well(NGFFNode):
         # build metadata
         image_meta = ImageMeta(acquisition=acquisition, path=pos_grp.basename)
         if not hasattr(self, "metadata"):
-            self.metadata = WellGroupMeta(
-                images=[image_meta], version=self.version
-            )
+            self.metadata = WellGroupMeta(images=[image_meta], version=self.version)
         else:
             self.metadata.images.append(image_meta)
         return Position(group=pos_grp, parse_meta=False, **self._child_attrs)
@@ -1753,15 +1771,10 @@ class Plate(NGFFNode):
         )
         for name, src_pos in positions.items():
             if not isinstance(src_pos, Position):
-                raise TypeError(
-                    f"Expected item type {type(Position)}, "
-                    f"got {type(src_pos)}"
-                )
+                raise TypeError(f"Expected item type {type(Position)}, got {type(src_pos)}")
             name = normalize_path(name)
             if name in plate.zgroup:
-                raise FileExistsError(
-                    f"Duplicate name '{name}' after path normalization."
-                )
+                raise FileExistsError(f"Duplicate name '{name}' after path normalization.")
             row, col, fov = name.split("/")
             dst_pos = plate.create_position(row, col, fov)
             # overwrite position group
@@ -1797,9 +1810,7 @@ class Plate(NGFFNode):
             overwriting_creation=overwriting_creation,
         )
         self._name = name
-        self._acquisitions = (
-            [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
-        )
+        self._acquisitions = [AcquisitionMeta(id=0)] if not acquisitions else acquisitions
 
     def _parse_meta(self):
         if plate_meta := self.maybe_wrapped_ome_attrs.get("plate"):
@@ -1918,9 +1929,7 @@ class Plate(NGFFNode):
         col_name = normalize_path(col_name)
         if row_name in self:
             if col_name in self[row_name]:
-                raise FileExistsError(
-                    f"Well '{row_name}/{col_name}' already exists."
-                )
+                raise FileExistsError(f"Well '{row_name}/{col_name}' already exists.")
         row_meta = PlateAxisMeta(name=row_name)
         col_meta = PlateAxisMeta(name=col_name)
         row_index = self._auto_idx(row_name, row_index, "row")
@@ -1937,9 +1946,7 @@ class Plate(NGFFNode):
             self.metadata.wells.append(well_index_meta)
         # create new row if needed
         if row_name not in self:
-            row_grp = self.zgroup.create_group(
-                row_meta.name, overwrite=self._overwrite
-            )
+            row_grp = self.zgroup.create_group(row_meta.name, overwrite=self._overwrite)
             if row_meta not in self.metadata.rows:
                 self.metadata.rows.append(row_meta)
         else:
@@ -1951,9 +1958,7 @@ class Plate(NGFFNode):
         self.dump_meta()
         return Well(group=well_grp, parse_meta=False, **self._child_attrs)
 
-    def create_positions(
-        self, positions: list[PositionSpec]
-    ) -> list[Position]:
+    def create_positions(self, positions: list[PositionSpec]) -> list[Position]:
         """Creates multiple position groups in the plate efficiently.
 
         This is a vectorized version of :py:meth:`create_position` that creates
@@ -1997,25 +2002,31 @@ class Plate(NGFFNode):
         --------
         Create multiple positions with automatic row/column indexing:
 
-        >>> plate.create_positions([
-        ...     ("A", "1", "0"),
-        ...     ("A", "1", "1"),
-        ...     ("A", "2", "0"),
-        ... ])
+        >>> plate.create_positions(
+        ...     [
+        ...         ("A", "1", "0"),
+        ...         ("A", "1", "1"),
+        ...         ("A", "2", "0"),
+        ...     ]
+        ... )
 
         Create positions with explicit row/column indices:
 
-        >>> plate.create_positions([
-        ...     ("B", "3", "0", 1, 2),      # row_index=1, col_index=2
-        ...     ("B", "3", "1", 1, 2),      # same well indices
-        ... ])
+        >>> plate.create_positions(
+        ...     [
+        ...         ("B", "3", "0", 1, 2),  # row_index=1, col_index=2
+        ...         ("B", "3", "1", 1, 2),  # same well indices
+        ...     ]
+        ... )
 
         Create positions with specific acquisition indices:
 
-        >>> plate.create_positions([
-        ...     ("B", "3", "0", 1, 2, 0),   # acquisition 0
-        ...     ("B", "3", "1", 1, 2, 1),   # acquisition 1
-        ... ])
+        >>> plate.create_positions(
+        ...     [
+        ...         ("B", "3", "0", 1, 2, 0),  # acquisition 0
+        ...         ("B", "3", "1", 1, 2, 1),  # acquisition 1
+        ...     ]
+        ... )
         """
         positions = deepcopy(positions)  # We may mutate contents
         wells = {}  # Track wells by path to avoid duplicate objects
@@ -2027,10 +2038,7 @@ class Plate(NGFFNode):
             if len(args) == 3:
                 acquisition_index = args[2]
             elif len(args) > 3:
-                raise ValueError(
-                    "Passed too many fields for a position: "
-                    f"{(r, c, p, *args)}"
-                )
+                raise ValueError(f"Passed too many fields for a position: {(r, c, p, *args)}")
             r = normalize_path(r)
             c = normalize_path(c)
             well_path = os.path.join(r, c)
@@ -2045,9 +2053,7 @@ class Plate(NGFFNode):
                 well = self.create_well(r, c, *well_args)
                 wells[well_path] = well
 
-            positions_out.append(
-                well._create_position_nosync(p, acquisition=acquisition_index)
-            )
+            positions_out.append(well._create_position_nosync(p, acquisition=acquisition_index))
         for well in wells.values():
             well.dump_meta()
         return positions_out
@@ -2093,9 +2099,7 @@ class Plate(NGFFNode):
         if well_path in self.zgroup:
             well = self[well_path]
         else:
-            well = self.create_well(
-                row_name, col_name, row_index=row_index, col_index=col_index
-            )
+            well = self.create_well(row_name, col_name, row_index=row_index, col_index=col_index)
         return well.create_position(pos_name, acquisition=acq_index)
 
     def rows(self) -> Generator[tuple[str, Row], None, None]:
@@ -2172,19 +2176,13 @@ class Plate(NGFFNode):
         new_path = store_path / new
         assert not new_path.parent.is_dir()
 
-        shutil.move(
-            str(old_path.parent), str(new_path.parent)
-        )  # rename row path
-        shutil.move(
-            str(new_path.parent / old_column), str(new_path)
-        )  # rename column path
+        shutil.move(str(old_path.parent), str(new_path.parent))  # rename row path
+        shutil.move(str(new_path.parent / old_column), str(new_path))  # rename column path
 
         assert new in self.zgroup
 
         # update well metadata
-        old_well_index = [
-            well_name.path for well_name in self.metadata.wells
-        ].index(old)
+        old_well_index = [well_name.path for well_name in self.metadata.wells].index(old)
         self.metadata.wells[old_well_index].path = new
         new_well_names = [well.path for well in self.metadata.wells]
 
@@ -2199,13 +2197,9 @@ class Plate(NGFFNode):
         if old_row not in [well.split("/")[0] for well in new_well_names]:
             # delete empty row from zarr
             del self.zgroup[old_row]
-            self.metadata.rows = [
-                row for row in self.metadata.rows if row.name != old_row
-            ]
+            self.metadata.rows = [row for row in self.metadata.rows if row.name != old_row]
         if old_column not in [well.split("/")[1] for well in new_well_names]:
-            self.metadata.columns = [
-                col for col in self.metadata.columns if col.name != old_column
-            ]
+            self.metadata.columns = [col for col in self.metadata.columns if col.name != old_column]
 
         self.dump_meta()
 
@@ -2225,10 +2219,7 @@ def _check_file_mode(
             raise FileExistsError(store_path)
     elif mode == "w":
         if store_path.exists():
-            if (
-                ".zarr" not in str(store_path.resolve())
-                and not disable_path_checking
-            ):
+            if ".zarr" not in str(store_path.resolve()) and not disable_path_checking:
                 raise ValueError(
                     "Cannot overwrite a path that does not contain '.zarr', "
                     "use `disable_path_checking=True` if you are sure that "
@@ -2377,9 +2368,7 @@ def open_ome_zarr(
         or :py:class:`iohub.ngff.TiledPosition`)
     """
     store_path = Path(store_path)
-    parse_meta = _check_file_mode(
-        store_path, mode, disable_path_checking=disable_path_checking
-    )
+    parse_meta = _check_file_mode(store_path, mode, disable_path_checking=disable_path_checking)
     root = _open_store(store_path, mode, version)
     meta_keys = root.attrs.keys() if parse_meta else []
     if "ome" in meta_keys:
@@ -2389,9 +2378,7 @@ def open_ome_zarr(
         if parse_meta:
             layout = _detect_layout(meta_keys)
         else:
-            raise ValueError(
-                "Store layout must be specified when creating a new dataset."
-            )
+            raise ValueError("Store layout must be specified when creating a new dataset.")
     msg = f"Specified layout '{layout}' does not match existing metadata."
     if layout in ("fov", "tiled"):
         if parse_meta and "multiscales" not in meta_keys:

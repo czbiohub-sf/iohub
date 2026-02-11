@@ -27,9 +27,7 @@ class ZarrReader(ReaderBase):
     Also collects the HCS metadata so it can be later copied.
     """
 
-    def __init__(
-        self, store_path: str, version: Literal["0.1", "0.4", "0.5"] = "0.1"
-    ):
+    def __init__(self, store_path: str, version: Literal["0.1", "0.4", "0.5"] = "0.1"):
         super().__init__()
 
         _logger.warning(
@@ -67,9 +65,7 @@ class ZarrReader(ReaderBase):
         self._get_positions()
 
         # structure of zarr array
-        first_arr_shape = self.root[self.position_map[0]["well"]][
-            self.position_map[0]["name"]
-        ][self.arr_name].shape
+        first_arr_shape = self.root[self.position_map[0]["well"]][self.position_map[0]["name"]][self.arr_name].shape
         (
             self.frames,
             self.channels,
@@ -192,9 +188,7 @@ class ZarrReader(ReaderBase):
                     self.stage_positions = []
 
                     for p in range(len(self._mm_meta["StagePositions"])):
-                        pos = self._simplify_stage_position_beta(
-                            self._mm_meta["StagePositions"][p]
-                        )
+                        pos = self._simplify_stage_position_beta(self._mm_meta["StagePositions"][p])
                         self.stage_positions.append(pos)
 
             # elif mm_version == '1.4.22':
@@ -205,9 +199,7 @@ class ZarrReader(ReaderBase):
                     self.stage_positions = []
 
                     for p in range(self._mm_meta["Positions"]):
-                        pos = self._simplify_stage_position(
-                            self._mm_meta["StagePositions"][p]
-                        )
+                        pos = self._simplify_stage_position(self._mm_meta["StagePositions"][p])
                         self.stage_positions.append(pos)
 
                 # for ch in self._mm_meta['ChNames']:

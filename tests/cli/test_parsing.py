@@ -10,9 +10,7 @@ def test_validate_and_process_paths(tmpdir):
     # Setup plate
     plate_path = tmpdir / "dataset.zarr"
     position_list = [("A", "1", "0"), ("B", "2", "0"), ("X", "4", "1")]
-    with open_ome_zarr(
-        plate_path, mode="w", layout="hcs", channel_names=["1", "2"]
-    ) as dataset:
+    with open_ome_zarr(plate_path, mode="w", layout="hcs", channel_names=["1", "2"]) as dataset:
         for position in position_list:
             pos = dataset.create_position(*position)
             pos.create_zeros("0", shape=(1, 1, 1, 1, 1), dtype=np.uint8)
@@ -29,9 +27,7 @@ def test_validate_and_process_paths(tmpdir):
         assert processed[i].parts[-3:] == position
 
     # Check single position
-    processed = _validate_and_process_paths(
-        ctx, opt, [str(plate_path / "A" / "1" / "0")]
-    )
+    processed = _validate_and_process_paths(ctx, opt, [str(plate_path / "A" / "1" / "0")])
     assert len(processed) == 1
 
     # Check two positions
@@ -42,12 +38,20 @@ def test_validate_and_process_paths(tmpdir):
     )
     assert len(processed) == 2
 
+    # Check that non-directory paths (e.g. zarr.json) are filtered out
+    zarr_json = plate_path / "A" / "1" / "zarr.json"
+    zarr_json.write_text("{}", encoding="utf-8")
+    processed = _validate_and_process_paths(
+        ctx,
+        opt,
+        [str(plate_path / "A" / "1" / "0"), str(zarr_json)],
+    )
+    assert len(processed) == 1
+
 
 def test_option_eat_all():
     @click.command()
-    @click.option(
-        "--test", cls=OptionEatAll
-    )  # tests will fail w/o OptionEatAll
+    @click.option("--test", cls=OptionEatAll)  # tests will fail w/o OptionEatAll
     def foo(test):
         print(test)
 

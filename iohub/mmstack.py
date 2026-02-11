@@ -42,9 +42,7 @@ def find_first_ome_tiff_in_mmstack(data_path: Path) -> Path:
         try:
             return next(files)
         except StopIteration:
-            raise FileNotFoundError(
-                f"Path {data_path} contains no OME-TIFF files."
-            )
+            raise FileNotFoundError(f"Path {data_path} contains no OME-TIFF files.")
     raise FileNotFoundError(f"Path {data_path} does not exist.")
 
 
@@ -104,10 +102,7 @@ class MMStack(MicroManagerFOVMapping):
 
     def _parse_data(self):
         series = self._first_tif.series[0]
-        raw_dims = dict(
-            (axis, size)
-            for axis, size in zip(series.get_axes(), series.get_shape())
-        )
+        raw_dims = dict((axis, size) for axis, size in zip(series.get_axes(), series.get_shape()))
         axes = ("R", "T", "C", "Z", "Y", "X")
         dims = dict((ax, raw_dims.get(ax, 1)) for ax in axes)
         _logger.debug(f"Got dataset dimensions from tifffile: {dims}.")
@@ -126,9 +121,7 @@ class MMStack(MicroManagerFOVMapping):
         data = da.from_zarr(zarr.open(self._store, mode="r")["0"])
         self.dtype = data.dtype
         img = DataArray(data, dims=raw_dims, name=self.dirname)
-        xarr = img.expand_dims(
-            [ax for ax in axes if ax not in img.dims]
-        ).transpose(*axes)
+        xarr = img.expand_dims([ax for ax in axes if ax not in img.dims]).transpose(*axes)
         if self.channels > len(self.channel_names):
             for c in range(self.channels):
                 if c >= len(self.channel_names):
@@ -189,12 +182,8 @@ class MMStack(MicroManagerFOVMapping):
             if self._mm_meta["Summary"]["Positions"] > 1:
                 self._stage_positions = []
 
-                for p in range(
-                    len(self._mm_meta["Summary"]["StagePositions"])
-                ):
-                    pos = self._simplify_stage_position_beta(
-                        self._mm_meta["Summary"]["StagePositions"][p]
-                    )
+                for p in range(len(self._mm_meta["Summary"]["StagePositions"])):
+                    pos = self._simplify_stage_position_beta(self._mm_meta["Summary"]["StagePositions"][p])
                     self._stage_positions.append(pos)
 
             # MM beta versions sometimes don't have 'ChNames',
@@ -204,9 +193,7 @@ class MMStack(MicroManagerFOVMapping):
                 for ch in self._mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
             except Exception:
-                self.channel_names = self._mm_meta["Summary"]["Channels"] * [
-                    ""
-                ]  # empty strings
+                self.channel_names = self._mm_meta["Summary"]["Channels"] * [""]  # empty strings
 
         elif mm_version == "1.4.22":
             for ch in self._mm_meta["Summary"].get("ChNames", []):
@@ -214,10 +201,7 @@ class MMStack(MicroManagerFOVMapping):
 
         # Parsing of data acquired with the OpenCell
         # acquisition script on the Dragonfly miroscope
-        elif (
-            mm_version == "2.0.1 20220920"
-            and self._mm_meta["Summary"].get("Prefix", None) == "raw_data"
-        ):
+        elif mm_version == "2.0.1 20220920" and self._mm_meta["Summary"].get("Prefix", None) == "raw_data":
             files = natsorted(self.root.glob("*.ome.tif"))
             self.positions = len(files)  # not all positions are saved
 
@@ -226,9 +210,7 @@ class MMStack(MicroManagerFOVMapping):
 
                 for p_idx, file_name in enumerate(files):
                     site_idx = int(str(file_name).split("_")[-1].split("-")[0])
-                    pos = self._simplify_stage_position(
-                        self._mm_meta["Summary"]["StagePositions"][site_idx]
-                    )
+                    pos = self._simplify_stage_position(self._mm_meta["Summary"]["StagePositions"][site_idx])
                     self._stage_positions[p_idx] = pos
 
             for ch in self._mm_meta["Summary"]["ChNames"]:
@@ -239,9 +221,7 @@ class MMStack(MicroManagerFOVMapping):
                 self._stage_positions = []
 
                 for p in range(self._mm_meta["Summary"]["Positions"]):
-                    pos = self._simplify_stage_position(
-                        self._mm_meta["Summary"]["StagePositions"][p]
-                    )
+                    pos = self._simplify_stage_position(self._mm_meta["Summary"]["StagePositions"][p])
                     self._stage_positions.append(pos)
 
             for ch in self._mm_meta["Summary"].get("ChNames", []):
@@ -250,20 +230,14 @@ class MMStack(MicroManagerFOVMapping):
         if z_step_size == 0.0:
             z_step_size = 1.0
             if self.slices != 1:
-                _logger.warning(
-                    "Z-step size is set to 0.0 um in the metadata, "
-                    "using 1.0 um instead."
-                )
+                _logger.warning("Z-step size is set to 0.0 um in the metadata, using 1.0 um instead.")
         self._z_step_size = z_step_size
         self.height = self._mm_meta["Summary"]["Height"]
         self.width = self._mm_meta["Summary"]["Width"]
         t_scale = float(self._mm_meta["Summary"].get("Interval_ms", 1e3)) / 1e3
         if t_scale == 0.0:
             t_scale = 1.0
-            _logger.warning(
-                "Time scale is set to 0.0 in the metadata, "
-                "using 1.0 instead."
-            )
+            _logger.warning("Time scale is set to 0.0 in the metadata, using 1.0 instead.")
         self._t_scale = t_scale
 
     def _simplify_stage_position(self, stage_pos: dict):
@@ -323,9 +297,7 @@ class MMStack(MicroManagerFOVMapping):
 
         return new_dict
 
-    def read_image_metadata(
-        self, p: int, t: int, c: int, z: int
-    ) -> dict | None:
+    def read_image_metadata(self, p: int, t: int, c: int, z: int) -> dict | None:
         """Read image plane metadata from the OME-TIFF file."""
         multi_index = (p, t, c, z)
         tif_shape = (self.positions, self.frames, self.channels, self.slices)
@@ -337,9 +309,7 @@ class MMStack(MicroManagerFOVMapping):
         # but a mixture of `TiffPage` and `TiffFrame` objects
         # https://github.com/cgohlke/tifffile/issues/179
         with catch_warnings():
-            filterwarnings(
-                "ignore", message=r".*from closed file.*", module="tifffile"
-            )
+            filterwarnings("ignore", message=r".*from closed file.*", module="tifffile")
             try:
                 # virtual frames
                 page = self._first_tif.pages[idx]
@@ -373,12 +343,8 @@ class MMStack(MicroManagerFOVMapping):
                 if self._xy_pixel_size > 0:
                     return
             except Exception:
-                _logger.warning(
-                    "Micro-Manager image plane metadata cannot be loaded."
-                )
-        _logger.warning(
-            "XY pixel size cannot be determined, defaulting to 1.0 um."
-        )
+                _logger.warning("Micro-Manager image plane metadata cannot be loaded.")
+        _logger.warning("XY pixel size cannot be determined, defaulting to 1.0 um.")
         self._xy_pixel_size = 1.0
 
     @property

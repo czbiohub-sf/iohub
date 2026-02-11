@@ -74,7 +74,7 @@ def create_empty_plate(
     ...     store_path=Path("/path/to/store"),
     ...     position_keys=[("A", "1", "0"), ("A", "1", "1")],
     ...     channel_names=["DAPI", "FITC"],
-    ...     shape=(1, 1, 256, 256, 256)
+    ...     shape=(1, 1, 256, 256, 256),
     ... )
 
     Create a plate with custom chunk size and scale:
@@ -84,7 +84,7 @@ def create_empty_plate(
     ...     channel_names=["DAPI"],
     ...     shape=(1, 1, 256, 256, 256),
     ...     chunks=(1, 1, 128, 128, 128),
-    ...     scale=(1, 1, 0.5, 0.5, 0.5)
+    ...     scale=(1, 1, 0.5, 0.5, 0.5),
     ... )
 
     Create a plate with sharding:
@@ -96,7 +96,7 @@ def create_empty_plate(
     ...     chunks=(1, 1, 8, 128, 128),
     ...     scale=(1, 1, 0.5, 0.5, 0.5),
     ...     shards_ratio=(10, 1, 8, 16, 16),
-    ...     version="0.5"
+    ...     version="0.5",
     ... )
 
     Notes
@@ -171,9 +171,7 @@ def _apply_transform_to_czyx(
     # if input_channel_indices is not None and len(input_channel_indices) > 0:
     click.echo(f"Processing t={input_time_index}, c={input_channel_indices}")
     input_dataset = open_ome_zarr(input_position_path, layout="fov", mode="r")
-    czyx_data = input_dataset.data.oindex[
-        input_time_index, input_channel_indices
-    ]
+    czyx_data = input_dataset.data.oindex[input_time_index, input_channel_indices]
     if not _check_nan_n_zeros(czyx_data):
         return func(czyx_data, **kwargs)
     else:
@@ -186,10 +184,7 @@ def _echo_finished(
     skipped: bool,
 ) -> None:
     if skipped:
-        click.echo(
-            f"Skipping t={time_index}, c={channel_index} "
-            "due to all zeros or nans"
-        )
+        click.echo(f"Skipping t={time_index}, c={channel_index} due to all zeros or nans")
     else:
         click.echo(f"Finished writing t={time_index}, c={channel_index}")
 
@@ -203,17 +198,9 @@ def _save_transformed(
     # NOTE: use tensorstore due to zarr-python#3221
     import tensorstore
 
-    with open_ome_zarr(
-        output_position_path, layout="fov", mode="r+"
-    ) as output_dataset:
-        ts = output_dataset.data.tensorstore(
-            context=tensorstore.Context(
-                {"data_copy_concurrency": {"limit": 4}}
-            )
-        )
-    ts.oindex[output_time_indices, output_channel_indices].write(
-        transformed
-    ).result()
+    with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
+        ts = output_dataset.data.tensorstore(context=tensorstore.Context({"data_copy_concurrency": {"limit": 4}}))
+    ts.oindex[output_time_indices, output_channel_indices].write(transformed).result()
     # NOTE: explicit GC due to tensorstore#223
     del ts
 
@@ -313,9 +300,7 @@ def apply_transform_to_czyx_and_save(
         )
 
 
-def _indices_to_shard_aligned_batches(
-    indices: Sequence[int], shard_size: int
-) -> list[list[int]]:
+def _indices_to_shard_aligned_batches(indices: Sequence[int], shard_size: int) -> list[list[int]]:
     """Split indices into batches that are in the same shards.
 
     Parameters
@@ -446,9 +431,7 @@ def apply_transform_to_tczyx_and_save(
             output_channel_indices=output_channel_indices,
             output_time_indices=output_time_indices,
         )
-        _echo_finished(
-            input_time_indices, input_channel_indices, skipped=False
-        )
+        _echo_finished(input_time_indices, input_channel_indices, skipped=False)
     del results
 
 
@@ -544,27 +527,19 @@ def process_single_position(
     click.echo(f"Output data path:\t{output_position_path}")
 
     # Get the reader
-    with open_ome_zarr(
-        input_position_path, layout="fov", mode="r"
-    ) as input_dataset:
+    with open_ome_zarr(input_position_path, layout="fov", mode="r") as input_dataset:
         input_data_shape = input_dataset.data.shape
-    with open_ome_zarr(
-        output_position_path, layout="fov", mode="r"
-    ) as output_dataset:
+    with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
         output_shards = output_dataset.data.shards
 
     # Process time indices
     if input_time_indices is None:
         input_time_indices = list(range(input_data_shape[0]))
-    assert (
-        type(input_time_indices) is list
-    ), "input_time_indices must be a list"
+    assert type(input_time_indices) is list, "input_time_indices must be a list"
     if output_time_indices is None:
         output_time_indices = input_time_indices
     if output_shards is not None:
-        batched_output_time_indices = _indices_to_shard_aligned_batches(
-            output_time_indices, output_shards[0]
-        )
+        batched_output_time_indices = _indices_to_shard_aligned_batches(output_time_indices, output_shards[0])
         batched_input_time_indices = _match_indices_to_batches(
             flat_indices=input_time_indices,
             original_reference=output_time_indices,
@@ -578,15 +553,11 @@ def process_single_position(
     if input_channel_indices is None:
         input_channel_indices = [[c] for c in range(input_data_shape[1])]
         output_channel_indices = input_channel_indices
-    assert (
-        type(input_channel_indices) is list
-    ), "input_channel_indices must be a list"
+    assert type(input_channel_indices) is list, "input_channel_indices must be a list"
     if output_channel_indices is None:
         output_channel_indices = input_channel_indices
     if output_shards is not None and output_shards[1] != 1:
-        raise ValueError(
-            "Sharding along the channel dimension is not supported."
-        )
+        raise ValueError("Sharding along the channel dimension is not supported.")
 
     # Check for invalid times
     time_ubound = input_data_shape[0] - 1
@@ -597,9 +568,7 @@ def process_single_position(
 
     # Write extra metadata to the output store
     extra_metadata = kwargs.pop("extra_metadata", None)
-    with open_ome_zarr(
-        output_position_path, layout="fov", mode="r+"
-    ) as output_dataset:
+    with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
         output_dataset.zattrs["extra_metadata"] = extra_metadata
 
     # Loop through (T, C), applying transform and writing as we go
