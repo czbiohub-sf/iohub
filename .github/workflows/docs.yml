@@ -40,7 +40,6 @@ jobs:
           uv sync --group doc
           # temporary fix for sphinx-polyversion
           uv pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging
-
       - name: Set environment
         run: |
           REPO_OWNER="${GITHUB_REPOSITORY%%/*}"
