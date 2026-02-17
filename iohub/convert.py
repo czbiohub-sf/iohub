@@ -14,7 +14,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import Position, open_ome_zarr
 from iohub.ngff.utils import (
-    _adjust_chunks_for_divisibility,
+    _clamp_chunks_to_shape,
     _limit_zyx_chunk_size,
 )
 from iohub.reader import MMStack, NDTiffDataset, read_images
@@ -254,11 +254,11 @@ class TIFFConverter:
         chunk_zyx_shape = _limit_zyx_chunk_size(shape, bytes_per_pixel, MAX_CHUNK_SIZE, chunks=chunks)
         chunks[-3:] = list(chunk_zyx_shape)
 
-        # Adjust chunks to divide evenly into dimensions
-        chunks = _adjust_chunks_for_divisibility(shape, chunks)
+        # Clamp chunks so they don't exceed dimension sizes
+        chunks = _clamp_chunks_to_shape(shape, chunks)
         for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, shape)):
-            if orig != adj:
-                _logger.warning(f"Chunk size {orig} on axis {i} adjusted to {adj} (dimension {dim}).")
+            if adj < orig:
+                _logger.warning(f"Chunk size {orig} on axis {i} clamped to {adj} (dimension size {dim}).")
 
         _logger.debug(f"Zarr store chunk size will be set to {chunks}.")
 
