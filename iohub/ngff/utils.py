@@ -656,19 +656,14 @@ def _limit_zyx_chunk_size(
     chunk_zyx_shape = list(chunks[-3:] if chunks else shape[-3:])
 
     # Reduce Z chunk size until total chunk is within limit
-    while (
-        chunk_zyx_shape[-3] > 1
-        and np.prod(chunk_zyx_shape) * bytes_per_pixel > max_chunk_size_bytes
-    ):
+    while chunk_zyx_shape[-3] > 1 and np.prod(chunk_zyx_shape) * bytes_per_pixel > max_chunk_size_bytes:
         chunk_zyx_shape[-3] = np.ceil(chunk_zyx_shape[-3] / 2)
     chunk_zyx_shape = tuple(map(int, chunk_zyx_shape))
     return chunk_zyx_shape
 
 
-def _adjust_chunks_for_divisibility(
-    shape: tuple[int, ...], chunks: tuple[int, ...]
-) -> tuple[int, ...]:
-    """Adjust chunks to divide evenly into dimensions for Dask.
+def _clamp_chunks_to_shape(shape: tuple[int, ...], chunks: tuple[int, ...]) -> tuple[int, ...]:
+    """Clamp chunk sizes so they don't exceed dimension sizes.
 
     Parameters
     ----------
@@ -680,21 +675,9 @@ def _adjust_chunks_for_divisibility(
     Returns
     -------
     tuple[int, ...]
-        Adjusted chunk sizes that divide evenly into dimensions.
+        Chunk sizes clamped to at most the dimension size.
     """
-    shape = list(shape)
-    chunks = list(chunks)
-    adjusted = []
-    for chunk, dim in zip(chunks, shape):
-        if chunk > dim:
-            adjusted.append(dim)
-        elif dim % chunk != 0:
-            while chunk > 1 and dim % chunk != 0:
-                chunk -= 1
-            adjusted.append(chunk)
-        else:
-            adjusted.append(chunk)
-    return tuple(adjusted)
+    return tuple(min(c, d) for c, d in zip(chunks, shape))
 
 
 def _downsample_tensorstore(
@@ -722,12 +705,12 @@ def _downsample_tensorstore(
     try:
         import tensorstore as ts
     except ImportError:
-        raise ImportError("Tensorstore is required for downsampling. \
-            Please install it with `pip install tensorstore`.")
+        raise ImportError(
+            "Tensorstore is required for downsampling. \
+            Please install it with `pip install tensorstore`."
+        )
 
-    downsampled = ts.downsample(
-        source_ts, downsample_factors=downsample_factors, method=method
-    )
+    downsampled = ts.downsample(source_ts, downsample_factors=downsample_factors, method=method)
 
     step = target_ts.chunk_layout.write_chunk.shape[0]
 
@@ -736,6 +719,4 @@ def _downsample_tensorstore(
             target_with_txn = target_ts.with_transaction(txn)
             downsampled_with_txn = downsampled.with_transaction(txn)
             stop = min(start + step, downsampled.shape[0])
-            target_with_txn[start:stop].write(
-                downsampled_with_txn[start:stop]
-            ).result()
+            target_with_txn[start:stop].write(downsampled_with_txn[start:stop]).result()

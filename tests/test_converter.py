@@ -8,7 +8,7 @@ import pytest
 from ndtiff import Dataset
 from tifffile import TiffFile
 
-from iohub.convert import TIFFConverter, _adjust_chunks_for_divisibility
+from iohub.convert import TIFFConverter, _clamp_chunks_to_shape
 from iohub.mm_fov import MicroManagerFOV
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
@@ -51,7 +51,7 @@ def _check_chunks(position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] 
         case "XYZ" | None:
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
-            expected = _adjust_chunks_for_divisibility(img.shape, chunks)
+            expected = _clamp_chunks_to_shape(img.shape, chunks)
             assert img.chunks == expected
         case _:
             assert False
@@ -243,34 +243,41 @@ class TestGenChunks:
     @pytest.mark.parametrize(
         "z_dim,input_chunk,expected_z",
         [
-            (15, 10, 5),  # 10 doesn't divide 15, adjust to 5
-            (7, 5, 1),  # prime - falls to 1
-            (16, 8, 8),  # divides evenly, no change
-            (100, 50, 50),  # divides evenly
-            (9, 4, 3),  # odd non-prime, adjust to 3
+            (15, 10, 10),  # 10 < 15, no clamping needed
+            (7, 5, 5),  # 5 < 7, no clamping needed
+            (16, 8, 8),  # 8 < 16, no clamping needed
+            (100, 50, 50),  # 50 < 100, no clamping needed
+            (9, 4, 4),  # 4 < 9, no clamping needed
+            (5, 10, 5),  # 10 > 5, clamped to 5
         ],
     )
-    def test_gen_chunks_divisibility(self, make_mock_converter, z_dim, input_chunk, expected_z):
-        """Test chunks are adjusted to divide evenly into dimensions."""
+    def test_gen_chunks_clamping(self, make_mock_converter, z_dim, input_chunk, expected_z):
+        """Test chunks are clamped to dimension size but not reduced for divisibility."""
         converter = make_mock_converter(z=z_dim)
         chunks = converter._gen_chunks((1, 1, input_chunk, 256, 256))
         assert chunks[2] == expected_z
-        assert z_dim % chunks[2] == 0
+        assert chunks[2] <= z_dim
 
-    def test_gen_chunks_max_chunk_size_then_divisibility(self, make_mock_converter):
-        """Test divisibility check happens AFTER MAX_CHUNK_SIZE adjustment."""
-        # Large chunks that trigger MAX_CHUNK_SIZE, then need divisibility fix
-        # Z=15, large XY to trigger size limit, chunk should end up dividing 15
+    def test_gen_chunks_max_chunk_size_then_clamp(self, make_mock_converter):
+        """Test clamping happens AFTER MAX_CHUNK_SIZE adjustment."""
         converter = make_mock_converter(z=15, y=2048, x=2048)
         chunks = converter._gen_chunks((1, 1, 15, 2048, 2048))
-        assert 15 % chunks[2] == 0
+        assert chunks[2] <= 15
 
     @pytest.mark.parametrize("z_dim", [7, 11, 13, 17, 19, 23])  # prime numbers
     def test_gen_chunks_prime_dimensions(self, make_mock_converter, z_dim):
-        """Test handling of prime dimension sizes - should fall to 1."""
+        """Test prime dimensions do NOT reduce chunk to 1."""
         converter = make_mock_converter(z=z_dim)
         chunks = converter._gen_chunks((1, 1, z_dim - 1, 256, 256))
-        assert z_dim % chunks[2] == 0
+        assert chunks[2] == z_dim - 1  # should stay as-is (< dim)
+        assert chunks[2] > 1
+
+    def test_gen_chunks_prime_z_1187(self, make_mock_converter):
+        """Regression: Z=1187 (prime) should not reduce chunk to 1."""
+        converter = make_mock_converter(z=1187, y=2048, x=2048)
+        chunks = converter._gen_chunks("XYZ")
+        assert chunks[2] > 1
+        assert chunks[2] <= 1187
 
     @pytest.mark.parametrize("input_chunks", ["XY", "XYZ", None])
     def test_gen_chunks_string_inputs(self, make_mock_converter, input_chunks):
@@ -320,6 +327,44 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
         written = reader["0/0/0"]["0"][:]
 
     np.testing.assert_array_equal(data, written, err_msg="Data lost during XY to XYZ rechunking")
+
+
+@pytest.mark.parametrize(
+    "shape,target_chunks",
+    [
+        # Non-divisible Z: 1187 is prime, chunk 512 doesn't divide evenly
+        ((1, 1, 1187, 256, 256), (1, 1, 512, 256, 256)),
+        # Another non-divisible case
+        ((1, 1, 50, 512, 512), (1, 1, 32, 512, 512)),
+    ],
+)
+def test_rechunk_non_divisible_z_preserves_data(shape, target_chunks, tmpdir):
+    """Test that rechunking with non-divisible Z chunks preserves all data.
+
+    Regression test for https://github.com/czbiohub-sf/iohub/issues/374
+    """
+    import dask
+    import dask.array as da
+    from dask.array import to_zarr
+
+    data = np.arange(np.prod(shape), dtype=np.uint16).reshape(shape)
+
+    source_chunks = (1, 1, 1, shape[3], shape[4])
+    dask_data = da.from_array(data, chunks=source_chunks)
+
+    output = tmpdir / "test_rechunk_nondiv.zarr"
+    with open_ome_zarr(output, layout="hcs", mode="w-", channel_names=["test"], version="0.5") as writer:
+        pos = writer.create_position("0", "0", "0")
+        zarr_img = pos.create_zeros(name="0", shape=shape, dtype=np.uint16, chunks=target_chunks)
+
+        chunk_size_bytes = int(np.prod(target_chunks) * 2)
+        with dask.config.set({"array.chunk-size": chunk_size_bytes}):
+            to_zarr(dask_data.rechunk(target_chunks), zarr_img)
+
+    with open_ome_zarr(output, layout="hcs", mode="r") as reader:
+        written = reader["0/0/0"]["0"][:]
+
+    np.testing.assert_array_equal(data, written, err_msg="Data lost during non-divisible Z rechunking")
 
 
 class TestVersionParameter:

@@ -1024,7 +1024,7 @@ dev = [
     { name = "sphinx", specifier = ">=4.2.0" },
     { name = "sphinx-copybutton", specifier = ">=0.4.0" },
     { name = "sphinx-gallery", specifier = ">=0.13.0" },
-    { name = "sphinx-polyversion", specifier = ">=0.2.4" },
+    { name = "sphinx-polyversion", specifier = ">=2.0.0" },
     { name = "sphinx-sitemap", specifier = ">=2.5.0" },
     { name = "wget", specifier = ">=3.2" },
 ]
@@ -1035,7 +1035,7 @@ doc = [
     { name = "sphinx", specifier = ">=4.2.0" },
     { name = "sphinx-copybutton", specifier = ">=0.4.0" },
     { name = "sphinx-gallery", specifier = ">=0.13.0" },
-    { name = "sphinx-polyversion", specifier = ">=0.2.4" },
+    { name = "sphinx-polyversion", specifier = ">=2.0.0" },
     { name = "sphinx-sitemap", specifier = ">=2.5.0" },
 ]
 test = [
