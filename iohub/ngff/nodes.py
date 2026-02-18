@@ -1366,6 +1366,47 @@ class Position(NGFFNode):
             attrs=saved_attrs,
         )
 
+    def tile(
+        self,
+        tile_size: dict[str, int],
+        overlap: dict[str, int] | None = None,
+        as_xarray: bool = False,
+        **kwargs,
+    ):
+        """Tile this FOV in YX with optional overlap.
+
+        Returns a :class:`~iohub.tile.Slicer` that yields
+        :class:`~iohub.tile.TileSpec` objects (or ``xr.DataArray``
+        when *as_xarray=True*).
+
+        Parameters
+        ----------
+        tile_size : dict[str, int]
+            Tile size per spatial dimension,
+            e.g. ``{"y": 1024, "x": 1024}``.
+        overlap : dict[str, int] | None
+            Overlap between adjacent tiles,
+            e.g. ``{"y": 128, "x": 128}``.
+        as_xarray : bool
+            If True, iteration yields ``xr.DataArray`` instead of
+            ``TileSpec``.
+        **kwargs
+            Forwarded to :class:`~iohub.tile.Slicer` (e.g. ``mode``).
+
+        Returns
+        -------
+        iohub.tile.Slicer
+        """
+        from iohub.tile import Slicer
+
+        return Slicer(
+            self.to_xarray(),
+            tile_size=tile_size,
+            overlap=overlap,
+            as_xarray=as_xarray,
+            **kwargs,
+        )
+
     def write_xarray(self, data_array: xr.DataArray, image: str = "0") -> None:
         """Write an xarray.DataArray into this Position.
 
@@ -1633,6 +1674,92 @@ class Well(NGFFNode):
             Name and position object.
         """
         yield from self.iteritems()
+
+    def to_xarray(
+        self,
+        layout_resolver=None,
+        compositor: str | object = "mean",
+    ) -> "xr.DataArray":
+        """Full well mosaic as one dask-backed xr.DataArray.
+
+        Composites overlapping FOVs into a single array using the
+        sweep-line algorithm. The result is lazy — no data is loaded
+        until ``.compute()`` or ``.values`` is called.
+
+        Parameters
+        ----------
+        layout_resolver : LayoutResolver | None
+            Strategy for adjusting FOV coordinates (e.g.
+            ``StitchingYAMLResolver``). If None, uses existing
+            OME-NGFF coordinateTransformations.
+        compositor : str | Compositor
+            Overlap compositing strategy. Built-in: ``"mean"``,
+            ``"max"``, ``"first"``. Default: ``"mean"``.
+
+        Returns
+        -------
+        xr.DataArray
+            5D labeled array spanning the full well mosaic.
+        """
+        from iohub.tile._composite import _composite_fovs
+        from iohub.tile._compositors import get_compositor
+
+        position_paths = []
+        fov_xarrays = []
+        for name, pos in self.positions():
+            fov_xarrays.append(pos.to_xarray())
+            position_paths.append(name)
+
+        if layout_resolver is not None:
+            fov_xarrays = layout_resolver.resolve(fov_xarrays, position_paths)
+
+        compositor_obj = get_compositor(compositor) if isinstance(compositor, str) else compositor
+        return _composite_fovs(fov_xarrays, compositor=compositor_obj)
+
+    def tile(
+        self,
+        tile_size: dict[str, int],
+        overlap: dict[str, int] | None = None,
+        layout_resolver=None,
+        compositor: str | object = "mean",
+        as_xarray: bool = False,
+        **kwargs,
+    ):
+        """Tile the well mosaic in YX with optional overlap.
+
+        Calls :meth:`to_xarray` internally, then wraps the result
+        in a :class:`~iohub.tile.Slicer`.
+
+        Parameters
+        ----------
+        tile_size : dict[str, int]
+            Tile size per spatial dimension,
+            e.g. ``{"y": 1024, "x": 1024}``.
+        overlap : dict[str, int] | None
+            Overlap between adjacent tiles.
+        layout_resolver : LayoutResolver | None
+            Translation source for FOV coordinates.
+        compositor : str | Compositor
+            Overlap compositing strategy.
+        as_xarray : bool
+            If True, iteration yields ``xr.DataArray``.
+        **kwargs
+            Forwarded to :class:`~iohub.tile.Slicer`.
+
+        Returns
+        -------
+        iohub.tile.Slicer
+        """
+        from iohub.tile import Slicer
+
+        xa = self.to_xarray(layout_resolver=layout_resolver, compositor=compositor)
+        return Slicer(
+            xa,
+            tile_size=tile_size,
+            overlap=overlap,
+            as_xarray=as_xarray,
+            **kwargs,
+        )
 
 
 class Row(NGFFNode):
