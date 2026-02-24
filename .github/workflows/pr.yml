@@ -41,24 +41,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: uv run pytest -v --cov=./ --cov-report=xml
 
-  # this checks that docs build and examples run
-  # but does not deploy to GH Pages
   docs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Set up Python
-        run: uv python install 3.11
-
-      - name: Install dependencies
-        run: |
-          uv sync --group doc
-          # temporary fix for sphinx-polyversion
-          uv pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging
-
-      - name: Test docs build
-        run: uv run sphinx-polyversion docs/poly.py -vvv --local
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.11"
+          enable-cache: true
+      - run: uv sync --group doc
+      - run: uv run zensical build --clean
