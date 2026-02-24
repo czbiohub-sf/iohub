@@ -17,7 +17,7 @@ _DATASET_PATH = click.Path(exists=True, file_okay=False, resolve_path=True, path
 @click.help_option("-h", "--help")
 @click.version_option(version=VERSION)
 def cli():
-    """\u001b[34;1m iohub: N-dimensional bioimaging I/O \u001b[0m"""
+    """iohub: N-dimensional bioimaging I/O"""
 
 
 @cli.command()

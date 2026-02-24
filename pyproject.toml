@@ -52,7 +52,6 @@ Source = "https://github.com/czbiohub-sf/iohub"
 tensorstore = [
     "tensorstore>=0.1.64",
 ]
-
 [dependency-groups]
 test = [
     "iohub[tensorstore]",
@@ -68,14 +67,9 @@ acquire-zarr = [
     "acquire-zarr",
 ]
 doc = [
-    "matplotlib",
-    "numpydoc>=1.1.0",
-    "sphinx>=4.2.0",
-    "pydata-sphinx-theme>=0.15.2",
-    "sphinx-copybutton>=0.4.0",
-    "sphinx-polyversion>=2.0.0",
-    "sphinx-sitemap>=2.5.0",
-    "sphinx-gallery>=0.13.0",
+    "zensical>=0.0.11",
+    "mkdocstrings-python>=2.0.2",
+    "mkdocs-click>=0.8",
 ]
 dev = [
     { include-group = "test" },
