@@ -17,7 +17,7 @@ _DATASET_PATH = click.Path(exists=True, file_okay=False, resolve_path=True, path
 @click.help_option("-h", "--help")
 @click.version_option(version=VERSION)
 def cli():
-    """\u001b[34;1m iohub: N-dimensional bioimaging I/O \u001b[0m"""
+    """iohub: N-dimensional bioimaging I/O"""
 
 
 @cli.command()
@@ -143,11 +143,15 @@ def set_scale(
 ):
     """Update scale metadata in OME-Zarr datasets.
 
-    >> iohub set-scale -i input.zarr/*/*/* -t 1.0 -z 1.0 -y 0.5 -x 0.5
+    ```
+    iohub set-scale -i input.zarr/*/*/* -t 1.0 -z 1.0 -y 0.5 -x 0.5
+    ```
 
     Supports setting a single axis at a time:
 
-    >> iohub set-scale -i input.zarr/*/*/* -z 2.0
+    ```
+    iohub set-scale -i input.zarr/*/*/* -z 2.0
+    ```
     """
     if image is None:
         image = "0"
@@ -180,7 +184,9 @@ def set_scale(
 def rename_wells_command(zarrfile, csvfile):
     """Rename wells in an plate.
 
-    >> iohub rename-wells -i plate.zarr -c names.csv
+    ```
+    iohub rename-wells -i plate.zarr -c names.csv
+    ```
 
     The CSV file must have two columns with old and new names in the form:
     ```
