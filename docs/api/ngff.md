@@ -3,6 +3,8 @@
 ## Convenience
 
 ::: iohub.open_ome_zarr
+    options:
+      show_overloads: false
 
 ## NGFF Nodes
 
