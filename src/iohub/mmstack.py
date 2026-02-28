@@ -171,6 +171,8 @@ class MMStack(MicroManagerFOVMapping):
 
     def close(self) -> None:
         """Close file handles"""
+        if self._store is not None:
+            self._store.close()
         self._first_tif.close()
 
     def _set_mm_meta(self, mm_meta: dict) -> None:
@@ -309,7 +311,7 @@ class MMStack(MicroManagerFOVMapping):
         # but a mixture of `TiffPage` and `TiffFrame` objects
         # https://github.com/cgohlke/tifffile/issues/179
         with catch_warnings():
-            filterwarnings("ignore", message=r".*from closed file.*", module="tifffile")
+            filterwarnings("ignore", message=r".*from closed file.*")
             try:
                 # virtual frames
                 page = self._first_tif.pages[idx]

@@ -22,12 +22,14 @@ def test_unsupported_datatype(tmpdir):
 def test_detect_ome_tiff(data_path):
     reader = read_images(data_path)
     assert isinstance(reader, MMStack)
+    reader.close()
 
 
 @pytest.mark.parametrize("data_path", ndtiff_v2_datasets + [ndtiff_v3_labeled_positions])
 def test_detect_ndtiff(data_path):
     reader = read_images(data_path)
     assert isinstance(reader, NDTiffDataset)
+    reader.close()
 
 
 @pytest.mark.parametrize("data_path", mm2gamma_singlepage_tiffs)
