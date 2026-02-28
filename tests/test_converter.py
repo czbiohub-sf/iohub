@@ -9,7 +9,6 @@ from ndtiff import Dataset
 from tifffile import TiffFile
 
 from iohub.convert import TIFFConverter, _adjust_chunks_for_divisibility
-from iohub.mm_fov import MicroManagerFOV
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
 from tests.conftest import (
@@ -33,13 +32,17 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("chunks", ["XY", "XYZ", (1, 1, 3, 256, 256), None])
 
 
-def _check_scale_transform(fov: MicroManagerFOV, position: Position) -> None:
+def _check_scale_transform(
+    t_scale: float,
+    zyx_scale: tuple[float, float, float],
+    position: Position,
+) -> None:
     """Check scale transformation of the highest resolution level."""
     tf = position.metadata.multiscales[0].datasets[0].coordinate_transformations[0]
     assert tf.type == "scale"
-    assert tf.scale[0] == fov.t_scale
+    assert tf.scale[0] == t_scale
     assert tf.scale[1] == 1.0
-    assert tf.scale[2:] == list(fov.zyx_scale)
+    assert tf.scale[2:] == list(zyx_scale)
 
 
 def _check_chunks(position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] | None) -> None:
@@ -60,16 +63,18 @@ def _check_chunks(position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] 
 def _check_result(
     output: Path,
     expected_sum: float,
-    converter: TIFFConverter,
+    num_positions: int,
+    t_scale: float,
+    zyx_scale: tuple[float, float, float],
     grid_layout: bool,
     chunks: Literal["XY", "XYZ"] | tuple[int] | None,
 ) -> None:
     with open_ome_zarr(output, mode="r") as result:
         intensity = 0
-        if grid_layout and converter.p > 1:
-            assert len(result) < converter.p
-        for (_, example_fov), (pos_name, pos) in zip(converter.reader, result.positions(), strict=True):
-            _check_scale_transform(example_fov, pos)
+        if grid_layout and num_positions > 1:
+            assert len(result) < num_positions
+        for pos_name, pos in result.positions():
+            _check_scale_transform(t_scale, zyx_scale, pos)
             _check_chunks(pos, chunks)
             intensity += pos["0"][:].sum()
             with open(output / pos_name / "0" / "image_plane_metadata.json") as f:
@@ -100,11 +105,18 @@ def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
         "iohub_version",
         "Summary",
     ]
+    # Capture scale info before conversion closes the reader
+    _, first_fov = next(iter(converter.reader))
+    t_scale = first_fov.t_scale
+    zyx_scale = first_fov.zyx_scale
+    num_positions = converter.p
     converter()
     _check_result(
         output=output,
         expected_sum=raw_array.sum(),
-        converter=converter,
+        num_positions=num_positions,
+        t_scale=t_scale,
+        zyx_scale=zyx_scale,
         grid_layout=grid_layout,
         chunks=chunks,
     )
@@ -182,17 +194,26 @@ def test_converter_ndtiff(ndtiff_datasets: Path, grid_layout, chunks, tmpdir):
     output = tmpdir / "converted.zarr"
     converter = TIFFConverter(ndtiff_datasets, output, grid_layout=grid_layout, chunks=chunks)
     assert isinstance(converter.reader, NDTiffDataset)
-    raw_array = np.asarray(Dataset(str(ndtiff_datasets)).as_array())
+    ds = Dataset(str(ndtiff_datasets))
+    raw_array = np.asarray(ds.as_array())
+    ds.close()
     assert np.prod([d for d in converter.dim if d > 0]) == np.prod(raw_array.shape)
     assert list(converter.metadata.keys()) == [
         "iohub_version",
         "Summary",
     ]
+    # Capture scale info before conversion closes the reader
+    _, first_fov = next(iter(converter.reader))
+    t_scale = first_fov.t_scale
+    zyx_scale = first_fov.zyx_scale
+    num_positions = converter.p
     converter()
     _check_result(
         output=output,
         expected_sum=raw_array.sum(),
-        converter=converter,
+        num_positions=num_positions,
+        t_scale=t_scale,
+        zyx_scale=zyx_scale,
         grid_layout=grid_layout,
         chunks=chunks,
     )
