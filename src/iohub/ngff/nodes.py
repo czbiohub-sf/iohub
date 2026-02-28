@@ -11,6 +11,7 @@ import os
 import shutil
 from copy import deepcopy
 from datetime import datetime
+from functools import cached_property
 from pathlib import Path
 from typing import Generator, Literal, Sequence, Type, TypeAlias, overload
 
@@ -112,22 +113,30 @@ class NGFFNode:
         version: Literal["0.4", "0.5"] = "0.4",
         overwriting_creation: bool = False,
     ):
-        if channel_names:
-            self._channel_names = channel_names
+        if channel_names is not None:
+            self.channel_names = channel_names
         elif not parse_meta:
             raise ValueError("Channel names need to be provided or in metadata.")
-        if axes:
+        if axes is not None:
             self.axes = axes
         self._group = group
         self._overwrite = overwriting_creation
         self._version: Literal["0.4", "0.5"] = version
         if parse_meta:
             self._parse_meta()
-        if not hasattr(self, "axes"):
-            self.axes = self._DEFAULT_AXES
         # TODO: properly check the underlying storage type
         # This works for now as only the local filesystem is supported
         self._case_insensitive_fs = _case_insensitive_local_fs()
+
+    @cached_property
+    def axes(self):
+        """Axes metadata. Lazily resolves to defaults if not set."""
+        return self._DEFAULT_AXES
+
+    @cached_property
+    def channel_names(self):
+        """Channel names. Subclasses override for lazy resolution."""
+        raise AttributeError("Channel names not available. Provide channel_names or ensure metadata is parseable.")
 
     @property
     def zgroup(self):
@@ -151,10 +160,6 @@ class NGFFNode:
         return self._version
 
     @property
-    def channel_names(self):
-        return self._channel_names
-
-    @property
     def _parent_path(self):
         """The parent Zarr group path of the node.
         None for the root node."""
@@ -174,7 +179,7 @@ class NGFFNode:
         return dict(
             version=self._version,
             axes=self.axes,
-            channel_names=self._channel_names,
+            channel_names=self.channel_names,
             overwriting_creation=self._overwrite,
         )
 
@@ -294,13 +299,9 @@ class NGFFNode:
         int
             Index of the channel.
         """
-        if not hasattr(self, "_channel_names"):
-            raise AttributeError(
-                f"Channel names are not set for this NGFF node. Cannot get the index for channel name '{name}'"
-            )
-        if name not in self._channel_names:
-            raise ValueError(f"Channel {name} is not in the existing channels: {self._channel_names}")
-        return self._channel_names.index(name)
+        if name not in self.channel_names:
+            raise ValueError(f"Channel {name} is not in the existing channels: {self.channel_names}")
+        return self.channel_names.index(name)
 
     def _warn_invalid_meta(self):
         msg = "Zarr group at {} does not have valid metadata for {}".format(self._group.path, type(self))
@@ -580,11 +581,11 @@ class Position(NGFFNode):
     def _set_meta(self):
         self.axes = self.metadata.multiscales[0].axes
         if self.metadata.omero is not None:
-            self._channel_names = [c.label for c in self.metadata.omero.channels]
+            self.channel_names = [c.label for c in self.metadata.omero.channels]
         else:
             _logger.warning("OMERO metadata not found. Using channel indices as channel names.")
             example_image: ImageArray = self[self.metadata.multiscales[0].datasets[0].path]
-            self._channel_names = list(range(example_image.channels))
+            self.channel_names = list(range(example_image.channels))
 
     def _parse_meta(self):
         try:
@@ -900,9 +901,9 @@ class Position(NGFFNode):
             Whether to resize all the image arrays for the new channel,
             by default True
         """
-        if chan_name in self._channel_names:
+        if chan_name in self.channel_names:
             raise ValueError(f"Channel name '{chan_name}' already exists.")
-        self._channel_names.append(chan_name)
+        self.channel_names.append(chan_name)
         if resize_arrays:
             for _, img in self.images():
                 ch_ax = self._get_channel_axis()
@@ -930,7 +931,7 @@ class Position(NGFFNode):
             New name of the channel
         """
         ch_idx = self.get_channel_index(old)
-        self._channel_names[ch_idx] = new
+        self.channel_names[ch_idx] = new
         if hasattr(self.metadata, "omero"):
             self.metadata.omero.channels[ch_idx].label = new
         self.dump_meta()
@@ -1820,26 +1821,40 @@ class Plate(NGFFNode):
             self.metadata = PlateMeta(**plate_meta)
         else:
             self._warn_invalid_meta()
-        for attr in ("_channel_names", "axes"):
-            if not hasattr(self, attr):
-                self._first_pos_attr(attr)
 
-    def _first_pos_attr(self, attr: str):
-        """Get attribute value from the first position."""
-        name = " ".join(attr.split("_")).strip()
-        msg = f"Cannot determine {name}:"
+    @cached_property
+    def _first_pos(self):
+        """Get first position by direct path lookup (O(1)).
+
+        Uses already-parsed PlateMeta to get the first well path,
+        then reads that well's zattrs for the first position path.
+        Avoids zarr v3's eager ``Group.groups()`` enumeration.
+        """
         try:
-            row_grp = next(self.zgroup.groups())[1]
-            well_grp = next(row_grp.groups())[1]
-            pos_grp = next(well_grp.groups())[1]
-        except StopIteration:
-            _logger.warning(f"{msg} No position is found in the dataset.")
-            return
-        try:
-            pos = Position(pos_grp)
-            setattr(self, attr, getattr(pos, attr))
-        except AttributeError:
-            _logger.warning(f"{msg} Invalid metadata at the first position")
+            well_path = self.metadata.wells[0].path
+            well_grp = self.zgroup[well_path]
+            attrs = well_grp.attrs.get("ome") or dict(well_grp.attrs)
+            pos_name = attrs["well"]["images"][0]["path"]
+            return Position(
+                group=well_grp[pos_name],
+                parse_meta=True,
+                version=self._version,
+            )
+        except (IndexError, KeyError, AttributeError):
+            _logger.warning("Cannot read first position metadata.")
+            return None
+
+    @cached_property
+    def channel_names(self):
+        if pos := self._first_pos:
+            return pos.channel_names
+        raise AttributeError("No position found to read channel names from.")
+
+    @cached_property
+    def axes(self):
+        if pos := self._first_pos:
+            return pos.axes
+        return self._DEFAULT_AXES
 
     def dump_meta(self, field_count: bool = False):
         """Dumps metadata JSON to the `.zattrs` file.
