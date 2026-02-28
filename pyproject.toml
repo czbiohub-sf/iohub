@@ -8,7 +8,7 @@ description = "N-dimensional bioimaging data I/O with OME metadata in Python"
 authors = [
     {name = "CZ Biohub and iohub contributors", email = "iohub@czbiohub.org"},
 ]
-license = {text = "BSD 3-Clause License"}
+license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
@@ -82,6 +82,10 @@ iohub = "iohub.cli.cli:cli"
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/iohub"]
+
 
 [tool.uv-dynamic-versioning]
 vcs = "git"
