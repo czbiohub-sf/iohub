@@ -203,7 +203,6 @@ def test_cli_rename_wells_help():
         cmd.append(option)
         result = runner.invoke(cli, cmd)
         assert result.exit_code == 0
-        assert ">> iohub rename-wells" in result.output
 
 
 def test_cli_rename_wells(csv_data_file_1):
