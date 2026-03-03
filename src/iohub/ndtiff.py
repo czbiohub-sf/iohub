@@ -180,6 +180,8 @@ class NDTiffDataset(MicroManagerFOVMapping):
                     )
                 except ValueError:
                     continue
+                if img_metadata is None:
+                    continue
                 # Note: Timestamp key differs between Micro-manager versions
                 timestamp = img_metadata.get("TimeReceivedByCore")
                 if timestamp is not None:
