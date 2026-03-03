@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=77.0.0", "wheel", "setuptools_scm[toml]"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling", "uv-dynamic-versioning>=0.7.0"]
 
 [project]
 name = "iohub"
@@ -8,7 +8,7 @@ description = "N-dimensional bioimaging data I/O with OME metadata in Python"
 authors = [
     {name = "CZ Biohub and iohub contributors", email = "iohub@czbiohub.org"},
 ]
-license = {text = "BSD 3-Clause License"}
+license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
@@ -29,7 +29,7 @@ dependencies = [
     "pandas>=1.5.2",
     "pydantic>=2.8.2",
     "pydantic_extra_types>=2.9.0",
-    "tifffile>=2024.1.30, <2025.5.21",
+    "tifffile>=2025.5.21",
     "natsort>=7.1.1",
     "ndtiff>=2.2.1",
     "zarr>=3.0.8",
@@ -52,14 +52,10 @@ Source = "https://github.com/czbiohub-sf/iohub"
 tensorstore = [
     "tensorstore>=0.1.64",
 ]
-acquire-zarr = [
-    "acquire-zarr",
-]
-dev = [
+[dependency-groups]
+test = [
     "iohub[tensorstore]",
     "ngff-zarr[validate]",
-    "black",
-    "flake8",
     "pytest>=5.0.0",
     "pytest-cov",
     "hypothesis>=6.61.0",
@@ -67,31 +63,45 @@ dev = [
     "wget>=3.2",
     "ome-zarr>=0.12.0",
 ]
+acquire-zarr = [
+    "acquire-zarr",
+]
 doc = [
-    "matplotlib",
-    "numpydoc>=1.1.0",
-    "sphinx>=4.2.0",
-    "pydata-sphinx-theme>=0.15.2",
-    "sphinx-copybutton>=0.4.0",
-    "sphinx-polyversion>=0.2.4",
-    "sphinx-sitemap>=2.5.0",
-    "sphinx-gallery>=0.13.0",
+    "zensical>=0.0.11",
+    "mkdocstrings-python>=2.0.2",
+    "mkdocs-click>=0.8",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "acquire-zarr" },
+    { include-group = "doc" },
 ]
 
 [project.scripts]
 iohub = "iohub.cli.cli:cli"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["iohub"]
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
-[tool.setuptools_scm]
-version_scheme = "release-branch-semver"
-write_to = "iohub/_version.py"
+[tool.hatch.build.targets.wheel]
+packages = ["src/iohub"]
 
-[tool.black]
-line-length = 79
 
-[tool.isort]
-profile = "black"
-line_length = 79
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E203", "E731"]

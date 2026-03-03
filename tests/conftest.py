@@ -9,6 +9,11 @@ import pytest
 from wget import download
 
 
+@pytest.fixture
+def rng():
+    return np.random.default_rng(42)
+
+
 def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
     ghfs = fsspec.filesystem(
         "github",
@@ -34,9 +39,7 @@ def download_data():
         print("\nsetting up temp folder")
 
     # Zenodo URL
-    custom_url = (
-        "https://zenodo.org/record/6983916/files/waveOrder_test_data.zip"
-    )
+    custom_url = "https://zenodo.org/record/6983916/files/waveOrder_test_data.zip"
     # Reference v0.4 HCS dataset from OME
     # See the last line of
     # https://github.com/ome/ngff/issues/140#issuecomment-1309972511
@@ -68,11 +71,7 @@ mm2gamma_ome_tiffs_hcs = [p for p in mm2gamma_ome_tiffs if "4p" in p.name]
 
 # This is a dataset with 11 timepoints
 # The MDA definition at start of the experiment specifies 20 timepoints
-mm2gamma_ome_tiffs_incomplete = (
-    test_datasets
-    / "MM20_ometiff_incomplete"
-    / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1"
-)
+mm2gamma_ome_tiffs_incomplete = test_datasets / "MM20_ometiff_incomplete" / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1"
 
 
 mm2gamma_singlepage_tiffs = subdirs(test_datasets, "MM20_singlepage-tiffs")
@@ -81,9 +80,7 @@ mm2gamma_singlepage_tiffs = subdirs(test_datasets, "MM20_singlepage-tiffs")
 # This is a dataset with 11 timepoints
 # The MDA definition at start of the experiment specifies 20 timepoints
 mm2gamma_singlepage_tiffs_incomplete = (
-    test_datasets
-    / "MM20_singlepage_incomplete"
-    / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1 2"
+    test_datasets / "MM20_singlepage_incomplete" / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1 2"
 )
 
 
@@ -93,9 +90,7 @@ mm1422_ome_tiffs = subdirs(test_datasets, "MM1422_ome-tiffs")
 mm1422_singlepage_tiffs = subdirs(test_datasets, "MM1422_singlepage-tiffs")
 
 
-mm2gamma_zarr_v01 = (
-    test_datasets / "MM20_zarr" / "mm2.0-20201209_4p_2t_5z_1c_512k_1.zarr"
-)
+mm2gamma_zarr_v01 = test_datasets / "MM20_zarr" / "mm2.0-20201209_4p_2t_5z_1c_512k_1.zarr"
 
 
 hcs_ref = test_datasets / "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"
@@ -104,11 +99,7 @@ hcs_ref = test_datasets / "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"
 ndtiff_v2_datasets = subdirs(test_datasets, "MM20_pycromanager")
 
 
-ndtiff_v2_ptcz = (
-    test_datasets
-    / "MM20_pycromanager"
-    / "mm2.0-20210713_pm0.13.2_2p_3t_2c_7z_1"
-)
+ndtiff_v2_ptcz = test_datasets / "MM20_pycromanager" / "mm2.0-20210713_pm0.13.2_2p_3t_2c_7z_1"
 
 
 ndtiff_v3_labeled_positions = test_datasets / "ndtiff_v3_labeled_positions"
@@ -157,15 +148,11 @@ def empty_ome_zarr_hcs_v05(tmpdir) -> tuple[Path, tuple[tuple[str, ...], ...]]:
         for col in COLS:
             col_dir = row_dir / col
             col_dir.mkdir()
-            shutil.copy(
-                example_json_dir / "well.json", col_dir / TARGET_FILENAME
-            )
+            shutil.copy(example_json_dir / "well.json", col_dir / TARGET_FILENAME)
             for fov in FOVS:
                 fov_dir = col_dir / fov
                 fov_dir.mkdir()
-                shutil.copy(
-                    example_json_dir / "image.json", fov_dir / TARGET_FILENAME
-                )
+                shutil.copy(example_json_dir / "image.json", fov_dir / TARGET_FILENAME)
                 for res in RESOLUTIONS:
                     res_dir = fov_dir / res
                     res_dir.mkdir()
@@ -239,9 +226,7 @@ def aqz_ome_zarr_05(tmpdir):
     )
 
     stream = aqz.ZarrStream(settings)
-    data = np.random.randint(
-        0, 2**16 - 1, (32, 4, 10, 48, 64), dtype=np.uint16
-    )
+    data = np.random.randint(0, 2**16 - 1, (32, 4, 10, 48, 64), dtype=np.uint16)
     stream.append(data)
     del stream
 

@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -9,8 +8,7 @@ import pytest
 from ndtiff import Dataset
 from tifffile import TiffFile
 
-from iohub.convert import TIFFConverter
-from iohub.mm_fov import MicroManagerFOV
+from iohub.convert import TIFFConverter, _adjust_chunks_for_divisibility
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
 from tests.conftest import (
@@ -31,27 +29,23 @@ def pytest_generate_tests(metafunc):
     if "grid_layout" in metafunc.fixturenames:
         metafunc.parametrize("grid_layout", [True, False])
     if "chunks" in metafunc.fixturenames:
-        metafunc.parametrize(
-            "chunks", ["XY", "XYZ", (1, 1, 3, 256, 256), None]
-        )
+        metafunc.parametrize("chunks", ["XY", "XYZ", (1, 1, 3, 256, 256), None])
 
 
-def _check_scale_transform(fov: MicroManagerFOV, position: Position) -> None:
-    """Check scale transformation of the highest resolution level."""
-    tf = (
-        position.metadata.multiscales[0]
-        .datasets[0]
-        .coordinate_transformations[0]
-    )
-    assert tf.type == "scale"
-    assert tf.scale[0] == fov.t_scale
-    assert tf.scale[1] == 1.0
-    assert tf.scale[2:] == list(fov.zyx_scale)
-
-
-def _check_chunks(
-    position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] | None
+def _check_scale_transform(
+    t_scale: float,
+    zyx_scale: tuple[float, float, float],
+    position: Position,
 ) -> None:
+    """Check scale transformation of the highest resolution level."""
+    tf = position.metadata.multiscales[0].datasets[0].coordinate_transformations[0]
+    assert tf.type == "scale"
+    assert tf.scale[0] == t_scale
+    assert tf.scale[1] == 1.0
+    assert tf.scale[2:] == list(zyx_scale)
+
+
+def _check_chunks(position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] | None) -> None:
     """Check chunk size of the highest resolution level."""
     img = position["0"]
     match chunks:
@@ -60,7 +54,8 @@ def _check_chunks(
         case "XYZ" | None:
             assert img.chunks == (1,) * 2 + img.shape[-3:]
         case tuple():
-            assert img.chunks == chunks
+            expected = _adjust_chunks_for_divisibility(img.shape, chunks)
+            assert img.chunks == expected
         case _:
             assert False
 
@@ -68,23 +63,21 @@ def _check_chunks(
 def _check_result(
     output: Path,
     expected_sum: float,
-    converter: TIFFConverter,
+    num_positions: int,
+    t_scale: float,
+    zyx_scale: tuple[float, float, float],
     grid_layout: bool,
     chunks: Literal["XY", "XYZ"] | tuple[int] | None,
 ) -> None:
     with open_ome_zarr(output, mode="r") as result:
         intensity = 0
-        if grid_layout and converter.p > 1:
-            assert len(result) < converter.p
-        for (_, example_fov), (pos_name, pos) in zip(
-            converter.reader, result.positions(), strict=True
-        ):
-            _check_scale_transform(example_fov, pos)
+        if grid_layout and num_positions > 1:
+            assert len(result) < num_positions
+        for pos_name, pos in result.positions():
+            _check_scale_transform(t_scale, zyx_scale, pos)
             _check_chunks(pos, chunks)
             intensity += pos["0"][:].sum()
-            with open(
-                output / pos_name / "0" / "image_plane_metadata.json"
-            ) as f:
+            with open(output / pos_name / "0" / "image_plane_metadata.json") as f:
                 metadata = json.load(f)
                 key = "0/0/0"
                 assert key in metadata
@@ -102,27 +95,28 @@ def test_converter_inputs(mm2gamma_ome_tiff, tmpdir):
 def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     output = tmpdir / "converted.zarr"
-    converter = TIFFConverter(
-        mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks
-    )
+    converter = TIFFConverter(mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks)
     assert isinstance(converter.reader, MMStack)
     with TiffFile(next(mm2gamma_ome_tiff.glob("*.tif*"))) as tf:
         raw_array = tf.asarray()
-        assert (
-            converter.summary_metadata == tf.micromanager_metadata["Summary"]
-        )
-    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-        raw_array.shape
-    )
+        assert converter.summary_metadata == tf.micromanager_metadata["Summary"]
+    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(raw_array.shape)
     assert list(converter.metadata.keys()) == [
         "iohub_version",
         "Summary",
     ]
+    # Capture scale info before conversion closes the reader
+    _, first_fov = next(iter(converter.reader))
+    t_scale = first_fov.t_scale
+    zyx_scale = first_fov.zyx_scale
+    num_positions = converter.p
     converter()
     _check_result(
         output=output,
         expected_sum=raw_array.sum(),
-        converter=converter,
+        num_positions=num_positions,
+        t_scale=t_scale,
+        zyx_scale=zyx_scale,
         grid_layout=grid_layout,
         chunks=chunks,
     )
@@ -137,9 +131,7 @@ def example_ome_tiff() -> Path:
 
 
 @pytest.fixture(scope="function")
-def mock_hcs_ome_tiff_reader(
-    example_ome_tiff, monkeypatch: pytest.MonkeyPatch
-):
+def mock_hcs_ome_tiff_reader(example_ome_tiff, monkeypatch: pytest.MonkeyPatch):
     # dataset with 4 positions without HCS site names
     mock_stage_positions = [
         {"Label": "A1-Site_0"},
@@ -156,9 +148,7 @@ def mock_hcs_ome_tiff_reader(
 
 
 @pytest.fixture(scope="function")
-def mock_non_hcs_ome_tiff_reader(
-    example_ome_tiff, monkeypatch: pytest.MonkeyPatch
-):
+def mock_non_hcs_ome_tiff_reader(example_ome_tiff, monkeypatch: pytest.MonkeyPatch):
     # dataset with 4 positions without HCS site names
     mock_stage_positions = [
         {"Label": "0"},
@@ -185,7 +175,7 @@ def test_converter_ometiff_mock_hcs(mock_hcs_ome_tiff_reader, tmpdir):
 def test_converter_ometiff_mock_non_hcs(mock_non_hcs_ome_tiff_reader, tmpdir):
     data = mock_non_hcs_ome_tiff_reader
     output = tmpdir / "converted.zarr"
-    with pytest.raises(ValueError, match="HCS position labels"):
+    with pytest.raises(ValueError, match="HCS position label"):
         TIFFConverter(data, output, hcs_plate=True)
 
 
@@ -202,23 +192,28 @@ def test_converter_ometiff_hcs_numerical(example_ome_tiff, tmpdir):
 def test_converter_ndtiff(ndtiff_datasets: Path, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     output = tmpdir / "converted.zarr"
-    converter = TIFFConverter(
-        ndtiff_datasets, output, grid_layout=grid_layout, chunks=chunks
-    )
+    converter = TIFFConverter(ndtiff_datasets, output, grid_layout=grid_layout, chunks=chunks)
     assert isinstance(converter.reader, NDTiffDataset)
-    raw_array = np.asarray(Dataset(str(ndtiff_datasets)).as_array())
-    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(
-        raw_array.shape
-    )
+    ds = Dataset(str(ndtiff_datasets))
+    raw_array = np.asarray(ds.as_array())
+    ds.close()
+    assert np.prod([d for d in converter.dim if d > 0]) == np.prod(raw_array.shape)
     assert list(converter.metadata.keys()) == [
         "iohub_version",
         "Summary",
     ]
+    # Capture scale info before conversion closes the reader
+    _, first_fov = next(iter(converter.reader))
+    t_scale = first_fov.t_scale
+    zyx_scale = first_fov.zyx_scale
+    num_positions = converter.p
     converter()
     _check_result(
         output=output,
         expected_sum=raw_array.sum(),
-        converter=converter,
+        num_positions=num_positions,
+        t_scale=t_scale,
+        zyx_scale=zyx_scale,
         grid_layout=grid_layout,
         chunks=chunks,
     )
@@ -235,3 +230,176 @@ def test_converter_ndtiff_v3_position_labels(tmpdir):
             "Pos1",
             "Pos2",
         ]
+
+
+class TestGenChunks:
+    """Unit tests for the TIFFConverter._gen_chunks method."""
+
+    @pytest.fixture
+    def make_mock_converter(self):
+        """Factory fixture to create mock converter with dimensions."""
+
+        def _make(t=1, c=1, z=10, y=256, x=256, dtype="uint16"):
+            class MockConverter:
+                pass
+
+            converter = MockConverter()
+            converter.t = t
+            converter.c = c
+            converter.z = z
+            converter.y = y
+            converter.x = x
+
+            class MockReader:
+                pass
+
+            converter.reader = MockReader()
+            converter.reader.dtype = dtype
+
+            converter._gen_chunks = TIFFConverter._gen_chunks.__get__(converter)
+            return converter
+
+        return _make
+
+    @pytest.mark.parametrize(
+        "z_dim,input_chunk,expected_z",
+        [
+            (15, 10, 5),  # 10 doesn't divide 15, adjust to 5
+            (7, 5, 1),  # prime - falls to 1
+            (16, 8, 8),  # divides evenly, no change
+            (100, 50, 50),  # divides evenly
+            (9, 4, 3),  # odd non-prime, adjust to 3
+        ],
+    )
+    def test_gen_chunks_divisibility(self, make_mock_converter, z_dim, input_chunk, expected_z):
+        """Test chunks are adjusted to divide evenly into dimensions."""
+        converter = make_mock_converter(z=z_dim)
+        chunks = converter._gen_chunks((1, 1, input_chunk, 256, 256))
+        assert chunks[2] == expected_z
+        assert z_dim % chunks[2] == 0
+
+    def test_gen_chunks_max_chunk_size_then_divisibility(self, make_mock_converter):
+        """Test divisibility check happens AFTER MAX_CHUNK_SIZE adjustment."""
+        # Large chunks that trigger MAX_CHUNK_SIZE, then need divisibility fix
+        # Z=15, large XY to trigger size limit, chunk should end up dividing 15
+        converter = make_mock_converter(z=15, y=2048, x=2048)
+        chunks = converter._gen_chunks((1, 1, 15, 2048, 2048))
+        assert 15 % chunks[2] == 0
+
+    @pytest.mark.parametrize("z_dim", [7, 11, 13, 17, 19, 23])  # prime numbers
+    def test_gen_chunks_prime_dimensions(self, make_mock_converter, z_dim):
+        """Test handling of prime dimension sizes - should fall to 1."""
+        converter = make_mock_converter(z=z_dim)
+        chunks = converter._gen_chunks((1, 1, z_dim - 1, 256, 256))
+        assert z_dim % chunks[2] == 0
+
+    @pytest.mark.parametrize("input_chunks", ["XY", "XYZ", None])
+    def test_gen_chunks_string_inputs(self, make_mock_converter, input_chunks):
+        """Test string chunk specifications."""
+        converter = make_mock_converter(z=10, y=256, x=256)
+        chunks = converter._gen_chunks(input_chunks)
+        assert len(chunks) == 5
+        assert all(isinstance(c, (int, np.integer)) for c in chunks)
+
+
+@pytest.mark.parametrize(
+    "shape,target_chunks",
+    [
+        # Shape where target chunk > dask default (128MB), triggering issue
+        ((1, 1, 100, 1024, 1024), (1, 1, 100, 1024, 1024)),
+        # Smaller shape that still tests the rechunking path
+        ((1, 1, 50, 512, 512), (1, 1, 50, 512, 512)),
+    ],
+)
+def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
+    """Test that rechunking from XY to XYZ chunks preserves all data.
+
+    Regression test for https://github.com/czbiohub-sf/iohub/issues/367
+    """
+    import dask
+    import dask.array as da
+    from dask.array import to_zarr
+
+    data = np.arange(np.prod(shape), dtype=np.uint16).reshape(shape)
+
+    # Source chunks: XY (one Z slice per chunk) - like TIFF reader
+    source_chunks = (1, 1, 1, shape[3], shape[4])
+    dask_data = da.from_array(data, chunks=source_chunks)
+
+    output = tmpdir / "test_rechunk.zarr"
+    with open_ome_zarr(output, layout="hcs", mode="w-", channel_names=["test"], version="0.5") as writer:
+        pos = writer.create_position("0", "0", "0")
+        zarr_img = pos.create_zeros(name="0", shape=shape, dtype=np.uint16, chunks=target_chunks)
+
+        # Rechunk and write with `array.chunk-size` config
+        chunk_size_bytes = int(np.prod(target_chunks) * 2)
+        with dask.config.set({"array.chunk-size": chunk_size_bytes}):
+            to_zarr(dask_data.rechunk(target_chunks), zarr_img)
+
+    # Make sure data is preserved
+    with open_ome_zarr(output, layout="hcs", mode="r") as reader:
+        written = reader["0/0/0"]["0"][:]
+
+    np.testing.assert_array_equal(data, written, err_msg="Data lost during XY to XYZ rechunking")
+
+
+class TestVersionParameter:
+    """Tests for the OME-NGFF version parameter on TIFFConverter."""
+
+    def test_default_version(self, example_ome_tiff, tmpdir):
+        """Default version should be '0.4'."""
+        output = tmpdir / "converted.zarr"
+        converter = TIFFConverter(example_ome_tiff, output)
+        assert converter.version == "0.4"
+
+    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
+    def test_explicit_version(self, example_ome_tiff, tmpdir, ver):
+        """Explicit version should be stored on the converter."""
+        output = tmpdir / f"converted_{ver}.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        assert converter.version == ver
+
+    def test_invalid_version_raises(self, example_ome_tiff, tmpdir):
+        """Invalid version strings should raise ValueError."""
+        output = tmpdir / "converted.zarr"
+        with pytest.raises(ValueError, match="Unsupported OME-NGFF version"):
+            TIFFConverter(example_ome_tiff, output, version="0.3")
+
+    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
+    def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver):
+        """Conversion should produce a correct store and preserve pixel data."""
+        logging.getLogger("tifffile").setLevel(logging.ERROR)
+        output = tmpdir / f"converted_{ver}.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        from tifffile import TiffFile
+
+        with TiffFile(next(example_ome_tiff.glob("*.tif*"))) as tf:
+            expected_sum = tf.asarray().sum()
+        converter()
+        with open_ome_zarr(output, mode="r") as result:
+            assert result.version == ver
+            intensity = sum(pos["0"][:].sum() for _, pos in result.positions())
+            assert intensity == expected_sum
+
+    @pytest.mark.parametrize(
+        "ver,expected_zarr_format",
+        [("0.4", 2), ("0.5", 3)],
+    )
+    def test_version_produces_correct_zarr_format(self, example_ome_tiff, tmpdir, ver, expected_zarr_format):
+        """Version should produce the corresponding Zarr format."""
+        logging.getLogger("tifffile").setLevel(logging.ERROR)
+        output = tmpdir / f"converted_{ver}.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        converter()
+        with open_ome_zarr(output, mode="r") as result:
+            assert result.zgroup.metadata.zarr_format == expected_zarr_format
+
+    def test_version_logs_info(self, example_ome_tiff, tmpdir, caplog):
+        """Version should be logged during conversion."""
+        logging.getLogger("tifffile").setLevel(logging.ERROR)
+        output = tmpdir / "converted.zarr"
+        converter = TIFFConverter(example_ome_tiff, output, version="0.5")
+        with caplog.at_level(logging.INFO, logger="iohub.convert"):
+            converter()
+        assert "OME-Zarr version 0.5" in caplog.text
+        assert "Zarr format v3" in caplog.text
