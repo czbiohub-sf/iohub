@@ -169,35 +169,29 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
                 pm_metadata["StagePositions"].append(position_metadata)
 
-        # Compute time scale
-        self._t_scale = 1.0
-        if self.frames > 1:
-            _acq_times, _t_idx = [], []
-            for t_idx in range(self.frames):
-                try:
-                    img_metadata = self.get_image_metadata(
-                        p_idx, t_idx, c_idx, 0
-                    )
-                except ValueError:
-                    continue
-                if img_metadata is None:
-                    continue
-                # Note: Timestamp key differs between Micro-manager versions
-                timestamp = img_metadata.get("TimeReceivedByCore")
-                if timestamp is not None:
-                    acq_time = datetime.strptime(
-                        timestamp, "%Y-%m-%d %H:%M:%S.%f"
-                    ).timestamp()
-                    _acq_times.append(acq_time)
-                    _t_idx.append(t_idx)
-            if len(_acq_times) > 1:
-                # find slope of _acq_times vs _t_idx
-                _acq_times = np.array(_acq_times, dtype=float)
-                _t_idx = np.array(_t_idx, dtype=float)
-                slope, _ = np.polyfit(_t_idx, _acq_times, 1)
-                self._t_scale = float(slope)
+        self._t_scale = self._compute_t_scale(p_idx, c_idx)
 
         return {"Summary": pm_metadata}
+
+    def _compute_t_scale(self, p_idx, c_idx) -> float:
+        """Compute time scale (seconds per timepoint) via linear fit of acquisition timestamps."""
+        if self.frames <= 1:
+            return 1.0
+        acq_times, t_indices = [], []
+        for t_idx in range(self.frames):
+            img_metadata = self.get_image_metadata(p_idx, t_idx, c_idx, 0)
+            if img_metadata is None:
+                continue
+            # Note: Timestamp key differs between Micro-manager versions
+            timestamp = img_metadata.get("TimeReceivedByCore")
+            if timestamp is not None:
+                acq_time = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S.%f").timestamp()
+                acq_times.append(acq_time)
+                t_indices.append(t_idx)
+        if len(acq_times) > 1:
+            slope, _ = np.polyfit(t_indices, acq_times, 1)
+            return float(slope)
+        return 1.0
 
     def _check_str_axis(self, axis: Literal["position", "channel"]) -> bool:
         if axis in self._axes:
