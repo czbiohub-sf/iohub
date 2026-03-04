@@ -4,7 +4,7 @@ import pytest
 from xarray import DataArray
 
 from iohub.ndtiff import NDTiffDataset, NDTiffFOV
-from tests.conftest import ndtiff_v2_datasets, ndtiff_v3_labeled_positions
+from tests.conftest import ndtiff_v2_datasets, ndtiff_v2_ptcz, ndtiff_v3_labeled_positions
 
 
 def pytest_generate_tests(metafunc):
@@ -68,6 +68,13 @@ def test_dataset_v2_num_positions(ndtiff_dataset):
     with NDTiffDataset(ndtiff_dataset) as dataset:
         p_match = re.search(r"_(\d+)p_", str(ndtiff_dataset))
         assert len(dataset) == int(p_match.group(1)) if p_match else 1
+
+
+def test_t_scale():
+    with NDTiffDataset(ndtiff_v2_ptcz) as dataset:
+        assert dataset.t_scale > 0
+        # Dataset has 3 timepoints, so t_scale should be computed from linear fit
+        assert dataset.t_scale != 1.0
 
 
 def test_fov_getitem(ndtiff_dataset):
