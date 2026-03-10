@@ -29,15 +29,14 @@ def test_mmstack_nonexisting(tmpdir):
 
 
 def test_mmstack_getitem(ome_tiff):
-    mmstack = MMStack(ome_tiff)
-    assert isinstance(mmstack["0"], MMOmeTiffFOV)
-    assert isinstance(mmstack[0], MMOmeTiffFOV)
-    for key, fov in mmstack:
-        assert isinstance(key, str)
-        assert isinstance(fov, MMOmeTiffFOV)
-        assert key in mmstack.__repr__()
-        assert key in fov.__repr__()
-    mmstack.close()
+    with MMStack(ome_tiff) as mmstack:
+        assert isinstance(mmstack["0"], MMOmeTiffFOV)
+        assert isinstance(mmstack[0], MMOmeTiffFOV)
+        for key, fov in mmstack:
+            assert isinstance(key, str)
+            assert isinstance(fov, MMOmeTiffFOV)
+            assert key in mmstack.__repr__()
+            assert key in fov.__repr__()
 
 
 def test_mmstack_num_positions(ome_tiff):
@@ -73,34 +72,29 @@ def test_mmstack_metadata(ome_tiff):
 
 
 def test_fov_axes_names(ome_tiff):
-    mmstack = MMStack(ome_tiff)
-    for _, fov in mmstack:
-        axes_names = fov.axes_names
-        assert isinstance(axes_names, list)
-        assert len(axes_names) == 5
-        assert all([isinstance(name, str) for name in axes_names])
-    mmstack.close()
+    with MMStack(ome_tiff) as mmstack:
+        for _, fov in mmstack:
+            axes_names = fov.axes_names
+            assert isinstance(axes_names, list)
+            assert len(axes_names) == 5
+            assert all([isinstance(name, str) for name in axes_names])
 
 
 def test_fov_getitem(ome_tiff):
-    mmstack = MMStack(ome_tiff)
-    for _, fov in mmstack:
-        img: DataArray = fov[:]
-        assert isinstance(img, DataArray)
-        assert img.ndim == 5
-        assert img[0, 0, 0, 0, 0] >= 0
-        for ch in fov.channel_names:
-            assert img.sel(T=0, Z=0, C=ch, Y=0, X=0) >= 0
-    mmstack.close()
+    with MMStack(ome_tiff) as mmstack:
+        for _, fov in mmstack:
+            img: DataArray = fov[:]
+            assert isinstance(img, DataArray)
+            assert img.ndim == 5
+            assert img[0, 0, 0, 0, 0] >= 0
+            for ch in fov.channel_names:
+                assert img.sel(T=0, Z=0, C=ch, Y=0, X=0) >= 0
 
 
 def test_fov_equal(ome_tiff):
-    ref1 = MMStack(ome_tiff)
-    ref2 = MMStack(ome_tiff)
-    for (_, fov1), (_, fov2) in zip(ref1, ref2):
-        assert fov1 == fov2
-    ref1.close()
-    ref2.close()
+    with MMStack(ome_tiff) as ref1, MMStack(ome_tiff) as ref2:
+        for (_, fov1), (_, fov2) in zip(ref1, ref2):
+            assert fov1 == fov2
 
 
 def test_fov_not_equal(ome_tiff):

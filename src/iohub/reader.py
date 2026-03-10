@@ -198,84 +198,87 @@ def print_info(path: StrOrBytesPath, verbose=False):
     except (ValueError, RuntimeError):
         print("Error: No compatible dataset is found.")
         return
-    fmt_msg = f"Format:\t\t\t {fmt}"
-    if extra_info:
-        if extra_info.startswith("0."):
-            fmt_msg += " v" + extra_info
-    sum_msg = "\n=== Summary ==="
-    ch_msg = f"Channel names:\t\t {reader.channel_names}"
-    code_msg = "\nThis datset can be opened with iohub in Python code:\n"
-    msgs = []
-    if isinstance(reader, BaseFOVMapping):
-        _, first_fov = next(iter(reader))
-        shape_msg = ", ".join([f"{a}={s}" for s, a in zip(first_fov.shape, ("T", "C", "Z", "Y", "X"))])
-        msgs.extend(
-            [
-                sum_msg,
-                fmt_msg,
-                f"FOVs:\t\t\t {len(reader)}",
-                f"FOV shape:\t\t {shape_msg}",
-                ch_msg,
-                f"(Z, Y, X) scale (um):\t {first_fov.zyx_scale}",
-            ]
-        )
-        if verbose:
+    try:
+        fmt_msg = f"Format:\t\t\t {fmt}"
+        if extra_info:
+            if extra_info.startswith("0."):
+                fmt_msg += " v" + extra_info
+        sum_msg = "\n=== Summary ==="
+        ch_msg = f"Channel names:\t\t {reader.channel_names}"
+        code_msg = "\nThis datset can be opened with iohub in Python code:\n"
+        msgs = []
+        if isinstance(reader, BaseFOVMapping):
+            _, first_fov = next(iter(reader))
+            shape_msg = ", ".join([f"{a}={s}" for s, a in zip(first_fov.shape, ("T", "C", "Z", "Y", "X"))])
             msgs.extend(
                 [
-                    code_msg,
-                    ">>> from iohub import read_images",
-                    f">>> reader = read_images('{path}')",
-                ]
-            )
-        print(str.join("\n", msgs))
-    elif isinstance(reader, NGFFNode):
-        msgs.extend(
-            [
-                sum_msg,
-                fmt_msg,
-                "".join(["Axes:\t\t\t "] + [f"{a.name} ({a.type}); " for a in reader.axes]),
-                ch_msg,
-            ]
-        )
-        if isinstance(reader, Plate):
-            meta = reader.metadata
-            msgs.extend(
-                [
-                    f"Row names:\t\t {[r.name for r in meta.rows]}",
-                    f"Column names:\t\t {[c.name for c in meta.columns]}",
-                    f"Wells:\t\t\t {len(meta.wells)}",
+                    sum_msg,
+                    fmt_msg,
+                    f"FOVs:\t\t\t {len(reader)}",
+                    f"FOV shape:\t\t {shape_msg}",
+                    ch_msg,
+                    f"(Z, Y, X) scale (um):\t {first_fov.zyx_scale}",
                 ]
             )
             if verbose:
-                print("Zarr hierarchy:")
-                reader.print_tree()
-                positions = list(reader.positions())
-                total_bytes_uncompressed = sum(p["0"].nbytes for _, p in positions)
-                msgs.append(f"Positions:\t\t {len(positions)}")
-                msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
+                msgs.extend(
+                    [
+                        code_msg,
+                        ">>> from iohub import read_images",
+                        f">>> reader = read_images('{path}')",
+                    ]
+                )
+            print(str.join("\n", msgs))
+        elif isinstance(reader, NGFFNode):
+            msgs.extend(
+                [
+                    sum_msg,
+                    fmt_msg,
+                    "".join(["Axes:\t\t\t "] + [f"{a.name} ({a.type}); " for a in reader.axes]),
+                    ch_msg,
+                ]
+            )
+            if isinstance(reader, Plate):
+                meta = reader.metadata
+                msgs.extend(
+                    [
+                        f"Row names:\t\t {[r.name for r in meta.rows]}",
+                        f"Column names:\t\t {[c.name for c in meta.columns]}",
+                        f"Wells:\t\t\t {len(meta.wells)}",
+                    ]
+                )
+                if verbose:
+                    print("Zarr hierarchy:")
+                    reader.print_tree()
+                    positions = list(reader.positions())
+                    total_bytes_uncompressed = sum(p["0"].nbytes for _, p in positions)
+                    msgs.append(f"Positions:\t\t {len(positions)}")
+                    msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
+                    msgs.append(
+                        f"No. bytes decompressed:\t\t {total_bytes_uncompressed} [{sizeof_fmt(total_bytes_uncompressed)}]"
+                    )
+            else:
+                total_bytes_uncompressed = reader["0"].nbytes
+                msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
+                msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
                 msgs.append(
                     f"No. bytes decompressed:\t\t {total_bytes_uncompressed} [{sizeof_fmt(total_bytes_uncompressed)}]"
                 )
-        else:
-            total_bytes_uncompressed = reader["0"].nbytes
-            msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
-            msgs.append(f"Chunk size:\t\t {reader['0'].chunks}")
-            msgs.append(
-                f"No. bytes decompressed:\t\t {total_bytes_uncompressed} [{sizeof_fmt(total_bytes_uncompressed)}]"
-            )
-        if verbose:
-            msgs.extend(
-                [
-                    code_msg,
-                    ">>> from iohub import open_ome_zarr",
-                    f">>> dataset = open_ome_zarr('{path}', mode='r')",
-                ]
-            )
-        if isinstance(reader, Position):
-            print("Zarr hierarchy:")
-            reader.print_tree()
-        print("\n".join(msgs))
-        reader.close()
+            if verbose:
+                msgs.extend(
+                    [
+                        code_msg,
+                        ">>> from iohub import open_ome_zarr",
+                        f">>> dataset = open_ome_zarr('{path}', mode='r')",
+                    ]
+                )
+            if isinstance(reader, Position):
+                print("Zarr hierarchy:")
+                reader.print_tree()
+            print("\n".join(msgs))
+    finally:
+        if hasattr(reader, "close"):
+            reader.close()
 
 
 def sizeof_fmt(num: int) -> str:

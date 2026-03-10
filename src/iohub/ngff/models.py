@@ -12,7 +12,6 @@ from __future__ import annotations
 import re
 from typing import Annotated, Any, Literal, Optional
 
-import pandas as pd
 from pydantic import (
     AfterValidator,
     BaseModel,
@@ -49,11 +48,9 @@ def unique_validator(data: list[BaseModel], field: str | list[str]) -> list[Base
         raised if any value is not unique
     """
     fields = [field] if isinstance(field, str) else field
-    if not isinstance(data[0], dict):
-        params = [d.model_dump() for d in data]
-    df = pd.DataFrame(params)
     for key in fields:
-        if not df[key].is_unique:
+        values = [d[key] if isinstance(d, dict) else getattr(d, key) for d in data]
+        if len(values) != len(set(values)):
             raise ValueError(f"'{key}' must be unique!")
     return data
 
