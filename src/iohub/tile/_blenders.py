@@ -15,6 +15,7 @@ discoverable via the ``iohub.blenders`` entrypoint group.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import reduce
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -43,16 +44,16 @@ class Blender(Protocol):
 
     def weights(
         self,
-        tile_shape: tuple[int, int],
+        tile_shape: tuple[int, ...],
         overlap: dict[str, int],
         metadata: BlendContext | None = None,
     ) -> np.ndarray:
-        """Return a 2D (Y, X) weight array for the given tile shape.
+        """Return an N-D weight array for the given tile shape.
 
         Parameters
         ----------
-        tile_shape : tuple[int, int]
-            (Y, X) size of the tile.
+        tile_shape : tuple[int, ...]
+            Tile size per tiled dimension, e.g. ``(Y, X)`` or ``(Z, Y, X)``.
         overlap : dict[str, int]
             Overlap in pixels, e.g. ``{"y": 128, "x": 128}``.
         metadata : BlendContext | None
@@ -61,9 +62,18 @@ class Blender(Protocol):
         Returns
         -------
         np.ndarray
-            2D float64 weight array with shape ``tile_shape``.
+            Float64 weight array with shape ``tile_shape``.
         """
         ...
+
+
+def _separable_nd(kernels_1d: list[np.ndarray]) -> np.ndarray:
+    """Compute N-D separable kernel from a list of 1D kernels.
+
+    Uses ``np.multiply.outer`` iteratively to build the outer product
+    of all 1D kernels. For 2D this is equivalent to ``np.outer(a, b)``.
+    """
+    return reduce(np.multiply.outer, kernels_1d)
 
 
 class UniformBlender:
@@ -71,7 +81,7 @@ class UniformBlender:
 
     def weights(
         self,
-        tile_shape: tuple[int, int],
+        tile_shape: tuple[int, ...],
         overlap: dict[str, int],
         metadata: BlendContext | None = None,
     ) -> np.ndarray:
@@ -91,13 +101,12 @@ class GaussianBlender:
 
     def weights(
         self,
-        tile_shape: tuple[int, int],
+        tile_shape: tuple[int, ...],
         overlap: dict[str, int],
         metadata: BlendContext | None = None,
     ) -> np.ndarray:
-        wy = self._gaussian_1d(tile_shape[0])
-        wx = self._gaussian_1d(tile_shape[1])
-        return np.outer(wy, wx)
+        kernels_1d = [self._gaussian_1d(s) for s in tile_shape]
+        return _separable_nd(kernels_1d)
 
     def _gaussian_1d(self, size: int) -> np.ndarray:
         """1D gaussian centered in the array."""
@@ -122,16 +131,12 @@ class DistanceBlender:
 
     def weights(
         self,
-        tile_shape: tuple[int, int],
+        tile_shape: tuple[int, ...],
         overlap: dict[str, int],
         metadata: BlendContext | None = None,
     ) -> np.ndarray:
-        # Separable 1D distance ramps with cosine profile.
-        # Each pixel's weight = product of Y and X ramp values.
-        # Ramp goes from ~0 at the edge to 1 at the center.
-        wy = self._cosine_ramp_1d(tile_shape[0])
-        wx = self._cosine_ramp_1d(tile_shape[1])
-        return np.outer(wy, wx)
+        kernels_1d = [self._cosine_ramp_1d(s) for s in tile_shape]
+        return _separable_nd(kernels_1d)
 
     @staticmethod
     def _cosine_ramp_1d(size: int) -> np.ndarray:

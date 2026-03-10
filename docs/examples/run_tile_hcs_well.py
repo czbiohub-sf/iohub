@@ -4,10 +4,10 @@ Tile + Blend an HCS Well (Multi-FOV)
 
 Create a synthetic HCS plate with 1 well and 4 FOVs arranged in a 2x2
 grid with physical overlap, then composite the FOVs into a single mosaic
-and tile+blend with ``map_tiles``.
+and tile+blend with ``apply_func_tiled``.
 
 This demonstrates the full pipeline:
-FOV compositing (``Well.to_xarray``) → tiling (``Slicer``) → blending (``map_tiles``).
+FOV compositing (``Well.to_xarray``) → tiling (``Slicer``) → blending (``apply_func_tiled``).
 """
 
 # %%
@@ -19,7 +19,7 @@ import numpy as np
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.models import TransformationMeta
-from iohub.tile import Slicer, map_tiles
+from iohub.tile import apply_func_tiled
 
 warnings.filterwarnings("ignore")
 
@@ -96,14 +96,6 @@ print(f"Mosaic shape: {mosaic.shape}")
 print(f"Mosaic Y range: [{float(mosaic.y[0]):.2f}, {float(mosaic.y[-1]):.2f}] um")
 print(f"Mosaic X range: [{float(mosaic.x[0]):.2f}, {float(mosaic.x[-1]):.2f}] um")
 
-# %%
-# Inspect the tiling
-# --------------------
-
-slicer = Slicer(mosaic, tile_size={"y": 24, "x": 24}, overlap={"y": 4, "x": 4})
-print(f"\n{slicer}")
-print(f"Tiles: {len(slicer)}")
-print(f"Overlap edges: {slicer.graph.number_of_edges()}")
 
 # %%
 # Tile, process, and blend
@@ -116,7 +108,7 @@ def process(tile):
     return tile * 2
 
 
-result = map_tiles(
+result = apply_func_tiled(
     mosaic,
     fn=process,
     tile_size={"y": 24, "x": 24},
@@ -139,7 +131,7 @@ print("Round-trip check: PASSED")
 # With overlap caching
 # ----------------------
 
-result_cached = map_tiles(
+result_cached = apply_func_tiled(
     mosaic,
     fn=process,
     tile_size={"y": 24, "x": 24},

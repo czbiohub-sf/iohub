@@ -7,6 +7,8 @@ and optimize tile processing order for cache locality.
 from __future__ import annotations
 
 from collections import deque
+from functools import reduce
+from operator import mul
 
 import dask
 import xarray as xr
@@ -14,12 +16,12 @@ import xarray as xr
 from iohub.tile._slicer import Slicer
 
 
-def _overlap_regions(slicer: Slicer) -> list[tuple[slice, slice]]:
+def _overlap_regions(slicer: Slicer) -> list[dict[str, slice]]:
     """Compute unique overlap strips from the neighborhood graph.
 
     For each edge ``(tile_a, tile_b)`` in the graph, the overlap is
-    the bounding-box intersection. Strips covering identical pixel
-    ranges are deduplicated.
+    the bounding-box intersection across all tiled dimensions. Strips
+    covering identical pixel ranges are deduplicated.
 
     Parameters
     ----------
@@ -28,27 +30,33 @@ def _overlap_regions(slicer: Slicer) -> list[tuple[slice, slice]]:
 
     Returns
     -------
-    list[tuple[slice, slice]]
-        ``(y_slice, x_slice)`` pairs into the source data, one per
-        unique overlap strip.
+    list[dict[str, slice]]
+        Overlap regions as dicts of slices keyed by dim name.
     """
-    seen: set[tuple[int, int, int, int]] = set()
-    regions: list[tuple[slice, slice]] = []
+    tile_dims = slicer.tile_dims
+    seen: set[tuple[tuple[str, int, int], ...]] = set()
+    regions: list[dict[str, slice]] = []
 
     for a, b in slicer.graph.edges():
         spec_a, spec_b = slicer[a], slicer[b]
-        oy0 = max(spec_a.y_slice.start, spec_b.y_slice.start)
-        oy1 = min(spec_a.y_slice.stop, spec_b.y_slice.stop)
-        ox0 = max(spec_a.x_slice.start, spec_b.x_slice.start)
-        ox1 = min(spec_a.x_slice.stop, spec_b.x_slice.stop)
 
-        if oy1 <= oy0 or ox1 <= ox0:
+        overlap_slices: dict[str, slice] = {}
+        valid = True
+        for dim in tile_dims:
+            start = max(spec_a.slices[dim].start, spec_b.slices[dim].start)
+            end = min(spec_a.slices[dim].stop, spec_b.slices[dim].stop)
+            if end <= start:
+                valid = False
+                break
+            overlap_slices[dim] = slice(start, end)
+
+        if not valid:
             continue
 
-        key = (oy0, oy1, ox0, ox1)
+        key = tuple((d, s.start, s.stop) for d, s in overlap_slices.items())
         if key not in seen:
             seen.add(key)
-            regions.append((slice(oy0, oy1), slice(ox0, ox1)))
+            regions.append(overlap_slices)
 
     return regions
 
@@ -108,17 +116,23 @@ def _estimate_overlap_bytes(slicer: Slicer) -> int:
         Approximate byte count for all overlap strips.
     """
     data = slicer.data
+    tile_dims = slicer.tile_dims
+
+    # Leading dims: all dims NOT in tiled dims
     leading = 1
     for dim in data.dims:
-        if dim not in ("y", "x"):
+        if dim not in tile_dims:
             leading *= data.sizes[dim]
     itemsize = data.dtype.itemsize
 
     total = 0
-    for y_sl, x_sl in _overlap_regions(slicer):
-        h = y_sl.stop - y_sl.start
-        w = x_sl.stop - x_sl.start
-        total += leading * h * w * itemsize
+    for overlap_slices in _overlap_regions(slicer):
+        region_size = reduce(
+            mul,
+            (s.stop - s.start for s in overlap_slices.values()),
+            1,
+        )
+        total += leading * region_size * itemsize
     return total
 
 
@@ -140,7 +154,7 @@ def _persist_overlaps(slicer: Slicer) -> None:
 
     data = slicer.data
     strips: list[xr.DataArray] = []
-    for y_sl, x_sl in regions:
-        strips.append(data[..., y_sl, x_sl])
+    for overlap_slices in regions:
+        strips.append(data.isel(**overlap_slices))
 
     dask.persist(*strips)

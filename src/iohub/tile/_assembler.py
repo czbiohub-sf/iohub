@@ -39,7 +39,7 @@ def _resolve_chunks(
     return shape
 
 
-def _open_zarr_array(
+def _create_scratch_zarr(
     store: str | zarr.Group,
     name: str | None,
     *,
@@ -49,7 +49,10 @@ def _open_zarr_array(
     fill_value: float,
     shards: tuple[int, ...] | None = None,
 ) -> zarr.Array:
-    """Create a zarr array either inside a Group or at a file path."""
+    """Create a temporary zarr array for accumulation scratch space.
+
+    TODO: Consider using iohub's zarr utilities instead of raw zarr APIs.
+    """
     if isinstance(store, zarr.Group):
         return store.create_array(
             name,
@@ -59,7 +62,6 @@ def _open_zarr_array(
             fill_value=fill_value,
             shards=shards,
         )
-    # zarr.open_array does not accept a ``shards`` kwarg; use ShardingCodec.
     if shards is not None:
         from zarr.codecs import ShardingCodec
 
@@ -123,10 +125,11 @@ class Assembler:
         self._finalized = False
         self._result: xr.DataArray | None = None
 
-        # Mosaic shape from slicer data: (T, C, Z, Y, X)
+        # Full output dims from the data (e.g. ("t", "c", "z", "y", "x"))
         data = slicer.data
-        self._dims = ("t", "c", "z", "y", "x")
+        self._dims = tuple(str(d) for d in data.dims)
         self._shape = tuple(data.sizes[d] for d in self._dims)
+        self._tile_dims = slicer.tile_dims
 
         self._chunks = _resolve_chunks(self._dims, self._shape, data, chunks)
 
@@ -154,7 +157,7 @@ class Assembler:
             accum_name = None
             weight_name = None
 
-        self._accum = _open_zarr_array(
+        self._accum = _create_scratch_zarr(
             accum_store,
             accum_name,
             shape=self._shape,
@@ -163,7 +166,7 @@ class Assembler:
             fill_value=0.0,
             shards=self._shards,
         )
-        self._weight_map = _open_zarr_array(
+        self._weight_map = _create_scratch_zarr(
             weight_store,
             weight_name,
             shape=self._shape,
@@ -174,7 +177,7 @@ class Assembler:
         )
 
         # Cache weight kernels by tile shape
-        self._weight_cache: dict[tuple[int, int], np.ndarray] = {}
+        self._weight_cache: dict[tuple[int, ...], np.ndarray] = {}
 
         self._overlap = slicer.overlap
 
@@ -185,21 +188,20 @@ class Assembler:
         When False, tiles must be processed in waves (see Slicer.graph
         for coloring-based wave scheduling).
         """
-        seen_chunks: set[tuple[int, int]] = set()
-        y_chunk_size = self._chunks[3]  # Y dim
-        x_chunk_size = self._chunks[4]  # X dim
+        # Map dim name -> chunk size for tiled dimensions
+        dim_chunk_sizes = {d: self._chunks[self._dims.index(d)] for d in self._tile_dims}
+
+        seen_chunks: set[tuple[int, ...]] = set()
 
         for tile in self._slicer:
-            tile_chunks = set()
-            for yc in range(
-                tile.y_slice.start // y_chunk_size,
-                (tile.y_slice.stop - 1) // y_chunk_size + 1,
-            ):
-                for xc in range(
-                    tile.x_slice.start // x_chunk_size,
-                    (tile.x_slice.stop - 1) // x_chunk_size + 1,
-                ):
-                    tile_chunks.add((yc, xc))
+            # Compute chunk indices touched by this tile in each tiled dim
+            chunk_ranges = []
+            for dim in self._tile_dims:
+                s = tile.slices[dim]
+                cs = dim_chunk_sizes[dim]
+                chunk_ranges.append(range(s.start // cs, (s.stop - 1) // cs + 1))
+
+            tile_chunks = set(product(*chunk_ranges))
 
             if tile_chunks & seen_chunks:
                 return False
@@ -207,7 +209,7 @@ class Assembler:
 
         return True
 
-    def _get_weight_kernel(self, tile_shape: tuple[int, int]) -> np.ndarray:
+    def _get_weight_kernel(self, tile_shape: tuple[int, ...]) -> np.ndarray:
         """Get or compute the weight kernel for a tile shape."""
         if tile_shape not in self._weight_cache:
             self._weight_cache[tile_shape] = self._blender.weights(tile_shape, self._overlap)
@@ -222,7 +224,7 @@ class Assembler:
             The tile spec (provides spatial slices into the mosaic).
         result : xr.DataArray | np.ndarray
             Processed tile data. Shape must match tile extent
-            (broadcast dimensions T, C, Z are supported).
+            (broadcast dimensions are supported).
         """
         if self._finalized:
             raise RuntimeError("Assembler already finalized. Create a new Assembler to write more tiles.")
@@ -230,16 +232,17 @@ class Assembler:
         data = result.values if isinstance(result, xr.DataArray) else result
         data = data.astype(np.float64)
 
-        # Weight kernel is 2D (Y, X), broadcast over leading dims
-        weight_2d = self._get_weight_kernel(tile.shape_yx)
+        # Weight kernel covers tiled dims, broadcast over non-tiled leading dims
+        weight = self._get_weight_kernel(tile.tile_shape)
 
-        idx = (..., tile.y_slice, tile.x_slice)
+        # Build index: slice for tiled dims, slice(None) for others
+        idx = tuple(tile.slices[d] if d in tile.slices else slice(None) for d in self._dims)
 
         existing_accum = self._accum[idx]
-        self._accum[idx] = existing_accum + data * weight_2d
+        self._accum[idx] = existing_accum + data * weight
 
         existing_weight = self._weight_map[idx]
-        self._weight_map[idx] = existing_weight + weight_2d
+        self._weight_map[idx] = existing_weight + weight
 
     def get_output(self) -> xr.DataArray:
         """Finalize: normalize accumulator by weight map and return result.
@@ -258,7 +261,7 @@ class Assembler:
 
         # Create output zarr
         if self._output_group is not None:
-            output = _open_zarr_array(
+            output = _create_scratch_zarr(
                 self._output_group,
                 "data",
                 shape=self._shape,
@@ -268,7 +271,7 @@ class Assembler:
                 shards=self._shards,
             )
         else:
-            output = _open_zarr_array(
+            output = _create_scratch_zarr(
                 str(self._output_path),
                 None,
                 shape=self._shape,

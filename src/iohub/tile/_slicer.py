@@ -7,9 +7,10 @@ patchly's SamplingMode strategies.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
+from functools import reduce
 from itertools import product
+from operator import mul
 from typing import Iterator
 
 import networkx as nx
@@ -96,76 +97,80 @@ def _ceil_to_multiple(value: int, multiple: int) -> int:
     return ((value + multiple - 1) // multiple) * multiple
 
 
-@dataclass(frozen=True)
 class TileSpec:
     """Metadata for a single tile. Holds slices into the parent xr.DataArray.
 
     Use ``to_xarray()`` to get the tile data as a labeled xr.DataArray
     (dask-backed, lazy until ``.compute()``).
+
+    Parameters
+    ----------
+    tile_id : int
+        Unique identifier for this tile.
+    slices : dict[str, slice]
+        Dimension name to slice mapping, e.g.
+        ``{"y": slice(0, 256), "x": slice(0, 256)}`` or
+        ``{"z": slice(0, 32), "y": slice(0, 256), "x": slice(0, 256)}``.
+    data : xr.DataArray
+        Back-reference to the mosaic xarray (set by Slicer).
     """
 
-    tile_id: int
-    y_slice: slice
-    x_slice: slice
+    __slots__ = ("tile_id", "slices", "_data")
 
-    # Back-reference to the mosaic xarray, set by Slicer.
-    # Excluded from repr/hash/eq (frozen dataclass compares by value fields only).
-    _data: xr.DataArray
-
-    def __init__(self, tile_id: int, y_slice: slice, x_slice: slice, data: xr.DataArray):
-        # frozen dataclass workaround for non-comparable field
-        object.__setattr__(self, "tile_id", tile_id)
-        object.__setattr__(self, "y_slice", y_slice)
-        object.__setattr__(self, "x_slice", x_slice)
-        object.__setattr__(self, "_data", data)
+    def __init__(
+        self,
+        tile_id: int,
+        slices: dict[str, slice],
+        data: xr.DataArray,
+    ):
+        self.tile_id = tile_id
+        self.slices = slices
+        self._data = data
 
     def to_xarray(self) -> xr.DataArray:
         """Slice the mosaic xarray for this tile.
 
-        Returns a dask-backed DataArray with dims ("t", "c", "z", "y", "x")
+        Returns a dask-backed DataArray preserving all non-tiled dimensions
         and physical coordinates (subset of the mosaic's global coords).
         """
-        return self._data[..., self.y_slice, self.x_slice]
+        return self._data.isel(**self.slices)
+
+    @property
+    def tile_dims(self) -> tuple[str, ...]:
+        """Dimension names being tiled, e.g. ``("z", "y", "x")``."""
+        return tuple(self.slices.keys())
 
     @property
     def bbox(self) -> np.ndarray:
-        """Bounding box as ``[[y_start, y_stop], [x_start, x_stop]]``."""
-        return np.array(
-            [
-                [self.y_slice.start, self.y_slice.stop],
-                [self.x_slice.start, self.x_slice.stop],
-            ]
-        )
+        """Bounding box as ``[[dim0_start, dim0_stop], ...]``."""
+        return np.array([[s.start, s.stop] for s in self.slices.values()])
 
     @property
-    def shape_yx(self) -> tuple[int, int]:
-        """Tile shape in (Y, X) pixels."""
-        return (
-            self.y_slice.stop - self.y_slice.start,
-            self.x_slice.stop - self.x_slice.start,
-        )
+    def tile_shape(self) -> tuple[int, ...]:
+        """Tile shape in tiled dimensions."""
+        return tuple(s.stop - s.start for s in self.slices.values())
 
     def __repr__(self) -> str:
-        return (
-            f"TileSpec(tile_id={self.tile_id}, "
-            f"y={self.y_slice.start}:{self.y_slice.stop}, "
-            f"x={self.x_slice.start}:{self.x_slice.stop})"
-        )
+        parts = ", ".join(f"{d}={s.start}:{s.stop}" for d, s in self.slices.items())
+        return f"TileSpec(tile_id={self.tile_id}, {parts})"
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TileSpec):
             return NotImplemented
-        return self.tile_id == other.tile_id and self.y_slice == other.y_slice and self.x_slice == other.x_slice
+        return self.tile_id == other.tile_id and self.slices == other.slices
 
     def __hash__(self) -> int:
-        return hash((self.tile_id, self.y_slice.start, self.y_slice.stop, self.x_slice.start, self.x_slice.stop))
+        return hash((self.tile_id,) + tuple((d, s.start, s.stop) for d, s in self.slices.items()))
 
 
 @experimental
 class Slicer:
     """Generate overlapping tiles from an xr.DataArray.
 
-    Partitions the YX extent of the input DataArray into overlapping tiles.
+    Partitions the spatial extent of the input DataArray into overlapping
+    tiles. Supports tiling over any subset of spatial dimensions (at
+    minimum "y" and "x"; optionally "z" as well).
+
     Iteration yields TileSpec objects (metadata-only). Use ``iter_xarrays()``
     to iterate over lazy xr.DataArrays instead.
 
@@ -174,14 +179,15 @@ class Slicer:
     data : xr.DataArray
         The mosaic to tile. Must have "y" and "x" dimensions.
     tile_size : dict[str, int]
-        Tile size per dimension, e.g. ``{"y": 1024, "x": 1024}``.
+        Tile size per dimension, e.g. ``{"y": 1024, "x": 1024}`` or
+        ``{"z": 32, "y": 1024, "x": 1024}``.
     overlap : dict[str, int] | None
         Overlap between adjacent tiles, e.g. ``{"y": 128, "x": 128}``.
     mode : SamplingMode
         Border handling strategy. Default: SQUEEZE.
     align_to_chunks : bool
         If True, snap tile_size up to the nearest multiple of the data's
-        zarr chunk size in Y and X. Prevents partial chunk reads.
+        zarr chunk size in each tiled dimension. Prevents partial chunk reads.
     align_to_shards : bool
         If True and the zarr array has shards, align to shard boundaries
         instead of chunk boundaries. Takes precedence over align_to_chunks.
@@ -194,8 +200,11 @@ class Slicer:
     15
     >>> for tile in slicer:
     ...     xa = tile.to_xarray()  # lazy xr.DataArray
-    >>> for xa in slicer.iter_xarrays():
-    ...     print(xa.shape)  # lazy xr.DataArray directly
+    >>> slicer_3d = Slicer(
+    ...     pos.to_xarray(),
+    ...     tile_size={"z": 32, "y": 1024, "x": 1024},
+    ...     overlap={"z": 4, "y": 128, "x": 128},
+    ... )
     """
 
     def __init__(
@@ -211,6 +220,9 @@ class Slicer:
             raise ValueError(f"DataArray must have 'y' and 'x' dims, got {data.dims}")
         if "y" not in tile_size or "x" not in tile_size:
             raise ValueError(f"tile_size must specify 'y' and 'x', got {tile_size}")
+        for dim in tile_size:
+            if dim not in data.dims:
+                raise ValueError(f"tile_size key '{dim}' not found in data dims {data.dims}")
 
         self._data = data
         self._original_tile_size = dict(tile_size)
@@ -219,52 +231,47 @@ class Slicer:
         self._align_to_chunks = align_to_chunks
         self._align_to_shards = align_to_shards
 
+        # Determine tiled dimensions, ordered as they appear in data.dims
+        self._tile_dims = tuple(d for d in data.dims if d in tile_size)
+
         # Chunk/shard alignment: snap tile_size up to nearest multiple
         tile_size = dict(tile_size)  # don't mutate caller's dict
         if (align_to_chunks or align_to_shards) and data.chunks is not None:
-            y_idx = list(data.dims).index("y")
-            x_idx = list(data.dims).index("x")
-            y_chunk = data.chunks[y_idx][0]
-            x_chunk = data.chunks[x_idx][0]
-            tile_size["y"] = _ceil_to_multiple(tile_size["y"], y_chunk)
-            tile_size["x"] = _ceil_to_multiple(tile_size["x"], x_chunk)
+            for dim in self._tile_dims:
+                dim_idx = list(data.dims).index(dim)
+                chunk_size = data.chunks[dim_idx][0]
+                tile_size[dim] = _ceil_to_multiple(tile_size[dim], chunk_size)
 
         self._tile_size = tile_size
 
-        # Generate tile positions
-        y_positions = _gen_slices_1d(
-            dim_size=data.sizes["y"],
-            tile_size=tile_size["y"],
-            overlap=self._overlap.get("y", 0),
-            mode=mode,
-        )
-        x_positions = _gen_slices_1d(
-            dim_size=data.sizes["x"],
-            tile_size=tile_size["x"],
-            overlap=self._overlap.get("x", 0),
-            mode=mode,
-        )
-
-        self._y_positions = y_positions
-        self._x_positions = x_positions
-
-        # Build TileSpecs from cartesian product of Y and X positions
-        self._tiles: list[TileSpec] = []
-        tile_id = 0
-        for y_start, x_start in product(y_positions, x_positions):
-            y_end = min(y_start + tile_size["y"], data.sizes["y"])
-            x_end = min(x_start + tile_size["x"], data.sizes["x"])
-            self._tiles.append(
-                TileSpec(
-                    tile_id=tile_id,
-                    y_slice=slice(y_start, y_end),
-                    x_slice=slice(x_start, x_end),
-                    data=data,
-                )
+        # Generate tile positions per dimension
+        self._positions_per_dim: dict[str, list[int]] = {}
+        for dim in self._tile_dims:
+            self._positions_per_dim[dim] = _gen_slices_1d(
+                dim_size=data.sizes[dim],
+                tile_size=tile_size[dim],
+                overlap=self._overlap.get(dim, 0),
+                mode=mode,
             )
+
+        # Build TileSpecs from cartesian product of all tiled dim positions
+        self._tiles: list[TileSpec] = []
+        dim_positions = [self._positions_per_dim[d] for d in self._tile_dims]
+        tile_id = 0
+        for combo in product(*dim_positions):
+            slices = {}
+            for dim, start in zip(self._tile_dims, combo):
+                end = min(start + tile_size[dim], data.sizes[dim])
+                slices[dim] = slice(start, end)
+            self._tiles.append(TileSpec(tile_id=tile_id, slices=slices, data=data))
             tile_id += 1
 
         self._graph: nx.Graph | None = None
+
+    @property
+    def tile_dims(self) -> tuple[str, ...]:
+        """Dimension names being tiled, e.g. ``("z", "y", "x")`` or ``("y", "x")``."""
+        return self._tile_dims
 
     def __iter__(self) -> Iterator[TileSpec]:
         yield from self._tiles
@@ -281,12 +288,11 @@ class Slicer:
         return self._tiles[idx]
 
     def __repr__(self) -> str:
-        ny = len(self._y_positions)
-        nx_ = len(self._x_positions)
+        grid_parts = "x".join(str(len(self._positions_per_dim[d])) for d in self._tile_dims)
         size_str = f"tile_size={self._tile_size}"
         if self._tile_size != self._original_tile_size:
             size_str += f" (requested={self._original_tile_size})"
-        return f"Slicer(tiles={len(self)}, grid={ny}x{nx_}, {size_str}, overlap={self._overlap})"
+        return f"Slicer(tiles={len(self)}, grid={grid_parts}, {size_str}, overlap={self._overlap})"
 
     @property
     def data(self) -> xr.DataArray:
@@ -302,43 +308,50 @@ class Slicer:
     def graph(self) -> nx.Graph:
         """Tile neighborhood graph. Nodes=tile_ids, edges=overlapping pairs.
 
-        Built lazily on first access. Uses grid-based O(N) construction.
+        Built lazily on first access. Uses grid-based construction.
         """
         if self._graph is None:
             self._graph = self._build_neighborhood_graph()
         return self._graph
 
     @property
-    def tile_grid_shape(self) -> tuple[int, int]:
-        """Number of tiles in (Y, X)."""
-        return (len(self._y_positions), len(self._x_positions))
+    def tile_grid_shape(self) -> tuple[int, ...]:
+        """Number of tiles per tiled dimension."""
+        return tuple(len(self._positions_per_dim[d]) for d in self._tile_dims)
 
     def _build_neighborhood_graph(self) -> nx.Graph:
-        """Build tile neighborhood graph using grid-based O(N) lookup.
+        """Build tile neighborhood graph using N-D grid-based lookup.
 
-        Tiles are on a regular grid (from cartesian product of Y and X
-        positions). Tile (r, c) is adjacent to (r+1, c) and (r, c+1).
+        Tiles are on a regular N-D grid (from cartesian product of
+        positions). Neighbors along each dimension with overlap > 0
+        are connected by edges.
         """
         G = nx.Graph()
-        nx_ = len(self._x_positions)
+        grid_shape = self.tile_grid_shape
+        n_dims = len(grid_shape)
 
-        # Map grid (row, col) -> tile_id
-        # Tile IDs are assigned in row-major order: id = row * nx + col
         for tile in self._tiles:
             G.add_node(tile.tile_id)
 
+        # Strides for converting N-D grid index to flat tile_id (row-major)
+        strides = []
+        for i in range(n_dims):
+            strides.append(reduce(mul, grid_shape[i + 1 :], 1))
+
         for tile in self._tiles:
-            row = tile.tile_id // nx_
-            col = tile.tile_id % nx_
+            # Recover N-D grid index from flat tile_id
+            grid_idx = []
+            remaining = tile.tile_id
+            for s in strides:
+                grid_idx.append(remaining // s)
+                remaining %= s
 
-            # Right neighbor
-            right_id = row * nx_ + (col + 1)
-            if col + 1 < nx_ and self._overlap.get("x", 0) > 0:
-                G.add_edge(tile.tile_id, right_id)
-
-            # Down neighbor
-            down_id = (row + 1) * nx_ + col
-            if row + 1 < len(self._y_positions) and self._overlap.get("y", 0) > 0:
-                G.add_edge(tile.tile_id, down_id)
+            # Connect to next neighbor along each dimension with overlap
+            for axis, dim in enumerate(self._tile_dims):
+                if self._overlap.get(dim, 0) > 0 and grid_idx[axis] + 1 < grid_shape[axis]:
+                    neighbor_idx = list(grid_idx)
+                    neighbor_idx[axis] += 1
+                    neighbor_id = sum(i * s for i, s in zip(neighbor_idx, strides))
+                    G.add_edge(tile.tile_id, neighbor_id)
 
         return G

@@ -6,11 +6,15 @@ dask array with ``da.block()``.
 
 Used by both ``_composite_fovs`` (FOV stitching) and ``_blend_tiles``
 (tile blending) — the only difference is the overlap handler callback.
+
+Supports N-D tiling dimensions (e.g. YX or ZYX). Non-tiled leading
+dimensions (e.g. T, C) are passed through unchanged.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import product
 from typing import Protocol, runtime_checkable
 
 import dask
@@ -23,10 +27,7 @@ import xarray as xr
 class _CellInfo:
     """Pixel-space bounds of a single cell in the sweep-line grid."""
 
-    y_start: int
-    y_end: int
-    x_start: int
-    x_end: int
+    bounds: dict[str, tuple[int, int]]
 
 
 @runtime_checkable
@@ -49,105 +50,132 @@ class OverlapHandler(Protocol):
 
 def _sweep_line_assemble(
     regions: list[xr.DataArray],
-    bboxes: list[tuple[int, int, int, int]],
+    bboxes: list[dict[str, tuple[int, int]]],
     overlap_fn: OverlapHandler,
-) -> tuple[da.Array, tuple[int, int, int, int]]:
-    """Sweep-line decomposition + ``da.block()`` assembly.
+    tile_dims: tuple[str, ...],
+) -> tuple[da.Array, dict[str, tuple[int, int]]]:
+    """N-D sweep-line decomposition + ``da.block()`` assembly.
 
     Parameters
     ----------
     regions : list[xr.DataArray]
         Input data arrays (FOVs or processed tiles).
-    bboxes : list[tuple[int, int, int, int]]
-        Pixel-space bounding boxes ``(y_start, y_end, x_start, x_end)``,
-        one per region.
+    bboxes : list[dict[str, tuple[int, int]]]
+        Pixel-space bounding boxes per region, keyed by dim name.
+        e.g. ``{"y": (0, 256), "x": (0, 512)}`` or
+        ``{"z": (0, 32), "y": (0, 256), "x": (0, 512)}``.
     overlap_fn : OverlapHandler
-        Handler for cells with 2+ contributors. Receives the cell slices,
-        contributing indices, and cell bounds. Must return an np.ndarray.
+        Handler for cells with 2+ contributors.
+    tile_dims : tuple[str, ...]
+        Ordered tiling dimensions, e.g. ``("y", "x")`` or ``("z", "y", "x")``.
 
     Returns
     -------
-    tuple[da.Array, tuple[int, int, int, int]]
-        ``(mosaic_dask, (global_y_min, global_y_max, global_x_min, global_x_max))``.
-        Callers wrap the dask array in ``xr.DataArray`` with their own coords.
+    tuple[da.Array, dict[str, tuple[int, int]]]
+        ``(mosaic_dask, global_bounds)`` where global_bounds maps each
+        tiled dim to ``(min, max)``.
     """
-    # Global bounds
-    global_y_min = min(b[0] for b in bboxes)
-    global_y_max = max(b[1] for b in bboxes)
-    global_x_min = min(b[2] for b in bboxes)
-    global_x_max = max(b[3] for b in bboxes)
+    # Global bounds per tiled dimension
+    global_bounds: dict[str, tuple[int, int]] = {}
+    for dim in tile_dims:
+        dim_min = min(b[dim][0] for b in bboxes)
+        dim_max = max(b[dim][1] for b in bboxes)
+        global_bounds[dim] = (dim_min, dim_max)
 
-    # Sweep-line: unique Y/X edges → cell grid
-    y_edges = sorted({coord for b in bboxes for coord in (b[0], b[1])})
-    x_edges = sorted({coord for b in bboxes for coord in (b[2], b[3])})
+    # Compute unique edges per tiled dimension
+    edges_per_dim: dict[str, list[int]] = {}
+    for dim in tile_dims:
+        edges = sorted({coord for b in bboxes for coord in (b[dim][0], b[dim][1])})
+        edges_per_dim[dim] = edges
 
-    n_rows = len(y_edges) - 1
-    n_cols = len(x_edges) - 1
+    # Number of cells per dimension
+    n_cells_per_dim = {dim: len(edges) - 1 for dim, edges in edges_per_dim.items()}
 
-    # Leading dims from first region (assumed identical across all)
+    # Leading dims: all dims from the first region that are NOT tiled
     first = regions[0]
-    T = first.sizes["t"]
-    C = first.sizes["c"]
-    Z = first.sizes["z"]
+    leading_dims = [d for d in first.dims if d not in tile_dims]
+    leading_shape = tuple(first.sizes[d] for d in leading_dims)
     dtype = first.dtype
 
-    # Build block grid
-    block_grid: list[list[da.Array]] = []
-    for i in range(n_rows):
-        block_row: list[da.Array] = []
-        cell_h = y_edges[i + 1] - y_edges[i]
+    # Build N-D block grid
+    # We iterate over all cell indices (cartesian product of per-dim cell ranges)
+    dim_cell_ranges = [range(n_cells_per_dim[d]) for d in tile_dims]
 
-        for j in range(n_cols):
-            cell_w = x_edges[j + 1] - x_edges[j]
+    # We'll build a flat dict mapping cell index tuple -> da.Array block,
+    # then reshape into nested lists for da.block()
+    blocks: dict[tuple[int, ...], da.Array] = {}
 
-            # Which regions fully cover this cell?
-            contributing: list[int] = []
-            for idx, (y0, y1, x0, x1) in enumerate(bboxes):
-                if y0 <= y_edges[i] and y1 >= y_edges[i + 1] and x0 <= x_edges[j] and x1 >= x_edges[j + 1]:
-                    contributing.append(idx)
+    for cell_idx in product(*dim_cell_ranges):
+        # Cell bounds for each tiled dim
+        cell_bounds: dict[str, tuple[int, int]] = {}
+        cell_spatial_shape: list[int] = []
+        for i, dim in enumerate(tile_dims):
+            start = edges_per_dim[dim][cell_idx[i]]
+            end = edges_per_dim[dim][cell_idx[i] + 1]
+            cell_bounds[dim] = (start, end)
+            cell_spatial_shape.append(end - start)
 
-            cell_shape = (T, C, Z, cell_h, cell_w)
+        # Which regions fully cover this cell?
+        contributing: list[int] = []
+        for idx, bbox in enumerate(bboxes):
+            covers = all(
+                bbox[dim][0] <= cell_bounds[dim][0] and bbox[dim][1] >= cell_bounds[dim][1] for dim in tile_dims
+            )
+            if covers:
+                contributing.append(idx)
 
-            if len(contributing) == 0:
-                # Gap: no coverage
-                block = da.full(cell_shape, np.nan, dtype=dtype)
+        cell_shape = leading_shape + tuple(cell_spatial_shape)
 
-            elif len(contributing) == 1:
-                # Interior: direct slice from single region (lazy)
-                region = regions[contributing[0]]
-                ry0 = bboxes[contributing[0]][0]
-                rx0 = bboxes[contributing[0]][2]
-                local_y = slice(y_edges[i] - ry0, y_edges[i + 1] - ry0)
-                local_x = slice(x_edges[j] - rx0, x_edges[j + 1] - rx0)
-                block = region.isel(y=local_y, x=local_x).data
+        if len(contributing) == 0:
+            block = da.full(cell_shape, np.nan, dtype=dtype)
 
-            else:
-                # Overlap: delegate to caller's callback
-                cell_slices: list[xr.DataArray] = []
-                for idx in contributing:
-                    region = regions[idx]
-                    ry0 = bboxes[idx][0]
-                    rx0 = bboxes[idx][2]
-                    local_y = slice(y_edges[i] - ry0, y_edges[i + 1] - ry0)
-                    local_x = slice(x_edges[j] - rx0, x_edges[j + 1] - rx0)
-                    cell_slices.append(region.isel(y=local_y, x=local_x))
-
-                info = _CellInfo(
-                    y_start=y_edges[i],
-                    y_end=y_edges[i + 1],
-                    x_start=x_edges[j],
-                    x_end=x_edges[j + 1],
+        elif len(contributing) == 1:
+            region = regions[contributing[0]]
+            local_slices = {
+                dim: slice(
+                    cell_bounds[dim][0] - bboxes[contributing[0]][dim][0],
+                    cell_bounds[dim][1] - bboxes[contributing[0]][dim][0],
                 )
-                # NOTE: dask.delayed captures cell_slices as opaque objects —
-                # dask cannot track their inner dask-array dependencies.
-                # Works with local/threaded scheduler; for dask.distributed
-                # replace with da.map_blocks or explicit graph wiring.
-                result = dask.delayed(overlap_fn)(cell_slices, contributing, info)
-                block = da.from_delayed(result, shape=cell_shape, dtype=dtype)
+                for dim in tile_dims
+            }
+            block = region.isel(**local_slices).data
 
-            block_row.append(block)
-        block_grid.append(block_row)
+        else:
+            cell_slices: list[xr.DataArray] = []
+            for idx in contributing:
+                region = regions[idx]
+                local_slices = {
+                    dim: slice(
+                        cell_bounds[dim][0] - bboxes[idx][dim][0],
+                        cell_bounds[dim][1] - bboxes[idx][dim][0],
+                    )
+                    for dim in tile_dims
+                }
+                cell_slices.append(region.isel(**local_slices))
 
-    mosaic = da.block(block_grid)
-    bounds = (global_y_min, global_y_max, global_x_min, global_x_max)
-    return mosaic, bounds
+            info = _CellInfo(bounds=cell_bounds)
+            result = dask.delayed(overlap_fn)(cell_slices, contributing, info)
+            block = da.from_delayed(result, shape=cell_shape, dtype=dtype)
+
+        blocks[cell_idx] = block
+
+    # Reshape flat dict into nested list structure for da.block()
+    grid_shape = tuple(n_cells_per_dim[d] for d in tile_dims)
+    mosaic = _build_nested_block(blocks, grid_shape, depth=0)
+    mosaic = da.block(mosaic)
+
+    return mosaic, global_bounds
+
+
+def _build_nested_block(
+    blocks: dict[tuple[int, ...], da.Array],
+    grid_shape: tuple[int, ...],
+    depth: int,
+    prefix: tuple[int, ...] = (),
+):
+    """Recursively build nested list structure for da.block() from flat dict."""
+    if depth == len(grid_shape) - 1:
+        # Innermost dimension: return a list of blocks
+        return [blocks[prefix + (i,)] for i in range(grid_shape[depth])]
+    else:
+        return [_build_nested_block(blocks, grid_shape, depth + 1, prefix + (i,)) for i in range(grid_shape[depth])]

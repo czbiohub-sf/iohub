@@ -36,7 +36,7 @@ class LayoutResolver(Protocol):
 
 
 class TransformResolver:
-    """No-op resolver — trusts existing OME-NGFF coordinateTransformations.
+    """No-op resolver - trusts existing OME-NGFF coordinateTransformations.
 
     Use this when Position metadata already has correct translations
     (i.e. ``Position.to_xarray()`` already produces correct coordinates).
@@ -62,7 +62,7 @@ class StitchingYAMLResolver:
           - x_pixels
 
     The resolver matches position paths against YAML keys and updates
-    the xarray y/x coordinates accordingly.
+    the xarray z/y/x coordinates accordingly.
 
     Parameters
     ----------
@@ -112,10 +112,19 @@ class StitchingYAMLResolver:
             new_y = np.arange(len(y_coords)) * sy + y_px * sy
             new_x = np.arange(len(x_coords)) * sx + x_px * sx
 
-            xa = xa.assign_coords(
-                y=("y", new_y, xa.coords["y"].attrs),
-                x=("x", new_x, xa.coords["x"].attrs),
-            )
+            coord_updates = {
+                "y": ("y", new_y, xa.coords["y"].attrs),
+                "x": ("x", new_x, xa.coords["x"].attrs),
+            }
+
+            # Apply Z translation if z coordinate has spacing info
+            if "z" in xa.coords and len(xa.coords["z"].values) > 1:
+                z_coords = xa.coords["z"].values
+                sz = float(z_coords[1] - z_coords[0])
+                new_z = np.arange(len(z_coords)) * sz + z_px * sz
+                coord_updates["z"] = ("z", new_z, xa.coords["z"].attrs)
+
+            xa = xa.assign_coords(**coord_updates)
             result.append(xa)
 
         return result

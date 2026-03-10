@@ -13,6 +13,13 @@ from iohub.tile._compositors import CompositeContext, Compositor
 from iohub.tile._sweep import _CellInfo, _sweep_line_assemble
 
 
+def _pixel_spacing(coords: np.ndarray) -> float:
+    """Infer pixel spacing from coordinate array."""
+    if len(coords) > 1:
+        return float(coords[1] - coords[0])
+    return 1.0
+
+
 def _composite_fovs(
     fov_xarrays: list[xr.DataArray],
     compositor: Compositor,
@@ -23,10 +30,14 @@ def _composite_fovs(
     non-overlapping cells, composites overlaps via *compositor*,
     and assembles with ``dask.array.block()``.
 
+    Compositing dimensions are determined automatically: Y and X are
+    always composited; Z is included when FOVs have Z coordinates
+    that vary across FOVs.
+
     Parameters
     ----------
     fov_xarrays : list[xr.DataArray]
-        FOV data arrays, each with physical y/x coordinates.
+        FOV data arrays, each with physical coordinates.
     compositor : Compositor
         Strategy for combining overlapping regions.
 
@@ -38,25 +49,39 @@ def _composite_fovs(
     if len(fov_xarrays) == 1:
         return fov_xarrays[0]
 
-    # Infer pixel size from first FOV's coordinate spacing
-    y0 = fov_xarrays[0].coords["y"].values
-    x0 = fov_xarrays[0].coords["x"].values
-    sy = float(y0[1] - y0[0]) if len(y0) > 1 else 1.0
-    sx = float(x0[1] - x0[0]) if len(x0) > 1 else 1.0
+    first = fov_xarrays[0]
+
+    # Determine which spatial dims to composite over.
+    # Y and X always; Z only if FOVs have varying Z coordinates.
+    composite_dims: list[str] = []
+    spacings: dict[str, float] = {}
+
+    for dim in ("z", "y", "x"):
+        if dim not in first.dims or dim not in first.coords:
+            continue
+        spacing = _pixel_spacing(first.coords[dim].values)
+        if dim in ("y", "x"):
+            # Always composite over Y and X
+            composite_dims.append(dim)
+            spacings[dim] = spacing
+        elif dim == "z":
+            # Only composite over Z if FOVs have different Z origins
+            z_origins = {float(xa.coords["z"].values[0]) for xa in fov_xarrays}
+            if len(z_origins) > 1:
+                composite_dims.append(dim)
+                spacings[dim] = spacing
+
+    tile_dims = tuple(composite_dims)
 
     # Derive pixel-space bounding boxes from physical coords
-    fov_bboxes: list[tuple[int, int, int, int]] = []
+    fov_bboxes: list[dict[str, tuple[int, int]]] = []
     for xa in fov_xarrays:
-        y_start = round(float(xa.coords["y"].values[0]) / sy)
-        x_start = round(float(xa.coords["x"].values[0]) / sx)
-        fov_bboxes.append(
-            (
-                y_start,
-                y_start + xa.sizes["y"],
-                x_start,
-                x_start + xa.sizes["x"],
-            )
-        )
+        bbox: dict[str, tuple[int, int]] = {}
+        for dim in tile_dims:
+            s = spacings[dim]
+            start = round(float(xa.coords[dim].values[0]) / s)
+            bbox[dim] = (start, start + xa.sizes[dim])
+        fov_bboxes.append(bbox)
 
     # Overlap callback: build CompositeContext and delegate to compositor
     def _composite_overlap(
@@ -65,33 +90,27 @@ def _composite_fovs(
         info: _CellInfo,
     ) -> np.ndarray:
         ctx = CompositeContext(
-            overlap_bbox=np.array([[info.y_start, info.y_end], [info.x_start, info.x_end]]),
-            fov_bboxes=[
-                np.array(
-                    [
-                        [fov_bboxes[idx][0], fov_bboxes[idx][1]],
-                        [fov_bboxes[idx][2], fov_bboxes[idx][3]],
-                    ]
-                )
-                for idx in contributing
-            ],
+            overlap_bounds=info.bounds,
+            fov_bounds=[fov_bboxes[idx] for idx in contributing],
         )
         return compositor.composite(cell_slices, masks=None, metadata=ctx)
 
-    mosaic, (y_min, y_max, x_min, x_max) = _sweep_line_assemble(fov_xarrays, fov_bboxes, _composite_overlap)
+    mosaic, global_bounds = _sweep_line_assemble(fov_xarrays, fov_bboxes, _composite_overlap, tile_dims)
 
     # Wrap in xarray with physical coordinates
-    mosaic_y = np.arange(y_min, y_max) * sy
-    mosaic_x = np.arange(x_min, x_max) * sx
+    all_dims = tuple(str(d) for d in first.dims)
+
+    coords: dict = {}
+    for d in all_dims:
+        if d in global_bounds:
+            dmin, dmax = global_bounds[d]
+            s = spacings[d]
+            coords[d] = (d, np.arange(dmin, dmax) * s, first.coords[d].attrs)
+        elif d in first.coords:
+            coords[d] = first.coords[d]
 
     return xr.DataArray(
         mosaic,
-        dims=("t", "c", "z", "y", "x"),
-        coords={
-            "t": fov_xarrays[0].coords["t"],
-            "c": fov_xarrays[0].coords["c"],
-            "z": fov_xarrays[0].coords["z"],
-            "y": ("y", mosaic_y, fov_xarrays[0].coords["y"].attrs),
-            "x": ("x", mosaic_x, fov_xarrays[0].coords["x"].attrs),
-        },
+        dims=all_dims,
+        coords=coords,
     )

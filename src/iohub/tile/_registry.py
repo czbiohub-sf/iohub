@@ -69,7 +69,6 @@ def resolve_strategy(
     if not isinstance(name, str):
         return name
 
-    # Runtime registry (highest priority)
     runtime = _RUNTIME_REGISTRY.get(entrypoint_group, {})
     if name in runtime:
         return runtime[name]()

@@ -4,7 +4,7 @@ Tile + Blend a Single FOV
 
 Create a synthetic OME-Zarr FOV, then tile it with overlap,
 apply a processing function to each tile, and blend the results
-back into a single mosaic using ``map_tiles`` (xarray-native)
+back into a single mosaic using ``apply_func_tiled`` (xarray-native)
 and ``tile_and_assemble`` (zarr output).
 """
 
@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 import numpy as np
 
 from iohub.ngff import open_ome_zarr
-from iohub.tile import Slicer, map_tiles, tile_and_assemble
+from iohub.tile import apply_func_tiled, tile_and_assemble
 
 warnings.filterwarnings("ignore")
 
@@ -48,17 +48,9 @@ print(f"Shape: {data.shape}  dims: {data.dims}")
 print(f"Y range: [{float(data.y[0]):.2f}, {float(data.y[-1]):.2f}] um")
 print(f"X range: [{float(data.x[0]):.2f}, {float(data.x[-1]):.2f}] um")
 
-# %%
-# Inspect the Slicer
-# --------------------
-# See how tiles are laid out with overlap.
-
-slicer = Slicer(data, tile_size={"y": 32, "x": 64}, overlap={"y": 8, "x": 16})
-print(slicer)
-print(f"Neighborhood graph: {slicer.graph.number_of_edges()} overlap edges")
 
 # %%
-# map_tiles: xarray-native (no zarr output)
+# apply_func_tiled: xarray-native (no zarr output)
 # -------------------------------------------
 # Tile, apply a function, blend back. Result stays lazy until ``.values``.
 
@@ -68,7 +60,7 @@ def my_algorithm(tile):
     return tile * 2 + 1
 
 
-result = map_tiles(
+result = apply_func_tiled(
     data,
     fn=my_algorithm,
     tile_size={"y": 32, "x": 64},
@@ -85,12 +77,12 @@ np.testing.assert_allclose(values, expected, atol=1e-4)
 print("Round-trip check: PASSED")
 
 # %%
-# map_tiles with overlap caching
+# apply_func_tiled with overlap caching
 # --------------------------------
 # ``cache="persist"`` pre-loads overlap strips so they aren't read twice.
 # ``cache="bfs"`` reorders tile processing for cache locality.
 
-result_cached = map_tiles(
+result_cached = apply_func_tiled(
     data,
     fn=my_algorithm,
     tile_size={"y": 32, "x": 64},
@@ -125,7 +117,7 @@ print("Zarr round-trip: PASSED")
 # Verify that blending is correct: ``fn=identity`` recovers the original.
 
 for blender in ["uniform", "gaussian", "distance"]:
-    r = map_tiles(
+    r = apply_func_tiled(
         data,
         fn=lambda t: t,
         tile_size={"y": 32, "x": 64},

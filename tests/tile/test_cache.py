@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from iohub.tile import Slicer, map_tiles
+from iohub.tile import Slicer, apply_func_tiled
 from iohub.tile._cache import (
     _bfs_tile_order,
     _estimate_overlap_bytes,
@@ -21,17 +21,16 @@ def test_overlap_regions(synthetic_5d):
 
     assert len(regions) > 0
 
-    # Every region should have positive area
-    for y_sl, x_sl in regions:
-        assert y_sl.stop > y_sl.start
-        assert x_sl.stop > x_sl.start
+    # Every region should have positive extent in all dims
+    for region in regions:
+        for dim, sl in region.items():
+            assert sl.stop > sl.start
 
     # Regions should be within data bounds
-    for y_sl, x_sl in regions:
-        assert y_sl.start >= 0
-        assert x_sl.start >= 0
-        assert y_sl.stop <= synthetic_5d.sizes["y"]
-        assert x_sl.stop <= synthetic_5d.sizes["x"]
+    for region in regions:
+        for dim, sl in region.items():
+            assert sl.start >= 0
+            assert sl.stop <= synthetic_5d.sizes[dim]
 
 
 def test_overlap_regions_no_overlap(synthetic_5d):
@@ -53,7 +52,7 @@ def test_overlap_regions_deduplication(synthetic_5d):
         overlap={"y": 8, "x": 16},
     )
     regions = _overlap_regions(slicer)
-    keys = [(y.start, y.stop, x.start, x.stop) for y, x in regions]
+    keys = [tuple((d, s.start, s.stop) for d, s in r.items()) for r in regions]
     assert len(keys) == len(set(keys))
 
 
@@ -104,9 +103,9 @@ def test_estimate_overlap_bytes(synthetic_5d):
     assert _estimate_overlap_bytes(slicer_no) == 0
 
 
-def test_map_tiles_persist_roundtrip(synthetic_5d):
-    """map_tiles with cache='persist' produces correct results."""
-    result = map_tiles(
+def test_apply_func_tiled_persist_roundtrip(synthetic_5d):
+    """apply_func_tiled with cache='persist' produces correct results."""
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t,
         tile_size={"y": 32, "x": 64},
@@ -117,9 +116,9 @@ def test_map_tiles_persist_roundtrip(synthetic_5d):
     np.testing.assert_allclose(result.values, synthetic_5d.values, atol=1e-5)
 
 
-def test_map_tiles_bfs_roundtrip(synthetic_5d):
-    """map_tiles with cache='bfs' produces correct results."""
-    result = map_tiles(
+def test_apply_func_tiled_bfs_roundtrip(synthetic_5d):
+    """apply_func_tiled with cache='bfs' produces correct results."""
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t,
         tile_size={"y": 32, "x": 64},
@@ -130,9 +129,9 @@ def test_map_tiles_bfs_roundtrip(synthetic_5d):
     np.testing.assert_allclose(result.values, synthetic_5d.values, atol=1e-5)
 
 
-def test_map_tiles_no_cache_default(synthetic_5d):
+def test_apply_func_tiled_no_cache_default(synthetic_5d):
     """cache=None (default) works identically to before."""
-    result = map_tiles(
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t,
         tile_size={"y": 32, "x": 64},

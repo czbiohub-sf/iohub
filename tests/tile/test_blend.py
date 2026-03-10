@@ -1,11 +1,11 @@
-"""Tests for _blend_tiles and map_tiles."""
+"""Tests for _blend_tiles and apply_func_tiled."""
 
 import dask.array
 import numpy as np
 from hypothesis import given
 from hypothesis import strategies as st
 
-from iohub.tile import Slicer, get_blender, map_tiles
+from iohub.tile import Slicer, apply_func_tiled, get_blender
 from iohub.tile._blend import _blend_tiles
 from tests.tile.conftest import tile_params
 
@@ -109,12 +109,12 @@ def test_blend_tiles_length_mismatch(synthetic_5d):
         pass
 
 
-# ---- map_tiles tests ----
+# ---- apply_func_tiled tests ----
 
 
-def test_map_tiles_identity_roundtrip(synthetic_5d):
-    """map_tiles with identity fn preserves data."""
-    result = map_tiles(
+def test_apply_func_tiled_identity_roundtrip(synthetic_5d):
+    """apply_func_tiled with identity fn preserves data."""
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t,
         tile_size={"y": 32, "x": 64},
@@ -125,9 +125,9 @@ def test_map_tiles_identity_roundtrip(synthetic_5d):
     np.testing.assert_allclose(result.values, synthetic_5d.values, atol=1e-5)
 
 
-def test_map_tiles_scaling(synthetic_5d):
-    """map_tiles correctly applies a scaling function."""
-    result = map_tiles(
+def test_apply_func_tiled_scaling(synthetic_5d):
+    """apply_func_tiled correctly applies a scaling function."""
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t * 2,
         tile_size={"y": 32, "x": 64},
@@ -136,9 +136,9 @@ def test_map_tiles_scaling(synthetic_5d):
     np.testing.assert_allclose(result.values, synthetic_5d.values * 2, atol=1e-5)
 
 
-def test_map_tiles_numpy_return(synthetic_5d):
-    """map_tiles handles fn returning np.ndarray."""
-    result = map_tiles(
+def test_apply_func_tiled_numpy_return(synthetic_5d):
+    """apply_func_tiled handles fn returning np.ndarray."""
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t.values * 3,
         tile_size={"y": 32, "x": 64},
@@ -147,9 +147,9 @@ def test_map_tiles_numpy_return(synthetic_5d):
     np.testing.assert_allclose(result.values, synthetic_5d.values * 3, atol=1e-5)
 
 
-def test_map_tiles_no_overlap(synthetic_5d):
-    """map_tiles works without overlap."""
-    result = map_tiles(
+def test_apply_func_tiled_no_overlap(synthetic_5d):
+    """apply_func_tiled works without overlap."""
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t,
         tile_size={"y": 32, "x": 64},
@@ -158,9 +158,9 @@ def test_map_tiles_no_overlap(synthetic_5d):
     np.testing.assert_allclose(result.values, synthetic_5d.values, atol=1e-6)
 
 
-def test_map_tiles_distance_blender(synthetic_5d):
-    """map_tiles with distance blender + identity = original."""
-    result = map_tiles(
+def test_apply_func_tiled_distance_blender(synthetic_5d):
+    """apply_func_tiled with distance blender + identity = original."""
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t,
         tile_size={"y": 32, "x": 64},
@@ -171,10 +171,10 @@ def test_map_tiles_distance_blender(synthetic_5d):
 
 
 @given(params=tile_params(), blender=st.sampled_from(["uniform", "gaussian"]))
-def test_map_tiles_roundtrip_hypothesis(synthetic_5d, params, blender):
-    """Property: map_tiles(identity) == original for any valid tiling."""
+def test_apply_func_tiled_roundtrip_hypothesis(synthetic_5d, params, blender):
+    """Property: apply_func_tiled(identity) == original for any valid tiling."""
     tile_size, overlap = params
-    result = map_tiles(
+    result = apply_func_tiled(
         synthetic_5d,
         fn=lambda t: t,
         tile_size=tile_size,
@@ -183,3 +183,47 @@ def test_map_tiles_roundtrip_hypothesis(synthetic_5d, params, blender):
     )
     assert result.shape == synthetic_5d.shape
     np.testing.assert_allclose(result.values, synthetic_5d.values, atol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# ZYX tiling tests
+# ---------------------------------------------------------------------------
+
+
+def test_zyx_blend_tiles_uniform_identity(synthetic_5d_large_z):
+    """ZYX uniform blending with identity preserves data."""
+    slicer = Slicer(
+        synthetic_5d_large_z,
+        tile_size={"z": 8, "y": 32, "x": 64},
+        overlap={"z": 2, "y": 8, "x": 16},
+    )
+    specs = list(slicer)
+    tiles = [s.to_xarray() for s in specs]
+    blender = get_blender("uniform")
+    result = _blend_tiles(tiles, specs, blender, slicer)
+    assert result.shape == synthetic_5d_large_z.shape
+    np.testing.assert_allclose(result.values, synthetic_5d_large_z.values, atol=1e-5)
+
+
+def test_zyx_apply_func_tiled_identity(synthetic_5d_large_z):
+    """ZYX apply_func_tiled with identity fn preserves data."""
+    result = apply_func_tiled(
+        synthetic_5d_large_z,
+        fn=lambda t: t,
+        tile_size={"z": 8, "y": 32, "x": 64},
+        overlap={"z": 2, "y": 8, "x": 16},
+    )
+    assert isinstance(result.data, dask.array.Array)
+    assert result.shape == synthetic_5d_large_z.shape
+    np.testing.assert_allclose(result.values, synthetic_5d_large_z.values, atol=1e-5)
+
+
+def test_zyx_apply_func_tiled_scaling(synthetic_5d_large_z):
+    """ZYX apply_func_tiled correctly applies a scaling function."""
+    result = apply_func_tiled(
+        synthetic_5d_large_z,
+        fn=lambda t: t * 3,
+        tile_size={"z": 4, "y": 32, "x": 64},
+        overlap={"z": 1, "y": 8, "x": 16},
+    )
+    np.testing.assert_allclose(result.values, synthetic_5d_large_z.values * 3, atol=1e-5)

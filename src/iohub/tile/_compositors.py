@@ -21,11 +21,11 @@ from iohub.tile._registry import resolve_strategy
 class CompositeContext:
     """Context passed to compositors about the overlap region."""
 
-    overlap_bbox: np.ndarray
-    """(2, 2) array: ``[[y_start, y_stop], [x_start, x_stop]]`` in pixel space."""
+    overlap_bounds: dict[str, tuple[int, int]]
+    """Pixel-space bounds of the overlap cell, e.g. ``{"y": (0, 32), "x": (0, 64)}``."""
 
-    fov_bboxes: list[np.ndarray]
-    """Each contributing FOV's full bbox in pixel space."""
+    fov_bounds: list[dict[str, tuple[int, int]]]
+    """Each contributing FOV's full bounds in pixel space."""
 
 
 @runtime_checkable
