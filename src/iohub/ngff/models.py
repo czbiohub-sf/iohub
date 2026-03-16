@@ -47,6 +47,9 @@ def unique_validator(data: list[BaseModel], field: str | list[str]) -> list[Base
     ValueError
         raised if any value is not unique
     """
+    if not data:
+        return data
+
     fields = [field] if isinstance(field, str) else field
     for key in fields:
         values = [d[key] if isinstance(d, dict) else getattr(d, key) for d in data]
@@ -274,6 +277,20 @@ class OMEROMeta(VersionMeta):
     rdefs: RDefsMeta | None = None
 
 
+class LabelImageMeta(MetaBase):
+    """Metadata for individual multiscale label image.
+    Combines multiscales specification with image-label metadata.
+    https://ngff.openmicroscopy.org/latest/index.html#labels-md"""
+
+    # MUST: multiscales with same levels as original image
+    multiscales: list[MultiScaleMeta]
+    # SHOULD: image-label with colors, properties, source
+    image_label: PositionLabelMeta = Field(alias="image-label")
+    # only for OME-NGFF v0.5
+    version: Literal["0.5"] | None = None
+    model_config = ConfigDict(extra="allow")
+
+
 class ImagesMeta(MetaBase):
     """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
     https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
@@ -281,6 +298,8 @@ class ImagesMeta(MetaBase):
     multiscales: list[MultiScaleMeta]
     # transitional, optional
     omero: OMEROMeta | None = None
+    # labels group support
+    labels: LabelsMeta | None = None
     # only for OME-NGFF v0.5
     version: Literal["0.5"] | None = None
     model_config = ConfigDict(extra="allow")
@@ -289,9 +308,12 @@ class ImagesMeta(MetaBase):
 class LabelsMeta(MetaBase):
     """https://ngff.openmicroscopy.org/0.4/index.html#labels-md"""
 
-    # SHOULD? (keyword not found in spec)
-    labels: str
-    # unlisted groups MAY be labels
+    # MUST: list of paths to labeled multiscale images
+    labels: list[str]
+    # MAY: metadata for individual labels
+    image_label: PositionLabelMeta | None = Field(
+        alias="image-label", default=None
+    )
 
 
 class LabelColorMeta(MetaBase):
@@ -309,21 +331,36 @@ class LabelColorMeta(MetaBase):
         return v
 
 
-class ImageLabelMeta(VersionMeta):
+class PositionLabelMeta(VersionMeta):
     """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
 
-    # SHOULD
-    colors: list[LabelColorMeta]
-    # MAY
-    properties: list[dict[str, Any]]
-    # MAY
-    source: dict[str, Any]
+    # SHOULD (optional per NGFF spec)
+    colors: list[LabelColorMeta] = Field(default_factory=list)
+    # MAY (optional per NGFF spec)
+    properties: list[dict[str, Any]] = Field(default_factory=list)
+    # MAY (optional per NGFF spec)
+    source: dict[str, Any] | None = Field(default=None)
 
-    @field_validator("colors", "properties")
+    @field_validator("colors")
     @classmethod
-    def unique_label_value(cls, v):
-        # MUST
+    def unique_label_value_colors(cls, v):
+        # MUST: colors must have unique label_value
         unique_validator(v, "label_value")
+        return v
+
+    @field_validator("properties")
+    @classmethod
+    def validate_properties(cls, v):
+        # Validate that properties have required 'label-value'
+        # field per NGFF spec
+        if not v:
+            return v
+        for i, prop in enumerate(v):
+            if "label-value" not in prop and "label_value" not in prop:
+                raise ValueError(
+                    f"Property {i} must include 'label-value' field "
+                    "per NGFF spec"
+                )
         return v
 
 
