@@ -65,6 +65,26 @@ plate_axis_names_st = st.lists(
     max_size=8,
     unique_by=(lambda x: x.lower()),
 )
+_dims_st = st.frozensets(
+    st.sampled_from(["z", "y", "x"]),
+    min_size=1,
+    max_size=3,
+)
+
+
+@st.composite
+def _pyramid_config(draw):
+    """Random TCZYX shape (including odd dims), dims subset, and level count."""
+    shape = (
+        draw(t_dim_st),
+        draw(c_dim_st),
+        draw(z_dim_st),
+        draw(y_dim_st),
+        draw(x_dim_st),
+    )
+    dims = draw(_dims_st)
+    levels = draw(st.integers(2, 4))
+    return shape, dims, levels
 
 
 @st.composite
@@ -1379,12 +1399,7 @@ def test_initialize_pyramid(tmp_path):
 
         # Verify scale transforms are updated for each level
         for level in range(levels):
-            level_scale = (
-                pos.metadata.multiscales[0]
-                .datasets[level]
-                .coordinate_transformations[0]
-                .scale
-            )
+            level_scale = pos.metadata.multiscales[0].datasets[level].coordinate_transformations[0].scale
             expected_factor = 2**level
             assert level_scale[-3:] == [
                 scale[-3] * expected_factor,
@@ -1470,3 +1485,105 @@ def test_delete_pyramid(tmp_path):
     with open_ome_zarr(store_path, mode="r") as pos:
         dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
         assert dataset_paths == ["0"]
+
+
+@given(config=_pyramid_config())
+@settings(max_examples=32, deadline=2000)
+def test_initialize_pyramid_shapes(config):
+    """Test initialize_pyramid produces correct cascade shapes for any dims subset."""
+    import math
+
+    shape, dims, levels = config
+    channel_names = ["ch0"] * shape[1]
+
+    with TemporaryDirectory() as tmp:
+        store_path = Path(tmp) / "pyramid-test.zarr"
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+            pos.create_zeros("0", shape=shape, dtype=np.float32)
+            pos.initialize_pyramid(levels=levels, dims=dims)
+
+            assert len(pos.array_keys()) == levels
+
+            axis_names = pos.axis_names
+            prev_shape = shape
+            for level in range(1, levels):
+                current_shape = pos[str(level)].shape
+                for i, name in enumerate(axis_names):
+                    if name in dims:
+                        assert current_shape[i] == math.ceil(prev_shape[i] / 2), (
+                            f"Level {level} axis '{name}': expected ceil({prev_shape[i]}/2)="
+                            f"{math.ceil(prev_shape[i] / 2)}, got {current_shape[i]}"
+                        )
+                    else:
+                        assert current_shape[i] == prev_shape[i], (
+                            f"Level {level} axis '{name}' should be unchanged: "
+                            f"expected {prev_shape[i]}, got {current_shape[i]}"
+                        )
+                prev_shape = current_shape
+
+
+@given(config=_pyramid_config())
+@settings(max_examples=32, deadline=2000)
+def test_initialize_pyramid_scale_metadata(config):
+    """Test initialize_pyramid sets correct cumulative scale metadata per axis."""
+    shape, dims, levels = config
+    channel_names = ["ch0"] * shape[1]
+
+    with TemporaryDirectory() as tmp:
+        store_path = Path(tmp) / "pyramid-test.zarr"
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+            pos.create_zeros("0", shape=shape, dtype=np.float32)
+            pos.initialize_pyramid(levels=levels, dims=dims)
+
+            axis_names = pos.axis_names
+            base_scale = pos.get_effective_scale("0")
+            for level in range(1, levels):
+                level_scale = pos.get_effective_scale(str(level))
+                for i, name in enumerate(axis_names):
+                    if name in dims:
+                        assert level_scale[i] == pytest.approx(base_scale[i] * 2**level), (
+                            f"Level {level} axis '{name}': scale should be "
+                            f"{base_scale[i] * 2**level}, got {level_scale[i]}"
+                        )
+                    else:
+                        assert level_scale[i] == pytest.approx(base_scale[i]), (
+                            f"Level {level} axis '{name}': scale should be unchanged "
+                            f"{base_scale[i]}, got {level_scale[i]}"
+                        )
+
+
+@given(config=_pyramid_config())
+@settings(max_examples=16, deadline=30000, suppress_health_check=[HealthCheck.too_slow])
+def test_compute_pyramid_shapes(config):
+    """Test compute_pyramid fills correct shapes for any dims subset."""
+    import math
+
+    pytest.importorskip("tensorstore")
+    shape, dims, levels = config
+    channel_names = ["ch0"] * shape[1]
+
+    with TemporaryDirectory() as tmp:
+        store_path = Path(tmp) / "test.zarr"
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+            pos.create_zeros("0", shape=shape, dtype=np.float32)
+            pos.compute_pyramid(levels=levels, dims=dims)
+
+            axis_names = pos.axis_names
+            prev_shape = shape
+            for level in range(1, levels):
+                current_shape = pos[str(level)].shape
+                for i, name in enumerate(axis_names):
+                    if name in dims:
+                        assert current_shape[i] == math.ceil(prev_shape[i] / 2)
+                    else:
+                        assert current_shape[i] == prev_shape[i]
+                prev_shape = current_shape
+
+
+def test_initialize_pyramid_invalid_dims(tmp_path):
+    """Test that unknown axis names in dims raise ValueError."""
+    store_path = tmp_path / "test.zarr"
+    with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=["ch0"]) as pos:
+        pos.create_zeros("0", shape=(1, 1, 2, 8, 8), dtype=np.float32)
+        with pytest.raises(ValueError, match="not in dataset axes"):
+            pos.initialize_pyramid(levels=2, dims={"w"})
