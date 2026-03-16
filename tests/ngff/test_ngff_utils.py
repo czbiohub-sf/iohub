@@ -177,9 +177,7 @@ def plate_setup(draw):
             st.tuples(
                 st.text(alphabet=alphanum, min_size=1, max_size=3),  # Plate
                 st.text(alphabet=alphanum, min_size=1, max_size=3),  # Well
-                st.text(
-                    alphabet=alphanum, min_size=1, max_size=3
-                ),  # Field of View
+                st.text(alphabet=alphanum, min_size=1, max_size=3),  # Field of View
             ),
             min_size=1,
             max_size=3,
@@ -463,9 +461,7 @@ def verify_transformation(
 
         # Check the transformation for each time point and channel
         input_data = input_position.data.oindex[time_indices, channel_indices]
-        output_data = output_position.data.oindex[
-            time_indices, channel_indices
-        ]
+        output_data = output_position.data.oindex[time_indices, channel_indices]
         expected_data = transform_func(input_data, **kwargs)
 
         np.testing.assert_array_almost_equal(
@@ -477,9 +473,7 @@ def verify_transformation(
 
 @given(
     plate_setup=plate_setup(),
-    extra_channels=st.lists(
-        st.text(min_size=5, max_size=16), min_size=1, max_size=3
-    ),
+    extra_channels=st.lists(st.text(min_size=5, max_size=16), min_size=1, max_size=3),
 )
 @settings(max_examples=5)
 def test_create_empty_plate(plate_setup, extra_channels):
@@ -597,9 +591,7 @@ def test_apply_transform_to_czyx_and_save(setup, constant):
         # Apply the transformation for each position and time point
         for position_key_tuple in position_keys:
             input_position_path = input_store_path / Path(*position_key_tuple)
-            output_position_path = output_store_path / Path(
-                *position_key_tuple
-            )
+            output_position_path = output_store_path / Path(*position_key_tuple)
 
             for t_in in time_indices:
                 apply_transform_to_czyx_and_save(
@@ -664,9 +656,7 @@ def test_apply_transform_to_tczyx_and_save(setup, constant):
         # Apply the transformation for each position and time point
         for position_key_tuple in position_keys:
             input_position_path = input_store_path / Path(*position_key_tuple)
-            output_position_path = output_store_path / Path(
-                *position_key_tuple
-            )
+            output_position_path = output_store_path / Path(*position_key_tuple)
 
             apply_transform_to_tczyx_and_save(
                 func=dummy_transform,
@@ -767,9 +757,7 @@ def test_process_single_position(setup, constant, num_processes):
         # Choose a single position to process (e.g., the first one)
         for position_key_tuple in position_keys:
             input_position_path = input_store_path / Path(*position_key_tuple)
-            output_position_path = output_store_path / Path(
-                *position_key_tuple
-            )
+            output_position_path = output_store_path / Path(*position_key_tuple)
             kwargs = {"constant": constant, "extra_metadata": {"temp": 10}}
 
             # Apply the transformation using process_single_position

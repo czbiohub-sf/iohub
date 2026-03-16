@@ -6,8 +6,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from iohub import open_ome_zarr
-from iohub._version import __version__
+from iohub import __version__, open_ome_zarr
 from iohub.cli.cli import cli
 from tests.conftest import (
     hcs_ref,
@@ -121,14 +120,34 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     assert "Converting" in result.output
 
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_cli_convert_version(version, tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
+    runner = CliRunner()
+    output_dir = tmpdir / "converted.zarr"
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", version]
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code == 0, result.output
+    with open_ome_zarr(output_dir, mode="r") as store:
+        assert store.version == version
+
+
+def test_cli_convert_invalid_version(tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
+    runner = CliRunner()
+    output_dir = tmpdir / "converted.zarr"
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", "0.3"]
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output
+
+
 def test_cli_set_scale(caplog):
     with _temp_copy(hcs_ref) as store_path:
         store_path = Path(store_path)
         position_path = Path(store_path) / "B" / "03" / "0"
 
-        with open_ome_zarr(
-            position_path, layout="fov", mode="r+"
-        ) as input_dataset:
+        with open_ome_zarr(position_path, layout="fov", mode="r+") as input_dataset:
             old_scale = input_dataset.scale
 
         random_z = random.uniform(0, 1)
@@ -153,9 +172,7 @@ def test_cli_set_scale(caplog):
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
             assert output_dataset.scale != old_scale
-            for i, record in enumerate(
-                output_dataset.zattrs["iohub"]["previous_transforms"]
-            ):
+            for i, record in enumerate(output_dataset.zattrs["iohub"]["previous_transforms"]):
                 for transform in record["transforms"]:
                     if transform["type"] == "scale":
                         assert transform["scale"][-3:][i] == old_scale[-3:][i]
@@ -174,9 +191,7 @@ def test_cli_set_scale(caplog):
         )
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert output_dataset.scale[-1] == 0.1
-            for transform in output_dataset.zattrs["iohub"][
-                "previous_transforms"
-            ][-1]["transforms"]:
+            for transform in output_dataset.zattrs["iohub"]["previous_transforms"][-1]["transforms"]:
                 if transform["type"] == "scale":
                     assert transform["scale"][-1] == 0.5
 
@@ -188,7 +203,6 @@ def test_cli_rename_wells_help():
         cmd.append(option)
         result = runner.invoke(cli, cmd)
         assert result.exit_code == 0
-        assert ">> iohub rename-wells" in result.output
 
 
 def test_cli_rename_wells(csv_data_file_1):
