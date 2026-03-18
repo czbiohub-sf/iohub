@@ -10,8 +10,8 @@ import numpy as np
 import xarray as xr
 
 from iohub.tile._blenders import Blender
-from iohub.tile._slicer import Slicer, TileSpec
 from iohub.tile._sweep import _CellInfo, _sweep_line_assemble
+from iohub.tile._tiler import Tile, Tiler
 
 
 def _weighted_blend(
@@ -45,9 +45,9 @@ def _weighted_blend(
 
 def _blend_tiles(
     tiles: list[xr.DataArray],
-    tile_specs: list[TileSpec],
+    tile_specs: list[Tile],
     blender: Blender,
-    slicer: Slicer,
+    tiler: Tiler,
 ) -> xr.DataArray:
     """Blend overlapping processed tiles into a single mosaic.
 
@@ -58,12 +58,12 @@ def _blend_tiles(
     ----------
     tiles : list[xr.DataArray]
         Processed tile data arrays, one per tile_spec.
-    tile_specs : list[TileSpec]
-        TileSpec objects from the Slicer (pixel-space positions).
+    tile_specs : list[Tile]
+        Tile objects from the Tiler (pixel-space positions).
     blender : Blender
         Blending strategy providing weight kernels.
-    slicer : Slicer
-        The Slicer that produced the tile_specs (for overlap info).
+    tiler : Tiler
+        The Tiler that produced the tile_specs (for overlap info).
 
     Returns
     -------
@@ -76,11 +76,11 @@ def _blend_tiles(
     if len(tiles) == 1:
         return tiles[0]
 
-    overlap = slicer.overlap
-    data = slicer.data
-    tile_dims = slicer.tile_dims
+    overlap = tiler.overlap
+    data = tiler.data
+    tile_dims = tiler.tile_dims
 
-    # Pixel-space bounding boxes from TileSpecs as dict[str, (start, stop)]
+    # Pixel-space bounding boxes from Tiles as dict[str, (start, stop)]
     tile_bboxes: list[dict[str, tuple[int, int]]] = [
         {d: (s.slices[d].start, s.slices[d].stop) for d in tile_dims} for s in tile_specs
     ]

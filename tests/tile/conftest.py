@@ -9,6 +9,7 @@ import xarray as xr
 from hypothesis import HealthCheck, settings
 
 from iohub._experimental import ExperimentalWarning
+from iohub.ngff import open_ome_zarr
 
 # Default hypothesis settings for tile tests
 settings.register_profile(
@@ -57,6 +58,24 @@ def synthetic_5d_large_z():
             "x": np.arange(128, dtype=np.float64) * 0.325,
         },
     )
+
+
+@pytest.fixture
+def synthetic_position(tmp_path, synthetic_5d):
+    """Position node backed by a real OME-Zarr store (1,1,4,64,128) float32."""
+    path = tmp_path / "synthetic.zarr"
+    pos = open_ome_zarr(str(path), layout="fov", mode="w-", channel_names=["ch0"])
+    pos.create_image("0", synthetic_5d.values, chunks=(1, 1, 4, 64, 128))
+    return pos
+
+
+@pytest.fixture
+def synthetic_position_large_z(tmp_path, synthetic_5d_large_z):
+    """Position node (1,1,16,64,128) float32 with Z coords for ZYX tiling."""
+    path = tmp_path / "synthetic_z.zarr"
+    pos = open_ome_zarr(str(path), layout="fov", mode="w-", channel_names=["ch0"])
+    pos.create_image("0", synthetic_5d_large_z.values, chunks=(1, 1, 16, 64, 128))
+    return pos
 
 
 @st.composite

@@ -10,7 +10,7 @@ Usage::
 
 
     @experimental
-    class Slicer: ...
+    class Tiler: ...
 
 
     @experimental(since="0.8.0")
@@ -18,9 +18,9 @@ Usage::
 
 Users see a single warning per process (Python's default filter) on first use::
 
-    >>> from iohub.tile import Slicer
-    >>> slicer = Slicer(data, tile_size={"y": 1024, "x": 1024})
-    ExperimentalWarning: Slicer is experimental and may change without notice.
+    >>> from iohub.tile import Tiler
+    >>> tiler = Tiler(data, tile_size={"y": 1024, "x": 1024})
+    ExperimentalWarning: Tiler is experimental and may change without notice.
 
 To suppress::
 

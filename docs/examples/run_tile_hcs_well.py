@@ -7,7 +7,7 @@ grid with physical overlap, then composite the FOVs into a single mosaic
 and tile+blend with ``apply_func_tiled``.
 
 This demonstrates the full pipeline:
-FOV compositing (``Well.to_xarray``) → tiling (``Slicer``) → blending (``apply_func_tiled``).
+FOV compositing (``Well.to_xarray``) → tiling (``Tiler``) → blending (``apply_func_tiled``).
 """
 
 # %%

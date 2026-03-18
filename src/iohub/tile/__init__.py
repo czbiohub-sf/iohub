@@ -1,7 +1,6 @@
 """iohub.tile — Tile, process, and reassemble large image volumes."""
 
 from iohub._experimental import ExperimentalWarning
-from iohub.tile._assembler import Assembler
 from iohub.tile._blenders import (
     BlendContext,
     Blender,
@@ -24,11 +23,16 @@ from iohub.tile._resolvers import (
     StitchingYAMLResolver,
     TransformResolver,
 )
-from iohub.tile._slicer import SamplingMode, Slicer, TileSpec
-from iohub.tile.tile import CacheMode, apply_func_tiled, tile_and_assemble
+from iohub.tile._tiler import SamplingMode, Tile, Tiler
+from iohub.tile.tile import (
+    CacheMode,
+    apply_func_tiled,
+    create_tile_store,
+    process_tiles,
+    stitch_from_store,
+)
 
 __all__ = [
-    "Assembler",
     "BlendContext",
     "Blender",
     "CacheMode",
@@ -42,14 +46,16 @@ __all__ = [
     "MaxCompositor",
     "MeanCompositor",
     "SamplingMode",
-    "Slicer",
+    "Tile",
+    "Tiler",
     "StitchingYAMLResolver",
-    "TileSpec",
     "TransformResolver",
     "UniformBlender",
+    "apply_func_tiled",
+    "create_tile_store",
     "get_blender",
     "get_compositor",
-    "apply_func_tiled",
+    "process_tiles",
     "register_strategy",
-    "tile_and_assemble",
+    "stitch_from_store",
 ]

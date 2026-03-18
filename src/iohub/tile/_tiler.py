@@ -1,7 +1,7 @@
 """Tile generation for xr.DataArray with overlap support.
 
-Produces TileSpec objects that lazily slice an xr.DataArray mosaic.
-Inspired by xbatcher (issue #172 Slicer/Batcher decomposition) and
+Produces Tile objects that lazily slice an xr.DataArray mosaic.
+Inspired by xbatcher (issue #172 Tiler/Batcher decomposition) and
 patchly's SamplingMode strategies.
 """
 
@@ -97,7 +97,7 @@ def _ceil_to_multiple(value: int, multiple: int) -> int:
     return ((value + multiple - 1) // multiple) * multiple
 
 
-class TileSpec:
+class Tile:
     """Metadata for a single tile. Holds slices into the parent xr.DataArray.
 
     Use ``to_xarray()`` to get the tile data as a labeled xr.DataArray
@@ -112,7 +112,7 @@ class TileSpec:
         ``{"y": slice(0, 256), "x": slice(0, 256)}`` or
         ``{"z": slice(0, 32), "y": slice(0, 256), "x": slice(0, 256)}``.
     data : xr.DataArray
-        Back-reference to the mosaic xarray (set by Slicer).
+        Back-reference to the mosaic xarray (set by Tiler).
     """
 
     __slots__ = ("tile_id", "slices", "_data")
@@ -152,10 +152,10 @@ class TileSpec:
 
     def __repr__(self) -> str:
         parts = ", ".join(f"{d}={s.start}:{s.stop}" for d, s in self.slices.items())
-        return f"TileSpec(tile_id={self.tile_id}, {parts})"
+        return f"Tile(tile_id={self.tile_id}, {parts})"
 
     def __eq__(self, other: object) -> bool:
-        if not isinstance(other, TileSpec):
+        if not isinstance(other, Tile):
             return NotImplemented
         return self.tile_id == other.tile_id and self.slices == other.slices
 
@@ -164,14 +164,14 @@ class TileSpec:
 
 
 @experimental
-class Slicer:
+class Tiler:
     """Generate overlapping tiles from an xr.DataArray.
 
     Partitions the spatial extent of the input DataArray into overlapping
     tiles. Supports tiling over any subset of spatial dimensions (at
     minimum "y" and "x"; optionally "z" as well).
 
-    Iteration yields TileSpec objects (metadata-only). Use ``iter_xarrays()``
+    Iteration yields Tile objects (metadata-only). Use ``iter_xarrays()``
     to iterate over lazy xr.DataArrays instead.
 
     Parameters
@@ -195,12 +195,12 @@ class Slicer:
     Examples
     --------
     >>> pos = open_ome_zarr("deskewed.zarr", mode="r")
-    >>> slicer = Slicer(pos.to_xarray(), tile_size={"y": 1024, "x": 1024})
-    >>> len(slicer)
+    >>> tiler = Tiler(pos.to_xarray(), tile_size={"y": 1024, "x": 1024})
+    >>> len(tiler)
     15
-    >>> for tile in slicer:
+    >>> for tile in tiler:
     ...     xa = tile.to_xarray()  # lazy xr.DataArray
-    >>> slicer_3d = Slicer(
+    >>> tiler_3d = Tiler(
     ...     pos.to_xarray(),
     ...     tile_size={"z": 32, "y": 1024, "x": 1024},
     ...     overlap={"z": 4, "y": 128, "x": 128},
@@ -254,8 +254,8 @@ class Slicer:
                 mode=mode,
             )
 
-        # Build TileSpecs from cartesian product of all tiled dim positions
-        self._tiles: list[TileSpec] = []
+        # Build Tiles from cartesian product of all tiled dim positions
+        self._tiles: list[Tile] = []
         dim_positions = [self._positions_per_dim[d] for d in self._tile_dims]
         tile_id = 0
         for combo in product(*dim_positions):
@@ -263,7 +263,7 @@ class Slicer:
             for dim, start in zip(self._tile_dims, combo):
                 end = min(start + tile_size[dim], data.sizes[dim])
                 slices[dim] = slice(start, end)
-            self._tiles.append(TileSpec(tile_id=tile_id, slices=slices, data=data))
+            self._tiles.append(Tile(tile_id=tile_id, slices=slices, data=data))
             tile_id += 1
 
         self._graph: nx.Graph | None = None
@@ -273,7 +273,7 @@ class Slicer:
         """Dimension names being tiled, e.g. ``("z", "y", "x")`` or ``("y", "x")``."""
         return self._tile_dims
 
-    def __iter__(self) -> Iterator[TileSpec]:
+    def __iter__(self) -> Iterator[Tile]:
         yield from self._tiles
 
     def iter_xarrays(self) -> Iterator[xr.DataArray]:
@@ -284,7 +284,7 @@ class Slicer:
     def __len__(self) -> int:
         return len(self._tiles)
 
-    def __getitem__(self, idx: int | slice) -> TileSpec | list[TileSpec]:
+    def __getitem__(self, idx: int | slice) -> Tile | list[Tile]:
         return self._tiles[idx]
 
     def __repr__(self) -> str:
@@ -292,7 +292,7 @@ class Slicer:
         size_str = f"tile_size={self._tile_size}"
         if self._tile_size != self._original_tile_size:
             size_str += f" (requested={self._original_tile_size})"
-        return f"Slicer(tiles={len(self)}, grid={grid_parts}, {size_str}, overlap={self._overlap})"
+        return f"Tiler(tiles={len(self)}, grid={grid_parts}, {size_str}, overlap={self._overlap})"
 
     @property
     def data(self) -> xr.DataArray:

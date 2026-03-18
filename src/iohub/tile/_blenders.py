@@ -21,14 +21,14 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 
 from iohub.tile._registry import resolve_strategy
-from iohub.tile._slicer import TileSpec
+from iohub.tile._tiler import Tile
 
 
 @dataclass
 class BlendContext:
     """Tile metadata passed to blenders."""
 
-    tile_spec: TileSpec
+    tile_spec: Tile
     """The tile being blended."""
 
     neighbors: list[int]

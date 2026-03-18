@@ -1,6 +1,6 @@
 """Graph-informed overlap caching for tile processing.
 
-Uses the Slicer's neighborhood graph to identify overlapping regions
+Uses the Tiler's neighborhood graph to identify overlapping regions
 and optimize tile processing order for cache locality.
 """
 
@@ -13,10 +13,10 @@ from operator import mul
 import dask
 import xarray as xr
 
-from iohub.tile._slicer import Slicer
+from iohub.tile._tiler import Tiler
 
 
-def _overlap_regions(slicer: Slicer) -> list[dict[str, slice]]:
+def _overlap_regions(tiler: Tiler) -> list[dict[str, slice]]:
     """Compute unique overlap strips from the neighborhood graph.
 
     For each edge ``(tile_a, tile_b)`` in the graph, the overlap is
@@ -25,20 +25,20 @@ def _overlap_regions(slicer: Slicer) -> list[dict[str, slice]]:
 
     Parameters
     ----------
-    slicer : Slicer
-        Slicer with overlap > 0 in at least one dimension.
+    tiler : Tiler
+        Tiler with overlap > 0 in at least one dimension.
 
     Returns
     -------
     list[dict[str, slice]]
         Overlap regions as dicts of slices keyed by dim name.
     """
-    tile_dims = slicer.tile_dims
+    tile_dims = tiler.tile_dims
     seen: set[tuple[tuple[str, int, int], ...]] = set()
     regions: list[dict[str, slice]] = []
 
-    for a, b in slicer.graph.edges():
-        spec_a, spec_b = slicer[a], slicer[b]
+    for a, b in tiler.graph.edges():
+        spec_a, spec_b = tiler[a], tiler[b]
 
         overlap_slices: dict[str, slice] = {}
         valid = True
@@ -61,7 +61,7 @@ def _overlap_regions(slicer: Slicer) -> list[dict[str, slice]]:
     return regions
 
 
-def _bfs_tile_order(slicer: Slicer) -> list[int]:
+def _bfs_tile_order(tiler: Tiler) -> list[int]:
     """BFS traversal of the tile neighborhood graph.
 
     Processes adjacent tiles consecutively so their shared overlap
@@ -69,15 +69,15 @@ def _bfs_tile_order(slicer: Slicer) -> list[int]:
 
     Parameters
     ----------
-    slicer : Slicer
-        Slicer with a neighborhood graph.
+    tiler : Tiler
+        Tiler with a neighborhood graph.
 
     Returns
     -------
     list[int]
         Tile IDs in BFS order.
     """
-    graph = slicer.graph
+    graph = tiler.graph
     if graph.number_of_nodes() == 0:
         return []
 
@@ -95,28 +95,28 @@ def _bfs_tile_order(slicer: Slicer) -> list[int]:
                 queue.append(neighbor)
 
     # Include any disconnected tiles (no overlap)
-    for tile_id in range(len(slicer)):
+    for tile_id in range(len(tiler)):
         if tile_id not in visited:
             order.append(tile_id)
 
     return order
 
 
-def _estimate_overlap_bytes(slicer: Slicer) -> int:
+def _estimate_overlap_bytes(tiler: Tiler) -> int:
     """Estimate total bytes needed to cache all overlap regions.
 
     Parameters
     ----------
-    slicer : Slicer
-        Slicer with overlap.
+    tiler : Tiler
+        Tiler with overlap.
 
     Returns
     -------
     int
         Approximate byte count for all overlap strips.
     """
-    data = slicer.data
-    tile_dims = slicer.tile_dims
+    data = tiler.data
+    tile_dims = tiler.tile_dims
 
     # Leading dims: all dims NOT in tiled dims
     leading = 1
@@ -126,7 +126,7 @@ def _estimate_overlap_bytes(slicer: Slicer) -> int:
     itemsize = data.dtype.itemsize
 
     total = 0
-    for overlap_slices in _overlap_regions(slicer):
+    for overlap_slices in _overlap_regions(tiler):
         region_size = reduce(
             mul,
             (s.stop - s.start for s in overlap_slices.values()),
@@ -136,7 +136,7 @@ def _estimate_overlap_bytes(slicer: Slicer) -> int:
     return total
 
 
-def _persist_overlaps(slicer: Slicer) -> None:
+def _persist_overlaps(tiler: Tiler) -> None:
     """Pre-compute and cache overlap regions in memory.
 
     Slices each overlap strip from the source data and calls
@@ -145,14 +145,14 @@ def _persist_overlaps(slicer: Slicer) -> None:
 
     Parameters
     ----------
-    slicer : Slicer
-        Slicer with overlap > 0.
+    tiler : Tiler
+        Tiler with overlap > 0.
     """
-    regions = _overlap_regions(slicer)
+    regions = _overlap_regions(tiler)
     if not regions:
         return
 
-    data = slicer.data
+    data = tiler.data
     strips: list[xr.DataArray] = []
     for overlap_slices in regions:
         strips.append(data.isel(**overlap_slices))

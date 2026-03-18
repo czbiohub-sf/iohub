@@ -12,17 +12,21 @@ out-of-core reassembly and concurrent writes from multiple workers.
 
 from __future__ import annotations
 
+import logging
+import threading
 from itertools import product
 from pathlib import Path
 
-import dask.array as da
 import numpy as np
 import xarray as xr
 import zarr
 
 from iohub._experimental import experimental
+from iohub.ngff import open_ome_zarr
 from iohub.tile._blenders import Blender, get_blender
-from iohub.tile._slicer import Slicer, TileSpec
+from iohub.tile._tiler import Tile, Tiler
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_chunks(
@@ -86,24 +90,25 @@ def _create_scratch_zarr(
 
 @experimental
 class Assembler:
-    """Reassemble processed tiles into a zarr array with overlap blending.
+    """Reassemble processed tiles into an OME-Zarr with overlap blending.
 
     Parameters
     ----------
-    slicer : Slicer
-        The slicer used to generate the tiles. Provides mosaic shape
+    tiler : Tiler
+        The tiler used to generate the tiles. Provides mosaic shape
         and overlap metadata.
-    output : str | Path | zarr.Group
-        Path for the output zarr array, or an open ``zarr.Group``
-        in which ``"data"``, ``"accum"``, and ``"weights"`` arrays
-        will be created.
+    output : str | Path
+        Path for the output OME-Zarr store.
+    source_position : Position
+        Source Position node — metadata (channel names, scale transforms)
+        is copied to the output OME-Zarr.
     weights : str | Blender
         Blending strategy. Built-in: ``"gaussian"`` (default), ``"uniform"``.
     dtype : np.dtype | None
-        Output dtype. Defaults to float32.
+        Output dtype. Defaults to the input data's dtype.
     chunks : dict[str, int] | None
         Chunk sizes for the output zarr, keyed by dim name.
-        Defaults to the slicer's data chunk sizes.
+        Defaults to the tiler's data chunk sizes.
     shards : dict[str, int] | None
         Shard sizes for the output zarr, keyed by dim name.
         When provided, multiple chunks are grouped into larger
@@ -112,24 +117,28 @@ class Assembler:
 
     def __init__(
         self,
-        slicer: Slicer,
-        output: str | Path | zarr.Group,
+        tiler: Tiler,
+        output: str | Path,
+        source_position,
         weights: str | Blender = "gaussian",
         dtype: np.dtype | None = None,
         chunks: dict[str, int] | None = None,
         shards: dict[str, int] | None = None,
     ):
-        self._slicer = slicer
+        self._tiler = tiler
         self._blender = get_blender(weights)
-        self._dtype = np.dtype(dtype) if dtype is not None else np.dtype("float32")
+        data = tiler.data
+        self._dtype = np.dtype(dtype) if dtype is not None else data.dtype
+        # Accumulator needs at least float32 precision for weighted sums
+        self._accum_dtype = np.float32 if self._dtype.itemsize < 4 else self._dtype
         self._finalized = False
         self._result: xr.DataArray | None = None
+        self._source_position = source_position
 
         # Full output dims from the data (e.g. ("t", "c", "z", "y", "x"))
-        data = slicer.data
         self._dims = tuple(str(d) for d in data.dims)
         self._shape = tuple(data.sizes[d] for d in self._dims)
-        self._tile_dims = slicer.tile_dims
+        self._tile_dims = tiler.tile_dims
 
         self._chunks = _resolve_chunks(self._dims, self._shape, data, chunks)
 
@@ -137,41 +146,26 @@ class Assembler:
         if shards is not None:
             self._shards = tuple(shards.get(d, c) for d, c in zip(self._dims, self._chunks))
 
-        # Store output reference: either a zarr.Group or a Path
-        if isinstance(output, zarr.Group):
-            self._output_group: zarr.Group | None = output
-            self._output_path: Path | None = None
-        else:
-            self._output_group = None
-            self._output_path = Path(output)
+        self._output_path = Path(output)
 
-        # Pre-allocate accumulator and weight map zarr arrays (float64 for precision)
-        if self._output_group is not None:
-            accum_store: str | zarr.Group = self._output_group
-            weight_store: str | zarr.Group = self._output_group
-            accum_name = "_accum"
-            weight_name = "_weights"
-        else:
-            accum_store = str(self._output_path.parent / (self._output_path.name + ".accum"))
-            weight_store = str(self._output_path.parent / (self._output_path.name + ".weights"))
-            accum_name = None
-            weight_name = None
+        accum_store = str(self._output_path.parent / (self._output_path.name + ".accum"))
+        weight_store = str(self._output_path.parent / (self._output_path.name + ".weights"))
 
         self._accum = _create_scratch_zarr(
             accum_store,
-            accum_name,
+            None,
             shape=self._shape,
             chunks=self._chunks,
-            dtype=np.float64,
+            dtype=self._accum_dtype,
             fill_value=0.0,
             shards=self._shards,
         )
         self._weight_map = _create_scratch_zarr(
             weight_store,
-            weight_name,
+            None,
             shape=self._shape,
             chunks=self._chunks,
-            dtype=np.float64,
+            dtype=self._accum_dtype,
             fill_value=0.0,
             shards=self._shards,
         )
@@ -179,13 +173,16 @@ class Assembler:
         # Cache weight kernels by tile shape
         self._weight_cache: dict[tuple[int, ...], np.ndarray] = {}
 
-        self._overlap = slicer.overlap
+        self._overlap = tiler.overlap
+
+        # Lock for thread-safe append (protects read-modify-write on zarr chunks)
+        self._lock = threading.Lock()
 
     def validate_parallel_safety(self) -> bool:
         """Check if tiles can be safely processed in parallel.
 
         Returns True if no two tiles write to overlapping zarr chunks.
-        When False, tiles must be processed in waves (see Slicer.graph
+        When False, tiles must be processed in waves (see Tiler.graph
         for coloring-based wave scheduling).
         """
         # Map dim name -> chunk size for tiled dimensions
@@ -193,7 +190,7 @@ class Assembler:
 
         seen_chunks: set[tuple[int, ...]] = set()
 
-        for tile in self._slicer:
+        for tile in self._tiler:
             # Compute chunk indices touched by this tile in each tiled dim
             chunk_ranges = []
             for dim in self._tile_dims:
@@ -212,15 +209,16 @@ class Assembler:
     def _get_weight_kernel(self, tile_shape: tuple[int, ...]) -> np.ndarray:
         """Get or compute the weight kernel for a tile shape."""
         if tile_shape not in self._weight_cache:
-            self._weight_cache[tile_shape] = self._blender.weights(tile_shape, self._overlap)
+            w = self._blender.weights(tile_shape, self._overlap)
+            self._weight_cache[tile_shape] = w.astype(self._accum_dtype)
         return self._weight_cache[tile_shape]
 
-    def append(self, tile: TileSpec, result: xr.DataArray | np.ndarray):
+    def append(self, tile: Tile, result: xr.DataArray | np.ndarray):
         """Write a processed tile into the accumulator.
 
         Parameters
         ----------
-        tile : TileSpec
+        tile : Tile
             The tile spec (provides spatial slices into the mosaic).
         result : xr.DataArray | np.ndarray
             Processed tile data. Shape must match tile extent
@@ -230,7 +228,7 @@ class Assembler:
             raise RuntimeError("Assembler already finalized. Create a new Assembler to write more tiles.")
 
         data = result.values if isinstance(result, xr.DataArray) else result
-        data = data.astype(np.float64)
+        data = data.astype(self._accum_dtype)
 
         # Weight kernel covers tiled dims, broadcast over non-tiled leading dims
         weight = self._get_weight_kernel(tile.tile_shape)
@@ -238,56 +236,63 @@ class Assembler:
         # Build index: slice for tiled dims, slice(None) for others
         idx = tuple(tile.slices[d] if d in tile.slices else slice(None) for d in self._dims)
 
-        existing_accum = self._accum[idx]
-        self._accum[idx] = existing_accum + data * weight
+        # Compute weighted data before acquiring lock
+        weighted_data = data * weight
 
-        existing_weight = self._weight_map[idx]
-        self._weight_map[idx] = existing_weight + weight
+        # Thread-safe read-modify-write on zarr chunks
+        with self._lock:
+            existing_accum = self._accum[idx]
+            self._accum[idx] = existing_accum + weighted_data
+
+            existing_weight = self._weight_map[idx]
+            self._weight_map[idx] = existing_weight + weight
 
     def get_output(self) -> xr.DataArray:
-        """Finalize: normalize accumulator by weight map and return result.
+        """Finalize: normalize and write to an OME-Zarr output store.
 
-        Processes chunk-by-chunk to avoid loading the full array into memory.
+        Creates a proper OME-Zarr with metadata copied from the source
+        Position. Processes chunk-by-chunk to avoid OOM.
         Idempotent — safe to call multiple times.
 
         Returns
         -------
         xr.DataArray
-            Result array backed by the output zarr, with physical coordinates
-            from the source mosaic.
+            Result backed by the output OME-Zarr.
         """
         if self._finalized and self._result is not None:
             return self._result
 
-        # Create output zarr
-        if self._output_group is not None:
-            output = _create_scratch_zarr(
-                self._output_group,
-                "data",
-                shape=self._shape,
-                chunks=self._chunks,
-                dtype=self._dtype,
-                fill_value=0,
-                shards=self._shards,
-            )
-        else:
-            output = _create_scratch_zarr(
-                str(self._output_path),
-                None,
-                shape=self._shape,
-                chunks=self._chunks,
-                dtype=self._dtype,
-                fill_value=0,
-                shards=self._shards,
-            )
+        from copy import deepcopy
+
+        src = self._source_position
+
+        # Create output OME-Zarr with metadata from source
+        dst = open_ome_zarr(
+            str(self._output_path),
+            layout="fov",
+            mode="w-",
+            channel_names=list(src.channel_names),
+        )
+        src_transforms = deepcopy(src.metadata.multiscales[0].datasets[0].coordinate_transformations)
+        dst.create_zeros(
+            "0",
+            shape=self._shape,
+            dtype=self._dtype,
+            chunks=self._chunks,
+        )
+        dst.metadata.multiscales[0].datasets[0].coordinate_transformations = src_transforms
+        dst.dump_meta()
+
+        output = dst["0"]
 
         # Normalize chunk-by-chunk to avoid OOM
-        chunk_slices = self._iter_chunk_slices()
-        for slices in chunk_slices:
+        all_chunk_slices = list(self._iter_chunk_slices())
+        n_chunks = len(all_chunk_slices)
+        logger.info("Normalizing %d chunks...", n_chunks)
+        for i, slices in enumerate(all_chunk_slices):
             accum_chunk = self._accum[slices]
             weight_chunk = self._weight_map[slices]
 
-            # Avoid division by zero: where weight is 0, output is 0
             with np.errstate(divide="ignore", invalid="ignore"):
                 normalized = np.where(
                     weight_chunk > 0,
@@ -296,16 +301,10 @@ class Assembler:
                 )
             output[slices] = normalized.astype(self._dtype)
 
-        # Build xr.DataArray with coordinates from source mosaic
-        source = self._slicer.data
-        coords = {d: source.coords[d].values for d in self._dims if d in source.coords}
+            if (i + 1) % 100 == 0 or i + 1 == n_chunks:
+                logger.info("  Normalized %d/%d chunks", i + 1, n_chunks)
 
-        dask_data = da.from_zarr(output)
-        self._result = xr.DataArray(
-            data=dask_data,
-            dims=self._dims,
-            coords=coords,
-        )
+        self._result = dst.to_xarray()
         self._finalized = True
         return self._result
 

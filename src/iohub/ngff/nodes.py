@@ -1376,8 +1376,8 @@ class Position(NGFFNode):
     ):
         """Tile this FOV in YX with optional overlap.
 
-        Returns a :class:`~iohub.tile.Slicer` that yields
-        :class:`~iohub.tile.TileSpec` objects (or ``xr.DataArray``
+        Returns a :class:`~iohub.tile.Tiler` that yields
+        :class:`~iohub.tile.Tile` objects (or ``xr.DataArray``
         when *as_xarray=True*).
 
         Parameters
@@ -1390,17 +1390,17 @@ class Position(NGFFNode):
             e.g. ``{"y": 128, "x": 128}``.
         as_xarray : bool
             If True, iteration yields ``xr.DataArray`` instead of
-            ``TileSpec``.
+            ``Tile``.
         **kwargs
-            Forwarded to :class:`~iohub.tile.Slicer` (e.g. ``mode``).
+            Forwarded to :class:`~iohub.tile.Tiler` (e.g. ``mode``).
 
         Returns
         -------
-        iohub.tile.Slicer
+        iohub.tile.Tiler
         """
-        from iohub.tile import Slicer
+        from iohub.tile import Tiler
 
-        return Slicer(
+        return Tiler(
             self.to_xarray(),
             tile_size=tile_size,
             overlap=overlap,
@@ -1729,7 +1729,7 @@ class Well(NGFFNode):
         """Tile the well mosaic in YX with optional overlap.
 
         Calls :meth:`to_xarray` internally, then wraps the result
-        in a :class:`~iohub.tile.Slicer`.
+        in a :class:`~iohub.tile.Tiler`.
 
         Parameters
         ----------
@@ -1745,16 +1745,16 @@ class Well(NGFFNode):
         as_xarray : bool
             If True, iteration yields ``xr.DataArray``.
         **kwargs
-            Forwarded to :class:`~iohub.tile.Slicer`.
+            Forwarded to :class:`~iohub.tile.Tiler`.
 
         Returns
         -------
-        iohub.tile.Slicer
+        iohub.tile.Tiler
         """
-        from iohub.tile import Slicer
+        from iohub.tile import Tiler
 
         xa = self.to_xarray(layout_resolver=layout_resolver, compositor=compositor)
-        return Slicer(
+        return Tiler(
             xa,
             tile_size=tile_size,
             overlap=overlap,
