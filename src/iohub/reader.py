@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -9,13 +8,10 @@ import natsort
 import tifffile as tiff
 import zarr
 
-from iohub._deprecated.reader_base import ReaderBase
-from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
-from iohub._deprecated.zarrfile import ZarrReader
 from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
-from iohub.ngff.nodes import NGFFNode, Plate, Position, open_ome_zarr
+from iohub.ngff.nodes import NGFFNode, Plate, Position, TiledPosition, open_ome_zarr
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -123,24 +119,23 @@ def _infer_format(path: Path):
 
 def read_images(
     path: StrOrBytesPath,
-    data_type: Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"] = None,
-) -> ReaderBase | BaseFOVMapping:
+    data_type: Literal["ometiff", "ndtiff", "omezarr"] = None,
+) -> BaseFOVMapping | Plate | Position | TiledPosition:
     """Read image arrays and metadata from a Micro-Manager dataset.
     Supported formats are Micro-Manager-acquired TIFF datasets
-    (single-page TIFF, multi-page OME-TIFF, NDTIFF),
-    and converted OME-Zarr (v0.1/v0.4 HCS layout assuming a linear structure).
+    (multi-page OME-TIFF, NDTIFF),
+    and converted OME-Zarr (v0.4/v0.5 HCS layout).
 
     Parameters
     ----------
     path : StrOrBytesPath
         File path, directory path to ome-tiff series, or Zarr root path
-    data_type :
-    Literal["singlepagetiff", "ometiff", "ndtiff", "omezarr"], optional
+    data_type : Literal["ometiff", "ndtiff", "omezarr"], optional
         Dataset format, by default None
 
     Returns
     -------
-    ReaderBase | BaseFOVMapping
+    BaseFOVMapping | Plate | Position | TiledPosition
         Image collection object for the dataset
     """
     path = Path(path).resolve()
@@ -153,23 +148,21 @@ def read_images(
     if data_type == "ometiff":
         return MMStack(path)
     elif data_type == "singlepagetiff":
-        return MicromanagerSequenceReader(path)
+        raise NotImplementedError(
+            "Single-page TIFF reading has been removed. "
+            "Please convert your data to OME-Zarr using a previous version of iohub."
+        )
     elif data_type == "omezarr":
         if extra_info is None:
             _, extra_info = _infer_format(path)
-        if extra_info == "0.4":
-            # `warnings` instead of `logging` since this can be avoided
-            warnings.warn(
-                UserWarning(
-                    "For NGFF v0.4 datasets, `iohub.open_ome_zarr()` "
-                    "is preferred over `iohub.read_images()`. "
-                    "Note that `open_ome_zarr()` will return "
-                    "an NGFFNode object instead of a ReaderBase instance."
-                )
+        if extra_info in ("0.4", "0.5"):
+            return open_ome_zarr(path, mode="r", version=extra_info)
+        elif extra_info == "0.1":
+            raise NotImplementedError(
+                "OME-Zarr v0.1 reading has been removed. Please convert your data to OME-Zarr v0.4 or later."
             )
-        elif extra_info != "0.1":
+        else:
             raise ValueError(f"NGFF version {extra_info} is not supported.")
-        return ZarrReader(path, version=extra_info)
     elif data_type == "ndtiff":
         return NDTiffDataset(path)
     else:
@@ -195,7 +188,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
             reader = open_ome_zarr(path, mode="r", version=extra_info)
         else:
             reader = read_images(path, data_type=fmt)
-    except (ValueError, RuntimeError):
+    except (ValueError, RuntimeError, NotImplementedError):
         print("Error: No compatible dataset is found.")
         return
     try:
@@ -255,7 +248,8 @@ def print_info(path: StrOrBytesPath, verbose=False):
                     msgs.append(f"Positions:\t\t {len(positions)}")
                     msgs.append(f"Chunk size:\t\t {positions[0][1][0].chunks}")
                     msgs.append(
-                        f"No. bytes decompressed:\t\t {total_bytes_uncompressed} [{sizeof_fmt(total_bytes_uncompressed)}]"
+                        f"No. bytes decompressed:\t\t, {total_bytes_uncompressed}"
+                        f" [{sizeof_fmt(total_bytes_uncompressed)}]"
                     )
             else:
                 total_bytes_uncompressed = reader["0"].nbytes

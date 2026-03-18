@@ -19,11 +19,3 @@
 ## ClearControl
 
 ::: iohub.clearcontrol.ClearControlFOV
-
-## MM TIFF Sequence (deprecated)
-
-::: iohub._deprecated.singlepagetiff.MicromanagerSequenceReader
-
-## PTI TIFF (deprecated)
-
-::: iohub._deprecated.upti.UPTIReader
