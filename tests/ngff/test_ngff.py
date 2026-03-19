@@ -33,6 +33,7 @@ from iohub.ngff.nodes import (
     _case_insensitive_local_fs,
     _open_store,
     _pad_shape,
+    _scale_dims,
     open_ome_zarr,
 )
 from tests.conftest import hcs_ref
@@ -121,6 +122,44 @@ def _channels_and_random_5d(draw):
     channel_names, shape, dtype = draw(_channels_and_random_5d_shape_and_dtype())
     random_5d = draw(npst.arrays(dtype, shape=shape))
     return channel_names, random_5d
+
+
+@pytest.mark.parametrize(
+    "values, axes, expected",
+    [
+        # all axes downsampled
+        ((4, 8, 16), {0, 1, 2}, (2, 4, 8)),
+        # subset of axes
+        ((4, 8, 16), {1, 2}, (4, 4, 8)),
+        # no axes — identity
+        ((4, 8, 16), set(), (4, 8, 16)),
+        # odd values round up
+        ((3, 7, 5), {0, 1, 2}, (2, 4, 3)),
+        # single element
+        ((1,), {0}, (1,)),
+    ],
+)
+def test_scale_dims(values, axes, expected):
+    """Test `iohub.ngff._scale_dims()`"""
+    assert _scale_dims(values, axes) == expected
+
+
+@given(
+    values=st.tuples(*[st.integers(1, 64)] * 5),
+    axes=st.frozensets(st.integers(0, 4)),
+)
+@settings(max_examples=64, deadline=1000)
+def test_scale_dims_properties(values, axes):
+    """Property tests for _scale_dims."""
+    import math
+
+    result = _scale_dims(values, axes)
+    assert len(result) == len(values)
+    for i, (v, r) in enumerate(zip(values, result)):
+        if i in axes:
+            assert r == math.ceil(v / 2)
+        else:
+            assert r == v
 
 
 @given(shape=st.lists(x_dim_st, min_size=1, max_size=10), target=x_dim_st)

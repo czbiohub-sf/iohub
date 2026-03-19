@@ -13,7 +13,7 @@ from copy import deepcopy
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Generator, Literal, Sequence, Type, TypeAlias, overload
+from typing import Generator, Literal, Type, TypeAlias, overload
 
 import numpy as np
 import xarray as xr
@@ -84,9 +84,9 @@ def _open_store(
     return root
 
 
-def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
-    """Computes the ceiling of the input sequence divided by the factor."""
-    return tuple(int(math.ceil(v / factor)) for v in values)
+def _scale_dims(values: tuple[int, ...], axes: set[int]) -> tuple[int, ...]:
+    """Halve values at the given indices, rounding up (ceiling division)."""
+    return tuple(int(math.ceil(v / 2)) if i in axes else v for i, v in enumerate(values))
 
 
 def _case_insensitive_local_fs() -> bool:
@@ -983,7 +983,7 @@ class Position(NGFFNode):
         dims : set[str] | None, optional
             Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
             Must be a subset of the dataset's axis names.
-            Defaults to ``{"z", "y", "x"}``.
+            Defaults to ``{"z", "y", "x"}``, must be lowercase.
         """
         if dims is None:
             dims = {"z", "y", "x"}
@@ -995,9 +995,6 @@ class Position(NGFFNode):
 
         axes = {i for i, name in enumerate(axis_names) if name in dims}
 
-        def _scale_dims(values: tuple[int, ...]) -> tuple[int, ...]:
-            return tuple(int(math.ceil(v / 2)) if i in axes else v for i, v in enumerate(values))
-
         prev_shape = self.data.shape
         prev_chunks = self.data.chunks
         prev_shards = self.data.shards
@@ -1005,11 +1002,11 @@ class Position(NGFFNode):
         for level in range(1, levels):
             factor = 2**level  # cumulative scale for metadata
 
-            shape = _scale_dims(prev_shape)
-            chunks = _scale_dims(prev_chunks)
+            shape = _scale_dims(prev_shape, axes)
+            chunks = _scale_dims(prev_chunks, axes)
 
             if prev_shards is not None:
-                prev_shards = _scale_dims(prev_shards)
+                prev_shards = _scale_dims(prev_shards, axes)
                 shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards))
             else:
                 shards_ratio = None
