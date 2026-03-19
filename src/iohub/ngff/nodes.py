@@ -13,7 +13,7 @@ from copy import deepcopy
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Generator, Literal, Sequence, Type, TypeAlias, overload
+from typing import Generator, Literal, Type, TypeAlias, overload
 
 import numpy as np
 import xarray as xr
@@ -84,9 +84,9 @@ def _open_store(
     return root
 
 
-def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
-    """Computes the ceiling of the input sequence divided by the factor."""
-    return tuple(int(math.ceil(v / factor)) for v in values)
+def _scale_dims(values: tuple[int, ...], axes: set[int]) -> tuple[int, ...]:
+    """Halve values at the given indices, rounding up (ceiling division)."""
+    return tuple(int(math.ceil(v / 2)) if i in axes else v for i, v in enumerate(values))
 
 
 def _case_insensitive_local_fs() -> bool:
@@ -966,7 +966,11 @@ class Position(NGFFNode):
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
 
-    def initialize_pyramid(self, levels: int) -> None:
+    def initialize_pyramid(
+        self,
+        levels: int,
+        dims: set[str] | None = None,
+    ) -> None:
         """
         Initializes the pyramid arrays with a down scaling of 2 per level.
         Decimals shapes are rounded up to ceiling.
@@ -975,32 +979,52 @@ class Position(NGFFNode):
         Parameters
         ----------
         levels : int
-            Number of down scaling levels, if levels is 1 nothing happens.
+            Number of pyramid levels. If 1, nothing happens.
+        dims : set[str] | None, optional
+            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
+            Must be a subset of the dataset's axis names.
+            Defaults to ``{"z", "y", "x"}``, must be lowercase.
         """
-        array = self.data
+        if dims is None:
+            dims = {"z", "y", "x"}
+
+        axis_names = self.axis_names
+        for name in dims:
+            if name not in axis_names:
+                raise ValueError(f"Axis '{name}' not in dataset axes {axis_names}.")
+
+        axes = {i for i, name in enumerate(axis_names) if name in dims}
+
+        prev_shape = self.data.shape
+        prev_chunks = self.data.chunks
+        prev_shards = self.data.shards
+
         for level in range(1, levels):
-            factor = 2**level
+            factor = 2**level  # cumulative scale for metadata
 
-            shape = array.shape[:-3] + _scale_integers(array.shape[-3:], factor)
+            shape = _scale_dims(prev_shape, axes)
+            chunks = _scale_dims(prev_chunks, axes)
 
-            chunks = _pad_shape(_scale_integers(array.chunks, factor), len(shape))
-
-            if array.shards is not None:
-                shards = array.shards[:-3] + _scale_integers(array.shards[-3:], factor)
-                shards_ratio = tuple(s // c for c, s in zip(chunks, shards))
+            if prev_shards is not None:
+                prev_shards = _scale_dims(prev_shards, axes)
+                shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards))
             else:
                 shards_ratio = None
 
             transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
             for tr in transforms:
                 if tr.type == "scale":
-                    for i in range(len(tr.scale))[-3:]:
-                        tr.scale[i] *= factor
+                    for i, name in enumerate(axis_names):
+                        if name in dims:
+                            tr.scale[i] *= factor
+
+            prev_shape = shape
+            prev_chunks = chunks
 
             self.create_zeros(
                 name=str(level),
                 shape=shape,
-                dtype=array.dtype,
+                dtype=self.data.dtype,
                 chunks=chunks,
                 shards_ratio=shards_ratio,
                 transform=transforms,
@@ -1010,6 +1034,7 @@ class Position(NGFFNode):
         self,
         levels: int | None = None,
         method: str = "mean",
+        dims: set[str] | None = None,
     ) -> None:
         """Compute pyramid by downsampling from source level.
 
@@ -1024,6 +1049,10 @@ class Position(NGFFNode):
         method : str, optional
             Downsampling method: "mean", "median", "mode", "min", "max",
             "stride". By default "mean".
+        dims : set[str] | None, optional
+            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
+            Forwarded to ``initialize_pyramid`` when creating the pyramid
+            structure. Defaults to ``{"z", "y", "x"}``.
 
         Raises
         ------
@@ -1057,7 +1086,7 @@ class Position(NGFFNode):
             levels = num_arrays
 
         if num_arrays == 1:
-            self.initialize_pyramid(levels=levels)
+            self.initialize_pyramid(levels=levels, dims=dims)
         elif num_arrays != levels:
             raise ValueError(
                 f"Pyramid structure exists with {num_arrays} levels but "
