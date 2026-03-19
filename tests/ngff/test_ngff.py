@@ -1379,12 +1379,7 @@ def test_initialize_pyramid(tmp_path):
 
         # Verify scale transforms are updated for each level
         for level in range(levels):
-            level_scale = (
-                pos.metadata.multiscales[0]
-                .datasets[level]
-                .coordinate_transformations[0]
-                .scale
-            )
+            level_scale = pos.metadata.multiscales[0].datasets[level].coordinate_transformations[0].scale
             expected_factor = 2**level
             assert level_scale[-3:] == [
                 scale[-3] * expected_factor,

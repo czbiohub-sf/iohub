@@ -20,9 +20,7 @@ data = np.random.randint(0, 255, size=(1, 2, 32, 256, 256), dtype=np.uint16)
 print(f"Original data shape: {data.shape}\n")
 
 # Create position with data and compute pyramid
-with open_ome_zarr(
-    store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP"]
-) as position:
+with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP"]) as position:
     # Create full resolution image
     position.create_image("0", data)
 
