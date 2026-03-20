@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from datetime import datetime
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Iterable, Literal
@@ -118,8 +119,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
     @property
     def t_scale(self) -> float:
-        _logger.warning("NDTiff does not store the planned time interval. Returning 1.0 as a placeholder.")
-        return 1.0
+        return self._t_scale
 
     def _get_summary_metadata(self):
         pm_metadata = self.dataset.summary_metadata
@@ -169,7 +169,29 @@ class NDTiffDataset(MicroManagerFOVMapping):
 
                 pm_metadata["StagePositions"].append(position_metadata)
 
+        self._t_scale = self._compute_t_scale(p_idx, c_idx)
+
         return {"Summary": pm_metadata}
+
+    def _compute_t_scale(self, p_idx, c_idx) -> float:
+        """Compute time scale (seconds per timepoint) via linear fit of acquisition timestamps."""
+        if self.frames <= 1:
+            return 1.0
+        acq_times, t_indices = [], []
+        for t_idx in range(self.frames):
+            img_metadata = self.get_image_metadata(p_idx, t_idx, c_idx, 0)
+            if img_metadata is None:
+                continue
+            # Note: Timestamp key differs between Micro-manager versions
+            timestamp = img_metadata.get("TimeReceivedByCore")
+            if timestamp is not None:
+                acq_time = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S.%f").timestamp()
+                acq_times.append(acq_time)
+                t_indices.append(t_idx)
+        if len(acq_times) > 1:
+            slope, _ = np.polyfit(t_indices, acq_times, 1)
+            return float(slope)
+        return 1.0
 
     def _check_str_axis(self, axis: Literal["position", "channel"]) -> bool:
         if axis in self._axes:
