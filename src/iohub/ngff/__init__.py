@@ -1,3 +1,4 @@
+from iohub.core import NGFFNDArray
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import (
     ImageArray,
@@ -11,6 +12,7 @@ from iohub.ngff.nodes import (
 
 __all__ = [
     "ImageArray",
+    "NGFFNDArray",
     "NGFFNode",
     "Plate",
     "Position",

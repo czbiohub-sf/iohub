@@ -318,7 +318,6 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
     """
     import dask
     import dask.array as da
-    from dask.array import to_zarr
 
     data = np.arange(np.prod(shape), dtype=np.uint16).reshape(shape)
 
@@ -334,7 +333,7 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
         # Rechunk and write with `array.chunk-size` config
         chunk_size_bytes = int(np.prod(target_chunks) * 2)
         with dask.config.set({"array.chunk-size": chunk_size_bytes}):
-            to_zarr(dask_data.rechunk(target_chunks), zarr_img)
+            zarr_img.write_from_dask(dask_data.rechunk(target_chunks))
 
     # Make sure data is preserved
     with open_ome_zarr(output, layout="hcs", mode="r") as reader:
@@ -347,10 +346,10 @@ class TestVersionParameter:
     """Tests for the OME-NGFF version parameter on TIFFConverter."""
 
     def test_default_version(self, example_ome_tiff, tmpdir):
-        """Default version should be '0.4'."""
+        """Default version should be '0.5'."""
         output = tmpdir / "converted.zarr"
         converter = TIFFConverter(example_ome_tiff, output)
-        assert converter.version == "0.4"
+        assert converter.version == "0.5"
 
     @pytest.mark.parametrize("ver", ["0.4", "0.5"])
     def test_explicit_version(self, example_ome_tiff, tmpdir, ver):
@@ -383,7 +382,7 @@ class TestVersionParameter:
 
     @pytest.mark.parametrize(
         "ver,expected_zarr_format",
-        [("0.4", 2), ("0.5", 3)],
+        [("0.4", 3), ("0.5", 3)],
     )
     def test_version_produces_correct_zarr_format(self, example_ome_tiff, tmpdir, ver, expected_zarr_format):
         """Version should produce the corresponding Zarr format."""

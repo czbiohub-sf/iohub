@@ -10,13 +10,12 @@ authors = [
 ]
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering",
@@ -39,6 +38,8 @@ dependencies = [
     "blosc2",
     "xarray>=2024.1.1",
     "dask[array]",
+    "zarrs>=0.2.2",
+    "ndstorage>=0.1.18",
 ]
 dynamic = ["version"]
 
@@ -52,6 +53,11 @@ Source = "https://github.com/czbiohub-sf/iohub"
 tensorstore = [
     "tensorstore>=0.1.64",
 ]
+
+[project.entry-points."iohub.zarr-implementations"]
+zarr = "iohub.core.implementations.zarr_python:ZarrPythonImplementation"
+tensorstore = "iohub.core.implementations.tensorstore:TensorStoreImplementation"
+
 [dependency-groups]
 test = [
     "iohub[tensorstore]",

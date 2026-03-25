@@ -120,16 +120,15 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     assert "Converting" in result.output
 
 
-@pytest.mark.parametrize("version", ["0.4", "0.5"])
-def test_cli_convert_version(version, tmpdir):
+def test_cli_convert_version(tmpdir):
     dataset = mm2gamma_ome_tiffs[0]
     runner = CliRunner()
     output_dir = tmpdir / "converted.zarr"
-    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", version]
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", "0.5"]
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0, result.output
     with open_ome_zarr(output_dir, mode="r") as store:
-        assert store.version == version
+        assert store.version == "0.5"
 
 
 def test_cli_convert_invalid_version(tmpdir):

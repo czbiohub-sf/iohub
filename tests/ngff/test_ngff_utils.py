@@ -14,7 +14,6 @@ from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
-    apply_transform_to_czyx_and_save,
     apply_transform_to_tczyx_and_save,
     create_empty_plate,
     process_single_position,
@@ -594,14 +593,14 @@ def test_apply_transform_to_czyx_and_save(setup, constant):
             output_position_path = output_store_path / Path(*position_key_tuple)
 
             for t_in in time_indices:
-                apply_transform_to_czyx_and_save(
+                apply_transform_to_tczyx_and_save(
                     func=dummy_transform,
                     input_position_path=Path(input_position_path),
                     output_position_path=Path(output_position_path),
                     input_channel_indices=channel_indices,
                     output_channel_indices=channel_indices,
-                    input_time_index=t_in,
-                    output_time_index=t_in,
+                    input_time_indices=[t_in],
+                    output_time_indices=[t_in],
                     **kwargs,
                 )
 

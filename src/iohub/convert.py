@@ -6,7 +6,6 @@ from typing import Literal
 
 import dask
 import numpy as np
-from dask.array import to_zarr
 from tqdm import tqdm
 from tqdm.contrib.itertools import product
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -93,8 +92,8 @@ class TIFFConverter:
         and is ignored for other formats, by default None
         (attempt to apply to OME-TIFF datasets, disable this with ``False``)
     version : Literal["0.4", "0.5"], optional
-        OME-NGFF version for the output Zarr store, by default "0.4".
-        Version "0.4" uses Zarr v2 format, version "0.5" uses Zarr v3 format.
+        OME-NGFF version for the output Zarr store, by default "0.5".
+        Both versions use Zarr v3 format; "0.4" is deprecated for new stores.
 
     Notes
     -----
@@ -110,7 +109,7 @@ class TIFFConverter:
         grid_layout: int = False,
         chunks: tuple[int] | Literal["XY", "XYZ"] = None,
         hcs_plate: bool = None,
-        version: Literal["0.4", "0.5"] = "0.4",
+        version: Literal["0.4", "0.5"] = "0.5",
     ):
         if version not in ("0.4", "0.5"):
             raise ValueError(f"Unsupported OME-NGFF version '{version}'. Supported versions are '0.4' and '0.5'.")
@@ -376,19 +375,20 @@ class TIFFConverter:
         # This prevents data loss when rechunking to zarr chunks
         # See: https://github.com/czbiohub-sf/iohub/issues/367
         chunk_size_bytes = int(np.prod(self.chunks) * np.dtype(self.reader.dtype).itemsize)
-        # Run through every coordinate and convert in acquisition order
+
         _logger.debug("Converting images.")
         with logging_redirect_tqdm(), dask.config.set({"array.chunk-size": chunk_size_bytes}):
             for zarr_pos_name, (_, fov) in tqdm(
                 zip(self.zarr_position_names, self.reader, strict=True),
-                total=len(self.reader),
+                total=len(self.zarr_position_names),
                 desc="Converting images",
                 unit="FOV",
                 ncols=80,
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
-                to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
+                zarr_img.write_from_dask(fov.xdata.data.rechunk(self.chunks))
                 self._convert_image_plane_metadata(fov, zarr_img.path)
+
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
         self.reader.close()
