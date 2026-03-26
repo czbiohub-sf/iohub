@@ -123,6 +123,21 @@ class NGFFNDArray:
         """Resize the array in-place."""
         self._impl.resize(self._handle, new_shape)
 
+    def append(self, data: np.ndarray, axis: int = 0) -> tuple[int, ...]:
+        """Append data along axis. Returns the new shape."""
+        data = np.asarray(data)
+        old_shape = self.shape
+        new_shape = tuple(
+            s + (data.shape[i] if i == axis else 0) for i, s in enumerate(old_shape)
+        )
+        self.resize(new_shape)
+        region = tuple(
+            slice(old_shape[i], new_shape[i]) if i == axis else slice(None)
+            for i in range(len(old_shape))
+        )
+        self._impl.write(self._handle, region, data)
+        return new_shape
+
     # -- Conversions -------------------------------------------------------
 
     def numpy(self) -> NDArray:

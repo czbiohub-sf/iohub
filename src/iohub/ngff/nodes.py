@@ -2372,7 +2372,7 @@ def open_ome_zarr(
             AxisMeta(name='X', type='space', unit='micrometer')]
 
     version : Literal["0.4", "0.5"], optional
-        OME-NGFF version, by default "0.5"
+        OME-NGFF version, by default "0.5".
     disable_path_checking : bool, optional
         Whether to allow overwriting a path that does not contain '.zarr',
         by default False
