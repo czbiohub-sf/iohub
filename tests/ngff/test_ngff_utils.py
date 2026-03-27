@@ -30,7 +30,7 @@ def _temp_ome_zarr(
     scale: Tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     base_dir: Optional[Path] = None,  # Added base_dir parameter
-    version: Literal["0.4", "0.5"] = "0.4",
+    version: Literal["0.4", "0.5"] = "0.5",
 ):
     """
     Helper context manager to generate a temporary OME-Zarr store.
@@ -106,7 +106,7 @@ def _temp_ome_zarr_stores(
     shards_ratio: tuple[int, ...] | None = None,
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
-    version: Literal["0.4", "0.5"] = "0.4",
+    version: Literal["0.4", "0.5"] = "0.5",
 ):
     """
     Helper context manager to generate temporary
@@ -189,8 +189,7 @@ def plate_setup(draw):
     # Generate channel names based on the number of channels
     channel_names = [f"Channel_{i}" for i in range(num_channels)]
 
-    version_st = st.one_of(st.just("0.4"), st.just("0.5"))
-    version = draw(version_st)
+    version = draw(st.just("0.5"))
 
     # Generate shape ensuring that the
     # second dimension (C) matches num_channels

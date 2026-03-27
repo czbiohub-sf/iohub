@@ -351,7 +351,7 @@ class TestVersionParameter:
         converter = TIFFConverter(example_ome_tiff, output)
         assert converter.version == "0.5"
 
-    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
+    @pytest.mark.parametrize("ver", ["0.5"])
     def test_explicit_version(self, example_ome_tiff, tmpdir, ver):
         """Explicit version should be stored on the converter."""
         output = tmpdir / f"converted_{ver}.zarr"
@@ -364,9 +364,12 @@ class TestVersionParameter:
         with pytest.raises(ValueError, match="Unsupported OME-NGFF version"):
             TIFFConverter(example_ome_tiff, output, version="0.3")
 
-    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
-    def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver):
+    @pytest.mark.parametrize("impl", ["zarr", "tensorstore"])
+    @pytest.mark.parametrize("ver", ["0.5"])
+    def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver, impl):
         """Conversion should produce a correct store and preserve pixel data."""
+        if impl == "tensorstore":
+            pytest.importorskip("tensorstore")
         logging.getLogger("tifffile").setLevel(logging.ERROR)
         output = tmpdir / f"converted_{ver}.zarr"
         converter = TIFFConverter(example_ome_tiff, output, version=ver)
@@ -375,14 +378,14 @@ class TestVersionParameter:
         with TiffFile(next(example_ome_tiff.glob("*.tif*"))) as tf:
             expected_sum = tf.asarray().sum()
         converter()
-        with open_ome_zarr(output, mode="r") as result:
+        with open_ome_zarr(output, mode="r", implementation=impl) as result:
             assert result.version == ver
             intensity = sum(pos["0"][:].sum() for _, pos in result.positions())
             assert intensity == expected_sum
 
     @pytest.mark.parametrize(
         "ver,expected_zarr_format",
-        [("0.4", 3), ("0.5", 3)],
+        [("0.5", 3)],
     )
     def test_version_produces_correct_zarr_format(self, example_ome_tiff, tmpdir, ver, expected_zarr_format):
         """Version should produce the corresponding Zarr format."""

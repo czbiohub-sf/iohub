@@ -40,6 +40,22 @@ class ArrayBackend[G, A](Protocol):
 
     def open_array(self, group: G, name: str) -> A: ...
 
+    def create_array_v2(
+        self,
+        group: G,
+        name: str,
+        *,
+        shape: tuple[int, ...],
+        dtype: Any,
+        chunks: tuple[int, ...],
+        fill_value: int = 0,
+        overwrite: bool = False,
+    ) -> A:
+        """Create a zarr v2 array. Only required for v0.4 store support."""
+        raise NotImplementedError(
+            f"{type(self).__name__!r} does not support zarr v2 array creation."
+        )
+
 
 @runtime_checkable
 class ArrayIO[A](Protocol):
@@ -89,16 +105,18 @@ class ArrayIO[A](Protocol):
         factors: list[int],
         method: str = "mean",
     ) -> None:
-        """Downsample a single shard-aligned region from source into target."""
+        """Downsample source into target for a single region.
+
+        ``target_region`` is expressed in **target coordinates**.
+        Implementations are responsible for mapping back to source
+        coordinates (e.g. multiplying by ``factors``) as needed.
+        """
         ...
 
     def iter_work_regions(self, target: A) -> list[tuple[slice, ...]]:
         """Return shard/chunk-aligned regions suitable for parallel iteration."""
         ...
 
-    def open_for_write(self, handle: A, zarr_format: int = 3) -> A:
-        """Return a handle ready for bulk writes (may be the same object)."""
-        ...
 
 
 @runtime_checkable

@@ -756,12 +756,6 @@ class Position(NGFFNode):
             )
             arr_handle = self._impl.create_array(self._group, name, spec, overwrite=self._overwrite)
         else:
-            if not hasattr(self._impl, "create_array_v2"):
-                raise NotImplementedError(
-                    f"Implementation {type(self._impl).__name__!r} does not support "
-                    "writing to zarr v2 stores. Use implementation='zarr' or migrate "
-                    "the store to v3 first."
-                )
             arr_handle = self._impl.create_array_v2(
                 self._group,
                 name,
@@ -772,7 +766,7 @@ class Position(NGFFNode):
                 overwrite=self._overwrite,
             )
         img_arr = ImageArray.from_handle(arr_handle, self._impl)
-        self._create_image_meta(img_arr.basename, transform=transform)
+        self._create_image_meta(name, transform=transform)
         return img_arr
 
     @staticmethod

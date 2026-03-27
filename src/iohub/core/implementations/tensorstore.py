@@ -102,6 +102,14 @@ class _TsGroup:
     def __contains__(self, name: str) -> bool:
         return self.get(name) is not None
 
+    def __delitem__(self, name: str) -> None:
+        import shutil
+
+        sub = self.path / name
+        if not sub.exists():
+            raise KeyError(name)
+        shutil.rmtree(sub)
+
     def __getitem__(self, name: str):
         result = self.get(name)
         if result is None:
@@ -146,7 +154,9 @@ class _TsGroup:
 
     @property
     def attrs(self) -> _TsAttrs:
-        return _TsAttrs(self)
+        if not hasattr(self, "_attrs_cache") or self._attrs_cache is None:
+            self._attrs_cache = _TsAttrs(self)
+        return self._attrs_cache
 
     def tree(self, level: int | None = None) -> str:
         lines = [self.basename]
@@ -167,14 +177,40 @@ class _TsGroup:
             self._tree_lines(p / child, prefix + extension, max_level, depth + 1, lines)
 
 
+def _fill_value_for_spec(data_type: str, fill_value: int | float) -> object:
+    """Return a TensorStore-compatible fill value for the given dtype string."""
+    if data_type == "bool":
+        return bool(fill_value)
+    if data_type in ("complex64", "complex128"):
+        # TensorStore requires [real, imag] for complex fill values
+        return [float(fill_value), 0.0]
+    return fill_value
+
+
+def _ts_open(spec: dict, **kwargs) -> ts.TensorStore:
+    """Thin wrapper that converts TensorStore errors to standard Python exceptions."""
+    import tensorstore as ts
+
+    try:
+        return ts.open(spec, **kwargs).result()
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "not found" in msg or "no such file" in msg:
+            raise FileNotFoundError(str(exc)) from exc
+        if "already exists" in msg:
+            raise FileExistsError(str(exc)) from exc
+        raise RuntimeError(f"TensorStore error: {exc}") from exc
+
+
 def _spec_to_ts(spec: ArraySpec, path: str) -> dict:
+    fill_value = _fill_value_for_spec(spec.data_type, spec.fill_value)
     metadata: dict = {
         "shape": list(spec.shape),
         "data_type": spec.data_type,
         "chunk_grid": spec.chunk_grid,
         "chunk_key_encoding": spec.chunk_key_encoding,
         "codecs": spec.codecs,
-        "fill_value": spec.fill_value,
+        "fill_value": fill_value,
     }
     if spec.dimension_names:
         metadata["dimension_names"] = spec.dimension_names
@@ -193,13 +229,31 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
     def _context(self) -> ts.Context:
         import tensorstore as ts
 
-        ctx_opts = self.config.context or {}
-        if self.config.data_copy_concurrency:
-            ctx_opts.setdefault(
-                "data_copy_concurrency",
-                {"limit": self.config.data_copy_concurrency},
-            )
-        return ts.Context(ctx_opts)
+        if not hasattr(self, "_ctx") or self._ctx is None:
+            ctx_opts = dict(self.config.context or {})
+            if self.config.data_copy_concurrency:
+                ctx_opts.setdefault(
+                    "data_copy_concurrency",
+                    {"limit": self.config.data_copy_concurrency},
+                )
+            if self.config.cache_pool_bytes is not None:
+                ctx_opts.setdefault(
+                    "cache_pool",
+                    {"total_bytes_limit": self.config.cache_pool_bytes},
+                )
+            if self.config.file_io_concurrency is not None:
+                ctx_opts.setdefault(
+                    "file_io_concurrency",
+                    {"limit": self.config.file_io_concurrency},
+                )
+            if not self.config.file_io_sync:
+                ctx_opts.setdefault("file_io_sync", False)
+            if self.config.file_io_locking != "auto":
+                ctx_opts.setdefault("file_io_locking", self.config.file_io_locking)
+            if self.config.extra_context:
+                ctx_opts.update(self.config.extra_context)
+            self._ctx = ts.Context(ctx_opts)
+        return self._ctx
 
     # -- Group operations --------------------------------------------------
 
@@ -213,39 +267,41 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         if not p.is_dir():
             return []
         keys = []
-        if group.zarr_driver == "zarr3":
-            for d in os.listdir(p):
-                sub = p / d
-                if not sub.is_dir() or d.startswith("."):
-                    continue
-                try:
-                    meta = json.loads((sub / "zarr.json").read_text())
-                    if meta.get("node_type") == "group":
-                        keys.append(d)
-                except (OSError, ValueError):
-                    pass
-        else:
-            keys = [d for d in os.listdir(p) if (p / d / ".zgroup").exists()]
+        match group.zarr_driver:
+            case "zarr3":
+                for d in os.listdir(p):
+                    sub = p / d
+                    if not sub.is_dir() or d.startswith("."):
+                        continue
+                    try:
+                        meta = json.loads((sub / "zarr.json").read_text())
+                        if meta.get("node_type") == "group":
+                            keys.append(d)
+                    except (OSError, ValueError):
+                        pass
+            case "zarr2":
+                keys = [d for d in os.listdir(p) if (p / d / ".zgroup").exists()]
         return sorted(keys)
 
     def array_keys(self, group: _TsGroup) -> list[str]:
         p = Path(group.path)
         if not p.is_dir():
             return []
-        if group.zarr_driver == "zarr3":
-            keys = []
-            for d in os.listdir(p):
-                sub = p / d
-                if not sub.is_dir():
-                    continue
-                try:
-                    meta = json.loads((sub / "zarr.json").read_text())
-                    if meta.get("node_type") == "array":
-                        keys.append(d)
-                except (OSError, ValueError):
-                    pass
-        else:
-            keys = [d for d in os.listdir(p) if (p / d / ".zarray").exists()]
+        keys = []
+        match group.zarr_driver:
+            case "zarr3":
+                for d in os.listdir(p):
+                    sub = p / d
+                    if not sub.is_dir():
+                        continue
+                    try:
+                        meta = json.loads((sub / "zarr.json").read_text())
+                        if meta.get("node_type") == "array":
+                            keys.append(d)
+                    except (OSError, ValueError):
+                        pass
+            case "zarr2":
+                keys = [d for d in os.listdir(p) if (p / d / ".zarray").exists()]
         return sorted(keys)
 
     def close(self, group: _TsGroup) -> None:
@@ -257,16 +313,46 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         import tensorstore as ts
 
         ts_spec = _spec_to_ts(spec, str(Path(group.path) / name))
-        return ts.open(ts_spec, create=True, context=self._context()).result()
+        return _ts_open(ts_spec, create=True, delete_existing=overwrite, context=self._context())
+
+    def create_array_v2(
+        self,
+        group: _TsGroup,
+        name: str,
+        *,
+        shape: tuple[int, ...],
+        dtype: np.dtype,
+        chunks: tuple[int, ...],
+        fill_value: int = 0,
+        overwrite: bool = False,
+    ) -> ts.TensorStore:
+        spec = {
+            "driver": "zarr2",
+            "kvstore": {"driver": "file", "path": str(Path(group.path) / name)},
+            "metadata": {
+                "shape": list(shape),
+                "chunks": list(chunks),
+                "dtype": np.dtype(dtype).str,  # zarr2 uses NumPy dtype strings e.g. "<u2"
+                "compressor": {"id": "blosc", "cname": "lz4", "clevel": 5, "shuffle": 1},
+                "fill_value": fill_value,
+                "order": "C",
+                "filters": None,
+            },
+        }
+        return _ts_open(spec, create=True, delete_existing=overwrite, context=self._context())
 
     def open_array(self, group: _TsGroup, name: str) -> ts.TensorStore:
-        import tensorstore as ts
-
         spec = {
             "driver": group.zarr_driver,
             "kvstore": {"driver": "file", "path": str(Path(group.path) / name)},
         }
-        return ts.open(spec, context=self._context()).result()
+        return _ts_open(
+            spec,
+            open=True,
+            read=True,
+            write=(group.mode != "r"),
+            context=self._context(),
+        )
 
     # -- Array I/O ---------------------------------------------------------
 
@@ -277,20 +363,10 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         handle[selection].write(data).result()
 
     def read_oindex(self, handle: ts.TensorStore, selection: Any) -> np.ndarray:
-        import tensorstore as ts
-
-        indexed = handle
-        for dim, sel in enumerate(selection):
-            indexed = indexed[ts.d[dim][sel]]
-        return np.asarray(indexed.read().result())
+        return np.asarray(handle.oindex[tuple(selection)].read().result())
 
     def write_oindex(self, handle: ts.TensorStore, selection: Any, data: np.ndarray) -> None:
-        import tensorstore as ts
-
-        indexed = handle
-        for dim, sel in enumerate(selection):
-            indexed = indexed[ts.d[dim][sel]]
-        indexed.write(data).result()
+        handle.oindex[tuple(selection)].write(data).result()
 
     def resize(self, handle: ts.TensorStore, new_shape: tuple[int, ...]) -> None:
         handle.resize(exclusive_max=new_shape).result()
@@ -308,6 +384,11 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         return tuple(cl.read_chunk.shape) if cl.read_chunk.shape else self.get_shape(handle)
 
     def get_shards(self, handle: ts.TensorStore) -> tuple[int, ...] | None:
+        cl = handle.chunk_layout
+        read_shape = cl.read_chunk.shape
+        write_shape = cl.write_chunk.shape
+        if read_shape and write_shape and tuple(read_shape) != tuple(write_shape):
+            return tuple(write_shape)
         return None
 
     # -- Conversions -------------------------------------------------------
@@ -325,10 +406,6 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
 
     # -- High-performance operations ---------------------------------------
 
-    def open_for_write(self, handle: ts.TensorStore, zarr_format: int = 3) -> ts.TensorStore:
-        """TensorStore handles are already high-performance, return as-is."""
-        return handle
-
     def downsample(
         self,
         source: ts.TensorStore,
@@ -336,17 +413,23 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         factors: Iterable[int],
         method: str = "mean",
     ) -> None:
-        """Sequential downsample using native ts.downsample."""
+        """Downsample source into target using native ts.downsample."""
         import tensorstore as ts
 
         downsampled = ts.downsample(source, downsample_factors=factors, method=method)
-        step = target.chunk_layout.write_chunk.shape[0]
-        for start in range(0, downsampled.shape[0], step):
+        sharded = self.get_shards(target) is not None
+        if sharded:
             with ts.Transaction() as txn:
-                target_with_txn = target.with_transaction(txn)
-                downsampled_with_txn = downsampled.with_transaction(txn)
-                stop = min(start + step, downsampled.shape[0])
-                target_with_txn[start:stop].write(downsampled_with_txn[start:stop]).result()
+                for region in self.iter_work_regions(target):
+                    target.with_transaction(txn)[region].write(
+                        downsampled.with_transaction(txn)[region]
+                    ).result()
+        else:
+            for region in self.iter_work_regions(target):
+                with ts.Transaction() as txn:
+                    target.with_transaction(txn)[region].write(
+                        downsampled.with_transaction(txn)[region]
+                    ).result()
 
     def downsample_region(
         self,
@@ -363,11 +446,13 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         target[target_region].write(downsampled[target_region]).result()
 
     def iter_work_regions(self, target: ts.TensorStore) -> list[tuple[slice, ...]]:
-        """Return chunk-aligned regions for parallel iteration."""
-        step = target.chunk_layout.write_chunk.shape[0]
-        regions = []
-        for start in range(0, target.shape[0], step):
-            stop = min(start + step, target.shape[0])
-            full_slices = (slice(start, stop),) + tuple(slice(0, s) for s in target.shape[1:])
-            regions.append(full_slices)
-        return regions
+        """Return chunk/shard-aligned regions covering all dimensions."""
+        import itertools
+
+        cl = target.chunk_layout
+        write_shape = cl.write_chunk.shape or target.shape
+        dim_ranges = []
+        for dim, (total, step) in enumerate(zip(target.shape, write_shape)):
+            starts = range(0, total, step)
+            dim_ranges.append([slice(s, min(s + step, total)) for s in starts])
+        return [tuple(region) for region in itertools.product(*dim_ranges)]

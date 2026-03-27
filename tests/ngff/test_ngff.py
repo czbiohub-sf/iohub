@@ -47,7 +47,7 @@ x_dim_st = st.integers(1, 32)
 channel_names_st = c_dim_st.flatmap(
     (lambda c_dim: st.lists(short_text_st, min_size=c_dim, max_size=c_dim, unique=True))
 )
-ngff_versions_st = st.sampled_from(["0.4", "0.5"])
+ngff_versions_st = st.just("0.5")
 short_alpha_numeric = st.text(
     alphabet=list(string.ascii_lowercase + string.ascii_uppercase + string.digits),
     min_size=1,
@@ -947,6 +947,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
                     tiles.get_tile(*args)
 
 
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     grid_shape=tiles_rc_st,
@@ -958,7 +959,9 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
     deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name, version):
+def test_write_read_tiles(implementation, channels_and_random_5d, grid_shape, arr_name, version):
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     """Test `iohub.ngff.TiledPosition.write_tile()` and `...get_tile()`"""
     channel_names, random_5d = channels_and_random_5d
 
@@ -979,6 +982,7 @@ def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name, version)
             mode="w-",
             channel_names=channel_names,
             version=version,
+            implementation=implementation,
         ) as dataset:
             tiles = dataset.make_tiles(
                 name=arr_name,
@@ -989,7 +993,7 @@ def test_write_read_tiles(channels_and_random_5d, grid_shape, arr_name, version)
             )
             for data, row, column in _tile_data(tiles):
                 tiles.write_tile(data, row, column)
-        with open_ome_zarr(store_path, layout="tiled", mode="r", channel_names=channel_names) as dataset:
+        with open_ome_zarr(store_path, layout="tiled", mode="r", channel_names=channel_names, implementation=implementation) as dataset:
             for data, row, column in _tile_data(tiles):
                 read = tiles.get_tile(row, column)
                 assert_allclose(data, read)
@@ -1006,7 +1010,7 @@ def test_create_hcs(channel_names):
         assert dataset.channel_names == channel_names
 
 
-@pytest.mark.parametrize("version", ["0.4", "0.5"])
+@pytest.mark.parametrize("version", ["0.5"])
 def test_open_hcs_create_empty(version):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
@@ -1158,17 +1162,14 @@ def test_create_position(row, col, pos, version):
             version=version,
         )
         _ = dataset.create_position(row_name=row, col_name=col, pos_name=pos)
-        if version == "0.4":
-            ome = dataset.zgroup.attrs
-        elif version == "0.5":
-            ome = dataset.zgroup.attrs["ome"]
+        ome = dataset.zgroup.attrs["ome"]
         assert [c["name"] for c in ome["plate"]["columns"]] == [col]
         assert [r["name"] for r in ome["plate"]["rows"]] == [row]
         assert (store_path / row / col / pos).is_dir()
         assert dataset[row][col].metadata.images[0].path == pos
 
 
-@pytest.mark.parametrize("version", ["0.4", "0.5"])
+@pytest.mark.parametrize("version", ["0.5"])
 def test_create_positions(tmp_path, version):
     positions = [
         x.split("/")
@@ -1212,10 +1213,7 @@ def test_create_positions(tmp_path, version):
 
     # Collect positions and compare those
 
-    if version == "0.4":
-        get_metadata = lambda x: dict(x.zgroup.attrs)
-    elif version == "0.5":
-        get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+    get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
 
     single_plate_metadata = get_metadata(single)
     batched_plate_metadata = get_metadata(batched)
@@ -1228,7 +1226,7 @@ def test_create_positions(tmp_path, version):
     assert single_well_metadata == batched_well_metadata
 
 
-@pytest.mark.parametrize("version", ["0.4", "0.5"])
+@pytest.mark.parametrize("version", ["0.5"])
 def test_create_positions_with_tuple_variations(tmp_path, version):
     """Test create_positions with various tuple lengths (3-6 elements).
 
@@ -1274,10 +1272,7 @@ def test_create_positions_with_tuple_variations(tmp_path, version):
     batched.create_positions(positions)
 
     # Verify metadata matches
-    if version == "0.4":
-        get_metadata = lambda x: dict(x.zgroup.attrs)
-    elif version == "0.5":
-        get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+    get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
 
     single_meta = get_metadata(single)
     batched_meta = get_metadata(batched)
@@ -1454,9 +1449,11 @@ def test_initialize_pyramid(tmp_path):
             ]
 
 
-def test_compute_pyramid(tmp_path):
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+def test_compute_pyramid(tmp_path, implementation):
     """Test pyramid computation fills levels with downsampled data."""
-    pytest.importorskip("tensorstore")
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
 
     store_path = tmp_path / "test_pyramid.zarr"
 
@@ -1468,6 +1465,7 @@ def test_compute_pyramid(tmp_path):
         layout="fov",
         mode="a",
         channel_names=["ch1", "ch2"],
+        implementation=implementation,
     ) as pos:
         pos.create_image("0", data)
         pos.compute_pyramid(levels=3, method="mean")
@@ -1485,9 +1483,11 @@ def test_compute_pyramid(tmp_path):
             pos.compute_pyramid(levels=2, method="mean")
 
 
-def test_delete_pyramid(tmp_path):
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+def test_delete_pyramid(tmp_path, implementation):
     """Test delete_pyramid removes all pyramid levels except level 0."""
-    pytest.importorskip("tensorstore")
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
 
     store_path = tmp_path / "test_delete_pyramid.zarr"
 
@@ -1499,6 +1499,7 @@ def test_delete_pyramid(tmp_path):
         layout="fov",
         mode="a",
         channel_names=["ch1", "ch2"],
+        implementation=implementation,
     ) as pos:
         pos.create_image("0", data)
         pos.compute_pyramid(levels=3, method="mean")

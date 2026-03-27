@@ -67,6 +67,10 @@ class ArraySpec:
                     "configuration": {
                         "chunk_shape": list(chunks),
                         "codecs": codecs,
+                        "index_codecs": [
+                            {"name": "bytes", "configuration": {"endian": "little"}},
+                            {"name": "crc32c"},
+                        ],
                     },
                 }
             ]

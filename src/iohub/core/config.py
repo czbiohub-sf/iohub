@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -36,6 +38,11 @@ class TensorStoreConfig(BaseModel):
 
     data_copy_concurrency: int = Field(default=4, ge=1)
     context: dict | None = None
+    file_io_concurrency: int | None = None
+    file_io_sync: bool = True
+    file_io_locking: Literal["auto", "disabled"] = "auto"
+    cache_pool_bytes: int | None = None
+    extra_context: dict | None = None
 
 
 ImplementationConfig = ZarrConfig | TensorStoreConfig

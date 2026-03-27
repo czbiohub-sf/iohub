@@ -1,12 +1,12 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling", "uv-dynamic-versioning>=0.7.0"]
+requires = ["hatchling", "uv-dynamic-versioning>=0.14.0"]
 
 [project]
 name = "iohub"
 description = "N-dimensional bioimaging data I/O with OME metadata in Python"
 authors = [
-    {name = "CZ Biohub and iohub contributors", email = "iohub@czbiohub.org"},
+    {name = "Biohub and iohub contributors", email = "iohub@czbiohub.org"},
 ]
 license = {file = "LICENSE"}
 readme = "README.md"
@@ -18,6 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Operating System :: Microsoft :: Windows",
@@ -25,21 +26,20 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
 ]
 dependencies = [
-    "pandas>=1.5.2",
+    "pandas>=2",
     "pydantic>=2.8.2",
     "pydantic_extra_types>=2.9.0",
     "tifffile>=2025.5.21",
-    "natsort>=7.1.1",
+    "natsort>=8.4.0",
     "ndtiff>=2.2.1",
-    "zarr>=3.0.8",
+    "zarr>=3.1.6",
     "rich",
     "tqdm",
     "pillow>=9.4.0",
     "blosc2",
     "xarray>=2024.1.1",
     "dask[array]",
-    "zarrs>=0.2.2",
-    "ndstorage>=0.1.18",
+    "zarrs>=0.2.3",
 ]
 dynamic = ["version"]
 
@@ -62,18 +62,19 @@ tensorstore = "iohub.core.implementations.tensorstore:TensorStoreImplementation"
 test = [
     "iohub[tensorstore]",
     "ngff-zarr[validate]",
-    "pytest>=5.0.0",
+    "pytest>=9.0.2",
     "pytest-cov",
-    "hypothesis>=6.61.0",
+    "hypothesis>=6.151.0",
     "requests>=2.22.0",
     "wget>=3.2",
     "ome-zarr>=0.12.0",
+    "pytest-xdist>=3.8.0",
 ]
 acquire-zarr = [
     "acquire-zarr",
 ]
 doc = [
-    "zensical>=0.0.11",
+    "zensical>=0.0.29",
     "mkdocstrings-python>=2.0.2",
     "mkdocs-click>=0.8",
 ]

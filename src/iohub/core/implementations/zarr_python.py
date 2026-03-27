@@ -67,7 +67,6 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         shape: tuple[int, ...],
         dtype: np.dtype,
         chunks: tuple[int, ...],
-        shards: tuple[int, ...] | None = None,
         fill_value: int = 0,
         overwrite: bool = False,
     ) -> zarr.Array:
@@ -86,7 +85,6 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
             shape=shape,
             dtype=dtype,
             chunks=chunks,
-            shards=shards,
             overwrite=overwrite,
             fill_value=fill_value,
             chunk_key_encoding={"name": "v2", "separator": "/"},
@@ -141,10 +139,6 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
 
     # -- High-performance operations ---------------------------------------
 
-    def open_for_write(self, handle: zarr.Array, zarr_format: int = 3) -> zarr.Array:
-        """Return the array handle ready for writing (zarr-python handles writes natively)."""
-        return handle
-
     def downsample(
         self,
         source: zarr.Array,
@@ -176,8 +170,14 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         target[target_region] = downsampled
 
     def iter_work_regions(self, target: zarr.Array) -> list[tuple[slice, ...]]:
-        """Return shard-aligned regions for parallel iteration."""
-        return list(target._iter_shard_regions())
+        """Return shard/chunk-aligned regions for parallel iteration."""
+        import itertools
+
+        step_shape = self.get_shards(target) or target.chunks
+        dim_ranges = []
+        for total, step in zip(target.shape, step_shape):
+            dim_ranges.append([slice(s, min(s + step, total)) for s in range(0, total, step)])
+        return [tuple(r) for r in itertools.product(*dim_ranges)]
 
     # -- Downsample internals ----------------------------------------------
 
