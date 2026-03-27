@@ -92,24 +92,3 @@ class ArraySpec:
             fill_value=fill_value,
             dimension_names=dimension_names,
         )
-
-
-def make_array_spec(
-    shape: tuple[int, ...],
-    dtype: DTypeLike,
-    chunks: tuple[int, ...],
-    shards: tuple[int, ...] | None = None,
-    fill_value: int | float = 0,
-    dimension_names: list[str] | None = None,
-    compressor: CompressorConfig | None = None,
-) -> ArraySpec:
-    """Alias for ``ArraySpec.create()`` — kept for backwards compatibility."""
-    return ArraySpec.create(
-        shape=shape,
-        dtype=dtype,
-        chunks=chunks,
-        shards=shards,
-        fill_value=fill_value,
-        dimension_names=dimension_names,
-        compressor=compressor,
-    )

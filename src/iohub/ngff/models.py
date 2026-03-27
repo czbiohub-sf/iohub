@@ -1,9 +1,9 @@
 """
 Data model classes with validation for OME-NGFF metadata.
-Developed against OME-NGFF v0.4/0.5.2 and ome-zarr v0.9.
+Developed against OME-NGFF v0.5.
 
 Attributes are 'snake_case' with aliases to match NGFF names in JSON output.
-See https://ngff.openmicroscopy.org/0.4/index.html#naming-style
+See https://ngff.openmicroscopy.org/specifications/0.5/index.html
 about 'camelCase' inconsistency.
 """
 
@@ -47,6 +47,9 @@ def unique_validator(data: list[BaseModel], field: str | list[str]) -> list[Base
     ValueError
         raised if any value is not unique
     """
+    if not data:
+        return data
+
     fields = [field] if isinstance(field, str) else field
     for key in fields:
         values = [d[key] if isinstance(d, dict) else getattr(d, key) for d in data]
@@ -160,7 +163,7 @@ class TimeAxisMeta(NamedAxisMeta):
     ) = None
 
 
-"""https://ngff.openmicroscopy.org/0.4/index.html#axes-md"""
+"""https://ngff.openmicroscopy.org/specifications/0.5/index.html#axes-md"""
 AxisMeta = Annotated[
     TimeAxisMeta | ChannelAxisMeta | SpaceAxisMeta,
     Discriminator("type"),
@@ -168,7 +171,7 @@ AxisMeta = Annotated[
 
 
 class TransformationMeta(MetaBase):
-    """https://ngff.openmicroscopy.org/0.4/index.html#trafo-md"""
+    """https://ngff.openmicroscopy.org/specifications/0.5/index.html#trafo-md"""
 
     # MUST
     type: Literal["identity", "translation", "scale"]
@@ -188,7 +191,7 @@ class TransformationMeta(MetaBase):
 
 
 class DatasetMeta(MetaBase):
-    """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
+    """https://ngff.openmicroscopy.org/specifications/0.5/index.html#multiscale-md"""
 
     # MUST
     path: str
@@ -204,7 +207,7 @@ class VersionMeta(MetaBase):
 
 
 class MultiScaleMeta(VersionMeta):
-    """https://ngff.openmicroscopy.org/0.4/index.html#multiscale-md"""
+    """https://ngff.openmicroscopy.org/specifications/0.5/index.html#multiscale-md"""
 
     # MUST
     axes: list[AxisMeta]
@@ -266,7 +269,8 @@ class RDefsMeta(MetaBase):
 
 
 class OMEROMeta(VersionMeta):
-    """https://ngff.openmicroscopy.org/0.4/index.html#omero-md"""
+    """Transitional OMERO display metadata. Implementations MUST support reading; writing is optional.
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#omero-transitional"""
 
     id: int | None = None
     name: str | None = None
@@ -274,28 +278,45 @@ class OMEROMeta(VersionMeta):
     rdefs: RDefsMeta | None = None
 
 
+class LabelImageMeta(MetaBase):
+    """Metadata for individual multiscale label image.
+    Combines multiscales specification with image-label metadata.
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#labels-md"""
+
+    # MUST: multiscales with same levels as original image
+    multiscales: list[MultiScaleMeta]
+    # SHOULD: image-label with colors, properties, source
+    image_label: PositionLabelMeta = Field(alias="image-label")
+    # only for OME-NGFF v0.5
+    version: Literal["0.5"] | None = None
+    model_config = ConfigDict(extra="allow")
+
+
 class ImagesMeta(MetaBase):
     """Metadata needed for 'Images' (or positions/FOVs) in an OME-NGFF dataset.
-    https://ngff.openmicroscopy.org/0.4/index.html#image-layout"""
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#image-layout"""
 
     multiscales: list[MultiScaleMeta]
     # transitional, optional
     omero: OMEROMeta | None = None
+    # labels group support
+    labels: LabelsMeta | None = None
     # only for OME-NGFF v0.5
     version: Literal["0.5"] | None = None
     model_config = ConfigDict(extra="allow")
 
 
 class LabelsMeta(MetaBase):
-    """https://ngff.openmicroscopy.org/0.4/index.html#labels-md"""
+    """https://ngff.openmicroscopy.org/specifications/0.5/index.html#labels-md"""
 
-    # SHOULD? (keyword not found in spec)
-    labels: str
-    # unlisted groups MAY be labels
+    # MUST: list of paths to labeled multiscale images
+    labels: list[str]
+    # MAY: metadata for individual labels
+    image_label: PositionLabelMeta | None = Field(alias="image-label", default=None)
 
 
 class LabelColorMeta(MetaBase):
-    """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
+    """https://ngff.openmicroscopy.org/specifications/0.5/index.html#label-md"""
 
     # MUST
     label_value: int = Field(alias="label-value")
@@ -309,26 +330,38 @@ class LabelColorMeta(MetaBase):
         return v
 
 
-class ImageLabelMeta(VersionMeta):
-    """https://ngff.openmicroscopy.org/0.4/index.html#label-md"""
+class PositionLabelMeta(VersionMeta):
+    """https://ngff.openmicroscopy.org/specifications/0.5/index.html#label-md"""
 
-    # SHOULD
-    colors: list[LabelColorMeta]
-    # MAY
-    properties: list[dict[str, Any]]
-    # MAY
-    source: dict[str, Any]
+    # SHOULD (optional per NGFF spec)
+    colors: list[LabelColorMeta] = Field(default_factory=list)
+    # MAY (optional per NGFF spec)
+    properties: list[dict[str, Any]] = Field(default_factory=list)
+    # MAY (optional per NGFF spec)
+    source: dict[str, Any] | None = Field(default=None)
 
-    @field_validator("colors", "properties")
+    @field_validator("colors")
     @classmethod
-    def unique_label_value(cls, v):
-        # MUST
+    def unique_label_value_colors(cls, v):
+        # MUST: colors must have unique label_value
         unique_validator(v, "label_value")
+        return v
+
+    @field_validator("properties")
+    @classmethod
+    def validate_properties(cls, v):
+        # Validate that properties have required 'label-value'
+        # field per NGFF spec
+        if not v:
+            return v
+        for i, prop in enumerate(v):
+            if "label-value" not in prop and "label_value" not in prop:
+                raise ValueError(f"Property {i} must include 'label-value' field per NGFF spec")
         return v
 
 
 class AcquisitionMeta(MetaBase):
-    """https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+    """https://ngff.openmicroscopy.org/specifications/0.5/index.html#plate-md"""
 
     # MUST
     id: NonNegativeInt
@@ -353,7 +386,7 @@ class AcquisitionMeta(MetaBase):
 
 class PlateAxisMeta(MetaBase):
     """OME-NGFF metadata for a row or a column on a multi-well plate.
-    https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#plate-md"""
 
     # MUST
     name: Annotated[str, AfterValidator(alpha_numeric_validator)]
@@ -361,7 +394,7 @@ class PlateAxisMeta(MetaBase):
 
 class WellIndexMeta(MetaBase):
     """OME-NGFF metadata for a well on a multi-well plate.
-    https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#plate-md"""
 
     path: str
     row_index: NonNegativeInt = Field(alias="rowIndex")
@@ -379,7 +412,7 @@ class WellIndexMeta(MetaBase):
 
 class PlateMeta(VersionMeta):
     """OME-NGFF high-content screening plate metadata.
-    https://ngff.openmicroscopy.org/0.4/index.html#plate-md"""
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#plate-md"""
 
     # SHOULD
     name: str | None = None
@@ -418,7 +451,7 @@ class PlateMeta(VersionMeta):
 
 class ImageMeta(MetaBase):
     """Image metadata field under an HCS well group.
-    https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#well-md"""
 
     # MUST if `PlateMeta.acquisitions` contains multiple acquisitions
     acquisition: int | None = None
@@ -428,7 +461,7 @@ class ImageMeta(MetaBase):
 
 class WellGroupMeta(VersionMeta):
     """OME-NGFF high-content screening well group metadata.
-    https://ngff.openmicroscopy.org/0.4/index.html#well-md"""
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#well-md"""
 
     # MUST
     images: list[ImageMeta]

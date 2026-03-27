@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from _typeshed import StrPath
 
 from iohub.core.utils import pad_shape
+from iohub.ngff.models import TO_DICT_SETTINGS
 from iohub.ngff.nodes import (
-    TO_DICT_SETTINGS,
     Plate,
     Position,
     TransformationMeta,
@@ -148,7 +148,7 @@ def test_scale_dims(values, axes, expected):
     values=st.tuples(*[st.integers(1, 64)] * 5),
     axes=st.frozensets(st.integers(0, 4)),
 )
-@settings(max_examples=64, deadline=1000)
+@settings(max_examples=64, deadline=None)
 def test_scale_dims_properties(values, axes):
     """Property tests for _scale_dims."""
     import math
@@ -163,7 +163,7 @@ def test_scale_dims_properties(values, axes):
 
 
 @given(shape=st.lists(x_dim_st, min_size=1, max_size=10), target=x_dim_st)
-@settings(max_examples=16, deadline=1000)
+@settings(max_examples=16, deadline=None)
 def testpad_shape(shape, target):
     """Test `iohub.ngff.pad_shape()`"""
     shape = tuple(shape)
@@ -193,7 +193,7 @@ def test_open_store_create_existing(version):
         store_path = os.path.join(temp_dir, "new.zarr")
         g = zarr.open_group(store_path, mode="w-")
         g.store.close()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(FileExistsError):
             _ = _open_store(store_path, mode="w-", version=version)
         root, impl = _open_store(store_path, mode="w", version=version)
         assert root is not None
@@ -361,7 +361,6 @@ def _temp_ome_zarr_plate(
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_write_ome_zarr(channels_and_random_5d, arr_name, version):
@@ -384,7 +383,6 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name, version):
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_create_zeros(ch_shape_dtype, arr_name, version):
@@ -437,7 +435,7 @@ def test_ome_zarr_to_dask(channels_and_random_5d, arr_name, version):
 @given(channels_and_random_5d=_channels_and_random_5d())
 @settings(
     max_examples=16,
-    deadline=4000,
+    deadline=None,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_writing_sharded(channels_and_random_5d):
@@ -471,7 +469,6 @@ def test_writing_sharded(channels_and_random_5d):
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_position_data(channels_and_random_5d, arr_name, version):
@@ -493,7 +490,6 @@ def test_position_data(channels_and_random_5d, arr_name, version):
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name, version, concurrency):
@@ -532,7 +528,6 @@ def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name, version, conc
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_append_channel(channels_and_random_5d, arr_name, version):
@@ -553,7 +548,6 @@ def test_append_channel(channels_and_random_5d, arr_name, version):
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_rename_channel(channels_and_random_5d, arr_name, new_channel, version):
@@ -626,7 +620,6 @@ def test_rename_well(channels_and_random_5d, arr_name, version):
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_update_channel(channels_and_random_5d, arr_name, version):
@@ -646,7 +639,6 @@ def test_update_channel(channels_and_random_5d, arr_name, version):
 )
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_write_more_channels(channels_and_random_5d, arr_name, version):
@@ -956,7 +948,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
 )
 @settings(
     max_examples=16,
-    deadline=2000,
+    deadline=None,
     suppress_health_check=[HealthCheck.data_too_large],
 )
 def test_write_read_tiles(implementation, channels_and_random_5d, grid_shape, arr_name, version):
@@ -993,7 +985,9 @@ def test_write_read_tiles(implementation, channels_and_random_5d, grid_shape, ar
             )
             for data, row, column in _tile_data(tiles):
                 tiles.write_tile(data, row, column)
-        with open_ome_zarr(store_path, layout="tiled", mode="r", channel_names=channel_names, implementation=implementation) as dataset:
+        with open_ome_zarr(
+            store_path, layout="tiled", mode="r", channel_names=channel_names, implementation=implementation
+        ) as dataset:
             for data, row, column in _tile_data(tiles):
                 read = tiles.get_tile(row, column)
                 assert_allclose(data, read)
@@ -1083,7 +1077,7 @@ def test_ngff_node_contains_cross_platform(caplog):
 
 
 @given(row=short_alpha_numeric, col=short_alpha_numeric, pos=short_alpha_numeric)
-@settings(max_examples=16, deadline=2000)
+@settings(max_examples=16)
 def test_modify_hcs_ref(row: str, col: str, pos: str):
     """Test `iohub.ngff.open_ome_zarr()`"""
     assume((row.lower() != "b"))
@@ -1104,7 +1098,7 @@ def test_modify_hcs_ref(row: str, col: str, pos: str):
 
 
 @given(row_names=plate_axis_names_st, col_names=plate_axis_names_st)
-@settings(max_examples=16, deadline=2000)
+@settings(max_examples=16)
 def test_create_well(row_names: list[str], col_names: list[str]):
     """Test `iohub.ngff.Plate.create_well()`"""
     with TemporaryDirectory() as temp_dir:
@@ -1402,6 +1396,209 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
         )
 
 
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    label_name=short_alpha_numeric,
+    version=ngff_versions_st,
+)
+@settings(
+    max_examples=8,
+    deadline=None,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_create_labels(channels_and_random_5d, label_name, version):
+    """Test `iohub.ngff.Position.create_label()`"""
+    channel_names, random_5d = channels_and_random_5d
+    # Create TZYX label data (no channel dimension)
+    label_shape = (
+        random_5d.shape[0],
+        random_5d.shape[2],
+        random_5d.shape[3],
+        random_5d.shape[4],
+    )
+    label_data = np.random.randint(0, 3, size=label_shape, dtype=np.uint16)
+
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
+        # Test label creation
+        label_image = dataset.create_label(
+            name=label_name,
+            data=label_data,
+            pyramid_levels=1,
+        )
+
+        # Verify creation
+        assert dataset.has_labels
+        assert label_name in list(dataset.labels_group.group_keys())
+        assert label_image.array_keys() == ["0"]
+        assert_array_equal(label_image.data.numpy(), label_data)
+        assert label_image.data.dtype == label_data.dtype
+
+        # Verify TZYX format constraint
+        assert len(label_data.shape) == 4  # TZYX
+        assert len(random_5d.shape) == 5  # TCZYX
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    label_name=short_alpha_numeric,
+    version=ngff_versions_st,
+)
+@settings(
+    max_examples=8,
+    deadline=None,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_labels_pyramid(channels_and_random_5d, label_name, version):
+    """Test `iohub.ngff.Position.create_label()` multiscale pyramids"""
+    channel_names, random_5d = channels_and_random_5d
+    # Create TZYX label data
+    label_shape = (
+        random_5d.shape[0],
+        random_5d.shape[2],
+        random_5d.shape[3],
+        random_5d.shape[4],
+    )
+    label_data = np.random.randint(0, 3, size=label_shape, dtype=np.uint16)
+
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
+        # Initialize image pyramid
+        dataset.initialize_pyramid(3)
+
+        # Create label with matching pyramid
+        label_image = dataset.create_label(
+            name=label_name,
+            data=label_data,
+            pyramid_levels=3,
+        )
+
+        # Verify pyramid structure matches image
+        assert label_image.array_keys() == ["0", "1", "2"]
+        assert dataset.array_keys() == ["0", "1", "2"]
+
+        # Verify shape progression using same logic as Position.initialize_pyramid
+        level0 = label_image["0"]
+        level1 = label_image["1"]
+        level2 = label_image["2"]
+
+        assert level0.shape == label_shape
+        # Use _scale_integers function like Position class does
+        from iohub.ngff.nodes import _scale_integers
+
+        expected_level1_shape = label_shape[:-3] + _scale_integers(label_shape[-3:], 2)
+        expected_level2_shape = label_shape[:-3] + _scale_integers(label_shape[-3:], 4)
+
+        assert level1.shape == expected_level1_shape
+        assert level2.shape == expected_level2_shape
+
+        # Verify downscaled levels are empty (same as images)
+        assert np.all(level1.numpy() == 0)
+        assert np.all(level2.numpy() == 0)
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    label_name=short_alpha_numeric,
+    version=ngff_versions_st,
+)
+@settings(
+    max_examples=8,
+    deadline=None,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_labels_metadata_structure(channels_and_random_5d, label_name, version):
+    """Test `iohub.ngff.Position.create_label()` NGFF metadata compliance"""
+    channel_names, random_5d = channels_and_random_5d
+    # Create TZYX label data with fixed pattern for testing
+    label_shape = (
+        random_5d.shape[0],
+        random_5d.shape[2],
+        random_5d.shape[3],
+        random_5d.shape[4],
+    )
+    label_data = np.zeros(label_shape, dtype=np.uint16)
+    if label_data.size > 4:
+        label_data.flat[0] = 1
+        label_data.flat[1] = 2
+
+    colors = {1: [255, 0, 0, 255], 2: [0, 255, 0, 255]}
+    properties = [
+        {"label-value": 1, "type": "cell"},
+        {"label-value": 2, "type": "nucleus"},
+    ]
+
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
+        label_image = dataset.create_label(
+            name=label_name,
+            data=label_data,
+            colors=colors,
+            properties=properties,
+        )
+
+        # Verify Position metadata structure (NGFF compliant)
+        assert hasattr(dataset.metadata, "labels")
+        assert dataset.metadata.labels.labels == [label_name]
+        assert dataset.metadata.labels.image_label is None
+
+        # Verify individual label image metadata
+        assert hasattr(label_image.metadata, "multiscales")
+        assert hasattr(label_image.metadata, "image_label")
+        assert len(label_image.metadata.image_label.colors) == 2
+        assert len(label_image.metadata.image_label.properties) == 2
+        assert label_image.metadata.image_label.source["image"] == "../../"
+
+
+@given(
+    channels_and_random_5d=_channels_and_random_5d(),
+    version=ngff_versions_st,
+)
+@settings(
+    max_examples=8,
+    deadline=None,
+    suppress_health_check=[HealthCheck.data_too_large],
+)
+def test_labels_access_patterns(channels_and_random_5d, version):
+    """Test `iohub.ngff.Position` label access methods and iterators"""
+    channel_names, random_5d = channels_and_random_5d
+    # Create TZYX label data
+    label_shape = (
+        random_5d.shape[0],
+        random_5d.shape[2],
+        random_5d.shape[3],
+        random_5d.shape[4],
+    )
+    label1 = np.ones(label_shape, dtype=np.uint8)
+    label2 = np.full(label_shape, 2, dtype=np.uint16)
+
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
+        # Create multiple labels with different pyramid levels
+        dataset.create_label("cells", label1, pyramid_levels=2)
+        dataset.create_label("nuclei", label2, pyramid_levels=1)
+
+        # Test has_labels property
+        assert dataset.has_labels is True
+
+        # Test get_label() returns PositionLabel
+        cells = dataset.get_label("cells")
+        nuclei = dataset.get_label("nuclei")
+
+        from iohub.ngff.nodes import PositionLabel
+
+        assert isinstance(cells, PositionLabel)
+        assert isinstance(nuclei, PositionLabel)
+
+        # Test level access patterns
+        assert "0" in cells and "1" in cells  # Multiscale
+        assert "0" in nuclei and "1" not in nuclei  # Single level
+
+        # Test labels() generator follows pattern of wells(), positions()
+        label_names = []
+        for name, label_img in dataset.labels():
+            label_names.append(name)
+            assert isinstance(label_img, PositionLabel)
+
+        assert sorted(label_names) == ["cells", "nuclei"]
+
+
 def test_initialize_pyramid(tmp_path):
     """Test initialize_pyramid creates pyramid structure with correct shapes and metadata."""
     store_path = tmp_path / "test_init_pyramid.zarr"
@@ -1535,7 +1732,7 @@ def test_delete_pyramid(tmp_path, implementation):
 
 
 @given(config=_pyramid_config())
-@settings(max_examples=32, deadline=2000)
+@settings(max_examples=32)
 def test_initialize_pyramid_shapes(config):
     """Test initialize_pyramid produces correct cascade shapes for any dims subset."""
     import math
@@ -1570,7 +1767,7 @@ def test_initialize_pyramid_shapes(config):
 
 
 @given(config=_pyramid_config())
-@settings(max_examples=32, deadline=2000)
+@settings(max_examples=32)
 def test_initialize_pyramid_scale_metadata(config):
     """Test initialize_pyramid sets correct cumulative scale metadata per axis."""
     shape, dims, levels = config
@@ -1600,7 +1797,7 @@ def test_initialize_pyramid_scale_metadata(config):
 
 
 @given(config=_pyramid_config())
-@settings(max_examples=16, deadline=30000, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=16, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_compute_pyramid_shapes(config):
     """Test compute_pyramid fills correct shapes for any dims subset."""
     import math

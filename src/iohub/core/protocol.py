@@ -29,6 +29,8 @@ class GroupBackend[G](Protocol):
 
     def close(self, group: G) -> None: ...
 
+    def get_zarr_format(self, group: G) -> int: ...
+
 
 @runtime_checkable
 class ArrayBackend[G, A](Protocol):
@@ -52,9 +54,7 @@ class ArrayBackend[G, A](Protocol):
         overwrite: bool = False,
     ) -> A:
         """Create a zarr v2 array. Only required for v0.4 store support."""
-        raise NotImplementedError(
-            f"{type(self).__name__!r} does not support zarr v2 array creation."
-        )
+        raise NotImplementedError(f"{type(self).__name__!r} does not support zarr v2 array creation.")
 
 
 @runtime_checkable
@@ -116,7 +116,6 @@ class ArrayIO[A](Protocol):
     def iter_work_regions(self, target: A) -> list[tuple[slice, ...]]:
         """Return shard/chunk-aligned regions suitable for parallel iteration."""
         ...
-
 
 
 @runtime_checkable

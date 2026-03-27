@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import threading
 from importlib.metadata import entry_points
 
 from iohub.core.config import ImplementationConfig
@@ -13,6 +14,7 @@ _logger = logging.getLogger(__name__)
 _default: str = "zarr"
 _IMPLEMENTATIONS: dict[str, type] = {}
 _discovered: bool = False
+_lock = threading.Lock()
 
 # Built-in implementations (always available, loaded before entrypoints)
 _BUILTINS: dict[str, str] = {
@@ -24,7 +26,10 @@ def _discover() -> None:
     global _discovered
     if _discovered:
         return
-    # Load builtins first
+    with _lock:
+        if _discovered:
+            return
+        # Load builtins first
     for name, path in _BUILTINS.items():
         module_path, cls_name = path.rsplit(":", 1)
         try:
@@ -45,7 +50,7 @@ def _discover() -> None:
                 f"Failed to load plugin implementation {ep.name!r}. This plugin will be unavailable. Error: {e}",
                 exc_info=True,
             )
-    _discovered = True
+        _discovered = True
 
 
 def register_implementation(name: str, cls: type) -> None:

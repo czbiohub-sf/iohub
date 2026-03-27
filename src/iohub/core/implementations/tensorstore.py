@@ -307,11 +307,12 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
     def close(self, group: _TsGroup) -> None:
         pass  # TensorStore handles are not persistent connections
 
+    def get_zarr_format(self, group: _TsGroup) -> int:
+        return 3  # TensorStore only supports zarr v3
+
     # -- Array lifecycle ---------------------------------------------------
 
     def create_array(self, group: _TsGroup, name: str, spec: ArraySpec, *, overwrite: bool = False) -> ts.TensorStore:
-        import tensorstore as ts
-
         ts_spec = _spec_to_ts(spec, str(Path(group.path) / name))
         return _ts_open(ts_spec, create=True, delete_existing=overwrite, context=self._context())
 
@@ -421,15 +422,11 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         if sharded:
             with ts.Transaction() as txn:
                 for region in self.iter_work_regions(target):
-                    target.with_transaction(txn)[region].write(
-                        downsampled.with_transaction(txn)[region]
-                    ).result()
+                    target.with_transaction(txn)[region].write(downsampled.with_transaction(txn)[region]).result()
         else:
             for region in self.iter_work_regions(target):
                 with ts.Transaction() as txn:
-                    target.with_transaction(txn)[region].write(
-                        downsampled.with_transaction(txn)[region]
-                    ).result()
+                    target.with_transaction(txn)[region].write(downsampled.with_transaction(txn)[region]).result()
 
     def downsample_region(
         self,

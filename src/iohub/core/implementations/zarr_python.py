@@ -8,6 +8,7 @@ import numpy as np
 import zarr
 
 from iohub.core.config import ZarrConfig
+from iohub.core.downsample import downsample_block, iter_work_regions, target_region_to_source
 from iohub.core.protocol import ZarrImplementation
 from iohub.core.specs import ArraySpec
 from iohub.core.types import StorePath
@@ -38,6 +39,9 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
 
     def close(self, group: zarr.Group) -> None:
         group.store.close()
+
+    def get_zarr_format(self, group: zarr.Group) -> int:
+        return group.metadata.zarr_format
 
     # -- Array lifecycle ---------------------------------------------------
 
@@ -159,70 +163,17 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         method: str = "mean",
     ) -> None:
         """Read, downsample, and write a single shard-aligned region."""
-        source_region = self._target_region_to_source(target_region, factors, source.shape)
+        source_region = target_region_to_source(target_region, factors, source.shape)
         source_data = np.asarray(source[source_region])
         local_factors = []
         for sl_src, sl_tgt, f in zip(source_region, target_region, factors):
             src_size = sl_src.stop - sl_src.start
             tgt_size = sl_tgt.stop - sl_tgt.start
             local_factors.append(max(1, src_size // tgt_size) if tgt_size > 0 else f)
-        downsampled = self._downsample_block(source_data, local_factors, method)
+        downsampled = downsample_block(source_data, local_factors, method)
         target[target_region] = downsampled
 
     def iter_work_regions(self, target: zarr.Array) -> list[tuple[slice, ...]]:
         """Return shard/chunk-aligned regions for parallel iteration."""
-        import itertools
-
         step_shape = self.get_shards(target) or target.chunks
-        dim_ranges = []
-        for total, step in zip(target.shape, step_shape):
-            dim_ranges.append([slice(s, min(s + step, total)) for s in range(0, total, step)])
-        return [tuple(r) for r in itertools.product(*dim_ranges)]
-
-    # -- Downsample internals ----------------------------------------------
-
-    @staticmethod
-    def _downsample_block(data: np.ndarray, factors: list[int], method: str) -> np.ndarray:
-        """Downsample an N-D numpy block by integer factors."""
-        trim_slices = tuple(slice(0, (s // f) * f) for s, f in zip(data.shape, factors))
-        data = data[trim_slices]
-
-        if method == "stride":
-            return data[tuple(slice(None, None, f) for f in factors)]
-
-        new_shape = []
-        reduce_axes = []
-        for i, (s, f) in enumerate(zip(data.shape, factors)):
-            new_shape.extend([s // f, f])
-            reduce_axes.append(2 * i + 1)
-        data = data.reshape(new_shape)
-
-        reduce_axes = tuple(reduce_axes)
-        if method == "mean":
-            return data.mean(axis=reduce_axes).astype(data.dtype)
-        elif method == "median":
-            return np.median(data, axis=reduce_axes).astype(data.dtype)
-        elif method == "min":
-            return data.min(axis=reduce_axes)
-        elif method == "max":
-            return data.max(axis=reduce_axes)
-        elif method == "mode":
-            from scipy import stats
-
-            orig_shape = tuple(s // f for s, f in zip(data.shape[::2], factors))
-            flat = data.reshape(*orig_shape, -1)
-            return stats.mode(flat, axis=-1, keepdims=False).mode.astype(data.dtype)
-        else:
-            raise ValueError(f"Unknown downsample method: {method!r}")
-
-    @staticmethod
-    def _target_region_to_source(
-        target_region: tuple[slice, ...], factors: list[int], source_shape: tuple[int, ...]
-    ) -> tuple[slice, ...]:
-        """Map a target region back to the corresponding source region."""
-        source_slices = []
-        for sl, f, src_dim in zip(target_region, factors, source_shape):
-            start = sl.start * f
-            stop = min(sl.stop * f, src_dim)
-            source_slices.append(slice(start, stop))
-        return tuple(source_slices)
+        return iter_work_regions(target.shape, step_shape)

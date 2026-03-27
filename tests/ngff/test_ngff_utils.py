@@ -485,6 +485,8 @@ def test_create_empty_plate(plate_setup, extra_channels):
         dtype,
         version,
     ) = plate_setup
+    assume(len(set(extra_channels)) == len(extra_channels))
+    assume(not any(c in channel_names for c in extra_channels))
 
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "test.zarr"

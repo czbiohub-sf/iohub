@@ -27,7 +27,7 @@ from iohub.core.registry import (
     register_implementation,
     set_default_implementation,
 )
-from iohub.core.specs import ArraySpec, make_array_spec
+from iohub.core.specs import ArraySpec
 from iohub.core.types import (
     AccessMode,
     NGFFVersion,
@@ -67,7 +67,6 @@ __all__ = [
     "set_default_implementation",
     # Specs
     "ArraySpec",
-    "make_array_spec",
     # Compat
     "zarr_format_for_version",
     "ngff_version_for_format",
