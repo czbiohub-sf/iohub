@@ -1,6 +1,5 @@
 import pytest
 
-from iohub._deprecated.singlepagetiff import MicromanagerSequenceReader
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
 from iohub.reader import read_images, sizeof_fmt
@@ -34,8 +33,8 @@ def test_detect_ndtiff(data_path):
 
 @pytest.mark.parametrize("data_path", mm2gamma_singlepage_tiffs)
 def test_detect_single_page_tiff(data_path):
-    reader = read_images(data_path)
-    assert isinstance(reader, MicromanagerSequenceReader)
+    with pytest.raises(NotImplementedError, match="Single-page TIFF"):
+        read_images(data_path)
 
 
 @pytest.mark.parametrize(

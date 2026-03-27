@@ -101,11 +101,7 @@ with open_ome_zarr(dataset_path, layout="fov", mode="r+") as position:
 # 4. Read back and demonstrate access patterns
 print("4. Reading labels back...")
 with open_ome_zarr(dataset_path, layout="fov", mode="r") as position:
-    available_labels = (
-        list(position.labels_group.group_keys())
-        if position.labels_group
-        else []
-    )
+    available_labels = list(position.labels_group.group_keys()) if position.labels_group else []
     print(f"   Available labels: {available_labels}")
 
     # Access specific labels

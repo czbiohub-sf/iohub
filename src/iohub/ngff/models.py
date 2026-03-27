@@ -311,9 +311,7 @@ class LabelsMeta(MetaBase):
     # MUST: list of paths to labeled multiscale images
     labels: list[str]
     # MAY: metadata for individual labels
-    image_label: PositionLabelMeta | None = Field(
-        alias="image-label", default=None
-    )
+    image_label: PositionLabelMeta | None = Field(alias="image-label", default=None)
 
 
 class LabelColorMeta(MetaBase):
@@ -357,10 +355,7 @@ class PositionLabelMeta(VersionMeta):
             return v
         for i, prop in enumerate(v):
             if "label-value" not in prop and "label_value" not in prop:
-                raise ValueError(
-                    f"Property {i} must include 'label-value' field "
-                    "per NGFF spec"
-                )
+                raise ValueError(f"Property {i} must include 'label-value' field per NGFF spec")
         return v
 
 

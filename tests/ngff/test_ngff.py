@@ -33,6 +33,7 @@ from iohub.ngff.nodes import (
     _case_insensitive_local_fs,
     _open_store,
     _pad_shape,
+    _scale_dims,
     open_ome_zarr,
 )
 from tests.conftest import hcs_ref
@@ -65,6 +66,26 @@ plate_axis_names_st = st.lists(
     max_size=8,
     unique_by=(lambda x: x.lower()),
 )
+_dims_st = st.frozensets(
+    st.sampled_from(["z", "y", "x"]),
+    min_size=1,
+    max_size=3,
+)
+
+
+@st.composite
+def _pyramid_config(draw):
+    """Random TCZYX shape (including odd dims), dims subset, and level count."""
+    shape = (
+        draw(t_dim_st),
+        draw(c_dim_st),
+        draw(z_dim_st),
+        draw(y_dim_st),
+        draw(x_dim_st),
+    )
+    dims = draw(_dims_st)
+    levels = draw(st.integers(2, 4))
+    return shape, dims, levels
 
 
 @st.composite
@@ -101,6 +122,44 @@ def _channels_and_random_5d(draw):
     channel_names, shape, dtype = draw(_channels_and_random_5d_shape_and_dtype())
     random_5d = draw(npst.arrays(dtype, shape=shape))
     return channel_names, random_5d
+
+
+@pytest.mark.parametrize(
+    "values, axes, expected",
+    [
+        # all axes downsampled
+        ((4, 8, 16), {0, 1, 2}, (2, 4, 8)),
+        # subset of axes
+        ((4, 8, 16), {1, 2}, (4, 4, 8)),
+        # no axes — identity
+        ((4, 8, 16), set(), (4, 8, 16)),
+        # odd values round up
+        ((3, 7, 5), {0, 1, 2}, (2, 4, 3)),
+        # single element
+        ((1,), {0}, (1,)),
+    ],
+)
+def test_scale_dims(values, axes, expected):
+    """Test `iohub.ngff._scale_dims()`"""
+    assert _scale_dims(values, axes) == expected
+
+
+@given(
+    values=st.tuples(*[st.integers(1, 64)] * 5),
+    axes=st.frozensets(st.integers(0, 4)),
+)
+@settings(max_examples=64, deadline=1000)
+def test_scale_dims_properties(values, axes):
+    """Property tests for _scale_dims."""
+    import math
+
+    result = _scale_dims(values, axes)
+    assert len(result) == len(values)
+    for i, (v, r) in enumerate(zip(values, result)):
+        if i in axes:
+            assert r == math.ceil(v / 2)
+        else:
+            assert r == v
 
 
 @given(shape=st.lists(x_dim_st, min_size=1, max_size=10), target=x_dim_st)
@@ -1363,9 +1422,7 @@ def test_create_labels(channels_and_random_5d, label_name, version):
     )
     label_data = np.random.randint(0, 3, size=label_shape, dtype=np.uint16)
 
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         # Test label creation
         label_image = dataset.create_label(
             name=label_name,
@@ -1407,9 +1464,7 @@ def test_labels_pyramid(channels_and_random_5d, label_name, version):
     )
     label_data = np.random.randint(0, 3, size=label_shape, dtype=np.uint16)
 
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         # Initialize image pyramid
         dataset.initialize_pyramid(3)
 
@@ -1433,12 +1488,8 @@ def test_labels_pyramid(channels_and_random_5d, label_name, version):
         # Use _scale_integers function like Position class does
         from iohub.ngff.nodes import _scale_integers
 
-        expected_level1_shape = label_shape[:-3] + _scale_integers(
-            label_shape[-3:], 2
-        )
-        expected_level2_shape = label_shape[:-3] + _scale_integers(
-            label_shape[-3:], 4
-        )
+        expected_level1_shape = label_shape[:-3] + _scale_integers(label_shape[-3:], 2)
+        expected_level2_shape = label_shape[:-3] + _scale_integers(label_shape[-3:], 4)
 
         assert level1.shape == expected_level1_shape
         assert level2.shape == expected_level2_shape
@@ -1458,9 +1509,7 @@ def test_labels_pyramid(channels_and_random_5d, label_name, version):
     deadline=3000,
     suppress_health_check=[HealthCheck.data_too_large],
 )
-def test_labels_metadata_structure(
-    channels_and_random_5d, label_name, version
-):
+def test_labels_metadata_structure(channels_and_random_5d, label_name, version):
     """Test `iohub.ngff.Position.create_label()` NGFF metadata compliance"""
     channel_names, random_5d = channels_and_random_5d
     # Create TZYX label data with fixed pattern for testing
@@ -1481,9 +1530,7 @@ def test_labels_metadata_structure(
         {"label-value": 2, "type": "nucleus"},
     ]
 
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         label_image = dataset.create_label(
             name=label_name,
             data=label_data,
@@ -1526,9 +1573,7 @@ def test_labels_access_patterns(channels_and_random_5d, version):
     label1 = np.ones(label_shape, dtype=np.uint8)
     label2 = np.full(label_shape, 2, dtype=np.uint16)
 
-    with _temp_ome_zarr(
-        random_5d, channel_names, "0", version=version
-    ) as dataset:
+    with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         # Create multiple labels with different pyramid levels
         dataset.create_label("cells", label1, pyramid_levels=2)
         dataset.create_label("nuclei", label2, pyramid_levels=1)
@@ -1596,12 +1641,7 @@ def test_initialize_pyramid(tmp_path):
 
         # Verify scale transforms are updated for each level
         for level in range(levels):
-            level_scale = (
-                pos.metadata.multiscales[0]
-                .datasets[level]
-                .coordinate_transformations[0]
-                .scale
-            )
+            level_scale = pos.metadata.multiscales[0].datasets[level].coordinate_transformations[0].scale
             expected_factor = 2**level
             assert level_scale[-3:] == [
                 scale[-3] * expected_factor,
@@ -1687,3 +1727,105 @@ def test_delete_pyramid(tmp_path):
     with open_ome_zarr(store_path, mode="r") as pos:
         dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
         assert dataset_paths == ["0"]
+
+
+@given(config=_pyramid_config())
+@settings(max_examples=32, deadline=2000)
+def test_initialize_pyramid_shapes(config):
+    """Test initialize_pyramid produces correct cascade shapes for any dims subset."""
+    import math
+
+    shape, dims, levels = config
+    channel_names = ["ch0"] * shape[1]
+
+    with TemporaryDirectory() as tmp:
+        store_path = Path(tmp) / "pyramid-test.zarr"
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+            pos.create_zeros("0", shape=shape, dtype=np.float32)
+            pos.initialize_pyramid(levels=levels, dims=dims)
+
+            assert len(pos.array_keys()) == levels
+
+            axis_names = pos.axis_names
+            prev_shape = shape
+            for level in range(1, levels):
+                current_shape = pos[str(level)].shape
+                for i, name in enumerate(axis_names):
+                    if name in dims:
+                        assert current_shape[i] == math.ceil(prev_shape[i] / 2), (
+                            f"Level {level} axis '{name}': expected ceil({prev_shape[i]}/2)="
+                            f"{math.ceil(prev_shape[i] / 2)}, got {current_shape[i]}"
+                        )
+                    else:
+                        assert current_shape[i] == prev_shape[i], (
+                            f"Level {level} axis '{name}' should be unchanged: "
+                            f"expected {prev_shape[i]}, got {current_shape[i]}"
+                        )
+                prev_shape = current_shape
+
+
+@given(config=_pyramid_config())
+@settings(max_examples=32, deadline=2000)
+def test_initialize_pyramid_scale_metadata(config):
+    """Test initialize_pyramid sets correct cumulative scale metadata per axis."""
+    shape, dims, levels = config
+    channel_names = ["ch0"] * shape[1]
+
+    with TemporaryDirectory() as tmp:
+        store_path = Path(tmp) / "pyramid-test.zarr"
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+            pos.create_zeros("0", shape=shape, dtype=np.float32)
+            pos.initialize_pyramid(levels=levels, dims=dims)
+
+            axis_names = pos.axis_names
+            base_scale = pos.get_effective_scale("0")
+            for level in range(1, levels):
+                level_scale = pos.get_effective_scale(str(level))
+                for i, name in enumerate(axis_names):
+                    if name in dims:
+                        assert level_scale[i] == pytest.approx(base_scale[i] * 2**level), (
+                            f"Level {level} axis '{name}': scale should be "
+                            f"{base_scale[i] * 2**level}, got {level_scale[i]}"
+                        )
+                    else:
+                        assert level_scale[i] == pytest.approx(base_scale[i]), (
+                            f"Level {level} axis '{name}': scale should be unchanged "
+                            f"{base_scale[i]}, got {level_scale[i]}"
+                        )
+
+
+@given(config=_pyramid_config())
+@settings(max_examples=16, deadline=30000, suppress_health_check=[HealthCheck.too_slow])
+def test_compute_pyramid_shapes(config):
+    """Test compute_pyramid fills correct shapes for any dims subset."""
+    import math
+
+    pytest.importorskip("tensorstore")
+    shape, dims, levels = config
+    channel_names = ["ch0"] * shape[1]
+
+    with TemporaryDirectory() as tmp:
+        store_path = Path(tmp) / "test.zarr"
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+            pos.create_zeros("0", shape=shape, dtype=np.float32)
+            pos.compute_pyramid(levels=levels, dims=dims)
+
+            axis_names = pos.axis_names
+            prev_shape = shape
+            for level in range(1, levels):
+                current_shape = pos[str(level)].shape
+                for i, name in enumerate(axis_names):
+                    if name in dims:
+                        assert current_shape[i] == math.ceil(prev_shape[i] / 2)
+                    else:
+                        assert current_shape[i] == prev_shape[i]
+                prev_shape = current_shape
+
+
+def test_initialize_pyramid_invalid_dims(tmp_path):
+    """Test that unknown axis names in dims raise ValueError."""
+    store_path = tmp_path / "test.zarr"
+    with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=["ch0"]) as pos:
+        pos.create_zeros("0", shape=(1, 1, 2, 8, 8), dtype=np.float32)
+        with pytest.raises(ValueError, match="not in dataset axes"):
+            pos.initialize_pyramid(levels=2, dims={"w"})

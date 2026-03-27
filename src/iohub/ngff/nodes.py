@@ -18,7 +18,6 @@ from typing import (
     Callable,
     Generator,
     Literal,
-    Sequence,
     Type,
     TypeAlias,
     overload,
@@ -97,9 +96,14 @@ def _open_store(
     return root
 
 
-def _scale_integers(values: Sequence[int], factor: int) -> tuple[int, ...]:
-    """Computes the ceiling of the input sequence divided by the factor."""
+def _scale_integers(values: tuple[int, ...], factor: int) -> tuple[int, ...]:
+    """Divide all values by factor, rounding up (ceiling division)."""
     return tuple(int(math.ceil(v / factor)) for v in values)
+
+
+def _scale_dims(values: tuple[int, ...], axes: set[int]) -> tuple[int, ...]:
+    """Halve values at the given indices, rounding up (ceiling division)."""
+    return tuple(int(math.ceil(v / 2)) if i in axes else v for i, v in enumerate(values))
 
 
 def _case_insensitive_local_fs() -> bool:
@@ -387,10 +391,7 @@ class NGFFMultiscalesNode(NGFFNode):
         try:
             return self["0"]
         except KeyError:
-            raise KeyError(
-                f"There is no array named '0' "
-                f"in the group of: {self.array_keys()}"
-            )
+            raise KeyError(f"There is no array named '0' in the group of: {self.array_keys()}")
 
     def __getitem__(self, key: int | str):
         """Get an array at a specific resolution level.
@@ -413,9 +414,7 @@ class NGFFMultiscalesNode(NGFFNode):
         if isinstance(znode, zarr.Array):
             return self._MEMBER_TYPE.from_zarr_array(znode)
         else:
-            raise TypeError(
-                f"Expected zarr.Array at level '{key}', got {type(znode)}"
-            )
+            raise TypeError(f"Expected zarr.Array at level '{key}', got {type(znode)}")
 
     def __setitem__(self, key, value: NDArray):
         """Write array data to a specific resolution level.
@@ -429,15 +428,11 @@ class NGFFMultiscalesNode(NGFFNode):
         """
         key = normalize_path(str(key))
         if not isinstance(value, np.ndarray):
-            raise TypeError(
-                f"Value must be a NumPy array. Got type {type(value)}."
-            )
+            raise TypeError(f"Value must be a NumPy array. Got type {type(value)}.")
         self._create_from_data(key, value)
 
     @staticmethod
-    def _default_chunks(
-        shape: tuple[int, ...], last_data_dims: int
-    ) -> tuple[int, ...]:
+    def _default_chunks(shape: tuple[int, ...], last_data_dims: int) -> tuple[int, ...]:
         """Default chunking strategy for arrays.
 
         Parameters
@@ -477,11 +472,7 @@ class NGFFMultiscalesNode(NGFFNode):
         else:
             from numcodecs import Blosc
 
-            return {
-                "compressor": Blosc(
-                    cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE
-                )
-            }
+            return {"compressor": Blosc(cname="zstd", clevel=1, shuffle=Blosc.BITSHUFFLE)}
 
     def _create_from_data(self, key, value):
         """Create array from data. Override in subclass.
@@ -499,9 +490,7 @@ class NGFFMultiscalesNode(NGFFNode):
         array_class: type[NGFFNDArray],
         shards_ratio: tuple[int, ...] | None = None,
         data: NDArray | None = None,
-        metadata_callback: (
-            Callable[[str, list[TransformationMeta] | None], None] | None
-        ) = None,
+        metadata_callback: (Callable[[str, list[TransformationMeta] | None], None] | None) = None,
         transform: list[TransformationMeta] | None = None,
     ) -> NGFFNDArray:
         """Create zarr array with optional data and metadata.
@@ -565,10 +554,7 @@ class NGFFMultiscalesNode(NGFFNode):
         """
         if shards_ratio:
             if len(shards_ratio) != len(shape):
-                raise ValueError(
-                    f"Sharding ratio length {len(shards_ratio)} "
-                    f"does not match shape length {len(shape)}."
-                )
+                raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
             shards = tuple(c * s for c, s in zip(chunks, shards_ratio))
         else:
             shards = None
@@ -581,9 +567,7 @@ class NGFFMultiscalesNode(NGFFNode):
             "fill_value": 0,
             "dimension_names": (
                 # Only for zarr v3: use axis names from metadata
-                [ax.name for ax in self.axes[: len(shape)]]
-                if self._zarr_format == 3
-                else None
+                [ax.name for ax in self.axes[: len(shape)]] if self._zarr_format == 3 else None
             ),
             "chunk_key_encoding": ChunkKeyEncodingParams(
                 # v3 uses "default", v2 uses "v2" encoding
@@ -652,35 +636,27 @@ class NGFFMultiscalesNode(NGFFNode):
         >>> # Calculate parameters for level 1 (2x downscaling)
         >>> shape, chunks, transforms = self._calculate_pyramid_params(
         ...     source_array=position.data,  # shape (1, 3, 512, 512, 512)
-        ...     level=1
+        ...     level=1,
         ... )
         >>> shape  # (1, 3, 256, 256, 256) - spatial dims halved
         >>> transforms[0].scale  # [1.0, 1.0, 2.0, 2.0, 2.0] - 2x on spatial
 
         >>> # Level 2 (4x downscaling)
-        >>> shape, chunks, transforms = self._calculate_pyramid_params(
-        ...     source_array=position.data,
-        ...     level=2
-        ... )
+        >>> shape, chunks, transforms = self._calculate_pyramid_params(source_array=position.data, level=2)
         >>> shape  # (1, 3, 128, 128, 128) - spatial dims quartered
         >>> transforms[0].scale  # [1.0, 1.0, 4.0, 4.0, 4.0] - 4x on spatial
         """
         factor = 2**level
 
-        downscaled_shape = source_array.shape[:-3] + _scale_integers(
-            source_array.shape[-3:], factor
-        )
+        downscaled_shape = source_array.shape[:-3] + _scale_integers(source_array.shape[-3:], factor)
 
-        downscaled_chunks = _pad_shape(
-            _scale_integers(source_array.chunks, factor), len(downscaled_shape)
-        )
+        downscaled_chunks = _pad_shape(_scale_integers(source_array.chunks, factor), len(downscaled_shape))
 
         # Leading dims (T, C) scale=1.0, spatial (ZYX) scale=factor
         transforms = [
             TransformationMeta(
                 type="scale",
-                scale=[1.0] * (len(source_array.shape) - 3)
-                + [float(factor)] * 3,
+                scale=[1.0] * (len(source_array.shape) - 3) + [float(factor)] * 3,
             )
         ]
 
@@ -796,9 +772,7 @@ class NGFFNDArray(zarr.Array):
         if "read" in kwargs or "write" in kwargs:
             raise ValueError("Cannot override file mode for the Zarr store.")
 
-        zarr_dataset = ts.open(
-            ts_spec, read=True, write=not self.read_only, **kwargs
-        ).result()
+        zarr_dataset = ts.open(ts_spec, read=True, write=not self.read_only, **kwargs).result()
 
         return zarr_dataset
 
@@ -990,9 +964,7 @@ class LabelsArray(NGFFNDArray):
 
     def downscale(self):
         """Labels downscaling is not supported."""
-        raise NotImplementedError(
-            "Downscaling is not implemented for labels arrays."
-        )
+        raise NotImplementedError("Downscaling is not implemented for labels arrays.")
 
 
 class PositionLabel(NGFFMultiscalesNode):
@@ -1048,18 +1020,13 @@ class PositionLabel(NGFFMultiscalesNode):
         else:
             self.axes = [
                 TimeAxisMeta(name="T", unit="second"),
-                *[
-                    SpaceAxisMeta(name=i, unit="micrometer")
-                    for i in ("Z", "Y", "X")
-                ],
+                *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("Z", "Y", "X")],
             ]
 
         super().__init__(
             group=group,
             parse_meta=parse_meta,
-            channel_names=[
-                "label"
-            ],  # Dummy channel name for labels (no actual channels)
+            channel_names=["label"],  # Dummy channel name for labels (no actual channels)
             axes=self.axes,
             version=version,
             overwriting_creation=overwriting_creation,
@@ -1071,9 +1038,7 @@ class PositionLabel(NGFFMultiscalesNode):
     def _parse_meta(self):
         """Parse multiscales and image-label metadata."""
         try:
-            self.metadata = LabelImageMeta.model_validate(
-                self.maybe_wrapped_ome_attrs
-            )
+            self.metadata = LabelImageMeta.model_validate(self.maybe_wrapped_ome_attrs)
         except ValidationError as e:
             _logger.warning(str(e))
             self._warn_invalid_meta()
@@ -1130,9 +1095,7 @@ class PositionLabel(NGFFMultiscalesNode):
             raise TypeError("Label data must be a NumPy array")
 
         if not np.issubdtype(data.dtype, np.integer):
-            raise ValueError(
-                f"Label data must be an integer dtype, got {data.dtype}."
-            )
+            raise ValueError(f"Label data must be an integer dtype, got {data.dtype}.")
 
         if chunks is None:
             chunks = self._default_chunks(data.shape, last_data_dims=3)
@@ -1219,9 +1182,7 @@ class PositionLabel(NGFFMultiscalesNode):
         source_array = self[source_level]
 
         for level in range(1, levels):
-            downscaled_shape, downscaled_chunks, transforms = (
-                self._calculate_pyramid_params(source_array, level)
-            )
+            downscaled_shape, downscaled_chunks, transforms = self._calculate_pyramid_params(source_array, level)
 
             self.create_zeros(
                 level=str(level),
@@ -1238,13 +1199,9 @@ class PositionLabel(NGFFMultiscalesNode):
     ):
         """Create or update multiscales metadata for this label image."""
         if not transform:
-            transform = [
-                TransformationMeta(type="scale", scale=[1.0] * len(self.axes))
-            ]
+            transform = [TransformationMeta(type="scale", scale=[1.0] * len(self.axes))]
 
-        dataset_meta = DatasetMeta(
-            path=level, coordinate_transformations=transform
-        )
+        dataset_meta = DatasetMeta(path=level, coordinate_transformations=transform)
 
         image_label_meta = self._create_image_label_meta()
 
@@ -1262,10 +1219,7 @@ class PositionLabel(NGFFMultiscalesNode):
                 image_label=image_label_meta,
                 version="0.5" if self.version == "0.5" else None,
             )
-        elif (
-            dataset_meta.path
-            not in self.metadata.multiscales[0].get_dataset_paths()
-        ):
+        elif dataset_meta.path not in self.metadata.multiscales[0].get_dataset_paths():
             self.metadata.multiscales[0].datasets.append(dataset_meta)
 
         self.dump_meta()
@@ -1289,20 +1243,14 @@ class PositionLabel(NGFFMultiscalesNode):
                         val = val.item()
                     # Validate bounds
                     if not (0 <= val <= 255):
-                        raise ValueError(
-                            f"Color values must be 0-255, got {val}"
-                        )
+                        raise ValueError(f"Color values must be 0-255, got {val}")
                     # Normalize: values > 1 are assumed 0-255 scale
                     if isinstance(val, int) or val > 1:
                         rgba_normalized.append(val / 255.0)
                     else:
                         rgba_normalized.append(float(val))
 
-                label_colors.append(
-                    LabelColorMeta(
-                        label_value=label_value, rgba=rgba_normalized
-                    )
-                )
+                label_colors.append(LabelColorMeta(label_value=label_value, rgba=rgba_normalized))
 
         label_properties = []
         if self._properties:
@@ -1311,10 +1259,7 @@ class PositionLabel(NGFFMultiscalesNode):
                     prop = prop.copy()
                     prop["label-value"] = prop.pop("label_id")
                 elif "label-value" not in prop:
-                    _logger.warning(
-                        f"Skipping property without 'label-value' field: "
-                        f"{list(prop.keys())}"
-                    )
+                    _logger.warning(f"Skipping property without 'label-value' field: {list(prop.keys())}")
                     continue
                 label_properties.append(prop)
 
@@ -1676,7 +1621,11 @@ class Position(NGFFMultiscalesNode):
         ortho_sel[ch_ax] = ch_idx
         img.set_orthogonal_selection(tuple(ortho_sel), data)
 
-    def initialize_pyramid(self, levels: int) -> None:
+    def initialize_pyramid(
+        self,
+        levels: int,
+        dims: set[str] | None = None,
+    ) -> None:
         """
         Initializes the pyramid arrays with a down scaling of 2 per level.
         Decimals shapes are rounded up to ceiling.
@@ -1685,30 +1634,52 @@ class Position(NGFFMultiscalesNode):
         Parameters
         ----------
         levels : int
-            Number of down scaling levels, if levels is 1 nothing happens.
+            Number of pyramid levels. If 1, nothing happens.
+        dims : set[str] | None, optional
+            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
+            Must be a subset of the dataset's axis names.
+            Defaults to ``{"z", "y", "x"}``, must be lowercase.
         """
-        array = self.data
+        if dims is None:
+            dims = {"z", "y", "x"}
+
+        axis_names = self.axis_names
+        for name in dims:
+            if name not in axis_names:
+                raise ValueError(f"Axis '{name}' not in dataset axes {axis_names}.")
+
+        axes = {i for i, name in enumerate(axis_names) if name in dims}
+
+        prev_shape = self.data.shape
+        prev_chunks = self.data.chunks
+        prev_shards = self.data.shards
 
         for level in range(1, levels):
-            shape, chunks, transforms = self._calculate_pyramid_params(
-                array, level
-            )
-            factor = 2**level
+            factor = 2**level  # cumulative scale for metadata
 
-            if array.shards is not None:
-                shards = array.shards[:-3] + _scale_integers(
-                    array.shards[-3:], factor
-                )
-                shards_ratio = tuple(
-                    s // c for c, s in zip(chunks, shards)
-                )
+            shape = _scale_dims(prev_shape, axes)
+            chunks = _scale_dims(prev_chunks, axes)
+
+            if prev_shards is not None:
+                prev_shards = _scale_dims(prev_shards, axes)
+                shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards))
             else:
                 shards_ratio = None
+
+            transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
+            for tr in transforms:
+                if tr.type == "scale":
+                    for i, name in enumerate(axis_names):
+                        if name in dims:
+                            tr.scale[i] *= factor
+
+            prev_shape = shape
+            prev_chunks = chunks
 
             self.create_zeros(
                 name=str(level),
                 shape=shape,
-                dtype=array.dtype,
+                dtype=self.data.dtype,
                 chunks=chunks,
                 shards_ratio=shards_ratio,
                 transform=transforms,
@@ -1718,6 +1689,7 @@ class Position(NGFFMultiscalesNode):
         self,
         levels: int | None = None,
         method: str = "mean",
+        dims: set[str] | None = None,
     ) -> None:
         """Compute pyramid by downsampling from source level.
 
@@ -1732,6 +1704,10 @@ class Position(NGFFMultiscalesNode):
         method : str, optional
             Downsampling method: "mean", "median", "mode", "min", "max",
             "stride". By default "mean".
+        dims : set[str] | None, optional
+            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
+            Forwarded to ``initialize_pyramid`` when creating the pyramid
+            structure. Defaults to ``{"z", "y", "x"}``.
 
         Raises
         ------
@@ -1765,7 +1741,7 @@ class Position(NGFFMultiscalesNode):
             levels = num_arrays
 
         if num_arrays == 1:
-            self.initialize_pyramid(levels=levels)
+            self.initialize_pyramid(levels=levels, dims=dims)
         elif num_arrays != levels:
             raise ValueError(
                 f"Pyramid structure exists with {num_arrays} levels but "
@@ -2040,10 +2016,7 @@ class Position(NGFFMultiscalesNode):
     @property
     def has_labels(self) -> bool:
         """Check if this position has any labels."""
-        return (
-            "labels" in self._group
-            and len(list(self.labels_group.group_keys())) > 0
-        )
+        return "labels" in self._group and len(list(self.labels_group.group_keys())) > 0
 
     def create_labels_group(self) -> zarr.Group:
         """Create the labels subgroup if it doesn't exist."""
@@ -2101,10 +2074,7 @@ class Position(NGFFMultiscalesNode):
             raise KeyError("No labels group exists in this position")
 
         if name not in self.labels_group:
-            raise KeyError(
-                f"Label '{name}' not found. "
-                f"Available labels: {self.label_names()}"
-            )
+            raise KeyError(f"Label '{name}' not found. Available labels: {self.label_names()}")
 
         zgroup = self.labels_group[name]
 
@@ -2177,8 +2147,8 @@ class Position(NGFFMultiscalesNode):
         >>>
         >>> # Define colors for visualization (RGBA integers 0-255)
         >>> colors = {
-        ...     1: [255, 0, 0, 255],    # Red for cell 1
-        ...     2: [0, 255, 0, 255],    # Green for cell 2
+        ...     1: [255, 0, 0, 255],  # Red for cell 1
+        ...     2: [0, 255, 0, 255],  # Green for cell 2
         ... }
         >>>
         >>> # Define properties for each label value
@@ -2198,9 +2168,9 @@ class Position(NGFFMultiscalesNode):
         ...     )
         ...
         ...     # Access different resolution levels
-        ...     high_res = cells["0"]      # Highest resolution
-        ...     medium_res = cells["1"]    # 2x downscaled
-        ...     low_res = cells["2"]       # 4x downscaled
+        ...     high_res = cells["0"]  # Highest resolution
+        ...     medium_res = cells["1"]  # 2x downscaled
+        ...     low_res = cells["2"]  # 4x downscaled
         ...
         ...     # Iterate over all labels
         ...     for name, label in position.labels():
@@ -2221,25 +2191,18 @@ class Position(NGFFMultiscalesNode):
 
         # Ensure integer dtype for labels
         if not np.issubdtype(data.dtype, np.integer):
-            raise ValueError(
-                f"Label data must be an integer dtype, got {data.dtype}."
-            )
+            raise ValueError(f"Label data must be an integer dtype, got {data.dtype}.")
 
         # Validate dimensionality (TZYX, no channel)
         expected_dims = len(self.label_axes)
         if len(data.shape) != expected_dims:
-            raise ValueError(
-                f"Label data must be {expected_dims}D (TZYX), "
-                f"got {len(data.shape)}D shape: {data.shape}"
-            )
+            raise ValueError(f"Label data must be {expected_dims}D (TZYX), got {len(data.shape)}D shape: {data.shape}")
 
         # Create labels group if it doesn't exist
         labels_group = self.create_labels_group()
 
         # Create label image group
-        label_group = labels_group.create_group(
-            name, overwrite=self._overwrite
-        )
+        label_group = labels_group.create_group(name, overwrite=self._overwrite)
 
         # Create PositionLabel with proper axes (TZYX, no channel)
         label_image = PositionLabel(
@@ -2252,9 +2215,7 @@ class Position(NGFFMultiscalesNode):
             overwriting_creation=self._overwrite,
         )
 
-        label_image.create_label(
-            "0", data, chunks=chunks, shards_ratio=shards_ratio
-        )
+        label_image.create_label("0", data, chunks=chunks, shards_ratio=shards_ratio)
 
         if pyramid_levels > 1:
             label_image.initialize_pyramid(pyramid_levels)
