@@ -39,6 +39,8 @@ dependencies = [
     "blosc2",
     "xarray>=2024.1.1",
     "dask[array]",
+    "submitit>=1.5.4",
+    "scipy>=1.17.0",
 ]
 dynamic = ["version"]
 
