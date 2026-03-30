@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -89,7 +88,7 @@ class _TsGroup:
         self._impl = impl
         self.zarr_driver = zarr_driver
 
-    def create_group(self, name: str, overwrite: bool = False) -> "_TsGroup":
+    def create_group(self, name: str, overwrite: bool = False) -> _TsGroup:
         sub = self.path / name
         if sub.exists() and not overwrite:
             return _TsGroup(path=sub, mode=self.mode, impl=self._impl, zarr_driver=self.zarr_driver)
@@ -167,7 +166,9 @@ class _TsGroup:
         if max_level is not None and depth >= max_level:
             return
         try:
-            children = sorted(d for d in os.listdir(p) if (p / d).is_dir() and not d.startswith("."))
+            children = sorted(
+                d for d in (entry.name for entry in p.iterdir()) if (p / d).is_dir() and not d.startswith(".")
+            )
         except OSError:
             return
         for i, child in enumerate(children):
@@ -269,7 +270,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         keys = []
         match group.zarr_driver:
             case "zarr3":
-                for d in os.listdir(p):
+                for d in (entry.name for entry in p.iterdir()):
                     sub = p / d
                     if not sub.is_dir() or d.startswith("."):
                         continue
@@ -280,7 +281,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
                     except (OSError, ValueError):
                         pass
             case "zarr2":
-                keys = [d for d in os.listdir(p) if (p / d / ".zgroup").exists()]
+                keys = [d for d in (entry.name for entry in p.iterdir()) if (p / d / ".zgroup").exists()]
         return sorted(keys)
 
     def array_keys(self, group: _TsGroup) -> list[str]:
@@ -290,7 +291,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         keys = []
         match group.zarr_driver:
             case "zarr3":
-                for d in os.listdir(p):
+                for d in (entry.name for entry in p.iterdir()):
                     sub = p / d
                     if not sub.is_dir():
                         continue
@@ -301,7 +302,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
                     except (OSError, ValueError):
                         pass
             case "zarr2":
-                keys = [d for d in os.listdir(p) if (p / d / ".zarray").exists()]
+                keys = [d for d in (entry.name for entry in p.iterdir()) if (p / d / ".zarray").exists()]
         return sorted(keys)
 
     def close(self, group: _TsGroup) -> None:
@@ -449,7 +450,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         cl = target.chunk_layout
         write_shape = cl.write_chunk.shape or target.shape
         dim_ranges = []
-        for dim, (total, step) in enumerate(zip(target.shape, write_shape)):
+        for _dim, (total, step) in enumerate(zip(target.shape, write_shape, strict=False)):
             starts = range(0, total, step)
             dim_ranges.append([slice(s, min(s + step, total)) for s in starts])
         return [tuple(region) for region in itertools.product(*dim_ranges)]

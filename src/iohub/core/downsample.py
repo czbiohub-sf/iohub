@@ -9,7 +9,7 @@ import numpy as np
 
 def downsample_block(data: np.ndarray, factors: list[int], method: str) -> np.ndarray:
     """Downsample an N-D numpy block by integer factors."""
-    trim_slices = tuple(slice(0, (s // f) * f) for s, f in zip(data.shape, factors))
+    trim_slices = tuple(slice(0, (s // f) * f) for s, f in zip(data.shape, factors, strict=False))
     data = data[trim_slices]
 
     if method == "stride":
@@ -17,7 +17,7 @@ def downsample_block(data: np.ndarray, factors: list[int], method: str) -> np.nd
 
     new_shape = []
     reduce_axes = []
-    for i, (s, f) in enumerate(zip(data.shape, factors)):
+    for i, (s, f) in enumerate(zip(data.shape, factors, strict=False)):
         new_shape.extend([s // f, f])
         reduce_axes.append(2 * i + 1)
     data = data.reshape(new_shape)
@@ -34,7 +34,7 @@ def downsample_block(data: np.ndarray, factors: list[int], method: str) -> np.nd
     elif method == "mode":
         from scipy import stats
 
-        orig_shape = tuple(s // f for s, f in zip(data.shape[::2], factors))
+        orig_shape = tuple(s // f for s, f in zip(data.shape[::2], factors, strict=False))
         flat = data.reshape(*orig_shape, -1)
         return stats.mode(flat, axis=-1, keepdims=False).mode.astype(data.dtype)
     else:
@@ -46,7 +46,7 @@ def target_region_to_source(
 ) -> tuple[slice, ...]:
     """Map a target-space region back to the corresponding source region."""
     source_slices = []
-    for sl, f, src_dim in zip(target_region, factors, source_shape):
+    for sl, f, src_dim in zip(target_region, factors, source_shape, strict=False):
         start = sl.start * f
         stop = min(sl.stop * f, src_dim)
         source_slices.append(slice(start, stop))
@@ -69,6 +69,6 @@ def iter_work_regions(shape: tuple[int, ...], step_shape: tuple[int, ...]) -> li
         One region (tuple of slices) per tile, covering the full array.
     """
     dim_ranges = []
-    for total, step in zip(shape, step_shape):
+    for total, step in zip(shape, step_shape, strict=False):
         dim_ranges.append([slice(s, min(s + step, total)) for s in range(0, total, step)])
     return [tuple(r) for r in itertools.product(*dim_ranges)]

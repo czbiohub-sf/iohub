@@ -47,7 +47,7 @@ def download_data():
     # Reference v0.4 HCS dataset from OME
     # See the last line of
     # https://github.com/ome/ngff/issues/140#issuecomment-1309972511
-    ome_hcs_url = "https://zenodo.org/record/8091756/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"  # noqa
+    ome_hcs_url = "https://zenodo.org/record/8091756/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"
 
     # download files to temp folder
     if not any(test_data.iterdir()):
@@ -115,7 +115,7 @@ def csv_data_file_1(tmpdir):
     csv_data_1 = [
         ["B/03", "D/4"],
     ]
-    with open(test_csv_1, mode="w", newline="") as csvfile:
+    with Path(test_csv_1).open(mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(csv_data_1)
     return test_csv_1
@@ -127,7 +127,7 @@ def csv_data_file_2(tmpdir):
     csv_data_2 = [
         ["D/4", "B/03"],
     ]
-    with open(test_csv_2, mode="w", newline="") as csvfile:
+    with Path(test_csv_2).open(mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(csv_data_2)
     return test_csv_2
@@ -167,7 +167,7 @@ def empty_ome_zarr_hcs_v05(tmpdir) -> tuple[Path, tuple[tuple[str, ...], ...]]:
     return empty_zarr, (ROWS, COLS, FOVS, RESOLUTIONS)
 
 
-@pytest.fixture()
+@pytest.fixture
 def aqz_ome_zarr_05(tmpdir):
     pytest.importorskip("acquire_zarr")
     import acquire_zarr as aqz
@@ -230,7 +230,7 @@ def aqz_ome_zarr_05(tmpdir):
     )
 
     stream = aqz.ZarrStream(settings)
-    data = np.random.randint(0, 2**16 - 1, (32, 4, 10, 48, 64), dtype=np.uint16)
+    data = np.random.default_rng().integers(0, 2**16 - 1, (32, 4, 10, 48, 64), dtype=np.uint16)
     stream.append(data)
     del stream
 

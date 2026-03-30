@@ -41,7 +41,7 @@ def _check_zarr_data_type(src: Path):
                 for _, well in row.groups():
                     if version := _find_ngff_version_in_zarr_group(well):
                         return version
-    except Exception:
+    except Exception:  # noqa: BLE001 — version detection may fail in many ways
         return False
     return "unknown"
 
@@ -95,7 +95,6 @@ def _check_ndtiff(src: Path):
 
 
 def _get_sub_dirs(directory: Path) -> list[str]:
-    """ """
     sub_dir_name = [subdir.name for subdir in directory.iterdir() if subdir.is_dir()]
     #    assert subDirName, 'No sub directories found'
     return natsort.natsorted(sub_dir_name)
@@ -119,9 +118,10 @@ def _infer_format(path: Path):
 
 def read_images(
     path: StrOrBytesPath,
-    data_type: Literal["ometiff", "ndtiff", "omezarr"] = None,
+    data_type: Literal["ometiff", "ndtiff", "omezarr"] | None = None,
 ) -> BaseFOVMapping | Plate | Position | TiledPosition:
     """Read image arrays and metadata from a Micro-Manager dataset.
+
     Supported formats are Micro-Manager-acquired TIFF datasets
     (multi-page OME-TIFF, NDTIFF),
     and converted OME-Zarr (v0.4/v0.5 HCS layout).
@@ -139,6 +139,7 @@ def read_images(
         Image collection object for the dataset
     """
     path = Path(path).resolve()
+
     # try to guess data type
     extra_info = None
     if not data_type:
@@ -182,6 +183,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
         by default False
     """
     path = Path(path).resolve()
+
     try:
         fmt, extra_info = _infer_format(path)
         if fmt == "omezarr" and extra_info in ("0.4", "0.5"):
@@ -202,7 +204,9 @@ def print_info(path: StrOrBytesPath, verbose=False):
         msgs = []
         if isinstance(reader, BaseFOVMapping):
             _, first_fov = next(iter(reader))
-            shape_msg = ", ".join([f"{a}={s}" for s, a in zip(first_fov.shape, ("T", "C", "Z", "Y", "X"))])
+            shape_msg = ", ".join(
+                [f"{a}={s}" for s, a in zip(first_fov.shape, ("T", "C", "Z", "Y", "X"), strict=False)]
+            )
             msgs.extend(
                 [
                     sum_msg,
@@ -278,6 +282,7 @@ def print_info(path: StrOrBytesPath, verbose=False):
 def sizeof_fmt(num: int) -> str:
     """
     Human readable file size
+
     Adapted form:
     https://web.archive.org/web/20111010015624/
     http://blogmag.net/blog/read/38/Print_human_readable_file_size

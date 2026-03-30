@@ -37,40 +37,40 @@ from iohub.core.types import (
 from iohub.core.utils import normalize_path, pad_shape
 
 __all__ = [
-    # Arrays
-    "NGFFNDArray",
-    # Protocol facets
-    "GroupBackend",
-    "ArrayBackend",
-    "ArrayIO",
-    "ZarrImplementation",
-    # Config
-    "CompressorConfig",
-    "ImplementationConfig",
-    "TensorStoreConfig",
-    "ZarrConfig",
     # Types
     "AccessMode",
-    "NGFFVersion",
-    "StorePath",
-    "ZarrFormat",
+    "ArrayBackend",
+    "ArrayIO",
+    # Specs
+    "ArraySpec",
     # Errors
     "ArraySpecError",
+    # Config
+    "CompressorConfig",
+    # Protocol facets
+    "GroupBackend",
+    "ImplementationConfig",
     "ImplementationNotFoundError",
     "IohubError",
+    # Arrays
+    "NGFFNDArray",
+    "NGFFVersion",
     "PathNormalizationError",
     "StoreOpenError",
+    "StorePath",
+    "TensorStoreConfig",
+    "ZarrConfig",
+    "ZarrFormat",
+    "ZarrImplementation",
     # Registry
     "available_implementations",
     "get_implementation",
-    "register_implementation",
-    "set_default_implementation",
-    # Specs
-    "ArraySpec",
-    # Compat
-    "zarr_format_for_version",
     "ngff_version_for_format",
     # Utils
     "normalize_path",
     "pad_shape",
+    "register_implementation",
+    "set_default_implementation",
+    # Compat
+    "zarr_format_for_version",
 ]

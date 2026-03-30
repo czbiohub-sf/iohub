@@ -1,6 +1,4 @@
-"""
-Node object and convenience functions for the OME-NGFF (OME-Zarr) Hierarchy.
-"""
+"""Node object and convenience functions for the OME-NGFF (OME-Zarr) Hierarchy."""
 
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
@@ -10,16 +8,15 @@ import math
 import os
 import shutil
 import warnings
+from collections.abc import Generator
 from copy import deepcopy
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 from typing import (
     Any,
-    Generator,
+    ClassVar,
     Literal,
-    Type,
-    TypeAlias,
     overload,
 )
 
@@ -63,7 +60,7 @@ from iohub.ngff.models import (
 _logger = logging.getLogger(__name__)
 
 # Type alias for position specification tuples in create_positions
-PositionSpec: TypeAlias = (
+type PositionSpec = (
     tuple[str, str, str]
     | tuple[str, str, str, int | None]
     | tuple[str, str, str, int | None, int | None]
@@ -87,7 +84,7 @@ def _open_store(
     if is_fs:
         store_path = Path(store_path).resolve()
         if not store_path.exists() and mode in ("r", "r+"):
-            raise FileNotFoundError(f"Dataset directory not found at {str(store_path)}.")
+            raise FileNotFoundError(f"Dataset directory not found at {store_path!s}.")
     if version not in ("0.4", "0.5"):
         _logger.warning(
             f"IOHub is only tested against OME-NGFF v0.4 and v0.5. Requested version {version} may not work properly."
@@ -107,12 +104,12 @@ def _open_store(
 
 def _scale_integers(values: tuple[int, ...], factor: int) -> tuple[int, ...]:
     """Divide all values by factor, rounding up (ceiling division)."""
-    return tuple(int(math.ceil(v / factor)) for v in values)
+    return tuple(math.ceil(v / factor) for v in values)
 
 
 def _scale_dims(values: tuple[int, ...], axes: set[int]) -> tuple[int, ...]:
     """Halve values at the given indices, rounding up (ceiling division)."""
-    return tuple(int(math.ceil(v / 2)) if i in axes else v for i, v in enumerate(values))
+    return tuple(math.ceil(v / 2) if i in axes else v for i, v in enumerate(values))
 
 
 def _case_insensitive_local_fs() -> bool:
@@ -123,9 +120,9 @@ def _case_insensitive_local_fs() -> bool:
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
-    _MEMBER_TYPE: Type[NGFFNode | NGFFNDArray]
+    _MEMBER_TYPE: type[NGFFNode | NGFFNDArray]
     _impl: ZarrImplementation
-    _DEFAULT_AXES = [
+    _DEFAULT_AXES: ClassVar[list] = [
         TimeAxisMeta(name="T", unit="second"),
         ChannelAxisMeta(name="C"),
         *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("Z", "Y", "X")],
@@ -180,7 +177,9 @@ class NGFFNode:
     @property
     def zattrs(self):
         """Zarr attributes of the node.
-        Assignments will modify the metadata file."""
+
+        Assignments will modify the metadata file.
+        """
         return self._group.attrs
 
     @property
@@ -196,11 +195,13 @@ class NGFFNode:
     @property
     def _parent_path(self):
         """The parent Zarr group path of the node.
-        None for the root node."""
+
+        None for the root node.
+        """
         if self._group.name == "/":
             return None
         else:
-            return os.path.dirname(self._group.name)
+            return Path(self._group.name).parent
 
     @property
     def _member_names(self):
@@ -210,13 +211,13 @@ class NGFFNode:
     @property
     def _child_attrs(self):
         """Attributes to pass on when constructing child type instances"""
-        return dict(
-            version=self._version,
-            axes=self.axes,
-            channel_names=self.channel_names,
-            overwriting_creation=self._overwrite,
-            impl=self._impl,
-        )
+        return {
+            "version": self._version,
+            "axes": self.axes,
+            "channel_names": self.channel_names,
+            "overwriting_creation": self._overwrite,
+            "impl": self._impl,
+        }
 
     def __len__(self):
         return len(self._member_names)
@@ -295,6 +296,7 @@ class NGFFNode:
 
     def is_leaf(self):
         """Wheter this node is a leaf node,
+
         meaning that no child Zarr group is present.
         Usually a position/fov node for NGFF-HCS if True.
 
@@ -318,8 +320,8 @@ class NGFFNode:
         for key in self._member_names:
             try:
                 yield key, self[key]
-            except Exception:
-                _logger.warning("Skipped item at {}: invalid {}.".format(key, type(self._MEMBER_TYPE)))
+            except Exception:  # noqa: BLE001 — partial iteration, skip corrupt items
+                _logger.warning(f"Skipped item at {key}: invalid {type(self._MEMBER_TYPE)}.")
 
     def get_channel_index(self, name: str) -> int:
         """Get the index of a given channel in the channel list.
@@ -339,7 +341,7 @@ class NGFFNode:
         return self.channel_names.index(name)
 
     def _warn_invalid_meta(self):
-        msg = "Zarr group at {} does not have valid metadata for {}".format(self._group.path, type(self))
+        msg = f"Zarr group at {self._group.path} does not have valid metadata for {type(self)}"
         _logger.warning(msg)
 
     def _parse_meta(self):
@@ -415,7 +417,7 @@ class TiledImageArray(ImageArray):
 
     @property
     def tile_shape(self):
-        """shape of a tile, the same as chunk size of the underlying array."""
+        """Shape of a tile, the same as chunk size of the underlying array."""
         return self.chunks
 
     def get_tile(
@@ -442,6 +444,7 @@ class TiledImageArray(ImageArray):
         NDArray
         """
         self._check_rc(row, column)
+
         return self[self.get_tile_slice(row, column, pre_dims=pre_dims)]
 
     def write_tile(
@@ -467,6 +470,7 @@ class TiledImageArray(ImageArray):
             by default None (select all).
         """
         self._check_rc(row, column)
+
         self[self.get_tile_slice(row, column, pre_dims=pre_dims)] = data
 
     def get_tile_slice(
@@ -494,6 +498,7 @@ class TiledImageArray(ImageArray):
             Tuple of slices for all the dimensions of the array.
         """
         self._check_rc(row, column)
+
         y, x = self.chunks[-2:]
         r_slice = slice(row * y, (row + 1) * y)
         c_slice = slice(column * x, (column + 1) * x)
@@ -502,14 +507,14 @@ class TiledImageArray(ImageArray):
             try:
                 if len(pre_dims) != len(pad):
                     raise IndexError(f"Length of `pre_dims` should be {len(pad)}, got {len(pre_dims)}.")
-            except TypeError:
-                raise TypeError(f"Argument `pre_dims` should be a sequence, got type {type(pre_dims)}.")
+            except TypeError as err:
+                raise TypeError(f"Argument `pre_dims` should be a sequence, got type {type(pre_dims)}.") from err
             for i, sel in enumerate(pre_dims):
                 if isinstance(sel, int):
                     sel = slice(sel)
                 if sel is not None:
                     pad[i] = sel
-        return tuple((pad + [r_slice, c_slice]))
+        return (*pad, r_slice, c_slice)
 
     @staticmethod
     def _check_rc(row: int, column: int):
@@ -640,8 +645,8 @@ class PositionLabel(NGFFNode):
         """Alias for the highest-resolution label array ('0')."""
         try:
             return self["0"]
-        except KeyError:
-            raise KeyError(f"There is no array named '0' in the group of: {self.array_keys()}")
+        except KeyError as err:
+            raise KeyError(f"There is no array named '0' in the group of: {self.array_keys()}") from err
 
     def __getitem__(self, key: int | str) -> LabelsArray:
         key = normalize_path(str(key))
@@ -735,7 +740,7 @@ class PositionLabel(NGFFNode):
         if shards_ratio:
             if len(shards_ratio) != len(shape):
                 raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
-            shards = tuple(c * s for c, s in zip(chunks, shards_ratio))
+            shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
         else:
             shards = None
         if self._zarr_format == 3:
@@ -778,15 +783,9 @@ class PositionLabel(NGFFNode):
         source_array = self[source_level]
         for level in range(1, levels):
             factor = 2**level
-            downscaled_shape = source_array.shape[:-3] + _scale_dims(
-                source_array.shape[-3:], set(range(len(source_array.shape[-3:])))
-            )
-            # _scale_dims halves by 2, but we need factor; use _scale_dims iteratively or compute directly
-            downscaled_shape = source_array.shape[:-3] + tuple(
-                int(math.ceil(s / factor)) for s in source_array.shape[-3:]
-            )
+            downscaled_shape = source_array.shape[:-3] + tuple(math.ceil(s / factor) for s in source_array.shape[-3:])
             downscaled_chunks = pad_shape(
-                tuple(int(math.ceil(c / factor)) for c in source_array.chunks[-3:]),
+                tuple(math.ceil(c / factor) for c in source_array.chunks[-3:]),
                 target=len(downscaled_shape),
             )
             transforms = [
@@ -840,7 +839,7 @@ class PositionLabel(NGFFNode):
             for label_value, rgba in self._colors.items():
                 # Ensure RGBA format
                 if len(rgba) == 3:
-                    rgba = rgba + [255]  # Add alpha
+                    rgba = [*rgba, 255]  # Add alpha
 
                 # Convert to 0-1 range for Pydantic (serialized as 0-255)
                 # Validate bounds and handle numpy integer types
@@ -960,6 +959,7 @@ class Position(NGFFNode):
     @property
     def data(self):
         """.. warning::
+
             This property does *NOT* aim to retrieve all the arrays.
             And it may also fail to retrive any data if arrays exist but
             are not named conventionally.
@@ -984,11 +984,12 @@ class Position(NGFFNode):
         """
         try:
             return self["0"]
-        except KeyError:
-            raise KeyError(f"There is no array named '0' in the group of: {self.array_keys()}")
+        except KeyError as err:
+            raise KeyError(f"There is no array named '0' in the group of: {self.array_keys()}") from err
 
     def __getitem__(self, key: int | str) -> ImageArray:
         """Get an image array member of the position.
+
         E.g. Raw-coordinates image, a multi-scale level, or labels
 
         Parameters
@@ -1003,6 +1004,7 @@ class Position(NGFFNode):
             Container object for image stored as a zarr array (up to 5D)
         """
         result = NGFFNode.__getitem__(self, key)
+
         if isinstance(result, ImageArray):
             result._dim_names = tuple(ax.name for ax in self.axes)
         return result
@@ -1016,6 +1018,7 @@ class Position(NGFFNode):
 
     def images(self) -> Generator[tuple[str, ImageArray]]:
         """Returns a generator that iterate over the name and value
+
         of all the image arrays in the group.
 
         Yields
@@ -1084,6 +1087,7 @@ class Position(NGFFNode):
         check_shape: bool = True,
     ):
         """Create a new zero-filled image array in the position.
+
         Under default zarr-python settings of lazy writing,
         this will not write the array values,
         but only create a ``.zarray`` file.
@@ -1125,7 +1129,7 @@ class Position(NGFFNode):
         if shards_ratio:
             if len(shards_ratio) != len(shape):
                 raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
-            shards = tuple(c * s for c, s in zip(chunks, shards_ratio))
+            shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
         else:
             shards = None
         if self._zarr_format == 3:
@@ -1207,10 +1211,8 @@ class Position(NGFFNode):
         if not clims:
             clims = [None] * len(self.channel_names)
         channels = []
-        for i, (channel_name, clim) in enumerate(zip(self.channel_names, clims)):
-            if i == 0:
-                first_chan = True
-            channels.append(channel_display_settings(channel_name, clim=clim, first_chan=first_chan))
+        for i, (channel_name, clim) in enumerate(zip(self.channel_names, clims, strict=False)):
+            channels.append(channel_display_settings(channel_name, clim=clim, first_chan=(i == 0)))
         omero_meta = OMEROMeta(
             version=self.version,
             id=id,
@@ -1273,6 +1275,7 @@ class Position(NGFFNode):
             New name of the channel
         """
         ch_idx = self.get_channel_index(old)
+
         self.channel_names[ch_idx] = new
         if hasattr(self.metadata, "omero"):
             self.metadata.omero.channels[ch_idx].label = new
@@ -1302,6 +1305,7 @@ class Position(NGFFNode):
         and users are encouraged to use array indexing directly.
         """
         img = self[target]
+
         ch_idx = self.get_channel_index(chan_name)
         ch_ax = self._get_channel_axis()
         ortho_sel = [slice(None)] * len(img.shape)
@@ -1315,6 +1319,7 @@ class Position(NGFFNode):
     ) -> None:
         """
         Initializes the pyramid arrays with a down scaling of 2 per level.
+
         Decimals shapes are rounded up to ceiling.
         Scales metadata are also updated.
 
@@ -1349,7 +1354,7 @@ class Position(NGFFNode):
 
             if prev_shards is not None:
                 prev_shards = _scale_dims(prev_shards, axes)
-                shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards))
+                shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards, strict=False))
             else:
                 shards_ratio = None
 
@@ -1415,6 +1420,7 @@ class Position(NGFFNode):
         >>> pos.compute_pyramid(levels=3, method="mean")
         """
         num_arrays = len(self.array_keys())
+
         if num_arrays == 0:
             raise ValueError("No level 0 array exists. Create base array before computing pyramid.")
 
@@ -1442,7 +1448,7 @@ class Position(NGFFNode):
             current_scale = self.get_effective_scale(str(level))
             previous_scale = self.get_effective_scale(str(level - 1))
 
-            downsample_factors = [int(round(current_scale[i] / previous_scale[i])) for i in range(len(current_scale))]
+            downsample_factors = [round(current_scale[i] / previous_scale[i]) for i in range(len(current_scale))]
 
             previous_level_array.downsample_into(
                 current_level_array,
@@ -1471,6 +1477,7 @@ class Position(NGFFNode):
     def scale(self) -> list[float]:
         """
         Helper function for scale transform metadata of
+
         highest resolution scale.
         """
         return self.get_effective_scale(self.metadata.multiscales[0].datasets[0].path)
@@ -1502,6 +1509,7 @@ class Position(NGFFNode):
 
     def _get_all_transforms(self, image: str | Literal["*"]) -> list[TransformationMeta]:
         """Get all transforms metadata
+
         for one image array or the whole FOV.
 
         Parameters
@@ -1516,7 +1524,7 @@ class Position(NGFFNode):
             All transforms applicable to this image or FOV.
         """
         transforms: list[TransformationMeta] = (
-            [t for t in self.metadata.multiscales[0].coordinate_transformations]
+            list(self.metadata.multiscales[0].coordinate_transformations)
             if self.metadata.multiscales[0].coordinate_transformations is not None
             else []
         )
@@ -1533,6 +1541,7 @@ class Position(NGFFNode):
         image: str | Literal["*"],
     ) -> list[float]:
         """Get the effective coordinate scale metadata
+
         for one image array or the whole FOV.
 
         Parameters
@@ -1561,6 +1570,7 @@ class Position(NGFFNode):
         image: str | Literal["*"],
     ) -> TransformationMeta:
         """Get the effective coordinate translation metadata
+
         for one image array or the whole FOV.
 
         Parameters
@@ -1576,6 +1586,7 @@ class Position(NGFFNode):
             for the image or FOV for each axis.
         """
         transforms = self._get_all_transforms(image)
+
         full_translation = np.zeros(len(self.axes), dtype=float)
         for transform in transforms:
             if transform.type == "translation":
@@ -1589,6 +1600,7 @@ class Position(NGFFNode):
         transform: list[TransformationMeta],
     ):
         """Set the coordinate transformations metadata
+
         for one image array or the whole FOV.
 
         Parameters
@@ -1614,6 +1626,7 @@ class Position(NGFFNode):
 
     def set_scale(self, image: str | Literal["*"], axis_name: str, new_scale: float):
         """Set the scale for a named axis.
+
         Either one image array or the whole FOV.
 
         Parameters
@@ -1653,7 +1666,7 @@ class Position(NGFFNode):
         self.zattrs["iohub"] = iohub_dict
         if transforms == [TransformationMeta(type="identity")]:
             transforms = [TransformationMeta(type="scale", scale=[1.0] * 5)]
-        if not any([transform.type == "scale" for transform in transforms]):
+        if not any(transform.type == "scale" for transform in transforms):
             transforms.append(TransformationMeta(type="scale", scale=[1.0] * 5))
         new_transforms = []
         for transform in transforms:
@@ -1680,6 +1693,7 @@ class Position(NGFFNode):
             List of dimension names for the label array
         """
         # Labels use TZYX dimensions (no channel dimension)
+
         return [ax.name for ax in self.label_axes[:ndims]]
 
     @property
@@ -1697,9 +1711,9 @@ class Position(NGFFNode):
     @property
     def has_labels(self) -> bool:
         """Check if this position has any labels."""
-        return "labels" in self._group and len(list(self.labels_group.group_keys())) > 0
+        return "labels" in self._group and len(self._impl.group_keys(self.labels_group)) > 0
 
-    def create_labels_group(self) -> zarr.Group:
+    def create_labels_group(self):
         """Create the labels subgroup if it doesn't exist."""
         if "labels" not in self._group:
             labels_group = self._group.create_group("labels", overwrite=False)
@@ -1709,6 +1723,7 @@ class Position(NGFFNode):
 
     def labels(self) -> Generator[tuple[str, PositionLabel], None, None]:
         """Returns a generator that iterates over the name and value
+
         of all the label images in the position.
 
         Yields
@@ -1718,7 +1733,7 @@ class Position(NGFFNode):
         """
         if self.labels_group is None:
             return
-        for name in self.labels_group.group_keys():
+        for name in self._impl.group_keys(self.labels_group):
             yield name, self.get_label(name)
 
     def label_names(self) -> list[str]:
@@ -1731,7 +1746,7 @@ class Position(NGFFNode):
         """
         if self.labels_group is None:
             return []
-        return sorted(list(self.labels_group.group_keys()))
+        return sorted(self._impl.group_keys(self.labels_group))
 
     def get_label(self, name: str) -> PositionLabel:
         """Get a multiscale label image by name.
@@ -1938,6 +1953,7 @@ class Position(NGFFNode):
             Contrast limit (min, max, start, end)
         """
         channel_index = self.get_channel_index(channel_name)
+
         self.metadata.omero.channels[channel_index].window = window
         self.dump_meta()
 
@@ -1959,12 +1975,19 @@ class Position(NGFFNode):
             channel names and physical scales/units.
         """
         all_channel_names = self.channel_names
+
         scale = self.scale
         translation = self.get_effective_translation(self.metadata.multiscales[0].datasets[0].path)
 
-        data = self.data.dask_array()
-        T, C, Z, Y, X = data.shape
+        import dask.array as da
 
+        # Always use zarr-python for the dask array — other backends
+        # (e.g. TensorStore) may not integrate reliably with dask/xarray.
+        arr_name = self.metadata.multiscales[0].datasets[0].path
+        if isinstance(self._group, zarr.Group):
+            data = da.from_zarr(self._group[arr_name])
+        else:
+            data = da.from_zarr(zarr.open_array(str(self._group.path / arr_name), mode="r"))
         # Build axis unit lookup from OME metadata
         axis_units = {}
         for axis in self.axes:
@@ -1972,13 +1995,17 @@ class Position(NGFFNode):
             if unit is not None:
                 axis_units[axis.name.lower()] = unit
 
-        # CF convention: units live in per-coordinate attrs
-        physical = {"t": (T, 0), "z": (Z, 2), "y": (Y, 3), "x": (X, 4)}
-        coords = {"c": ("c", all_channel_names)}
-        for dim, (size, idx) in physical.items():
-            values = np.arange(size) * scale[idx] + translation[idx]
-            attrs = {"units": axis_units[dim]} if dim in axis_units else {}
-            coords[dim] = (dim, values, attrs)
+        # Build coordinates dynamically from axes metadata -- supports 2-5D arrays
+        dim_names = [ax.name.lower() for ax in self.axes]
+        coords = {}
+        for i, (ax, size) in enumerate(zip(self.axes, data.shape, strict=True)):
+            name = ax.name.lower()
+            if ax.type == "channel":
+                coords[name] = (name, all_channel_names)
+            else:
+                values = np.arange(size) * scale[i] + translation[i]
+                attrs = {"units": axis_units[name]} if name in axis_units else {}
+                coords[name] = (name, values, attrs)
 
         # Restore any previously saved DataArray attrs from zarr
         iohub_dict = self.zattrs.get("iohub", {})
@@ -1986,7 +2013,7 @@ class Position(NGFFNode):
 
         return xr.DataArray(
             data,
-            dims=("t", "c", "z", "y", "x"),
+            dims=dim_names,
             coords=coords,
             attrs=saved_attrs,
         )
@@ -2097,6 +2124,7 @@ class Position(NGFFNode):
 
 class TiledPosition(Position):
     """Variant of the NGFF position node
+
     with convenience methods to create and access tiled arrays.
     Other parameters and attributes are the same as
     :py:class:`iohub.ngff.Position`.
@@ -2114,6 +2142,7 @@ class TiledPosition(Position):
         chunk_dims: int = 2,
     ):
         """Make a tiled image array filled with zeros.
+
         Chunk size is inferred from tile shape.
 
         Parameters
@@ -2138,6 +2167,7 @@ class TiledPosition(Position):
         TiledImageArray
         """
         xy_shape = tuple(int(i) for i in np.array(grid_shape) * np.array(tile_shape[-2:]))
+
         chunks = self._default_chunks(shape=tile_shape, last_data_dims=chunk_dims)
         img_arr = self.create_zeros(
             name=name,
@@ -2246,11 +2276,13 @@ class Well(NGFFNode):
             The index of the acquisition, by default 0
         """
         pos = self._create_position_nosync(name, acquisition=acquisition)
+
         self.dump_meta()
         return pos
 
     def positions(self):
         """Returns a generator that iterate over the name and value
+
         of all the positions in the well.
 
         Yields
@@ -2325,6 +2357,7 @@ class Row(NGFFNode):
 
     def wells(self):
         """Returns a generator that iterate over the name and value
+
         of all the wells in the row.
 
         Yields
@@ -2349,6 +2382,7 @@ class Plate(NGFFNode):
         positions: dict[str, Position],
     ) -> Plate:
         """Create a new HCS store from existing OME-Zarr stores
+
         by copying images and metadata from a dictionary of positions.
 
         .. warning: This assumes same channel names and axes across the FOVs
@@ -2382,6 +2416,7 @@ class Plate(NGFFNode):
         >>> new_plate = Plate.from_positions("combined.zarr", fovs)
         """
         # TODO: remove when zarr-python adds back `copy_store`
+
         raise NotImplementedError(
             "This method is disabled until upstream support is finalized: "
             "https://github.com/zarr-developers/zarr-python/issues/2407"
@@ -2546,6 +2581,7 @@ class Plate(NGFFNode):
         col_index: int | None = None,
     ):
         """Creates a new well group in the plate.
+
         The new well will have empty group metadata,
         which will not be created until a position is written.
 
@@ -2570,6 +2606,7 @@ class Plate(NGFFNode):
             Well node object
         """
         # normalize input
+
         row_name = normalize_path(row_name)
         col_name = normalize_path(col_name)
         if row_name in self:
@@ -2674,6 +2711,7 @@ class Plate(NGFFNode):
         ... )
         """
         positions = deepcopy(positions)  # We may mutate contents
+
         wells = {}  # Track wells by path to avoid duplicate objects
         positions_out = []
         for r, c, p, *args in positions:
@@ -2686,7 +2724,7 @@ class Plate(NGFFNode):
                 raise ValueError(f"Passed too many fields for a position: {(r, c, p, *args)}")
             r = normalize_path(r)
             c = normalize_path(c)
-            well_path = os.path.join(r, c)
+            well_path = f"{r}/{c}"
 
             # Get or create well, ensuring we reuse the same object
             if well_path in wells:
@@ -2713,6 +2751,7 @@ class Plate(NGFFNode):
         acq_index: int = 0,
     ):
         """Creates a new position group in the plate.
+
         The new position will have empty group metadata,
         which will not be created until an image is written.
 
@@ -2739,8 +2778,9 @@ class Plate(NGFFNode):
             Position node object
         """
         row_name = normalize_path(row_name)
+
         col_name = normalize_path(col_name)
-        well_path = os.path.join(row_name, col_name)
+        well_path = f"{row_name}/{col_name}"
         if well_path in self.zgroup:
             well = self[well_path]
         else:
@@ -2749,6 +2789,7 @@ class Plate(NGFFNode):
 
     def rows(self) -> Generator[tuple[str, Row], None, None]:
         """Returns a generator that iterate over the name and value
+
         of all the rows in the plate.
 
         Yields
@@ -2760,6 +2801,7 @@ class Plate(NGFFNode):
 
     def wells(self) -> Generator[tuple[str, Well], None, None]:
         """Returns a generator that iterate over the path and value
+
         of all the wells (along rows, columns) in the plate.
 
         Yields
@@ -2773,6 +2815,7 @@ class Plate(NGFFNode):
 
     def positions(self) -> Generator[tuple[str, Position], None, None]:
         """Returns a generator that iterate over the path and value
+
         of all the positions (along rows, columns, and wells) in the plate.
 
         Yields
@@ -2794,8 +2837,8 @@ class Plate(NGFFNode):
         new : str
             New name of well, e.g. "B/2"
         """
-
         # normalize inputs
+
         old = normalize_path(old)
         new = normalize_path(new)
         old_row, old_column = old.split("/")

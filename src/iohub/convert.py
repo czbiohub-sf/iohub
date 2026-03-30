@@ -42,8 +42,8 @@ def _create_grid_from_coordinates(xy_coords: list[tuple[float, float]], rows: in
         A grid-like array mimicking the shape of the acquisition where the
         value in the array corresponds to the position index at that location.
     """
+    coords = {}
 
-    coords = dict()
     coords_list = []
     for idx, pos in enumerate(xy_coords):
         coords[idx] = pos
@@ -70,6 +70,7 @@ def _create_grid_from_coordinates(xy_coords: list[tuple[float, float]], rows: in
 
 class TIFFConverter:
     """Convert Micro-Manager TIFF formats
+
     (OME-TIFF, ND-TIFF) into HCS OME-Zarr.
     Each FOV will be written to a separate well in the plate layout.
 
@@ -107,8 +108,8 @@ class TIFFConverter:
         input_dir: str | Path,
         output_dir: str | Path,
         grid_layout: int = False,
-        chunks: tuple[int] | Literal["XY", "XYZ"] = None,
-        hcs_plate: bool = None,
+        chunks: tuple[int] | Literal["XY", "XYZ"] | None = None,
+        hcs_plate: bool | None = None,
         version: Literal["0.4", "0.5"] = "0.5",
     ):
         if version not in ("0.4", "0.5"):
@@ -130,7 +131,7 @@ class TIFFConverter:
         self.summary_metadata = self.reader.micromanager_summary
         self.save_name = output_dir.name
         _logger.debug("Getting dataset summary information.")
-        self.coord_map = dict()
+        self.coord_map = {}
         self.p = len(self.reader)
         self.t = self.reader.frames
         self.c = self.reader.channels
@@ -143,7 +144,7 @@ class TIFFConverter:
         self._check_hcs_sites()
         self._get_pos_names()
         _logger.info(f"Found Dataset {input_dir} with dimensions (P, T, C, Z, Y, X): {self.dim}")
-        self.metadata = dict()
+        self.metadata = {}
         self.metadata["iohub_version"] = _get_package_version("iohub")
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
@@ -179,15 +180,18 @@ class TIFFConverter:
     def _get_position_coords(self):
         """Get the position coordinates from the reader metadata.
 
-        Raises:
+        Raises
+        ------
             ValueError: If stage positions are not available.
 
-        Returns:
+        Returns
+        -------
             list: XY stage position coordinates.
             int: Number of grid rows.
             int: Number of grid columns.
         """
         rows = set()
+
         cols = set()
         xy_coords = []
 
@@ -198,22 +202,24 @@ class TIFFConverter:
             try:
                 xy_stage = pos["DefaultXYStage"]
                 stage_pos = pos[xy_stage]
-            except KeyError:
-                raise ValueError(f"Stage position is not available for position {idx}")
+            except KeyError as err:
+                raise ValueError(f"Stage position is not available for position {idx}") from err
             xy_coords.append(stage_pos)
             try:
                 rows.add(pos["GridRow"])
                 cols.add(pos["GridCol"])
-            except KeyError:
-                raise ValueError(f"Grid indices not available for position {idx}")
+            except KeyError as err:
+                raise ValueError(f"Grid indices not available for position {idx}") from err
 
         return xy_coords, len(rows), len(cols)
 
     def _get_pos_names(self):
         """Append a list of pos names in ascending order
+
         (order in which they were acquired).
         """
         self.pos_names = []
+
         for p in range(self.p):
             try:
                 name = self.reader.stage_positions[p]["Label"]
@@ -255,7 +261,7 @@ class TIFFConverter:
 
         # Adjust chunks to divide evenly into dimensions
         chunks = _adjust_chunks_for_divisibility(shape, chunks)
-        for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, shape)):
+        for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, shape, strict=False)):
             if orig != adj:
                 _logger.warning(f"Chunk size {orig} on axis {i} adjusted to {adj} (dimension {dim}).")
 
@@ -353,8 +359,7 @@ class TIFFConverter:
                 # T/C/Z
                 frame_key = "/".join([str(i) for i in (t_idx, c_idx, z_idx)])
                 position_image_plane_metadata[frame_key] = sorted_metadata
-        with open(
-            self.output_dir / zarr_name / "image_plane_metadata.json",
+        with (self.output_dir / zarr_name / "image_plane_metadata.json").open(
             mode="x",
         ) as metadata_file:
             json.dump(position_image_plane_metadata, metadata_file, indent=4)
@@ -370,6 +375,7 @@ class TIFFConverter:
         >>> converter()
         """
         _logger.debug("Setting up Zarr store.")
+
         self._init_zarr_arrays()
         # Calculate chunk size in bytes for dask config
         # This prevents data loss when rechunking to zarr chunks

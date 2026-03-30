@@ -19,23 +19,25 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
 
     def __init__(self, config: ZarrConfig | None = None):
         self.config = config or ZarrConfig()
-
-    # -- Group operations --------------------------------------------------
-
-    def open_group(self, path: StorePath, mode: str, zarr_format: int | None = None) -> zarr.Group:
-        with zarr.config.set(
+        # Apply codec pipeline config globally — zarr-python reads this at I/O time,
+        # not at group-open time, so it must persist beyond the open_group call.
+        zarr.config.set(
             {
                 "codec_pipeline.path": self.config.codec_pipeline,
                 "codec_pipeline.validate_checksums": self.config.validate_checksums,
             }
-        ):
-            return zarr.open_group(path, mode=mode, zarr_format=zarr_format)
+        )
+
+    # -- Group operations --------------------------------------------------
+
+    def open_group(self, path: StorePath, mode: str, zarr_format: int | None = None) -> zarr.Group:
+        return zarr.open_group(path, mode=mode, zarr_format=zarr_format)
 
     def group_keys(self, group: zarr.Group) -> list[str]:
-        return sorted(list(group.group_keys()))
+        return sorted(group.group_keys())
 
     def array_keys(self, group: zarr.Group) -> list[str]:
-        return sorted(list(group.array_keys()))
+        return sorted(group.array_keys())
 
     def close(self, group: zarr.Group) -> None:
         group.store.close()
@@ -166,7 +168,7 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         source_region = target_region_to_source(target_region, factors, source.shape)
         source_data = np.asarray(source[source_region])
         local_factors = []
-        for sl_src, sl_tgt, f in zip(source_region, target_region, factors):
+        for sl_src, sl_tgt, f in zip(source_region, target_region, factors, strict=False):
             src_size = sl_src.stop - sl_src.start
             tgt_size = sl_tgt.stop - sl_tgt.start
             local_factors.append(max(1, src_size // tgt_size) if tgt_size > 0 else f)

@@ -14,8 +14,7 @@ from tests.conftest import (
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
 )
-
-from ..ngff.test_ngff import _temp_copy
+from tests.ngff.test_ngff import _temp_copy
 
 
 def pytest_generate_tests(metafunc):
@@ -26,7 +25,7 @@ def pytest_generate_tests(metafunc):
     if "ndtiff_dataset" in metafunc.fixturenames:
         metafunc.parametrize(
             "ndtiff_dataset",
-            ndtiff_v2_datasets + [ndtiff_v3_labeled_positions],
+            [*ndtiff_v2_datasets, ndtiff_v3_labeled_positions],
         )
 
 

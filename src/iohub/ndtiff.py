@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Iterable
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Literal
 
 import numpy as np
 from natsort import natsorted
@@ -49,6 +50,7 @@ class NDTiffFOV(MicroManagerFOV):
 
 class NDTiffDataset(MicroManagerFOVMapping):
     """Reader for ND-TIFF datasets acquired with Micro/Pycro-Manager,
+
     effectively a wrapper of the `ndtiff.Dataset` class.
     """
 
@@ -63,7 +65,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
         self._root = data_path
         self.dirname = data_path.name
         self._axes = self.dataset.axes
-        if any([a for a in self._axes.keys() if a not in self._ndtiff_axes]):
+        if any(a for a in self._axes.keys() if a not in self._ndtiff_axes):
             raise NotImplementedError(
                 f"Custom axis names {self._axes.keys()} are not supported. Supported axes are: {self._ndtiff_axes}"
             )
@@ -191,10 +193,12 @@ class NDTiffDataset(MicroManagerFOVMapping):
     def _check_coordinates(self, p: int | str, t: int, c: int | str, z: int):
         """
         Check that the (p, t, c, z) coordinates are part of the ndtiff dataset.
+
         Replace coordinates with None or string values in specific cases - see
         below
         """
         coords = [p, t, c, z]
+
         axes = self._ndtiff_axes[:4]
 
         for i, axis in enumerate(axes):
@@ -220,7 +224,9 @@ class NDTiffDataset(MicroManagerFOVMapping):
                     coord_sample = next(iter(self._axes[axis]))
                     if coord == 0 and isinstance(coord_sample, str):
                         coords[i] = coord_sample
-                        warnings.warn(f"Indices of {axis} are string-valued. Returning data at {axis} = {coord}")
+                        warnings.warn(
+                            f"Indices of {axis} are string-valued. Returning data at {axis} = {coord}", stacklevel=2
+                        )
                     else:
                         # If the coordinate is not part of the axis and
                         # nonzero, a ValueError will be raised
@@ -253,7 +259,8 @@ class NDTiffDataset(MicroManagerFOVMapping):
         else:
             if key not in (0, None):
                 warnings.warn(
-                    f"Position index {key} is not part of this dataset. Returning data at the default position."
+                    f"Position index {key} is not part of this dataset. Returning data at the default position.",
+                    stacklevel=2,
                 )
                 key = None
         return key
@@ -304,6 +311,7 @@ class NDTiffDataset(MicroManagerFOVMapping):
             Image plane metadata. None if not available.
         """
         metadata = None
+
         if not self.str_position_axis and isinstance(p, str):
             if p.isdigit():
                 p = int(p)

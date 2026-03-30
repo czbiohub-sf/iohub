@@ -44,9 +44,7 @@ c_dim_st = st.integers(1, 4)
 z_dim_st = st.integers(1, 4)
 y_dim_st = st.integers(1, 32)
 x_dim_st = st.integers(1, 32)
-channel_names_st = c_dim_st.flatmap(
-    (lambda c_dim: st.lists(short_text_st, min_size=c_dim, max_size=c_dim, unique=True))
-)
+channel_names_st = c_dim_st.flatmap(lambda c_dim: st.lists(short_text_st, min_size=c_dim, max_size=c_dim, unique=True))
 ngff_versions_st = st.just("0.5")
 short_alpha_numeric = st.text(
     alphabet=list(string.ascii_lowercase + string.ascii_uppercase + string.digits),
@@ -125,7 +123,7 @@ def _channels_and_random_5d(draw):
 
 
 @pytest.mark.parametrize(
-    "values, axes, expected",
+    ("values", "axes", "expected"),
     [
         # all axes downsampled
         ((4, 8, 16), {0, 1, 2}, (2, 4, 8)),
@@ -155,7 +153,7 @@ def test_scale_dims_properties(values, axes):
 
     result = _scale_dims(values, axes)
     assert len(result) == len(values)
-    for i, (v, r) in enumerate(zip(values, result)):
+    for i, (v, r) in enumerate(zip(values, result, strict=False)):
         if i in axes:
             assert r == math.ceil(v / 2)
         else:
@@ -178,8 +176,8 @@ def test_open_store_create(version):
     """Test `iohub.ngff._open_store()"""
     for mode in ("a", "w", "w-"):
         with TemporaryDirectory() as temp_dir:
-            store_path = os.path.join(temp_dir, "new.zarr")
-            root, impl = _open_store(store_path, mode=mode, version=version)
+            store_path = Path(temp_dir) / "new.zarr"
+            root, _impl = _open_store(store_path, mode=mode, version=version)
             assert isinstance(root, zarr.Group)
             assert isinstance(root.store, zarr.storage.LocalStore)
             # assert root.store._dimension_separator == "/"
@@ -190,12 +188,12 @@ def test_open_store_create(version):
 def test_open_store_create_existing(version):
     """Test `iohub.ngff._open_store()"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "new.zarr")
+        store_path = Path(temp_dir) / "new.zarr"
         g = zarr.open_group(store_path, mode="w-")
         g.store.close()
         with pytest.raises(FileExistsError):
             _ = _open_store(store_path, mode="w-", version=version)
-        root, impl = _open_store(store_path, mode="w", version=version)
+        root, _impl = _open_store(store_path, mode="w", version=version)
         assert root is not None
 
 
@@ -204,7 +202,7 @@ def test_open_store_read_nonexist(version):
     """Test `iohub.ngff._open_store()"""
     for mode in ("r", "r+"):
         with TemporaryDirectory() as temp_dir:
-            store_path = os.path.join(temp_dir, "new.zarr")
+            store_path = Path(temp_dir) / "new.zarr"
             with pytest.raises(FileNotFoundError):
                 _ = _open_store(store_path, mode=mode, version=version)
 
@@ -227,7 +225,7 @@ def test_case_insensitive_local_fs():
 def test_init_ome_zarr(channel_names, version):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         dataset = open_ome_zarr(
             store_path,
             layout="fov",
@@ -235,7 +233,7 @@ def test_init_ome_zarr(channel_names, version):
             channel_names=channel_names,
             version=version,
         )
-        assert os.path.isdir(store_path)
+        assert Path(store_path).is_dir()
         assert dataset.channel_names == channel_names
 
 
@@ -251,7 +249,7 @@ def test_init_ome_zarr_overwrite_non_zarr(tmp_path, basename, version):
     some_child_directory = store_path / "some_other_directory"
     some_child_directory.mkdir()
     if ".zarr" not in basename:
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             _ = open_ome_zarr(
                 store_path,
                 layout="fov",
@@ -300,7 +298,7 @@ def _temp_ome_zarr(
     try:
         temp_dir = TemporaryDirectory()
         dataset = open_ome_zarr(
-            os.path.join(temp_dir.name, "ome.zarr"),
+            Path(temp_dir.name) / "ome.zarr",
             layout="fov",
             mode="a",
             version=version,
@@ -339,7 +337,7 @@ def _temp_ome_zarr_plate(
     try:
         temp_dir = TemporaryDirectory()
         dataset = open_ome_zarr(
-            os.path.join(temp_dir.name, "ome.zarr"),
+            Path(temp_dir.name) / "ome.zarr",
             layout="hcs",
             mode="a",
             channel_names=channel_names,
@@ -370,7 +368,7 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name, version):
         assert_allclose(dataset[arr_name][:], random_5d)
         # round-trip test with the offical reader implementation
         ext_reader = ome_zarr.reader.Reader(ome_zarr.io.parse_url(dataset.zgroup.store.root))
-        node = list(ext_reader())[0]
+        node = next(iter(ext_reader()))
         assert node.metadata["channel_names"] == channel_names
         assert node.specs[0].datasets == [arr_name]
         assert_allclose(node.data[0], random_5d)
@@ -389,7 +387,7 @@ def test_create_zeros(ch_shape_dtype, arr_name, version):
     """Test `iohub.ngff.Position.create_zeros()`"""
     channel_names, shape, dtype = ch_shape_dtype
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         dataset = open_ome_zarr(
             store_path,
             layout="fov",
@@ -398,7 +396,7 @@ def test_create_zeros(ch_shape_dtype, arr_name, version):
             version=version,
         )
         dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-        assert set(os.listdir(os.path.join(store_path, arr_name))) == {
+        assert {e.name for e in (Path(store_path) / arr_name).iterdir()} == {
             "zarr.json",
         }
         if version == "0.5":
@@ -459,7 +457,7 @@ def test_writing_sharded(channels_and_random_5d):
     ) as dataset:
         assert_array_equal(dataset["0"].numpy(), random_5d)
         assert dataset["0"].chunks == chunks
-        assert dataset["0"].shards == tuple(c * s for c, s in zip(chunks, shards_ratio))
+        assert dataset["0"].shards == tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
 
 
 @given(
@@ -607,9 +605,9 @@ def test_rename_well(channels_and_random_5d, arr_name, version):
             dataset.rename_well("Q/1", "Q/2")
 
         # invalid well names
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             dataset.rename_well("B/2", " A/1")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             dataset.rename_well("B/2", "A/?")
 
 
@@ -645,7 +643,7 @@ def test_write_more_channels(channels_and_random_5d, arr_name, version):
     """Test `iohub.ngff.Position.create_image()`"""
     channel_names, random_5d = channels_and_random_5d
     assume(len(channel_names) > 1)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         with _temp_ome_zarr(random_5d, channel_names[:-1], arr_name, version=version) as _:
             pass
 
@@ -659,7 +657,7 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
     channel_names, shape, dtype = ch_shape_dtype
     transform = [TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))] * len(channel_names)
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=channel_names) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
             assert dataset.metadata.multiscales[0].datasets[0].coordinate_transformations == [
@@ -669,7 +667,7 @@ def test_set_transform_image(ch_shape_dtype, arr_name):
             assert dataset.metadata.multiscales[0].datasets[0].coordinate_transformations == transform
         # read data with an external reader
         ext_reader = ome_zarr.reader.Reader(ome_zarr.io.parse_url(dataset.zgroup.store.root))
-        node = list(ext_reader())[0]
+        node = next(iter(ext_reader()))
         assert node.metadata["coordinateTransformations"][0] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
@@ -709,7 +707,7 @@ target_translations = [
 
 @pytest.mark.parametrize(
     "transforms",
-    [(saved, target) for saved, target in zip(input_transformations, target_scales)],
+    [(saved, target) for saved, target in zip(input_transformations, target_scales, strict=False)],
 )
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
@@ -721,7 +719,7 @@ def test_get_effective_scale_image(transforms, ch_shape_dtype, arr_name, version
     (fov_transform, img_transform), expected_scale = transforms
     channel_names, shape, dtype = ch_shape_dtype
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         with open_ome_zarr(
             store_path,
             layout="fov",
@@ -738,7 +736,7 @@ def test_get_effective_scale_image(transforms, ch_shape_dtype, arr_name, version
 
 @pytest.mark.parametrize(
     "transforms",
-    [(saved, target) for saved, target in zip(input_transformations, target_translations)],
+    [(saved, target) for saved, target in zip(input_transformations, target_translations, strict=False)],
 )
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
@@ -750,7 +748,7 @@ def test_get_effective_translation_image(transforms, ch_shape_dtype, arr_name, v
     (fov_transform, img_transform), expected_translation = transforms
     channel_names, shape, dtype = ch_shape_dtype
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         with open_ome_zarr(
             store_path,
             layout="fov",
@@ -775,7 +773,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name, version):
     channel_names, shape, dtype = ch_shape_dtype
     transform = [TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))] * len(channel_names)
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         with open_ome_zarr(
             store_path,
             layout="fov",
@@ -807,7 +805,7 @@ def test_set_scale(image_name, version):
     array_name = "0" if image_name == "*" else image_name
     new_scale = 10.0
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         with open_ome_zarr(
             store_path,
             layout="fov",
@@ -824,7 +822,7 @@ def test_set_scale(image_name, version):
                     TransformationMeta(type="scale", scale=scale),
                 ],
             )
-            with pytest.raises(ValueError):
+            with pytest.raises(ValueError, match=r"."):
                 dataset.set_scale(image=image_name, axis_name="z", new_scale=-1.0)
             with pytest.raises(KeyError):
                 dataset.set_scale(image="nonexistent", axis_name="z", new_scale=9.0)
@@ -845,7 +843,7 @@ def test_set_scale(image_name, version):
 def test_set_contrast_limits(channel_names, version):
     """Test `iohub.ngff.Position.set_contrast_limits()`"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "ome.zarr")
+        store_path = Path(temp_dir) / "ome.zarr"
         dataset = open_ome_zarr(
             store_path,
             layout="fov",
@@ -891,7 +889,7 @@ def test_create_tiled(channel_names, version):
     """Test that `iohub.ngff.open_ome_zarr()` can create
     an empty OME-Zarr store with 'tiled' layout."""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "tiled.zarr")
+        store_path = Path(temp_dir) / "tiled.zarr"
         dataset = open_ome_zarr(
             store_path,
             layout="tiled",
@@ -899,7 +897,7 @@ def test_create_tiled(channel_names, version):
             channel_names=channel_names,
             version=version,
         )
-        assert os.path.isdir(store_path)
+        assert Path(store_path).is_dir()
         assert dataset.channel_names == channel_names
 
 
@@ -913,7 +911,7 @@ def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
     """Test `iohub.ngff.TiledPosition.make_tiles()` and  `...get_tile()`"""
     with TemporaryDirectory() as temp_dir:
         channel_names, random_5d = channels_and_random_5d
-        store_path = os.path.join(temp_dir, "tiled.zarr")
+        store_path = Path(temp_dir) / "tiled.zarr"
         with open_ome_zarr(store_path, layout="tiled", mode="a", channel_names=channel_names) as dataset:
             tiles = dataset.make_tiles(
                 name=arr_name,
@@ -967,7 +965,7 @@ def test_write_read_tiles(implementation, channels_and_random_5d, grid_shape, ar
                 )
 
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "tiled.zarr")
+        store_path = Path(temp_dir) / "tiled.zarr"
         with open_ome_zarr(
             store_path,
             layout="tiled",
@@ -998,9 +996,9 @@ def test_write_read_tiles(implementation, channels_and_random_5d, grid_shape, ar
 def test_create_hcs(channel_names):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "hcs.zarr")
+        store_path = Path(temp_dir) / "hcs.zarr"
         dataset = open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=channel_names)
-        assert os.path.isdir(store_path)
+        assert Path(store_path).is_dir()
         assert dataset.channel_names == channel_names
 
 
@@ -1020,11 +1018,11 @@ def test_open_hcs_create_empty(version):
         dataset.close()
         with pytest.raises(FileExistsError):
             _ = open_ome_zarr(store_path, layout="hcs", mode="w-", channel_names=["GFP"])
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             _ = open_ome_zarr(store_path, layout="hcs", mode="x")
         with pytest.raises(FileNotFoundError):
             _ = open_ome_zarr("do-not-exist.zarr", layout="hcs", mode="r+")
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             dataset = open_ome_zarr(store_path, layout="hcs", mode="r+")
 
 
@@ -1044,7 +1042,7 @@ def test_get_channel_index(wrong_channel_name):
     assume(wrong_channel_name != "DAPI")
     with open_ome_zarr(hcs_ref, layout="hcs", mode="r+") as dataset:
         assert dataset.get_channel_index("DAPI") == 0
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             _ = dataset.get_channel_index(wrong_channel_name)
 
 
@@ -1057,10 +1055,10 @@ def test_get_axis_index():
         assert position.get_axis_index("z") == 1
         assert position.get_axis_index("Z") == 1
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             _ = position.get_axis_index("t")
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match=r"."):
             _ = position.get_axis_index("DOG")
 
 
@@ -1080,7 +1078,7 @@ def test_ngff_node_contains_cross_platform(caplog):
 @settings(max_examples=16)
 def test_modify_hcs_ref(row: str, col: str, pos: str):
     """Test `iohub.ngff.open_ome_zarr()`"""
-    assume((row.lower() != "b"))
+    assume(row.lower() != "b")
     with _temp_copy(hcs_ref) as store_path:
         with open_ome_zarr(store_path, layout="hcs", mode="r+") as dataset:
             assert dataset.axes[0].name == "c"
@@ -1102,7 +1100,7 @@ def test_modify_hcs_ref(row: str, col: str, pos: str):
 def test_create_well(row_names: list[str], col_names: list[str]):
     """Test `iohub.ngff.Plate.create_well()`"""
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "hcs.zarr")
+        store_path = Path(temp_dir) / "hcs.zarr"
         dataset = open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=["GFP"])
         for row_name in row_names:
             for col_name in col_names:
@@ -1310,7 +1308,7 @@ def test_combine_fovs_to_hcs():
         for path in fov_paths:
             fovs[path] = fov
     with TemporaryDirectory() as temp_dir:
-        store_path = os.path.join(temp_dir, "combined.zarr")
+        store_path = Path(temp_dir) / "combined.zarr"
         Plate.from_positions(store_path, fovs).close()
         with open_ome_zarr(store_path, layout="hcs", mode="r") as dataset:
             assert len(dataset.metadata.rows) == 3
@@ -1334,7 +1332,7 @@ def test_hcs_external_reader(tmp_path):
             fov.create_zeros("0", shape=(1, 2, 3, y_size, x_size), dtype=int)
         n_rows = len(dataset.metadata.rows)
         n_cols = len(dataset.metadata.columns)
-    plate = list(ome_zarr.reader.Reader(ome_zarr.io.parse_url(store_path))())[0]
+    plate = next(iter(ome_zarr.reader.Reader(ome_zarr.io.parse_url(store_path))()))
     assert plate.data[0].shape == (1, 2, 3, y_size * n_rows, x_size * n_cols)
     assert plate.data[0].dtype == int
     assert not plate.data[0].any()
@@ -1416,7 +1414,7 @@ def test_create_labels(channels_and_random_5d, label_name, version):
         random_5d.shape[3],
         random_5d.shape[4],
     )
-    label_data = np.random.randint(0, 3, size=label_shape, dtype=np.uint16)
+    label_data = np.random.default_rng().integers(0, 3, size=label_shape, dtype=np.uint16)
 
     with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         # Test label creation
@@ -1458,7 +1456,7 @@ def test_labels_pyramid(channels_and_random_5d, label_name, version):
         random_5d.shape[3],
         random_5d.shape[4],
     )
-    label_data = np.random.randint(0, 3, size=label_shape, dtype=np.uint16)
+    label_data = np.random.default_rng().integers(0, 3, size=label_shape, dtype=np.uint16)
 
     with _temp_ome_zarr(random_5d, channel_names, "0", version=version) as dataset:
         # Initialize image pyramid
@@ -1587,8 +1585,10 @@ def test_labels_access_patterns(channels_and_random_5d, version):
         assert isinstance(nuclei, PositionLabel)
 
         # Test level access patterns
-        assert "0" in cells and "1" in cells  # Multiscale
-        assert "0" in nuclei and "1" not in nuclei  # Single level
+        assert "0" in cells
+        assert "1" in cells
+        assert "0" in nuclei
+        assert "1" not in nuclei
 
         # Test labels() generator follows pattern of wells(), positions()
         label_names = []

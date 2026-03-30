@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import get_args
 
@@ -112,7 +112,7 @@ def _build_xarray(
 def _make_position(rng, tmp_dir, channel_names, shape, scales=None, name="test.zarr"):
     """Create a Position with random float32 data and optional scales."""
     pos = open_ome_zarr(
-        os.path.join(tmp_dir, name),
+        Path(tmp_dir) / name,
         layout="fov",
         mode="w-",
         channel_names=channel_names,
@@ -139,7 +139,7 @@ def test_roundtrip_data_and_scales(rng, params):
     xa = _build_xarray(rng, channel_names, shape, scales, translations)
     with TemporaryDirectory() as tmp:
         with open_ome_zarr(
-            os.path.join(tmp, "rt.zarr"),
+            Path(tmp) / "rt.zarr",
             layout="fov",
             mode="w-",
             channel_names=channel_names,
@@ -168,7 +168,7 @@ def test_roundtrip_coordinate_units(rng, time_unit, space_unit):
     xa = _build_xarray(rng, ["ch1"], SHAPE_SMALL, coord_units=coord_units)
     with TemporaryDirectory() as tmp:
         with open_ome_zarr(
-            os.path.join(tmp, "u.zarr"),
+            Path(tmp) / "u.zarr",
             layout="fov",
             mode="w-",
             channel_names=["ch1"],
@@ -190,7 +190,7 @@ def test_roundtrip_value_attrs(rng, attrs):
     """DataArray attrs survive write -> close -> reopen -> read."""
     xa = _build_xarray(rng, ["ch1"], (1, 1, 1, 4, 4), attrs=attrs)
     with TemporaryDirectory() as tmp:
-        path = os.path.join(tmp, "v.zarr")
+        path = Path(tmp) / "v.zarr"
         with open_ome_zarr(
             path,
             layout="fov",
@@ -222,7 +222,7 @@ def test_write_channel_subset(rng, params):
     xa_all = _build_xarray(rng, channel_names, shape, scales, translations)
     with TemporaryDirectory() as tmp:
         with open_ome_zarr(
-            os.path.join(tmp, "all.zarr"),
+            Path(tmp) / "all.zarr",
             layout="fov",
             mode="w-",
             channel_names=channel_names,
@@ -231,7 +231,7 @@ def test_write_channel_subset(rng, params):
             result_all = pos_all.to_xarray()
 
         with open_ome_zarr(
-            os.path.join(tmp, "per_ch.zarr"),
+            Path(tmp) / "per_ch.zarr",
             layout="fov",
             mode="w-",
             channel_names=channel_names,
@@ -258,7 +258,7 @@ def test_dims_shape_and_data(rng, params):
     data = rng.random(shape).astype(np.float32)
     with TemporaryDirectory() as tmp:
         with open_ome_zarr(
-            os.path.join(tmp, "d.zarr"),
+            Path(tmp) / "d.zarr",
             layout="fov",
             mode="w-",
             channel_names=channel_names,
@@ -295,7 +295,7 @@ class TestWriteXarray:
         with TemporaryDirectory() as tmp:
             xa = _build_xarray(rng, ["GFP"])
             with open_ome_zarr(
-                os.path.join(tmp, "e.zarr"),
+                Path(tmp) / "e.zarr",
                 layout="fov",
                 mode="w-",
                 channel_names=["RFP"],
@@ -307,7 +307,7 @@ class TestWriteXarray:
         bad = xr.DataArray(np.zeros((2, 3)), dims=("x", "y"))
         with TemporaryDirectory() as tmp:
             with open_ome_zarr(
-                os.path.join(tmp, "e.zarr"),
+                Path(tmp) / "e.zarr",
                 layout="fov",
                 mode="w-",
                 channel_names=["ch1"],
@@ -323,7 +323,7 @@ class TestWriteXarray:
         )
         with TemporaryDirectory() as tmp:
             with open_ome_zarr(
-                os.path.join(tmp, "e.zarr"),
+                Path(tmp) / "e.zarr",
                 layout="fov",
                 mode="w-",
                 channel_names=["ch1"],
@@ -339,7 +339,7 @@ class TestWriteXarray:
         )
         with TemporaryDirectory() as tmp:
             with open_ome_zarr(
-                os.path.join(tmp, "e.zarr"),
+                Path(tmp) / "e.zarr",
                 layout="fov",
                 mode="w-",
                 channel_names=["ch1"],
@@ -361,7 +361,7 @@ class TestWriteXarray:
                 },
             )
             with open_ome_zarr(
-                os.path.join(tmp, "t.zarr"),
+                Path(tmp) / "t.zarr",
                 layout="fov",
                 mode="w-",
                 channel_names=["ch1"],
@@ -387,7 +387,7 @@ class TestWriteXarray:
                 "x": ("x", np.arange(8.0)),
             }
             with open_ome_zarr(
-                os.path.join(tmp, "t.zarr"),
+                Path(tmp) / "t.zarr",
                 layout="fov",
                 mode="w-",
                 channel_names=["ch1"],
@@ -419,7 +419,7 @@ class TestWriteXarray:
             channels = ["GFP", "RFP"]
             xa = _build_xarray(rng, channels, shape=(2, 2, 3, 16, 16))
             with open_ome_zarr(
-                os.path.join(tmp, "p.zarr"),
+                Path(tmp) / "p.zarr",
                 layout="hcs",
                 mode="w-",
                 channel_names=channels,
@@ -433,7 +433,7 @@ class TestWriteXarray:
     def test_waveorder_pattern(self, rng):
         """Read BF, compute Phase+Retardance, write channel-by-channel."""
         with TemporaryDirectory() as tmp:
-            in_path = os.path.join(tmp, "in.zarr")
+            in_path = Path(tmp) / "in.zarr"
             in_data = rng.random((2, 1, 4, 16, 16)).astype(np.float32)
             with open_ome_zarr(
                 in_path,
@@ -451,7 +451,7 @@ class TestWriteXarray:
                 phase = np.sin(bf.values).astype(np.float32)
                 ret = np.cos(bf.values).astype(np.float32)
 
-            out_path = os.path.join(tmp, "out.zarr")
+            out_path = Path(tmp) / "out.zarr"
             with open_ome_zarr(
                 out_path,
                 layout="fov",
@@ -483,3 +483,68 @@ class TestWriteXarray:
                 result.coords["z"].values,
                 np.arange(4) * 2.0,
             )
+
+
+# ── TensorStore backend tests ─────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+def test_to_xarray_tensorstore(implementation, tmp_path):
+    """to_xarray() works with both zarr-python and tensorstore backends."""
+    pytest.importorskip("tensorstore") if implementation == "tensorstore" else None
+    rng = np.random.default_rng(0)
+    data = rng.random((2, 3, 4, 16, 16)).astype(np.float32)
+    channel_names = ["DAPI", "GFP", "mCherry"]
+
+    store = tmp_path / "test.zarr"
+    with open_ome_zarr(
+        store,
+        layout="fov",
+        mode="w-",
+        channel_names=channel_names,
+        implementation=implementation,
+    ) as pos:
+        pos.create_image("0", data)
+        pos.set_scale("0", "z", 0.5)
+        pos.set_scale("0", "y", 0.25)
+        pos.set_scale("0", "x", 0.25)
+
+    with open_ome_zarr(store, layout="fov", mode="r", implementation=implementation) as pos:
+        xa = pos.to_xarray()
+
+    assert xa.shape == data.shape
+    assert list(xa.dims) == ["t", "c", "z", "y", "x"]
+    assert list(xa.coords["c"].values) == channel_names
+    assert_allclose(xa.values, data, rtol=1e-5)
+    assert_allclose(xa.coords["z"].values, np.arange(4) * 0.5)
+    assert_allclose(xa.coords["y"].values, np.arange(16) * 0.25)
+
+
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+def test_write_xarray_tensorstore(implementation, tmp_path):
+    """write_xarray() roundtrip works with both zarr-python and tensorstore backends."""
+    pytest.importorskip("tensorstore") if implementation == "tensorstore" else None
+    rng = np.random.default_rng(1)
+    channel_names = ["ch0", "ch1"]
+    xa = xr.DataArray(
+        rng.random((1, 2, 3, 8, 8)).astype(np.float32),
+        dims=("t", "c", "z", "y", "x"),
+        coords={"c": ("c", channel_names)},
+    )
+
+    store = tmp_path / "rw.zarr"
+    with open_ome_zarr(
+        store,
+        layout="fov",
+        mode="w-",
+        channel_names=channel_names,
+        implementation=implementation,
+    ) as pos:
+        pos.write_xarray(xa)
+
+    with open_ome_zarr(store, layout="fov", mode="r", implementation=implementation) as pos:
+        result = pos.to_xarray()
+
+    assert result.shape == xa.shape
+    assert_allclose(result.values, xa.values, rtol=1e-5)
+    assert list(result.coords["c"].values) == channel_names

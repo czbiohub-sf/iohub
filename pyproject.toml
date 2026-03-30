@@ -101,19 +101,57 @@ bump = true
 fallback-version = "0.0.0"
 
 [tool.pytest]
-minversion = "9.0"
-addopts = ["-ra", "-nauto"]
-testpaths = ["tests"]
+minversion="9.0"
+strict = true
+testpaths = [ "tests" ]
+addopts = [
+    "-ra",
+    "--import-mode=importlib",
+]
 
 [tool.ruff]
 line-length = 120
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-docstring-code-format = true
-docstring-code-line-length = "dynamic"
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I"]
-ignore = ["E203", "E731"]
+src = [ "src" ]
+extend-include = [ "*.ipynb" ]
+format.quote-style = "double"
+format.indent-style = "space"
+format.docstring-code-format = true
+format.docstring-code-line-length = "dynamic"
+lint.select = [
+    "B",    # flake8-bugbear
+    "BLE",  # flake8-blind-except
+    "C4",   # flake8-comprehensions
+    "D",    # pydocstyle
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "NPY",  # NumPy-specific rules
+    "PERF", # Perflint
+    "PT",   # pytest
+    "PTH",  # pathlib
+    "RUF",  # Ruff-specific rules
+    "TID",  # flake8-tidy-imports
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+lint.ignore = [
+    "B008",  # function calls in argument defaults are fine when result is immutable
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
+    "D105",  # __magic__ methods are often self-explanatory
+    "D107",  # Missing docstring in __init__
+    "D203",  # no blank line before class docstring (conflicts with D211)
+    "D213",  # docstrings start immediately after opening triple quote (conflicts with D212)
+    "D400",  # first line should end with period (doesn't work with single-line docstrings)
+    "D401",  # first line in imperative mood
+    "E203",  # slice whitespace (handled by formatter)
+    "E501",  # line too long (formatter handles code; long comments are acceptable)
+    "E731",  # lambda assignments are convenient
+]
+lint.per-file-ignores."*/__init__.py" = [ "F401" ]
+lint.per-file-ignores."docs/*" = [ "D", "I", "NPY002", "PTH", "PERF401", "BLE001" ]
+lint.per-file-ignores."tests/*" = [ "D" ]
+lint.pydocstyle.convention = "numpy"

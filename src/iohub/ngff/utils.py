@@ -4,9 +4,10 @@ import inspect
 import itertools
 import multiprocessing as mp
 from collections import defaultdict
+from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Literal, Sequence, Union
+from typing import Any, Literal
 
 import click
 import numpy as np
@@ -30,6 +31,7 @@ def create_empty_plate(
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
+
     If the plate exists, append positions and channels
     if they are not already in the plate.
 
@@ -102,7 +104,6 @@ def create_empty_plate(
     - The function ensures that positions and channels are appended to an
     existing plate if they are not already present.
     """
-
     # Limiting the chunking to 500MB
     if chunks is None:
         chunk_zyx_shape = _limit_zyx_chunk_size(
@@ -151,7 +152,7 @@ def create_empty_plate(
 def _apply_transform_to_czyx(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
-    input_channel_indices: Union[list[int], slice],
+    input_channel_indices: list[int] | slice,
     input_time_index: int,
     **kwargs,
 ) -> NDArray | None:
@@ -204,8 +205,10 @@ def apply_transform_to_tczyx_and_save(
     output_time_indices: list[int] | slice,
     **kwargs,
 ) -> None:
-    """Load a TCZYX array from a position store,
-    apply a transformation, and save the result."""
+    """Load a TCZYX array from a position store.
+
+    Apply a transformation and save the result.
+    """
     input_time_indices = _slice_to_list(input_time_indices)
     results = {}
     for i, input_time_index in enumerate(input_time_indices):
@@ -259,9 +262,7 @@ def _match_indices_to_batches(
     """Match flat indices to batches based on a reference pair."""
     matched_batches = []
     for batch in batched_reference:
-        matched_batch = []
-        for index in batch:
-            matched_batch.append(flat_indices[original_reference.index(index)])
+        matched_batch = [flat_indices[original_reference.index(index)] for index in batch]
         matched_batches.append(matched_batch)
     return matched_batches
 
@@ -286,9 +287,9 @@ def process_single_position(
     **kwargs,
 ) -> None:
     """
-    Apply function to data in an `iohub` position store,
-    parallelizing over time and channel indices,
-    and save result in an output position store.
+    Apply function to data in an `iohub` position store.
+
+    Parallelize over time and channel indices and save result in an output position store.
 
     Parameters
     ----------
@@ -382,8 +383,8 @@ def process_single_position(
 
     # Loop through (T, C), applying transform and writing as we go
     iterable = itertools.product(
-        zip(input_channel_indices, output_channel_indices),
-        zip(batched_input_time_indices, batched_output_time_indices),
+        zip(input_channel_indices, output_channel_indices, strict=False),
+        zip(batched_input_time_indices, batched_output_time_indices, strict=False),
     )
     flat_iterable = tuple((*c, *t) for c, t in iterable)
 
@@ -459,7 +460,7 @@ def _adjust_chunks_for_divisibility(shape: tuple[int, ...], chunks: tuple[int, .
     shape = list(shape)
     chunks = list(chunks)
     adjusted = []
-    for chunk, dim in zip(chunks, shape):
+    for chunk, dim in zip(chunks, shape, strict=False):
         if chunk > dim:
             adjusted.append(dim)
         elif dim % chunk != 0:

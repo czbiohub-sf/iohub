@@ -4,7 +4,7 @@
 | :----------: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 |  **Status**  | [![Docs][badge-docs]][link-docs] [![Tests][badge-tests]][link-tests]                                                                                                        |
 | **Package**  | [![PyPI][badge-pypi]][link-pypi] [![Python][badge-python]][link-pypi]                                                                                                       |
-|   **Meta**   | [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license]  |
+|   **Meta**   | [![SPEC 0][badge-spec0]][link-spec0] [![Hatch][badge-hatch]][link-hatch] [![uv][badge-uv]][link-uv] [![Ruff][badge-ruff]][link-ruff] [![prek][badge-prek]][link-prek] [![License][badge-license]][link-license]  |
 |   **Cite**   | [![DOI][badge-doi]][link-doi]                                                                                                                                               |
 
 [badge-docs]: https://github.com/czbiohub-sf/iohub/actions/workflows/docs.yml/badge.svg
@@ -13,6 +13,8 @@
 [badge-python]: https://img.shields.io/pypi/pyversions/iohub
 [badge-hatch]: https://img.shields.io/badge/%F0%9F%A5%9A-Hatch-4051b5.svg
 [badge-uv]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json
+[badge-spec0]: https://img.shields.io/badge/SPEC-0-green?labelColor=%23004811&color=%235CA038
+[link-spec0]: https://scientific-python.org/specs/spec-0000/
 [badge-ruff]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json
 [badge-prek]: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/j178/prek/master/docs/assets/badge-v0.json
 [badge-license]: https://img.shields.io/badge/License-BSD--3--Clause-blue.svg
