@@ -95,6 +95,10 @@ class TIFFConverter:
     version : Literal["0.4", "0.5"], optional
         OME-NGFF version for the output Zarr store, by default "0.5".
         Both versions use Zarr v3 format; "0.4" is deprecated for new stores.
+    implementation : str, optional
+        Zarr backend implementation to use for writing.
+        None (default) uses zarr-python. Pass "tensorstore"
+        to write via TensorStore (requires the optional tensorstore dependency).
 
     Notes
     -----
@@ -111,7 +115,9 @@ class TIFFConverter:
         chunks: tuple[int] | Literal["XY", "XYZ"] | None = None,
         hcs_plate: bool | None = None,
         version: Literal["0.4", "0.5"] = "0.5",
+        implementation: str | None = None,
     ):
+        self.implementation = implementation
         if version not in ("0.4", "0.5"):
             raise ValueError(f"Unsupported OME-NGFF version '{version}'. Supported versions are '0.4' and '0.5'.")
         self.version = version
@@ -287,6 +293,7 @@ class TIFFConverter:
             mode="w-",
             channel_names=self.reader.channel_names,
             version=self.version,
+            implementation=self.implementation,
         )
         self.zarr_position_names = []
         arr_kwargs = {
@@ -320,7 +327,7 @@ class TIFFConverter:
 
     def _create_zeros_array(self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict) -> Position:
         pos = self.writer.create_position(row_name, col_name, pos_name)
-        self.zarr_position_names.append(pos.zgroup.name)
+        self.zarr_position_names.append(f"{row_name}/{col_name}/{pos_name}")
         _ = pos.create_zeros(**arr_kwargs)
         pos.metadata.omero.name = self.pos_names[len(self.zarr_position_names) - 1]
         pos.dump_meta()
@@ -393,7 +400,7 @@ class TIFFConverter:
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
                 zarr_img.write_from_dask(fov.xdata.data.rechunk(self.chunks))
-                self._convert_image_plane_metadata(fov, zarr_img.path)
+                self._convert_image_plane_metadata(fov, f"{zarr_pos_name.lstrip('/')}/0")
 
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()

@@ -367,17 +367,19 @@ class TestVersionParameter:
     @pytest.mark.parametrize("impl", ["zarr", "tensorstore"])
     @pytest.mark.parametrize("ver", ["0.5"])
     def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver, impl):
-        """Conversion should produce a correct store and preserve pixel data."""
+        """Conversion write+read roundtrip preserves data for both backends."""
         if impl == "tensorstore":
             pytest.importorskip("tensorstore")
         logging.getLogger("tifffile").setLevel(logging.ERROR)
-        output = tmpdir / f"converted_{ver}.zarr"
-        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        output = tmpdir / f"converted_{ver}_{impl}.zarr"
+        # Write with the same implementation
+        converter = TIFFConverter(example_ome_tiff, output, version=ver, implementation=impl)
         from tifffile import TiffFile
 
         with TiffFile(next(example_ome_tiff.glob("*.tif*"))) as tf:
             expected_sum = tf.asarray().sum()
         converter()
+        # Read back with the same implementation
         with open_ome_zarr(output, mode="r", implementation=impl) as result:
             assert result.version == ver
             intensity = sum(pos["0"][:].sum() for _, pos in result.positions())
