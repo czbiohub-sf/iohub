@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import re
 import warnings
@@ -16,7 +18,7 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-ArrayIndex = int | slice, list[int, np.ndarray]
+ArrayIndex = int | slice | list[int] | np.ndarray
 
 
 def _array_to_blosc_buffer(

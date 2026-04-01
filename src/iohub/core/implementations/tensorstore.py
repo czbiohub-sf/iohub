@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -82,21 +81,30 @@ class _TsGroup:
         mode: str,
         impl: TensorStoreImplementation,
         zarr_driver: str = "zarr3",
+        root: Path | None = None,
     ):
+        if mode == "w-" and path.exists():
+            raise FileExistsError(f"Store already exists: {path}")
+        if mode in ("w", "w-", "a") and not path.exists():
+            path.mkdir(parents=True, exist_ok=True)
+            (path / "zarr.json").write_text(
+                '{"zarr_format": 3, "node_type": "group", "attributes": {}}'
+            )
         self.path = path
         self.mode = mode
         self._impl = impl
         self.zarr_driver = zarr_driver
+        self._root = root if root is not None else path
 
     def create_group(self, name: str, overwrite: bool = False) -> _TsGroup:
         sub = self.path / name
         if sub.exists() and not overwrite:
-            return _TsGroup(path=sub, mode=self.mode, impl=self._impl, zarr_driver=self.zarr_driver)
+            return _TsGroup(path=sub, mode="a", impl=self._impl, zarr_driver=self.zarr_driver)
         sub.mkdir(parents=True, exist_ok=True)
         zarr_json = sub / "zarr.json"
         if not zarr_json.exists() or overwrite:
             zarr_json.write_text(json.dumps({"zarr_format": 3, "node_type": "group", "attributes": {}}))
-        return _TsGroup(path=sub, mode=self.mode, impl=self._impl, zarr_driver=self.zarr_driver)
+        return _TsGroup(path=sub, mode="a", impl=self._impl, zarr_driver=self.zarr_driver)
 
     def __contains__(self, name: str) -> bool:
         return self.get(name) is not None
@@ -125,14 +133,14 @@ class _TsGroup:
                 if meta.get("node_type") == "array":
                     return self._impl.open_array(self, name)
                 if meta.get("node_type") == "group":
-                    return _TsGroup(path=sub, mode=self.mode, impl=self._impl, zarr_driver=self.zarr_driver)
+                    return _TsGroup(path=sub, mode="a", impl=self._impl, zarr_driver=self.zarr_driver, root=self._root)
             except (OSError, ValueError):
                 pass
         else:
             if (sub / ".zarray").exists():
                 return self._impl.open_array(self, name)
             if (sub / ".zgroup").exists():
-                return _TsGroup(path=sub, mode=self.mode, impl=self._impl, zarr_driver=self.zarr_driver)
+                return _TsGroup(path=sub, mode="a", impl=self._impl, zarr_driver=self.zarr_driver, root=self._root)
         return default
 
     @property
@@ -145,7 +153,11 @@ class _TsGroup:
 
     @property
     def name(self) -> str:
-        return str(self.path)
+        try:
+            rel = self.path.relative_to(self._root)
+            return "/" + str(rel) if str(rel) != "." else "/"
+        except ValueError:
+            return str(self.path)
 
     @property
     def basename(self) -> str:
@@ -226,6 +238,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
 
     def __init__(self, config: TensorStoreConfig | None = None):
         self.config = config or TensorStoreConfig()
+        self._array_cache: dict[str, Any] = {}
 
     def _context(self) -> ts.Context:
         import tensorstore as ts
@@ -260,50 +273,36 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
 
     def open_group(self, path: StorePath, mode: str, zarr_format: int | None = None) -> _TsGroup:
         p = Path(path)
-        zarr_driver = _detect_zarr_driver(p)
-        return _TsGroup(path=p, mode=mode, impl=self, zarr_driver=zarr_driver)
+        return _TsGroup(path=p, mode=mode, impl=self, zarr_driver=_detect_zarr_driver(p), root=p)
+
+    def _iter_children(self, group: _TsGroup, node_type: str) -> list[str]:
+        """Return sorted child names matching node_type ('group' or 'array')."""
+        p = Path(group.path)
+        if not p.is_dir():
+            return []
+        keys: list[str] = []
+        match group.zarr_driver:
+            case "zarr3":
+                for entry in p.iterdir():
+                    d = entry.name
+                    if not entry.is_dir() or d.startswith("."):
+                        continue
+                    try:
+                        meta = json.loads((entry / "zarr.json").read_text())
+                        if meta.get("node_type") == node_type:
+                            keys.append(d)
+                    except (OSError, ValueError):
+                        pass
+            case "zarr2":
+                sentinel = {"group": ".zgroup", "array": ".zarray"}[node_type]
+                keys = [e.name for e in p.iterdir() if (p / e.name / sentinel).exists()]
+        return sorted(keys)
 
     def group_keys(self, group: _TsGroup) -> list[str]:
-        p = Path(group.path)
-        if not p.is_dir():
-            return []
-        keys = []
-        match group.zarr_driver:
-            case "zarr3":
-                for d in (entry.name for entry in p.iterdir()):
-                    sub = p / d
-                    if not sub.is_dir() or d.startswith("."):
-                        continue
-                    try:
-                        meta = json.loads((sub / "zarr.json").read_text())
-                        if meta.get("node_type") == "group":
-                            keys.append(d)
-                    except (OSError, ValueError):
-                        pass
-            case "zarr2":
-                keys = [d for d in (entry.name for entry in p.iterdir()) if (p / d / ".zgroup").exists()]
-        return sorted(keys)
+        return self._iter_children(group, "group")
 
     def array_keys(self, group: _TsGroup) -> list[str]:
-        p = Path(group.path)
-        if not p.is_dir():
-            return []
-        keys = []
-        match group.zarr_driver:
-            case "zarr3":
-                for d in (entry.name for entry in p.iterdir()):
-                    sub = p / d
-                    if not sub.is_dir():
-                        continue
-                    try:
-                        meta = json.loads((sub / "zarr.json").read_text())
-                        if meta.get("node_type") == "array":
-                            keys.append(d)
-                    except (OSError, ValueError):
-                        pass
-            case "zarr2":
-                keys = [d for d in (entry.name for entry in p.iterdir()) if (p / d / ".zarray").exists()]
-        return sorted(keys)
+        return self._iter_children(group, "array")
 
     def close(self, group: _TsGroup) -> None:
         pass  # TensorStore handles are not persistent connections
@@ -344,17 +343,20 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         return _ts_open(spec, create=True, delete_existing=overwrite, context=self._context())
 
     def open_array(self, group: _TsGroup, name: str) -> ts.TensorStore:
-        spec = {
-            "driver": group.zarr_driver,
-            "kvstore": {"driver": "file", "path": str(Path(group.path) / name)},
-        }
-        return _ts_open(
-            spec,
-            open=True,
-            read=True,
-            write=(group.mode != "r"),
-            context=self._context(),
-        )
+        key = str(Path(group.path) / name)
+        if key not in self._array_cache:
+            spec = {
+                "driver": group.zarr_driver,
+                "kvstore": {"driver": "file", "path": key},
+            }
+            self._array_cache[key] = _ts_open(
+                spec,
+                open=True,
+                read=True,
+                write=(group.mode != "r"),
+                context=self._context(),
+            )
+        return self._array_cache[key]
 
     # -- Array I/O ---------------------------------------------------------
 
@@ -412,7 +414,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         self,
         source: ts.TensorStore,
         target: ts.TensorStore,
-        factors: Iterable[int],
+        factors: list[int],
         method: str = "mean",
     ) -> None:
         """Downsample source into target using native ts.downsample."""

@@ -205,7 +205,9 @@ class NGFFNode:
 
     @property
     def _member_names(self):
-        """Group keys (default) or array keys (overridden)."""
+        """Array keys for leaf nodes (Position/PositionLabel), group keys for container nodes."""
+        if issubclass(self._MEMBER_TYPE, NGFFNDArray):
+            return self.array_keys()
         return self.group_keys()
 
     @property
@@ -364,6 +366,44 @@ class NGFFNode:
     def close(self):
         """Close Zarr store."""
         self._impl.close(self._group)
+
+    def _create_zarr_array(
+        self,
+        name: str,
+        shape: tuple[int, ...],
+        dtype,
+        chunks: tuple[int, ...],
+        shards_ratio: tuple[int, ...] | None,
+        dimension_names: list[str] | None = None,
+    ):
+        """Create a zarr array via the active implementation and return the native handle."""
+        if shards_ratio:
+            if len(shards_ratio) != len(shape):
+                raise ValueError(
+                    f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}."
+                )
+            shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
+        else:
+            shards = None
+        if self._zarr_format == 3:
+            spec = ArraySpec.create(
+                shape=shape,
+                dtype=dtype,
+                chunks=chunks,
+                shards=shards,
+                fill_value=0,
+                dimension_names=dimension_names or [ax.name for ax in self.axes[: len(shape)]],
+            )
+            return self._impl.create_array(self._group, name, spec, overwrite=self._overwrite)
+        return self._impl.create_array_v2(
+            self._group,
+            name,
+            shape=shape,
+            dtype=dtype,
+            chunks=chunks,
+            fill_value=0,
+            overwrite=self._overwrite,
+        )
 
     @property
     def _zarr_format(self) -> int:
@@ -600,7 +640,7 @@ class PositionLabel(NGFFNode):
         colors: dict[int, list[int]] | None = None,
         properties: list[dict[str, Any]] | None = None,
         overwriting_creation: bool = False,
-        impl=None,
+        impl: ZarrImplementation | None = None,
     ):
         if axes:
             self.axes = [ax for ax in axes if ax.type != "channel"]
@@ -635,10 +675,6 @@ class PositionLabel(NGFFNode):
         """Dump metadata to zarr.json file."""
         ome = self.metadata.model_dump(exclude_none=True, by_alias=True)
         self._dump_ome(ome)
-
-    @property
-    def _member_names(self):
-        return self.array_keys()
 
     @property
     def data(self) -> LabelsArray:
@@ -737,32 +773,7 @@ class PositionLabel(NGFFNode):
             raise ValueError(f"Labels must use integer dtype, got {dtype}")
         if not chunks:
             chunks = pad_shape(shape[-3:], target=len(shape))
-        if shards_ratio:
-            if len(shards_ratio) != len(shape):
-                raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
-            shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
-        else:
-            shards = None
-        if self._zarr_format == 3:
-            spec = ArraySpec.create(
-                shape=shape,
-                dtype=dtype,
-                chunks=chunks,
-                shards=shards,
-                fill_value=0,
-                dimension_names=[ax.name for ax in self.axes[: len(shape)]],
-            )
-            arr_handle = self._impl.create_array(self._group, level, spec, overwrite=self._overwrite)
-        else:
-            arr_handle = self._impl.create_array_v2(
-                self._group,
-                level,
-                shape=shape,
-                dtype=dtype,
-                chunks=chunks,
-                fill_value=0,
-                overwrite=self._overwrite,
-            )
+        arr_handle = self._create_zarr_array(level, shape, dtype, chunks, shards_ratio)
         lbl_arr = LabelsArray.from_handle(arr_handle, self._impl)
         self._create_label_meta(level, transform=transform)
         return lbl_arr
@@ -1126,32 +1137,7 @@ class Position(NGFFNode):
 
         if check_shape:
             self._check_shape(shape)
-        if shards_ratio:
-            if len(shards_ratio) != len(shape):
-                raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
-            shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
-        else:
-            shards = None
-        if self._zarr_format == 3:
-            spec = ArraySpec.create(
-                shape=shape,
-                dtype=dtype,
-                chunks=chunks,
-                shards=shards,
-                fill_value=0,
-                dimension_names=[ax.name for ax in self.axes],
-            )
-            arr_handle = self._impl.create_array(self._group, name, spec, overwrite=self._overwrite)
-        else:
-            arr_handle = self._impl.create_array_v2(
-                self._group,
-                name,
-                shape=shape,
-                dtype=dtype,
-                chunks=chunks,
-                fill_value=0,
-                overwrite=self._overwrite,
-            )
+        arr_handle = self._create_zarr_array(name, shape, dtype, chunks, shards_ratio)
         img_arr = ImageArray.from_handle(arr_handle, self._impl)
         self._create_image_meta(name, transform=transform)
         return img_arr
@@ -1160,6 +1146,7 @@ class Position(NGFFNode):
     def _default_chunks(shape, last_data_dims: int):
         chunks = shape[-min(last_data_dims, len(shape)) :]
         return pad_shape(chunks, target=len(shape))
+
 
     def _check_shape(self, data_shape: tuple[int, ...]) -> None:
         if len(data_shape) != len(self.axes):

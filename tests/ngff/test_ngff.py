@@ -648,17 +648,20 @@ def test_write_more_channels(channels_and_random_5d, arr_name, version):
             pass
 
 
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
 )
-def test_set_transform_image(ch_shape_dtype, arr_name):
+def test_set_transform_image(implementation, ch_shape_dtype, arr_name):
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     """Test `iohub.ngff.Position.set_transform()`"""
     channel_names, shape, dtype = ch_shape_dtype
     transform = [TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))] * len(channel_names)
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "ome.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=channel_names) as dataset:
+        with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=channel_names, implementation=implementation) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
             assert dataset.metadata.multiscales[0].datasets[0].coordinate_transformations == [
                 TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0))
@@ -906,13 +909,16 @@ def test_create_tiled(channel_names, version):
     grid_shape=tiles_rc_st,
     arr_name=short_alpha_numeric,
 )
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @settings(suppress_health_check=[HealthCheck.too_slow])
-def test_make_tiles(channels_and_random_5d, grid_shape, arr_name):
+def test_make_tiles(implementation, channels_and_random_5d, grid_shape, arr_name):
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     """Test `iohub.ngff.TiledPosition.make_tiles()` and  `...get_tile()`"""
     with TemporaryDirectory() as temp_dir:
         channel_names, random_5d = channels_and_random_5d
         store_path = Path(temp_dir) / "tiled.zarr"
-        with open_ome_zarr(store_path, layout="tiled", mode="a", channel_names=channel_names) as dataset:
+        with open_ome_zarr(store_path, layout="tiled", mode="a", channel_names=channel_names, implementation=implementation) as dataset:
             tiles = dataset.make_tiles(
                 name=arr_name,
                 grid_shape=(int(grid_shape[0]), int(grid_shape[1])),
@@ -991,19 +997,25 @@ def test_write_read_tiles(implementation, channels_and_random_5d, grid_shape, ar
                 assert_allclose(data, read)
 
 
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
-def test_create_hcs(channel_names):
+def test_create_hcs(implementation, channel_names):
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "hcs.zarr"
-        dataset = open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=channel_names)
+        dataset = open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=channel_names, implementation=implementation)
         assert Path(store_path).is_dir()
         assert dataset.channel_names == channel_names
 
 
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @pytest.mark.parametrize("version", ["0.5"])
-def test_open_hcs_create_empty(version):
+def test_open_hcs_create_empty(implementation, version):
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "hcs.zarr"
@@ -1013,6 +1025,7 @@ def test_open_hcs_create_empty(version):
             mode="a",
             channel_names=["GFP"],
             version=version,
+            implementation=implementation,
         )
         assert dataset.zgroup.store.root.resolve() == store_path.resolve()
         dataset.close()
@@ -1732,8 +1745,11 @@ def test_delete_pyramid(tmp_path, implementation):
 
 
 @given(config=_pyramid_config())
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @settings(max_examples=32)
-def test_initialize_pyramid_shapes(config):
+def test_initialize_pyramid_shapes(implementation, config):
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     """Test initialize_pyramid produces correct cascade shapes for any dims subset."""
     import math
 
@@ -1742,7 +1758,7 @@ def test_initialize_pyramid_shapes(config):
 
     with TemporaryDirectory() as tmp:
         store_path = Path(tmp) / "pyramid-test.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation) as pos:
             pos.create_zeros("0", shape=shape, dtype=np.float32)
             pos.initialize_pyramid(levels=levels, dims=dims)
 
@@ -1766,16 +1782,19 @@ def test_initialize_pyramid_shapes(config):
                 prev_shape = current_shape
 
 
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @given(config=_pyramid_config())
 @settings(max_examples=32)
-def test_initialize_pyramid_scale_metadata(config):
+def test_initialize_pyramid_scale_metadata(implementation, config):
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     """Test initialize_pyramid sets correct cumulative scale metadata per axis."""
     shape, dims, levels = config
     channel_names = ["ch0"] * shape[1]
 
     with TemporaryDirectory() as tmp:
         store_path = Path(tmp) / "pyramid-test.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation) as pos:
             pos.create_zeros("0", shape=shape, dtype=np.float32)
             pos.initialize_pyramid(levels=levels, dims=dims)
 
@@ -1797,18 +1816,20 @@ def test_initialize_pyramid_scale_metadata(config):
 
 
 @given(config=_pyramid_config())
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
 @settings(max_examples=16, deadline=None, suppress_health_check=[HealthCheck.too_slow])
-def test_compute_pyramid_shapes(config):
+def test_compute_pyramid_shapes(implementation, config):
     """Test compute_pyramid fills correct shapes for any dims subset."""
     import math
 
-    pytest.importorskip("tensorstore")
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     shape, dims, levels = config
     channel_names = ["ch0"] * shape[1]
 
     with TemporaryDirectory() as tmp:
         store_path = Path(tmp) / "test.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names) as pos:
+        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation) as pos:
             pos.create_zeros("0", shape=shape, dtype=np.float32)
             pos.compute_pyramid(levels=levels, dims=dims)
 
@@ -1824,10 +1845,13 @@ def test_compute_pyramid_shapes(config):
                 prev_shape = current_shape
 
 
-def test_initialize_pyramid_invalid_dims(tmp_path):
+@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+def test_initialize_pyramid_invalid_dims(implementation, tmp_path):
     """Test that unknown axis names in dims raise ValueError."""
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
     store_path = tmp_path / "test.zarr"
-    with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=["ch0"]) as pos:
+    with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=["ch0"], implementation=implementation) as pos:
         pos.create_zeros("0", shape=(1, 1, 2, 8, 8), dtype=np.float32)
         with pytest.raises(ValueError, match="not in dataset axes"):
             pos.initialize_pyramid(levels=2, dims={"w"})
