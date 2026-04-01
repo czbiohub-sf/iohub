@@ -397,13 +397,18 @@ def process_single_position(
     )
     num_processes = min(num_processes, len(flat_iterable), mp.cpu_count())
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
-    # NOTE: use spawn to work around tensorstore#61
-    context = mp.get_context("spawn")
-    with context.Pool(num_processes) as p:
-        p.starmap(
-            partial_apply_transform_to_czyx_and_save,
-            flat_iterable,
-        )
+    if num_processes <= 1:
+        # Run serially — Pool(1) with spawn unnecessarily forks a subprocess
+        for args in flat_iterable:
+            partial_apply_transform_to_czyx_and_save(*args)
+    else:
+        # NOTE: use spawn to work around tensorstore#61
+        context = mp.get_context("spawn")
+        with context.Pool(num_processes) as p:
+            p.starmap(
+                partial_apply_transform_to_czyx_and_save,
+                flat_iterable,
+            )
     click.echo("Shut down multiprocess pool")
 
 
