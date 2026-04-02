@@ -7,7 +7,6 @@ import logging
 import math
 import os
 import shutil
-import warnings
 from collections.abc import Generator
 from copy import deepcopy
 from datetime import datetime
@@ -26,7 +25,7 @@ import zarr
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 
-from iohub.core import ArraySpec, NGFFNDArray, get_implementation
+from iohub.core import ArraySpec, NGFFArray, get_implementation
 from iohub.core.config import ImplementationConfig
 from iohub.core.errors import StoreOpenError
 from iohub.core.protocol import ZarrImplementation
@@ -120,7 +119,7 @@ def _case_insensitive_local_fs() -> bool:
 class NGFFNode:
     """A node (group level in Zarr) in an NGFF dataset."""
 
-    _MEMBER_TYPE: type[NGFFNode | NGFFNDArray]
+    _MEMBER_TYPE: type[NGFFNode | NGFFArray]
     _impl: ZarrImplementation
     _DEFAULT_AXES: ClassVar[list] = [
         TimeAxisMeta(name="T", unit="second"),
@@ -206,7 +205,7 @@ class NGFFNode:
     @property
     def _member_names(self):
         """Array keys for leaf nodes (Position/PositionLabel), group keys for container nodes."""
-        if issubclass(self._MEMBER_TYPE, NGFFNDArray):
+        if issubclass(self._MEMBER_TYPE, NGFFArray):
             return self.array_keys()
         return self.group_keys()
 
@@ -233,7 +232,7 @@ class NGFFNode:
         item_type = self._MEMBER_TYPE
         for _ in range(levels):
             item_type = item_type._MEMBER_TYPE
-        if issubclass(item_type, NGFFNDArray):
+        if issubclass(item_type, NGFFArray):
             return item_type.from_handle(znode, self._impl)
         else:
             return item_type(group=znode, parse_meta=True, **self._child_attrs)
@@ -410,7 +409,7 @@ class NGFFNode:
         return self._impl.get_zarr_format(self._group)
 
 
-class ImageArray(NGFFNDArray):
+class ImageArray(NGFFArray):
     """Container object for image stored as a zarr array (up to 5D: TCZYX)"""
 
     _SUPPORTED_DIMS = "TCZYX"
@@ -562,7 +561,7 @@ class TiledImageArray(ImageArray):
             raise TypeError("Row and column indices must be integers.")
 
 
-class LabelsArray(NGFFNDArray):
+class LabelsArray(NGFFArray):
     """Container for labels stored as zarr array (4D: TZYX)"""
 
     _SUPPORTED_DIMS = "TZYX"
@@ -3071,10 +3070,8 @@ def open_ome_zarr(
         store_path = Path(store_path)
     _is_new_store = mode in ("w", "w-") or (mode == "a" and _is_fslike(store_path) and not store_path.exists())
     if version == "0.4" and _is_new_store:
-        warnings.warn(
-            "Creating new OME-Zarr v0.4 stores is deprecated. Use version='0.5' instead.",
-            DeprecationWarning,
-            stacklevel=2,
+        raise ValueError(
+            "Creating new OME-Zarr v0.4 stores is not supported. Use version='0.5' instead."
         )
     parse_meta = _check_file_mode(store_path, mode, disable_path_checking=disable_path_checking)
     root, impl = _open_store(

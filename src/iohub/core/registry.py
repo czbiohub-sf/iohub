@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 _default: str = "zarr"
 _IMPLEMENTATIONS: dict[str, type] = {}
 _discovered: bool = False
-_lock = threading.Lock()
+_lock = threading.RLock()
 
 # Built-in implementations (always available, loaded before entrypoints)
 _BUILTINS: dict[str, str] = {
@@ -30,26 +30,26 @@ def _discover() -> None:
         if _discovered:
             return
         # Load builtins first
-    for name, path in _BUILTINS.items():
-        module_path, cls_name = path.rsplit(":", 1)
-        try:
-            mod = importlib.import_module(module_path)
-            _IMPLEMENTATIONS[name] = getattr(mod, cls_name)
-        except Exception as e:
-            _logger.error(
-                f"Failed to load built-in implementation {name!r} from {path!r}. "
-                f"iohub may be non-functional. Error: {e}",
-                exc_info=True,
-            )
-    # Entrypoint plugins can override builtins
-    for ep in entry_points(group="iohub.zarr-implementations"):
-        try:
-            _IMPLEMENTATIONS[ep.name] = ep.load()
-        except Exception as err:  # noqa: BLE001 — plugin loading may fail in many ways
-            _logger.warning(
-                f"Failed to load plugin implementation {ep.name!r}. This plugin will be unavailable. Error: {err}",
-                exc_info=True,
-            )
+        for name, path in _BUILTINS.items():
+            module_path, cls_name = path.rsplit(":", 1)
+            try:
+                mod = importlib.import_module(module_path)
+                _IMPLEMENTATIONS[name] = getattr(mod, cls_name)
+            except Exception as e:
+                _logger.error(
+                    f"Failed to load built-in implementation {name!r} from {path!r}. "
+                    f"iohub may be non-functional. Error: {e}",
+                    exc_info=True,
+                )
+        # Entrypoint plugins can override builtins
+        for ep in entry_points(group="iohub.zarr-implementations"):
+            try:
+                _IMPLEMENTATIONS[ep.name] = ep.load()
+            except Exception as err:  # noqa: BLE001 — plugin loading may fail in many ways
+                _logger.warning(
+                    f"Failed to load plugin implementation {ep.name!r}. This plugin will be unavailable. Error: {err}",
+                    exc_info=True,
+                )
         _discovered = True
 
 

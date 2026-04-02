@@ -201,7 +201,7 @@ class DatasetMeta(MetaBase):
 
 
 class VersionMeta(MetaBase):
-    """OME-NGFF spec version. Default is the current version (0.4)."""
+    """OME-NGFF spec version. Default is the current version (0.5)."""
 
     # SHOULD
     version: Literal["0.1", "0.2", "0.3", "0.4", "0.5"] | None = None

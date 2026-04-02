@@ -1,8 +1,8 @@
-"""NGFFNDArray -- implementation-agnostic N-dimensional array base class."""
+"""NGFFArray -- implementation-agnostic N-dimensional array base class."""
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Self
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,7 +12,7 @@ from iohub.core.utils import pad_shape
 
 
 class _OIndexProxy:
-    """Proxy for orthogonal indexing on an NGFFNDArray."""
+    """Proxy for orthogonal indexing on an NGFFArray."""
 
     def __init__(self, handle: Any, impl: ZarrImplementation):
         self._handle = handle
@@ -25,7 +25,7 @@ class _OIndexProxy:
         self._impl.write_oindex(self._handle, key, value)
 
 
-class NGFFNDArray:
+class NGFFArray:
     """Base class for NGFF N-dimensional arrays.
 
     Delegates all I/O to the configured :class:`ZarrImplementation`.
@@ -51,7 +51,7 @@ class NGFFNDArray:
         handle: Any,
         impl: ZarrImplementation,
         dim_names: tuple[str, ...] | None = None,
-    ):
+    ) -> Self:
         """Construct from an implementation-native handle."""
         return cls(handle, impl, dim_names=dim_names)
 
@@ -139,7 +139,7 @@ class NGFFNDArray:
         """Return the whole array as an in-RAM NumPy array."""
         return self[:]
 
-    def __array__(self, dtype=None):
+    def __array__(self, dtype=None, copy=None):
         arr = self.numpy()
         return arr if dtype is None else arr.astype(dtype)
 
@@ -153,7 +153,7 @@ class NGFFNDArray:
 
     def downsample_into(
         self,
-        target: NGFFNDArray,
+        target: NGFFArray,
         factors: list[int],
         method: str = "mean",
     ) -> None:

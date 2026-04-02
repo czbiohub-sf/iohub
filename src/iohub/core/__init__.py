@@ -1,6 +1,6 @@
 """Core zarr implementation abstraction for iohub."""
 
-from iohub.core.arrays import NGFFNDArray
+from iohub.core.arrays import NGFFArray
 from iohub.core.compat import ngff_version_for_format, zarr_format_for_version
 from iohub.core.config import (
     CompressorConfig,
@@ -53,7 +53,7 @@ __all__ = [
     "ImplementationNotFoundError",
     "IohubError",
     # Arrays
-    "NGFFNDArray",
+    "NGFFArray",
     "NGFFVersion",
     "PathNormalizationError",
     "StoreOpenError",

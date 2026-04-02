@@ -237,7 +237,7 @@ def test_init_ome_zarr(channel_names, version):
         assert dataset.channel_names == channel_names
 
 
-@pytest.mark.parametrize("version", ["0.4", "0.5"])
+@pytest.mark.parametrize("version", ["0.5"])
 @pytest.mark.parametrize(
     "basename",
     ["some.zarr", "other.zarr/0/0/0", "random_dir", "napari_ome_zarr"],
@@ -661,7 +661,9 @@ def test_set_transform_image(implementation, ch_shape_dtype, arr_name):
     transform = [TransformationMeta(type="translation", translation=(1, 2, 3, 4, 5))] * len(channel_names)
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "ome.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=channel_names, implementation=implementation) as dataset:
+        with open_ome_zarr(
+            store_path, layout="fov", mode="w-", channel_names=channel_names, implementation=implementation
+        ) as dataset:
             dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
             assert dataset.metadata.multiscales[0].datasets[0].coordinate_transformations == [
                 TransformationMeta(type="scale", scale=(1.0, 1.0, 1.0, 1.0, 1.0))
@@ -799,7 +801,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name, version):
         ]
 
 
-@pytest.mark.parametrize("version", ["0.4", "0.5"])
+@pytest.mark.parametrize("version", ["0.5"])
 @pytest.mark.parametrize("image_name", ["0", "1", "a", "*"])
 def test_set_scale(image_name, version):
     """Test `iohub.ngff.Position.set_scale()`"""
@@ -918,7 +920,9 @@ def test_make_tiles(implementation, channels_and_random_5d, grid_shape, arr_name
     with TemporaryDirectory() as temp_dir:
         channel_names, random_5d = channels_and_random_5d
         store_path = Path(temp_dir) / "tiled.zarr"
-        with open_ome_zarr(store_path, layout="tiled", mode="a", channel_names=channel_names, implementation=implementation) as dataset:
+        with open_ome_zarr(
+            store_path, layout="tiled", mode="a", channel_names=channel_names, implementation=implementation
+        ) as dataset:
             tiles = dataset.make_tiles(
                 name=arr_name,
                 grid_shape=(int(grid_shape[0]), int(grid_shape[1])),
@@ -1006,7 +1010,9 @@ def test_create_hcs(implementation, channel_names):
     """Test `iohub.ngff.open_ome_zarr()`"""
     with TemporaryDirectory() as temp_dir:
         store_path = Path(temp_dir) / "hcs.zarr"
-        dataset = open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=channel_names, implementation=implementation)
+        dataset = open_ome_zarr(
+            store_path, layout="hcs", mode="a", channel_names=channel_names, implementation=implementation
+        )
         assert Path(store_path).is_dir()
         assert dataset.channel_names == channel_names
 
@@ -1758,7 +1764,9 @@ def test_initialize_pyramid_shapes(implementation, config):
 
     with TemporaryDirectory() as tmp:
         store_path = Path(tmp) / "pyramid-test.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation) as pos:
+        with open_ome_zarr(
+            store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation
+        ) as pos:
             pos.create_zeros("0", shape=shape, dtype=np.float32)
             pos.initialize_pyramid(levels=levels, dims=dims)
 
@@ -1794,7 +1802,9 @@ def test_initialize_pyramid_scale_metadata(implementation, config):
 
     with TemporaryDirectory() as tmp:
         store_path = Path(tmp) / "pyramid-test.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation) as pos:
+        with open_ome_zarr(
+            store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation
+        ) as pos:
             pos.create_zeros("0", shape=shape, dtype=np.float32)
             pos.initialize_pyramid(levels=levels, dims=dims)
 
@@ -1829,7 +1839,9 @@ def test_compute_pyramid_shapes(implementation, config):
 
     with TemporaryDirectory() as tmp:
         store_path = Path(tmp) / "test.zarr"
-        with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation) as pos:
+        with open_ome_zarr(
+            store_path, layout="fov", mode="a", channel_names=channel_names, implementation=implementation
+        ) as pos:
             pos.create_zeros("0", shape=shape, dtype=np.float32)
             pos.compute_pyramid(levels=levels, dims=dims)
 
