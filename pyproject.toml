@@ -73,9 +73,10 @@ acquire-zarr = [
     "acquire-zarr",
 ]
 doc = [
-    "zensical>=0.0.29",
+    "zensical>=0.0.31",
     "mkdocstrings-python>=2.0.2",
     "mkdocs-click>=0.8",
+    "mike",
 ]
 dev = [
     { include-group = "test" },
@@ -92,6 +93,9 @@ source = "uv-dynamic-versioning"
 [tool.hatch.build.targets.wheel]
 packages = ["src/iohub"]
 
+
+[tool.uv.sources]
+mike = { git = "https://github.com/squidfunk/mike.git" }
 
 [tool.uv-dynamic-versioning]
 vcs = "git"
