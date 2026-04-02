@@ -38,10 +38,7 @@ position_list = (
 )
 
 with open_ome_zarr(
-    store_path,
-    layout="hcs",
-    mode="w-",
-    channel_names=["DAPI", "GFP", "Brightfield"],
+    store_path, layout="hcs", mode="w-", channel_names=["DAPI", "GFP", "Brightfield"], implementation="tensorstore"
 ) as dataset:
     # Create and write to positions
     # This affects the tile arrangement in visualization

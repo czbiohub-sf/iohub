@@ -114,7 +114,7 @@ The project uses [dependency groups](https://docs.astral.sh/uv/concepts/projects
 |-------|---------|
 | `test` | Testing tools (pytest, hypothesis, etc.) |
 | `acquire-zarr` | Acquire-zarr reader (requires glibc 2.35+) |
-| `doc` | Documentation (sphinx, etc.) |
+| `doc` | Documentation (zensical, mkdocstrings, etc.) |
 | `pre-commit` | Pre-commit hooks |
 | `dev` | Includes test, acquire-zarr, doc, pre-commit (installed by default via `uv sync`) |
 
@@ -124,38 +124,24 @@ Then make the changes and [track them with Git](https://docs.github.com/en/get-s
 
 ### Developing documentation
 
-#### Prerequisites
-
-Install the [forked version of `sphinx-polyversion`](https://github.com/ziw-liu/sphinx-polyversion/tree/iohub-staging) (temporary fix for compatibility):
-
-```shell
-uv pip install --force-reinstall git+https://github.com/ziw-liu/sphinx-polyversion.git@iohub-staging
-```
+Documentation is built with [Zensical](https://zensical.org). Configuration lives in `zensical.toml`.
 
 #### Building the HTML version locally
 
-Inside the `docs/` folder:
-
 ```shell
-make clean
-uv run sphinx-polyversion poly.py -vvv --local
+uv sync --group doc
+uv run zensical serve
 ```
 
-Generated HTML documentation can be found in the `build/` directory.
+This starts a local dev server at `http://localhost:8000` with live reloading.
 
-#### Writing examples
+To build static HTML:
 
-Example scripts in the `docs/examples` directory
-are automatically compiled to RST with `sphinx-gallery`
-in the `docs/source/auto_examples` directory.
-Files that start with `run_` in the file name
-are executed during the build,
-and output (stdout, matplotlib plot) are rendered in HTML.
+```shell
+uv run zensical build --clean
+```
 
-They can also be executed as plain Python scripts
-or interactive code blocks in some IDEs (VS Code, PyCharm, Spyder etc.).
-
-See the [syntax documentation](https://sphinx-gallery.github.io/stable/syntax.html).
+Generated HTML documentation can be found in the `site/` directory.
 
 ### Testing
 
