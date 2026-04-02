@@ -81,9 +81,9 @@ def info(files, verbose):
     "--ome-zarr-version",
     "-v",
     required=False,
-    default="0.4",
-    type=click.Choice(["0.4", "0.5"]),
-    help="OME-NGFF version for the output Zarr store. '0.4' uses Zarr v2 format, '0.5' uses Zarr v3 format.",
+    default="0.5",
+    type=click.Choice(["0.5"]),
+    help="OME-NGFF version for the output Zarr store. '0.5' uses Zarr v3 format.",
 )
 def convert(input, output, grid_layout, chunks, ome_zarr_version):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
@@ -157,7 +157,7 @@ def set_scale(
         image = "0"
     for input_position_dirpath in input_position_dirpaths:
         with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
-            for name, value in zip(["t", "z", "y", "x"], [t_scale, z_scale, y_scale, x_scale]):
+            for name, value in zip(["t", "z", "y", "x"], [t_scale, z_scale, y_scale, x_scale], strict=False):
                 if value is None:
                     continue
                 dataset.set_scale(image, name, value)

@@ -4,10 +4,10 @@ import inspect
 import itertools
 import multiprocessing as mp
 from collections import defaultdict
+from collections.abc import Callable, Sequence
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Sequence, Union
-from warnings import warn
+from typing import Any, Literal
 
 import click
 import numpy as np
@@ -15,9 +15,6 @@ from numpy.typing import DTypeLike, NDArray
 
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.nodes import TransformationMeta
-
-if TYPE_CHECKING:
-    import tensorstore as ts
 
 
 def create_empty_plate(
@@ -27,13 +24,14 @@ def create_empty_plate(
     shape: tuple[int, ...],
     chunks: tuple[int, ...] | None = None,
     shards_ratio: tuple[int, ...] | None = None,
-    version: Literal["0.4", "0.5"] = "0.4",
+    version: Literal["0.4", "0.5"] = "0.5",
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     max_chunk_size_bytes: float = 500e6,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
+
     If the plate exists, append positions and channels
     if they are not already in the plate.
 
@@ -106,7 +104,6 @@ def create_empty_plate(
     - The function ensures that positions and channels are appended to an
     existing plate if they are not already present.
     """
-
     # Limiting the chunking to 500MB
     if chunks is None:
         chunk_zyx_shape = _limit_zyx_chunk_size(
@@ -125,10 +122,6 @@ def create_empty_plate(
         channel_names=channel_names,
         version=version,
     )
-    if output_plate.version == "0.4" and shards_ratio is not None:
-        warn("Ignoring shards ratio for OME-Zarr version 0.4.")
-        shards_ratio = None
-
     # Create positions
     for position_key in position_keys:
         position_key_string = "/".join(position_key)
@@ -153,22 +146,20 @@ def create_empty_plate(
                 position.append_channel(channel_name, resize_arrays=True)
 
 
+# -- Transform helpers -----------------------------------------------------
+
+
 def _apply_transform_to_czyx(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
-    input_channel_indices: Union[list[int], slice],
+    input_channel_indices: list[int] | slice,
     input_time_index: int,
     **kwargs,
 ) -> NDArray | None:
-    # Check if input_time_indices should be added to the func kwargs
-    # This is needed when a different processing is needed for each time point,
-    # for example during stabilization
     all_func_params = inspect.signature(func).parameters.keys()
     if "input_time_index" in all_func_params:
         kwargs["input_time_index"] = input_time_index
 
-    # Process CZYX given with the given indices
-    # if input_channel_indices is not None and len(input_channel_indices) > 0:
     click.echo(f"Processing t={input_time_index}, c={input_channel_indices}")
     input_dataset = open_ome_zarr(input_position_path, layout="fov", mode="r")
     czyx_data = input_dataset.data.oindex[input_time_index, input_channel_indices]
@@ -195,171 +186,13 @@ def _save_transformed(
     output_channel_indices: list[int] | slice,
     output_time_indices: int | list[int],
 ) -> None:
-    # NOTE: use tensorstore due to zarr-python#3221
-    import tensorstore
-
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
-        ts = output_dataset.data.tensorstore(context=tensorstore.Context({"data_copy_concurrency": {"limit": 4}}))
-    ts.oindex[output_time_indices, output_channel_indices].write(transformed).result()
-    # NOTE: explicit GC due to tensorstore#223
-    del ts
-
-
-def apply_transform_to_czyx_and_save(
-    func: Callable[[NDArray, Any], NDArray],
-    input_position_path: Path,
-    output_position_path: Path,
-    input_channel_indices: Union[list[int], slice],
-    output_channel_indices: Union[list[int], slice],
-    input_time_index: int,
-    output_time_index: int,
-    **kwargs,
-) -> None:
-    """
-    Note: To be deprecated, no longer used by process_single_position
-
-    Load a CZYX array from a position store,
-    apply a transformation, and save the result.
-
-    Parameters
-    ----------
-    func : Callable[[NDArray, Any], NDArray]
-        The function to be applied to the data.
-        func must take the CZYX NDArray as the first argument and return
-        a CZXY NDArray. Additional arguments are passed through **kwargs.
-    input_position_path : Path
-        The path to input OME-Zarr position store
-        (e.g., input_store_path.zarr/A/1/0).
-    output_position_path : Path
-        The path to output OME-Zarr position store
-        (e.g., output_store_path.zarr/A/1/0).
-    input_channel_indices : Union[list[int], slice]
-        The channel indices to process. Acceptable values:
-        - Slices: slice(0, 2).
-        - A list of integers: [0, 1, 2, 3, 4].
-    output_channel_indices : Union[list[int], slice]
-        The channel indices to write to. Acceptable values:
-        - Slices: slice(0, 2).
-        - A list of integers: [0, 1, 2, 3, 4].
-    input_time_index : int
-        The time index to process.
-    output_time_index : int
-        The time index to write to.
-    kwargs : dict, optional
-        Additional arguments to pass to the function.
-
-    Examples
-    --------
-    Using slices for input_channel_indices:
-    >>> apply_transform_to_zyx_and_save(
-    ...     func=some_function,
-    ...     input_position_path=Path("/path/to/input.zarr/A/1/0"),
-    ...     output_position_path=Path("/path/to/output.zarr/A/1/0"),
-    ...     input_channel_indices=slice(0, 2),
-    ...     output_channel_indices=[0],
-    ...     input_time_index=0,
-    ...     output_time_index=0,
-    ... )
-
-    Using list for input_channel_indices:
-    >>> apply_transform_to_zyx_and_save(
-    ...     func=some_function,
-    ...     input_position_path=Path("/path/to/input.zarr/A/1/0"),
-    ...     output_store_path=Path("/path/to/output.zarr/A/1/0"),
-    ...     input_channel_indices=[0, 1, 2, 3, 4],
-    ...     output_channel_indices=[0, 1, 2],
-    ...     input_time_index=0,
-    ...     output_time_index=0,
-    ... )
-
-    """
-    transformed = _apply_transform_to_czyx(
-        func,
-        input_position_path=input_position_path,
-        input_channel_indices=input_channel_indices,
-        input_time_index=input_time_index,
-        **kwargs,
-    )
-    if transformed is not None:
-        _save_transformed(
+        arr = output_dataset.data
+        arr._impl.write_oindex(
+            arr.native,
+            (output_time_indices, output_channel_indices),
             transformed,
-            output_time_indices=output_time_index,
-            output_channel_indices=output_channel_indices,
-            output_position_path=output_position_path,
         )
-        _echo_finished(
-            time_index=input_time_index,
-            channel_index=input_channel_indices,
-            skipped=False,
-        )
-    else:
-        _echo_finished(
-            time_index=input_time_index,
-            channel_index=input_channel_indices,
-            skipped=True,
-        )
-
-
-def _indices_to_shard_aligned_batches(indices: Sequence[int], shard_size: int) -> list[list[int]]:
-    """Split indices into batches that are in the same shards.
-
-    Parameters
-    ----------
-    indices : Sequence[int]
-        Non-negative indices to split.
-    shard_size : int
-        The size of each shard.
-
-    Returns
-    -------
-    list[list[int]]
-        List of sorted batches,
-        where each batch is a list of indices in the same shard.
-    """
-    indices = sorted(indices)
-    batches = defaultdict(list)
-    for index in indices:
-        if index < 0:
-            raise ValueError(f"Negative indices are not supported: {indices}")
-        batches[index // shard_size].append(index)
-    return list(batches.values())
-
-
-def _match_indices_to_batches(
-    flat_indices: Sequence[int],
-    original_reference: Sequence[int],
-    batched_reference: list[list[int]],
-) -> list[list[int]]:
-    """Match flat indices to batches based on a reference pair.
-
-    Parameters
-    ----------
-    flat_indices : Sequence[int]
-        Flat indices to match.
-    original_reference : Sequence[int]
-        Original reference indices.
-    batched_reference : list[list[int]]
-        Batched version of reference.
-
-    Returns
-    -------
-    list[list[int]]
-        List of matched batches, where each batch corresponds to the
-        original reference indices.
-    """
-    matched_batches = []
-    for batch in batched_reference:
-        matched_batch = []
-        for index in batch:
-            matched_batch.append(flat_indices[original_reference.index(index)])
-        matched_batches.append(matched_batch)
-    return matched_batches
-
-
-def _slice_to_list(indices: list[int] | slice) -> list[int]:
-    if isinstance(indices, slice):
-        return list(range(indices.start, indices.stop, indices.step))
-    return indices
 
 
 def apply_transform_to_tczyx_and_save(
@@ -372,37 +205,9 @@ def apply_transform_to_tczyx_and_save(
     output_time_indices: list[int] | slice,
     **kwargs,
 ) -> None:
-    """
-    Load a TCZYX array from a position store,
-    apply a transformation, and save the result.
+    """Load a TCZYX array from a position store.
 
-    Parameters
-    ----------
-    func : Callable[[NDArray, Any], NDArray]
-        The function to be applied to the data.
-        func must take the TCZYX NDArray as the first argument and return
-        a TCZXY NDArray. Additional arguments are passed through **kwargs.
-    input_position_path : Path
-        The path to input OME-Zarr position store
-        (e.g., "input_store_path.zarr/A/1/0").
-    output_position_path : Path
-        The path to output OME-Zarr position store
-        (e.g., "output_store_path.zarr/A/1/0").
-    input_channel_indices : list[int] | slice
-        The channel indices to process. Acceptable values:
-        - Slices: slice(0, 2).
-        - A list of integers: [0, 1, 2, 3, 4].
-    output_channel_indices : list[int] | slice
-        The channel indices to write to,
-        similar to input_channel_indices.
-    input_time_indices : list[int] | slice
-        The time indices to process,
-        similar to input_channel_indices.
-    output_time_indices : list[int] | slice
-        The time indices to write to,
-        similar to input_channel_indices.
-    kwargs : dict, optional
-        Additional arguments to pass to the function.
+    Apply a transformation and save the result.
     """
     input_time_indices = _slice_to_list(input_time_indices)
     results = {}
@@ -435,6 +240,41 @@ def apply_transform_to_tczyx_and_save(
     del results
 
 
+# -- Shard-aligned batching helpers ----------------------------------------
+
+
+def _indices_to_shard_aligned_batches(indices: Sequence[int], shard_size: int) -> list[list[int]]:
+    """Split indices into batches that are in the same shards."""
+    indices = sorted(indices)
+    batches = defaultdict(list)
+    for index in indices:
+        if index < 0:
+            raise ValueError(f"Negative indices are not supported: {indices}")
+        batches[index // shard_size].append(index)
+    return list(batches.values())
+
+
+def _match_indices_to_batches(
+    flat_indices: Sequence[int],
+    original_reference: Sequence[int],
+    batched_reference: list[list[int]],
+) -> list[list[int]]:
+    """Match flat indices to batches based on a reference pair."""
+    matched_batches = []
+    for batch in batched_reference:
+        matched_batch = [flat_indices[original_reference.index(index)] for index in batch]
+        matched_batches.append(matched_batch)
+    return matched_batches
+
+
+def _slice_to_list(indices: list[int] | slice) -> list[int]:
+    if isinstance(indices, slice):
+        start = indices.start or 0
+        step = indices.step or 1
+        return list(range(start, indices.stop, step))
+    return indices
+
+
 def process_single_position(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
@@ -447,9 +287,9 @@ def process_single_position(
     **kwargs,
 ) -> None:
     """
-    Apply function to data in an `iohub` position store,
-    parallelizing over time and channel indices,
-    and save result in an output position store.
+    Apply function to data in an `iohub` position store.
+
+    Parallelize over time and channel indices and save result in an output position store.
 
     Parameters
     ----------
@@ -491,42 +331,12 @@ def process_single_position(
         can be passed to be stored at a FOV level,
         e.g.,
         kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
-
-    Examples
-    --------
-    Using slices for input_channel_indices:
-    process_single_position(
-        func=some_function,
-        input_position_path=Path("/path/to/input"),
-        output_store_path=Path("/path/to/output"),
-        input_time_indices=[0],
-        input_channel_indices=[slice(0, 2), slice(2, 4)],
-        output_channel_indices=[[0], [1]],
-    )
-
-    Using list of lists for input_channel_indices:
-    process_single_position(
-        func=some_function,
-        input_position_path=Path("/path/to/input"),
-        output_store_path=Path("/path/to/output"),
-        input_time_indices=[1, 2],
-        input_channel_indices=[[0, 1], [2, 3]],
-        output_channel_indices=[[0], [1]],
-    )
-
-    Notes
-    -----
-    - Multiprocessing over T and C:
-    input_channel_indices and output_channel_indices should be empty.
-    - Multiprocessing over T only:
-    input_channel_indices and output_channel_indices should be provided.
     """
-    # Function to be applied
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
     click.echo(f"Output data path:\t{output_position_path}")
 
-    # Get the reader
+    # Get data shape and shard info
     with open_ome_zarr(input_position_path, layout="fov", mode="r") as input_dataset:
         input_data_shape = input_dataset.data.shape
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
@@ -573,8 +383,8 @@ def process_single_position(
 
     # Loop through (T, C), applying transform and writing as we go
     iterable = itertools.product(
-        zip(input_channel_indices, output_channel_indices),
-        zip(batched_input_time_indices, batched_output_time_indices),
+        zip(input_channel_indices, output_channel_indices, strict=False),
+        zip(batched_input_time_indices, batched_output_time_indices, strict=False),
     )
     flat_iterable = tuple((*c, *t) for c, t in iterable)
 
@@ -587,41 +397,37 @@ def process_single_position(
     )
     num_processes = min(num_processes, len(flat_iterable), mp.cpu_count())
     click.echo(f"\nStarting multiprocess pool with {num_processes} processes")
-    # NOTE: use spawn to work around tensorstore#61
-    context = mp.get_context("spawn")
-    with context.Pool(num_processes) as p:
-        p.starmap(
-            partial_apply_transform_to_czyx_and_save,
-            flat_iterable,
-        )
+    if num_processes <= 1:
+        # Run serially — Pool(1) with spawn unnecessarily forks a subprocess
+        for args in flat_iterable:
+            partial_apply_transform_to_czyx_and_save(*args)
+    else:
+        # NOTE: use spawn to work around tensorstore#61
+        context = mp.get_context("spawn")
+        with context.Pool(num_processes) as p:
+            p.starmap(
+                partial_apply_transform_to_czyx_and_save,
+                flat_iterable,
+            )
     click.echo("Shut down multiprocess pool")
 
 
+# -- Pure utility functions ------------------------------------------------
+
+
 def _check_nan_n_zeros(input_array) -> bool:
-    """
-    Checks if any of the channels are all zeros or nans and returns true
-    """
+    """Checks if any of the channels are all zeros or nans."""
     if len(input_array.shape) == 3:
-        # Check if all the values are zeros or nans
         if np.all(input_array == 0) or np.all(np.isnan(input_array)):
-            # Return true
             return True
     elif len(input_array.shape) == 4:
-        # Get the number of channels
         num_channels = input_array.shape[0]
-        # Loop through the channels
         for c in range(num_channels):
-            # Get the channel
             zyx_array = input_array[c, :, :, :]
-
-            # Check if all the values are zeros or nans
             if np.all(zyx_array == 0) or np.all(np.isnan(zyx_array)):
-                # Return true
                 return True
     else:
         raise ValueError("Input array must be 3D or 4D")
-
-    # Return false
     return False
 
 
@@ -631,28 +437,7 @@ def _limit_zyx_chunk_size(
     max_chunk_size_bytes: float,
     chunks: tuple[int, ...] | None = None,
 ) -> tuple[int, int, int]:
-    """
-    Calculate the chunk size for ZYX dimensions based on the shape,
-    bytes per pixel of data, and desired max chunk size.
-
-    Parameters
-    ----------
-    shape : tuple[int]
-        The shape of the data (at least 3 dimensions for ZYX).
-    bytes_per_pixel : int
-        Number of bytes per pixel (e.g., 2 for uint16).
-    max_chunk_size_bytes : float
-        Maximum chunk size in bytes.
-    chunks : tuple[int] | None, optional
-        Initial chunk sizes to limit. If None, uses shape[-3:] as starting
-        chunk size. If provided, uses chunks[-3:] as starting point.
-
-    Returns
-    -------
-    tuple[int, int, int]
-        The limited ZYX chunk sizes.
-    """
-    # Use provided chunks if available, otherwise start from shape
+    """Calculate chunk size for ZYX dimensions to stay under max bytes."""
     chunk_zyx_shape = list(chunks[-3:] if chunks else shape[-3:])
 
     # Reduce Z chunk size until total chunk is within limit
@@ -680,7 +465,7 @@ def _adjust_chunks_for_divisibility(shape: tuple[int, ...], chunks: tuple[int, .
     shape = list(shape)
     chunks = list(chunks)
     adjusted = []
-    for chunk, dim in zip(chunks, shape):
+    for chunk, dim in zip(chunks, shape, strict=False):
         if chunk > dim:
             adjusted.append(dim)
         elif dim % chunk != 0:
@@ -690,45 +475,3 @@ def _adjust_chunks_for_divisibility(shape: tuple[int, ...], chunks: tuple[int, .
         else:
             adjusted.append(chunk)
     return tuple(adjusted)
-
-
-def _downsample_tensorstore(
-    source_ts: ts.TensorStore,
-    target_ts: ts.TensorStore,
-    downsample_factors: list[int],
-    method: str = "mean",
-) -> None:
-    """Downsample source into target using tensorstore.
-
-    Writes data in chunks with transactions for consistency.
-
-    Parameters
-    ----------
-    source_ts : ts.TensorStore
-        Source tensorstore array to downsample from
-    target_ts : ts.TensorStore
-        Target tensorstore array to write downsampled data to
-    downsample_factors : list[int]
-        Downsampling factors for each dimension
-    method : str, optional
-        Downsampling method ("mean", "median", "mode", "min", "max",
-        "stride"), by default "mean"
-    """
-    try:
-        import tensorstore as ts
-    except ImportError:
-        raise ImportError(
-            "Tensorstore is required for downsampling. \
-            Please install it with `pip install tensorstore`."
-        )
-
-    downsampled = ts.downsample(source_ts, downsample_factors=downsample_factors, method=method)
-
-    step = target_ts.chunk_layout.write_chunk.shape[0]
-
-    for start in range(0, downsampled.shape[0], step):
-        with ts.Transaction() as txn:
-            target_with_txn = target_ts.with_transaction(txn)
-            downsampled_with_txn = downsampled.with_transaction(txn)
-            stop = min(start + step, downsampled.shape[0])
-            target_with_txn[start:stop].write(downsampled_with_txn[start:stop]).result()

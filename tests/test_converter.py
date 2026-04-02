@@ -24,7 +24,7 @@ def pytest_generate_tests(metafunc):
     if "ndtiff_datasets" in metafunc.fixturenames:
         metafunc.parametrize(
             "ndtiff_datasets",
-            ndtiff_v2_datasets + [ndtiff_v3_labeled_positions],
+            [*ndtiff_v2_datasets, ndtiff_v3_labeled_positions],
         )
     if "grid_layout" in metafunc.fixturenames:
         metafunc.parametrize("grid_layout", [True, False])
@@ -57,7 +57,7 @@ def _check_chunks(position: Position, chunks: Literal["XY", "XYZ"] | tuple[int] 
             expected = _adjust_chunks_for_divisibility(img.shape, chunks)
             assert img.chunks == expected
         case _:
-            assert False
+            raise AssertionError()
 
 
 def _check_result(
@@ -77,7 +77,7 @@ def _check_result(
             _check_scale_transform(t_scale, zyx_scale, pos)
             _check_chunks(pos, chunks)
             intensity += pos["0"][:].sum()
-            with open(output / pos_name / "0" / "image_plane_metadata.json") as f:
+            with Path(output / pos_name / "0" / "image_plane_metadata.json").open() as f:
                 metadata = json.load(f)
                 key = "0/0/0"
                 assert key in metadata
@@ -88,7 +88,7 @@ def _check_result(
 def test_converter_inputs(mm2gamma_ome_tiff, tmpdir):
     # Test that output directory needs to end with ".zarr"
     output = tmpdir / "converted"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=r"."):
         _ = TIFFConverter(mm2gamma_ome_tiff, output)
 
 
@@ -130,7 +130,7 @@ def example_ome_tiff() -> Path:
     raise FileNotFoundError("Corrupted test data directory")
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def mock_hcs_ome_tiff_reader(example_ome_tiff, monkeypatch: pytest.MonkeyPatch):
     # dataset with 4 positions without HCS site names
     mock_stage_positions = [
@@ -147,7 +147,7 @@ def mock_hcs_ome_tiff_reader(example_ome_tiff, monkeypatch: pytest.MonkeyPatch):
     return example_ome_tiff, expected_ngff_name
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def mock_non_hcs_ome_tiff_reader(example_ome_tiff, monkeypatch: pytest.MonkeyPatch):
     # dataset with 4 positions without HCS site names
     mock_stage_positions = [
@@ -262,7 +262,7 @@ class TestGenChunks:
         return _make
 
     @pytest.mark.parametrize(
-        "z_dim,input_chunk,expected_z",
+        ("z_dim", "input_chunk", "expected_z"),
         [
             (15, 10, 5),  # 10 doesn't divide 15, adjust to 5
             (7, 5, 1),  # prime - falls to 1
@@ -303,7 +303,7 @@ class TestGenChunks:
 
 
 @pytest.mark.parametrize(
-    "shape,target_chunks",
+    ("shape", "target_chunks"),
     [
         # Shape where target chunk > dask default (128MB), triggering issue
         ((1, 1, 100, 1024, 1024), (1, 1, 100, 1024, 1024)),
@@ -318,7 +318,6 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
     """
     import dask
     import dask.array as da
-    from dask.array import to_zarr
 
     data = np.arange(np.prod(shape), dtype=np.uint16).reshape(shape)
 
@@ -334,7 +333,7 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
         # Rechunk and write with `array.chunk-size` config
         chunk_size_bytes = int(np.prod(target_chunks) * 2)
         with dask.config.set({"array.chunk-size": chunk_size_bytes}):
-            to_zarr(dask_data.rechunk(target_chunks), zarr_img)
+            zarr_img.write_from_dask(dask_data.rechunk(target_chunks))
 
     # Make sure data is preserved
     with open_ome_zarr(output, layout="hcs", mode="r") as reader:
@@ -347,12 +346,12 @@ class TestVersionParameter:
     """Tests for the OME-NGFF version parameter on TIFFConverter."""
 
     def test_default_version(self, example_ome_tiff, tmpdir):
-        """Default version should be '0.4'."""
+        """Default version should be '0.5'."""
         output = tmpdir / "converted.zarr"
         converter = TIFFConverter(example_ome_tiff, output)
-        assert converter.version == "0.4"
+        assert converter.version == "0.5"
 
-    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
+    @pytest.mark.parametrize("ver", ["0.5"])
     def test_explicit_version(self, example_ome_tiff, tmpdir, ver):
         """Explicit version should be stored on the converter."""
         output = tmpdir / f"converted_{ver}.zarr"
@@ -365,25 +364,30 @@ class TestVersionParameter:
         with pytest.raises(ValueError, match="Unsupported OME-NGFF version"):
             TIFFConverter(example_ome_tiff, output, version="0.3")
 
-    @pytest.mark.parametrize("ver", ["0.4", "0.5"])
-    def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver):
-        """Conversion should produce a correct store and preserve pixel data."""
+    @pytest.mark.parametrize("impl", ["zarr", "tensorstore"])
+    @pytest.mark.parametrize("ver", ["0.5"])
+    def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver, impl):
+        """Conversion write+read roundtrip preserves data for both backends."""
+        if impl == "tensorstore":
+            pytest.importorskip("tensorstore")
         logging.getLogger("tifffile").setLevel(logging.ERROR)
-        output = tmpdir / f"converted_{ver}.zarr"
-        converter = TIFFConverter(example_ome_tiff, output, version=ver)
+        output = tmpdir / f"converted_{ver}_{impl}.zarr"
+        # Write with the same implementation
+        converter = TIFFConverter(example_ome_tiff, output, version=ver, implementation=impl)
         from tifffile import TiffFile
 
         with TiffFile(next(example_ome_tiff.glob("*.tif*"))) as tf:
             expected_sum = tf.asarray().sum()
         converter()
-        with open_ome_zarr(output, mode="r") as result:
+        # Read back with the same implementation
+        with open_ome_zarr(output, mode="r", implementation=impl) as result:
             assert result.version == ver
             intensity = sum(pos["0"][:].sum() for _, pos in result.positions())
             assert intensity == expected_sum
 
     @pytest.mark.parametrize(
-        "ver,expected_zarr_format",
-        [("0.4", 2), ("0.5", 3)],
+        ("ver", "expected_zarr_format"),
+        [("0.5", 3)],
     )
     def test_version_produces_correct_zarr_format(self, example_ome_tiff, tmpdir, ver, expected_zarr_format):
         """Version should produce the corresponding Zarr format."""

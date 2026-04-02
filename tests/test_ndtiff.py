@@ -11,7 +11,7 @@ def pytest_generate_tests(metafunc):
     if "ndtiff_dataset" in metafunc.fixturenames:
         metafunc.parametrize(
             "ndtiff_dataset",
-            ndtiff_v2_datasets + [ndtiff_v3_labeled_positions],
+            [*ndtiff_v2_datasets, ndtiff_v3_labeled_positions],
         )
 
 
@@ -47,13 +47,14 @@ def test_dataset_v3_labeled_positions():
     with NDTiffDataset(ndtiff_v3_labeled_positions) as dataset:
         assert len(dataset) == 3
         positions = ["Pos0", "Pos1", "Pos2"]
-        for (key, fov), name in zip(dataset, positions):
+        for (key, fov), name in zip(dataset, positions, strict=False):
             assert key == name
             assert isinstance(fov, NDTiffFOV)
             assert name in dataset.__repr__()
             assert key in fov.__repr__()
         with pytest.raises(KeyError):
             dataset["0"]
+        with pytest.raises(KeyError):
             dataset[0]
 
 

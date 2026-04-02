@@ -1,14 +1,14 @@
 import re
 
 import pytest
-from xarray import DataArray
-
-from iohub.mmstack import MMOmeTiffFOV, MMStack
 from tests.conftest import (
     mm2gamma_ome_tiffs,
     mm2gamma_ome_tiffs_incomplete,
     mm1422_ome_tiffs,
 )
+from xarray import DataArray
+
+from iohub.mmstack import MMOmeTiffFOV, MMStack
 
 
 def pytest_generate_tests(metafunc):
@@ -77,7 +77,7 @@ def test_fov_axes_names(ome_tiff):
             axes_names = fov.axes_names
             assert isinstance(axes_names, list)
             assert len(axes_names) == 5
-            assert all([isinstance(name, str) for name in axes_names])
+            assert all(isinstance(name, str) for name in axes_names)
 
 
 def test_fov_getitem(ome_tiff):
@@ -93,7 +93,7 @@ def test_fov_getitem(ome_tiff):
 
 def test_fov_equal(ome_tiff):
     with MMStack(ome_tiff) as ref1, MMStack(ome_tiff) as ref2:
-        for (_, fov1), (_, fov2) in zip(ref1, ref2):
+        for (_, fov1), (_, fov2) in zip(ref1, ref2, strict=False):
             assert fov1 == fov2
 
 

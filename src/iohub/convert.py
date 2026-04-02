@@ -6,7 +6,6 @@ from typing import Literal
 
 import dask
 import numpy as np
-from dask.array import to_zarr
 from tqdm import tqdm
 from tqdm.contrib.itertools import product
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -43,8 +42,8 @@ def _create_grid_from_coordinates(xy_coords: list[tuple[float, float]], rows: in
         A grid-like array mimicking the shape of the acquisition where the
         value in the array corresponds to the position index at that location.
     """
+    coords = {}
 
-    coords = dict()
     coords_list = []
     for idx, pos in enumerate(xy_coords):
         coords[idx] = pos
@@ -71,6 +70,7 @@ def _create_grid_from_coordinates(xy_coords: list[tuple[float, float]], rows: in
 
 class TIFFConverter:
     """Convert Micro-Manager TIFF formats
+
     (OME-TIFF, ND-TIFF) into HCS OME-Zarr.
     Each FOV will be written to a separate well in the plate layout.
 
@@ -93,8 +93,12 @@ class TIFFConverter:
         and is ignored for other formats, by default None
         (attempt to apply to OME-TIFF datasets, disable this with ``False``)
     version : Literal["0.4", "0.5"], optional
-        OME-NGFF version for the output Zarr store, by default "0.4".
-        Version "0.4" uses Zarr v2 format, version "0.5" uses Zarr v3 format.
+        OME-NGFF version for the output Zarr store, by default "0.5".
+        Both versions use Zarr v3 format; "0.4" is deprecated for new stores.
+    implementation : str, optional
+        Zarr backend implementation to use for writing.
+        None (default) uses zarr-python. Pass "tensorstore"
+        to write via TensorStore (requires the optional tensorstore dependency).
 
     Notes
     -----
@@ -108,10 +112,12 @@ class TIFFConverter:
         input_dir: str | Path,
         output_dir: str | Path,
         grid_layout: int = False,
-        chunks: tuple[int] | Literal["XY", "XYZ"] = None,
-        hcs_plate: bool = None,
-        version: Literal["0.4", "0.5"] = "0.4",
+        chunks: tuple[int] | Literal["XY", "XYZ"] | None = None,
+        hcs_plate: bool | None = None,
+        version: Literal["0.4", "0.5"] = "0.5",
+        implementation: str | None = None,
     ):
+        self.implementation = implementation
         if version not in ("0.4", "0.5"):
             raise ValueError(f"Unsupported OME-NGFF version '{version}'. Supported versions are '0.4' and '0.5'.")
         self.version = version
@@ -131,7 +137,7 @@ class TIFFConverter:
         self.summary_metadata = self.reader.micromanager_summary
         self.save_name = output_dir.name
         _logger.debug("Getting dataset summary information.")
-        self.coord_map = dict()
+        self.coord_map = {}
         self.p = len(self.reader)
         self.t = self.reader.frames
         self.c = self.reader.channels
@@ -144,7 +150,7 @@ class TIFFConverter:
         self._check_hcs_sites()
         self._get_pos_names()
         _logger.info(f"Found Dataset {input_dir} with dimensions (P, T, C, Z, Y, X): {self.dim}")
-        self.metadata = dict()
+        self.metadata = {}
         self.metadata["iohub_version"] = _get_package_version("iohub")
         self.metadata["Summary"] = self.summary_metadata
         if grid_layout:
@@ -180,15 +186,18 @@ class TIFFConverter:
     def _get_position_coords(self):
         """Get the position coordinates from the reader metadata.
 
-        Raises:
+        Raises
+        ------
             ValueError: If stage positions are not available.
 
-        Returns:
+        Returns
+        -------
             list: XY stage position coordinates.
             int: Number of grid rows.
             int: Number of grid columns.
         """
         rows = set()
+
         cols = set()
         xy_coords = []
 
@@ -199,22 +208,24 @@ class TIFFConverter:
             try:
                 xy_stage = pos["DefaultXYStage"]
                 stage_pos = pos[xy_stage]
-            except KeyError:
-                raise ValueError(f"Stage position is not available for position {idx}")
+            except KeyError as err:
+                raise ValueError(f"Stage position is not available for position {idx}") from err
             xy_coords.append(stage_pos)
             try:
                 rows.add(pos["GridRow"])
                 cols.add(pos["GridCol"])
-            except KeyError:
-                raise ValueError(f"Grid indices not available for position {idx}")
+            except KeyError as err:
+                raise ValueError(f"Grid indices not available for position {idx}") from err
 
         return xy_coords, len(rows), len(cols)
 
     def _get_pos_names(self):
         """Append a list of pos names in ascending order
+
         (order in which they were acquired).
         """
         self.pos_names = []
+
         for p in range(self.p):
             try:
                 name = self.reader.stage_positions[p]["Label"]
@@ -256,7 +267,7 @@ class TIFFConverter:
 
         # Adjust chunks to divide evenly into dimensions
         chunks = _adjust_chunks_for_divisibility(shape, chunks)
-        for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, shape)):
+        for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, shape, strict=False)):
             if orig != adj:
                 _logger.warning(f"Chunk size {orig} on axis {i} adjusted to {adj} (dimension {dim}).")
 
@@ -282,6 +293,7 @@ class TIFFConverter:
             mode="w-",
             channel_names=self.reader.channel_names,
             version=self.version,
+            implementation=self.implementation,
         )
         self.zarr_position_names = []
         arr_kwargs = {
@@ -315,7 +327,7 @@ class TIFFConverter:
 
     def _create_zeros_array(self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict) -> Position:
         pos = self.writer.create_position(row_name, col_name, pos_name)
-        self.zarr_position_names.append(pos.zgroup.name)
+        self.zarr_position_names.append(f"{row_name}/{col_name}/{pos_name}")
         _ = pos.create_zeros(**arr_kwargs)
         pos.metadata.omero.name = self.pos_names[len(self.zarr_position_names) - 1]
         pos.dump_meta()
@@ -354,8 +366,7 @@ class TIFFConverter:
                 # T/C/Z
                 frame_key = "/".join([str(i) for i in (t_idx, c_idx, z_idx)])
                 position_image_plane_metadata[frame_key] = sorted_metadata
-        with open(
-            self.output_dir / zarr_name / "image_plane_metadata.json",
+        with (self.output_dir / zarr_name / "image_plane_metadata.json").open(
             mode="x",
         ) as metadata_file:
             json.dump(position_image_plane_metadata, metadata_file, indent=4)
@@ -371,24 +382,26 @@ class TIFFConverter:
         >>> converter()
         """
         _logger.debug("Setting up Zarr store.")
+
         self._init_zarr_arrays()
         # Calculate chunk size in bytes for dask config
         # This prevents data loss when rechunking to zarr chunks
         # See: https://github.com/czbiohub-sf/iohub/issues/367
         chunk_size_bytes = int(np.prod(self.chunks) * np.dtype(self.reader.dtype).itemsize)
-        # Run through every coordinate and convert in acquisition order
+
         _logger.debug("Converting images.")
         with logging_redirect_tqdm(), dask.config.set({"array.chunk-size": chunk_size_bytes}):
             for zarr_pos_name, (_, fov) in tqdm(
                 zip(self.zarr_position_names, self.reader, strict=True),
-                total=len(self.reader),
+                total=len(self.zarr_position_names),
                 desc="Converting images",
                 unit="FOV",
                 ncols=80,
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
-                to_zarr(fov.xdata.data.rechunk(self.chunks), zarr_img)
-                self._convert_image_plane_metadata(fov, zarr_img.path)
+                zarr_img.write_from_dask(fov.xdata.data.rechunk(self.chunks))
+                self._convert_image_plane_metadata(fov, f"{zarr_pos_name.lstrip('/')}/0")
+
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()
         self.reader.close()

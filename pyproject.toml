@@ -1,24 +1,24 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = ["hatchling", "uv-dynamic-versioning>=0.7.0"]
+requires = ["hatchling", "uv-dynamic-versioning>=0.14.0"]
 
 [project]
 name = "iohub"
 description = "N-dimensional bioimaging data I/O with OME metadata in Python"
 authors = [
-    {name = "CZ Biohub and iohub contributors", email = "iohub@czbiohub.org"},
+    {name = "Biohub and iohub contributors", email = "iohub@czbiohub.org"},
 ]
 license = {file = "LICENSE"}
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Operating System :: Microsoft :: Windows",
@@ -26,19 +26,20 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
 ]
 dependencies = [
-    "pandas>=1.5.2",
+    "pandas>=2",
     "pydantic>=2.8.2",
     "pydantic_extra_types>=2.9.0",
     "tifffile>=2025.5.21",
-    "natsort>=7.1.1",
+    "natsort>=8.4.0",
     "ndtiff>=2.2.1",
-    "zarr>=3.0.8",
+    "zarr>=3.1.6",
     "rich",
     "tqdm",
     "pillow>=9.4.0",
     "blosc2",
     "xarray>=2024.1.1",
     "dask[array]",
+    "zarrs>=0.2.3",
 ]
 dynamic = ["version"]
 
@@ -52,13 +53,18 @@ Source = "https://github.com/czbiohub-sf/iohub"
 tensorstore = [
     "tensorstore>=0.1.64",
 ]
+
+[project.entry-points."iohub.zarr-implementations"]
+zarr = "iohub.core.implementations.zarr_python:ZarrPythonImplementation"
+tensorstore = "iohub.core.implementations.tensorstore:TensorStoreImplementation"
+
 [dependency-groups]
 test = [
     "iohub[tensorstore]",
     "ngff-zarr[validate]",
-    "pytest>=5.0.0",
+    "pytest>=9.0.2",
     "pytest-cov",
-    "hypothesis>=6.61.0",
+    "hypothesis>=6.151.0",
     "requests>=2.22.0",
     "wget>=3.2",
     "ome-zarr>=0.12.0",
@@ -67,7 +73,7 @@ acquire-zarr = [
     "acquire-zarr",
 ]
 doc = [
-    "zensical>=0.0.11",
+    "zensical>=0.0.29",
     "mkdocstrings-python>=2.0.2",
     "mkdocs-click>=0.8",
 ]
@@ -93,15 +99,58 @@ style = "pep440"
 bump = true
 fallback-version = "0.0.0"
 
+[tool.pytest]
+minversion="9.0"
+strict = true
+testpaths = [ "tests" ]
+addopts = [
+    "-ra",
+    "--import-mode=importlib",
+]
+
 [tool.ruff]
 line-length = 120
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-docstring-code-format = true
-docstring-code-line-length = "dynamic"
-
-[tool.ruff.lint]
-select = ["E", "F", "W", "I"]
-ignore = ["E203", "E731"]
+src = [ "src" ]
+extend-include = [ "*.ipynb" ]
+format.quote-style = "double"
+format.indent-style = "space"
+format.docstring-code-format = true
+format.docstring-code-line-length = "dynamic"
+lint.select = [
+    "B",    # flake8-bugbear
+    "BLE",  # flake8-blind-except
+    "C4",   # flake8-comprehensions
+    "D",    # pydocstyle
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "NPY",  # NumPy-specific rules
+    "PERF", # Perflint
+    "PT",   # pytest
+    "PTH",  # pathlib
+    "RUF",  # Ruff-specific rules
+    "TID",  # flake8-tidy-imports
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+lint.ignore = [
+    "B008",  # function calls in argument defaults are fine when result is immutable
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
+    "D105",  # __magic__ methods are often self-explanatory
+    "D107",  # Missing docstring in __init__
+    "D203",  # no blank line before class docstring (conflicts with D211)
+    "D213",  # docstrings start immediately after opening triple quote (conflicts with D212)
+    "D400",  # first line should end with period (doesn't work with single-line docstrings)
+    "D401",  # first line in imperative mood
+    "E203",  # slice whitespace (handled by formatter)
+    "E501",  # line too long (formatter handles code; long comments are acceptable)
+    "E731",  # lambda assignments are convenient
+]
+lint.per-file-ignores."*/__init__.py" = [ "F401" ]
+lint.per-file-ignores."docs/*" = [ "D", "I", "NPY002", "PTH", "PERF401", "BLE001" ]
+lint.per-file-ignores."tests/*" = [ "D" ]
+lint.pydocstyle.convention = "numpy"

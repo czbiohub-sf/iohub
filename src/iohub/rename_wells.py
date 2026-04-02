@@ -7,6 +7,7 @@ from iohub.ngff import open_ome_zarr
 def rename_wells(zarr_store_path: str | Path, csv_file_path: str | Path):
     """
     Rename wells in a Zarr store based on a CSV file containing old and new
+
     well names.
 
     Parameters
@@ -35,10 +36,10 @@ def rename_wells(zarr_store_path: str | Path, csv_file_path: str | Path):
     A/2,B/2
 
     """
-
     # read and check csv
+
     name_pair_list = []
-    with open(csv_file_path, mode="r", encoding="utf-8-sig") as csv_file:
+    with Path(csv_file_path).open(encoding="utf-8-sig") as csv_file:
         for row in csv.reader(csv_file):
             if len(row) != 2:
                 raise ValueError(f"Invalid row format: {row}.Each row must have two columns.")

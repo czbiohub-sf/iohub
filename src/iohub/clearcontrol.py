@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import json
 import re
 import warnings
+from collections.abc import Callable, Sequence
 from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any
 
 import blosc2
 import numpy as np
@@ -15,16 +18,17 @@ if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
 
 
-ArrayIndex = Union[int, slice, list[int], np.ndarray]
+ArrayIndex = int | slice | list[int] | np.ndarray
 
 
 def _array_to_blosc_buffer(
     in_array: np.ndarray,
-    out_path: "StrOrBytesPath",
+    out_path: StrOrBytesPath,
     overwrite: bool = False,
 ) -> None:
     """
     Compresses array and save into output path.
+
     This function does not use new functionality from `blosc2` to
     compress large arrays on purpose, to emulate Clear Control behavior.
 
@@ -41,6 +45,7 @@ def _array_to_blosc_buffer(
         When true it allows overwriting existing path.
     """
     out_path = Path(out_path)
+
     if out_path.exists() and not overwrite:
         raise ValueError(f"{out_path} already exists use `ovewrite=True`.")
 
@@ -52,7 +57,7 @@ def _array_to_blosc_buffer(
     num_chunks = len(arr_bytes) // blosc2.MAX_BUFFERSIZE + 1
     chunk_size = len(arr_bytes) // num_chunks
 
-    with open(out_path, "wb") as f:
+    with Path(out_path).open("wb") as f:
         while len(arr_bytes) > 0:
             compressed_chunk = blosc2.compress2(arr_bytes[:chunk_size], **kwargs)
             f.write(compressed_chunk)
@@ -60,7 +65,7 @@ def _array_to_blosc_buffer(
 
 
 def blosc_buffer_to_array(
-    buffer_path: "StrOrBytesPath",
+    buffer_path: StrOrBytesPath,
     shape: tuple[int, ...],
     dtype: np.dtype,
     nthreads: int = 4,
@@ -84,10 +89,11 @@ def blosc_buffer_to_array(
         Output numpy array.
     """
     header_size = 32
+
     out_arr = np.empty(np.prod(shape), dtype=dtype)
     array_buffer = out_arr
 
-    with open(buffer_path, "rb") as f:
+    with Path(buffer_path).open("rb") as f:
         while True:
             # read header only
             blosc_header = bytes(f.read(header_size))
@@ -111,8 +117,8 @@ def _cached(f: Callable) -> Callable:
 
     @wraps(f)
     def _key_cache_wrapper(
-        self: "ClearControlFOV",
-        key: Union[ArrayIndex, tuple[ArrayIndex, ArrayIndex]],
+        self: ClearControlFOV,
+        key: ArrayIndex | tuple[ArrayIndex, ArrayIndex],
     ) -> np.ndarray:
         if not self._cache:
             return f(self, key)
@@ -129,6 +135,7 @@ def _cached(f: Callable) -> Callable:
 class ClearControlFOV(BaseFOV):
     """
     Reader class for Clear Control dataset
+
     https://github.com/royerlab/opensimview.
 
     It provides an array-like API for the Clear Control
@@ -150,8 +157,8 @@ class ClearControlFOV(BaseFOV):
 
     def __init__(
         self,
-        data_path: "StrOrBytesPath",
-        missing_value: Optional[int] = None,
+        data_path: StrOrBytesPath,
+        missing_value: int | None = None,
         cache: bool = False,
     ):
         super().__init__()
@@ -170,17 +177,18 @@ class ClearControlFOV(BaseFOV):
     def shape(self) -> tuple[int, int, int, int, int]:
         """
         Reads Clear Control index data of every data and returns
+
         the element-wise minimum shape.
         """
-
         # dummy maximum shape size
+
         shape = [65535] * 4
         # guess of minimum line length, it might be wrong
         minimum_size = 64
         numbers = re.compile(r"\d+\.\d+|\d+")
 
         for index_filepath in self._root.glob("*.index.txt"):
-            with open(index_filepath, "rb") as f:
+            with Path(index_filepath).open("rb") as f:
                 if index_filepath.stat().st_size > minimum_size:
                     f.seek(-minimum_size, 2)  # goes to a little bit before the last line
                 last_line = f.readlines()[-1].decode("utf-8")
@@ -193,7 +201,7 @@ class ClearControlFOV(BaseFOV):
                     int(values[2]),
                 ]
 
-                shape = [min(s, v) for s, v in zip(shape, values)]
+                shape = [min(s, v) for s, v in zip(shape, values, strict=False)]
 
         shape.insert(1, len(self.channel_names))
         shape[0] += 1  # time points starts counts on zero
@@ -213,11 +221,12 @@ class ClearControlFOV(BaseFOV):
     def _read_volume(
         self,
         volume_shape: tuple[int, int, int],
-        channels: Union[Sequence[str], str],
+        channels: Sequence[str] | str,
         time_point: int,
     ) -> np.ndarray:
         """
         Reads a single or multiple channels of blosc compressed
+
         Clear Control volume.
 
         Parameters
@@ -240,6 +249,7 @@ class ClearControlFOV(BaseFOV):
             When expected volume path not found.
         """
         # single channel
+
         if isinstance(channels, str):
             volume_name = f"{str(time_point).zfill(6)}.blc"
             volume_path = self._root / "stacks" / channels / volume_name
@@ -247,7 +257,7 @@ class ClearControlFOV(BaseFOV):
                 if self._missing_value is None:
                     raise ValueError(f"{volume_path} not found.")
                 else:
-                    warnings.warn(f"{volume_path} not found. Filled with {self._missing_value}")
+                    warnings.warn(f"{volume_path} not found. Filled with {self._missing_value}", stacklevel=2)
                     return np.full(volume_name, self._missing_value, dtype=self._dtype)
             return blosc_buffer_to_array(volume_path, volume_shape, dtype=self._dtype)
 
@@ -267,7 +277,7 @@ class ClearControlFOV(BaseFOV):
 
         return indexing
 
-    def __getitem__(self, key: Union[ArrayIndex, tuple[ArrayIndex, ...]]) -> np.ndarray:
+    def __getitem__(self, key: ArrayIndex | tuple[ArrayIndex, ...]) -> np.ndarray:
         """Lazily load array as indexed.
 
         Parameters
@@ -286,6 +296,7 @@ class ClearControlFOV(BaseFOV):
             Not all numpy array of indexing are implemented.
         """
         # standardizing indexing
+
         volume_slicing = None
         if isinstance(key, tuple):
             key = tuple(self._fix_indexing(k) for k in key)
@@ -304,7 +315,7 @@ class ClearControlFOV(BaseFOV):
     @_cached
     def _load_array(
         self,
-        key: Union[ArrayIndex, tuple[ArrayIndex, ArrayIndex]],
+        key: ArrayIndex | tuple[ArrayIndex, ArrayIndex],
     ) -> np.ndarray:
         # these are properties are loaded to avoid multiple reads per call
         shape = self.shape
@@ -370,7 +381,7 @@ class ClearControlFOV(BaseFOV):
         """Summarizes Clear Control metadata into a dictionary."""
         cc_metadata = []
         for path in self._root.glob("*.metadata.txt"):
-            with open(path, mode="r") as f:
+            with path.open() as f:
                 channel_metadata = pd.DataFrame([json.loads(s) for s in f.readlines()])
             cc_metadata.append(channel_metadata)
 
@@ -394,6 +405,7 @@ class ClearControlFOV(BaseFOV):
         """Dataset temporal, channel and spacial scales."""
         warnings.warn(
             ".scale will be deprecated use .zyx_scale or .t_scale.",
+            stacklevel=2,
             category=DeprecationWarning,
         )
         metadata = self.metadata()
@@ -422,7 +434,7 @@ class ClearControlFOV(BaseFOV):
         return metadata["time_delta"]
 
 
-def create_mock_clear_control_dataset(path: "StrOrBytesPath") -> None:
+def create_mock_clear_control_dataset(path: StrOrBytesPath) -> None:
     """
     Creates a (2, 4, 64, 64, 64) Clear Control dataset of random integers.
 
@@ -454,7 +466,7 @@ def create_mock_clear_control_dataset(path: "StrOrBytesPath") -> None:
         index_path = path / f"{ch}.index.txt"
         metadata_path = path / f"{ch}.metadata.txt"
 
-        with open(index_path, "w") as idx_f, open(metadata_path, "w") as mt_f:
+        with Path(index_path).open("w") as idx_f, Path(metadata_path).open("w") as mt_f:
             for t in range(array.shape[0]):
                 out_path = channel_dir / f"{str(t).zfill(6)}.blc"
                 time_stamp = 45_000_000 * t

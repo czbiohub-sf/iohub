@@ -35,6 +35,7 @@ CHANNEL_COLORS = {
 def color_to_hex(color: str) -> str:
     """
     Convert the color string to HEX (i.e 'red' -> 'FF0000')
+
     (https://pillow.readthedocs.io/en/stable/_modules/PIL/ImageColor.html#getrgb)
     (https://www.w3.org/TR/css-color-3/#svg-color)
 
@@ -54,7 +55,8 @@ def channel_display_settings(
     clim: tuple[float, float, float, float] | None = None,
     first_chan: bool = False,
 ):
-    """This will create a dictionary used for OME-Zarr metadata.
+    """Create a dictionary of OME-Zarr channel display metadata.
+
     Allows custom contrast limits and channel names for display.
     Defaults everything to grayscale.
 
@@ -96,7 +98,7 @@ def channel_display_settings(
     for key in CHANNEL_COLORS:
         # Does chan_name have any of the values in the CHANNEL_COLORS[key]
         # list as a substring?
-        if any([value in chan_name for value in CHANNEL_COLORS[key]]):
+        if any(value in chan_name for value in CHANNEL_COLORS[key]):
             display_color = color_to_hex(key)
             break
         else:

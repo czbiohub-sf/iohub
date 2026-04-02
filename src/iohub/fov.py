@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Iterable, Optional, Type, Union
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -40,7 +40,7 @@ class BaseFOV(ABC):
         elif len(self.axes_names) > 5:
             raise ValueError(f"{self.__name__} does not support more than 5 axes. Found {len(self.axes_names)}")
 
-        axes = set(ax[:1].upper() for ax in self.axes_names)
+        axes = {ax[:1].upper() for ax in self.axes_names}
 
         missing = []
         for i, ax in enumerate(_AXES_PREFIX):
@@ -51,11 +51,10 @@ class BaseFOV(ABC):
 
     def _pad_missing_axes(
         self,
-        seq: Union[list[Any], tuple[Any]],
+        seq: list[Any] | tuple[Any],
         value: Any,
-    ) -> Union[list[Any], tuple[Any]]:
+    ) -> list[Any] | tuple[Any]:
         """Pads ``seq`` with ``value`` in the missing axes positions."""
-
         if isinstance(seq, tuple):
             is_tuple = True
             seq = list(seq)
@@ -81,10 +80,11 @@ class BaseFOV(ABC):
     @abstractmethod
     def __getitem__(
         self,
-        key: Union[int, slice, tuple[Union[int, slice], ...]],
+        key: int | slice | tuple[int | slice, ...],
     ) -> ArrayLike:
         """
         Returned object must support the ``__array__`` interface,
+
         so that ``np.asarray(...)`` will work.
         """
         raise NotImplementedError
@@ -125,9 +125,9 @@ class BaseFOVMapping(Mapping):
     @abstractmethod
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> bool:
         """Close the files."""
         raise NotImplementedError
@@ -153,13 +153,11 @@ class BaseFOVMapping(Mapping):
 
 
 class FOVDict(BaseFOVMapping):
-    """
-    Basic implementation of a mapping of strings to BaseFOVs.
-    """
+    """Basic implementation of a mapping of strings to BaseFOVs."""
 
     def __init__(
         self,
-        data_dict: Optional[dict[str, BaseFOV]] = None,
+        data_dict: dict[str, BaseFOV] | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -208,9 +206,9 @@ class FOVDict(BaseFOVMapping):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> bool:
         """Close the files."""
         return False

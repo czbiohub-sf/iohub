@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from copy import copy
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 from warnings import catch_warnings, filterwarnings
 
 import dask.array as da
@@ -27,8 +28,8 @@ _logger = logging.getLogger(__name__)
 def _normalize_mm_pos_key(key: str | int) -> int:
     try:
         return int(key)
-    except TypeError:
-        raise TypeError("Micro-Manager position keys must be integers.")
+    except TypeError as err:
+        raise TypeError("Micro-Manager position keys must be integers.") from err
 
 
 def find_first_ome_tiff_in_mmstack(data_path: Path) -> Path:
@@ -41,8 +42,8 @@ def find_first_ome_tiff_in_mmstack(data_path: Path) -> Path:
         files = data_path.glob("*.ome.tif")
         try:
             return next(files)
-        except StopIteration:
-            raise FileNotFoundError(f"Path {data_path} contains no OME-TIFF files.")
+        except StopIteration as err:
+            raise FileNotFoundError(f"Path {data_path} contains no OME-TIFF files.") from err
     raise FileNotFoundError(f"Path {data_path} does not exist.")
 
 
@@ -102,9 +103,9 @@ class MMStack(MicroManagerFOVMapping):
 
     def _parse_data(self):
         series = self._first_tif.series[0]
-        raw_dims = dict((axis, size) for axis, size in zip(series.get_axes(), series.get_shape()))
+        raw_dims = dict(zip(series.get_axes(), series.get_shape(), strict=False))
         axes = ("R", "T", "C", "Z", "Y", "X")
-        dims = dict((ax, raw_dims.get(ax, 1)) for ax in axes)
+        dims = {ax: raw_dims.get(ax, 1) for ax in axes}
         _logger.debug(f"Got dataset dimensions from tifffile: {dims}.")
         (
             self.positions,
@@ -194,7 +195,7 @@ class MMStack(MicroManagerFOVMapping):
             try:
                 for ch in self._mm_meta["Summary"]["ChNames"]:
                     self.channel_names.append(ch)
-            except Exception:
+            except Exception:  # noqa: BLE001 — metadata format varies
                 self.channel_names = self._mm_meta["Summary"]["Channels"] * [""]  # empty strings
 
         elif mm_version == "1.4.22":
@@ -244,7 +245,8 @@ class MMStack(MicroManagerFOVMapping):
 
     def _simplify_stage_position(self, stage_pos: dict):
         """
-        flattens the nested dictionary structure of stage_pos
+        Flattens the nested dictionary structure of stage_pos
+
         and removes superfluous keys
 
         Parameters
@@ -257,8 +259,8 @@ class MMStack(MicroManagerFOVMapping):
         out:            (dict)
             flattened dictionary
         """
-
         out = copy(stage_pos)
+
         out.pop("DevicePositions")
         for dev_pos in stage_pos["DevicePositions"]:
             out.update({dev_pos["Device"]: dev_pos["Position_um"]})
@@ -266,7 +268,8 @@ class MMStack(MicroManagerFOVMapping):
 
     def _simplify_stage_position_beta(self, stage_pos: dict) -> dict:
         """
-        flattens the nested dictionary structure of stage_pos
+        Flattens the nested dictionary structure of stage_pos
+
         and removes superfluous keys
         for MM2.0 Beta versions
 
@@ -281,17 +284,14 @@ class MMStack(MicroManagerFOVMapping):
             flattened dictionary
 
         """
-
         new_dict = {}
+
         new_dict["Label"] = stage_pos["label"]
         new_dict["GridRow"] = stage_pos["gridRow"]
         new_dict["GridCol"] = stage_pos["gridCol"]
 
         for sub in stage_pos["subpositions"]:
-            values = []
-            for field in ["x", "y", "z"]:
-                if sub[field] != 0:
-                    values.append(sub[field])
+            values = [sub[field] for field in ["x", "y", "z"] if sub[field] != 0]
             if len(values) == 1:
                 new_dict[sub["stageName"]] = values[0]
             else:
@@ -334,9 +334,7 @@ class MMStack(MicroManagerFOVMapping):
                 return None
 
     def _infer_image_meta(self) -> None:
-        """
-        Infer data type and pixel size from the first image plane metadata.
-        """
+        """Infer data type and pixel size from the first image plane metadata."""
         _logger.debug("Inferring image metadata.")
         metadata = self._read_frame_metadata(0)
         if metadata is not None:
@@ -344,7 +342,7 @@ class MMStack(MicroManagerFOVMapping):
                 self._xy_pixel_size = float(metadata["PixelSizeUm"])
                 if self._xy_pixel_size > 0:
                     return
-            except Exception:
+            except Exception:  # noqa: BLE001 — metadata parsing is unpredictable
                 _logger.warning("Micro-Manager image plane metadata cannot be loaded.")
         _logger.warning("XY pixel size cannot be determined, defaulting to 1.0 um.")
         self._xy_pixel_size = 1.0

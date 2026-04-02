@@ -1,5 +1,5 @@
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, List
 
 import click
 from natsort import natsorted
@@ -7,7 +7,7 @@ from natsort import natsorted
 from iohub.ngff import Plate, open_ome_zarr
 
 
-def _validate_and_process_paths(ctx: click.Context, opt: click.Option, value: List[str]) -> list[Path]:
+def _validate_and_process_paths(ctx: click.Context, opt: click.Option, value: list[str]) -> list[Path]:
     # Sort and validate the input paths,
     # expanding plates into lists of positions
     input_paths = [p for p in map(Path, natsorted(value)) if p.is_dir()]
@@ -15,8 +15,7 @@ def _validate_and_process_paths(ctx: click.Context, opt: click.Option, value: Li
         with open_ome_zarr(path, mode="r") as dataset:
             if isinstance(dataset, Plate):
                 plate_path = input_paths.pop()
-                for position in dataset.positions():
-                    input_paths.append(plate_path / position[0])
+                input_paths.extend(plate_path / position[0] for position in dataset.positions())
 
     return input_paths
 
@@ -46,8 +45,8 @@ class OptionEatAll(click.Option):
     def __init__(self, *args, **kwargs):
         self.save_other_options = kwargs.pop("save_other_options", True)
         nargs = kwargs.pop("nargs", -1)
-        assert nargs == -1, "nargs, if set, must be -1 not {}".format(nargs)
-        super(OptionEatAll, self).__init__(*args, **kwargs)
+        assert nargs == -1, f"nargs, if set, must be -1 not {nargs}"
+        super().__init__(*args, **kwargs)
         self._previous_parser_process = None
         self._eat_all_parser = None
 
@@ -73,7 +72,7 @@ class OptionEatAll(click.Option):
             # call the actual process
             self._previous_parser_process(value, state)
 
-        retval = super(OptionEatAll, self).add_to_parser(parser, ctx)
+        retval = super().add_to_parser(parser, ctx)
         for name in self.opts:
             our_parser = parser._long_opt.get(name) or parser._short_opt.get(name)
             if our_parser:
