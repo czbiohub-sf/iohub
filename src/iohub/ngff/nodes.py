@@ -378,9 +378,7 @@ class NGFFNode:
         """Create a zarr array via the active implementation and return the native handle."""
         if shards_ratio:
             if len(shards_ratio) != len(shape):
-                raise ValueError(
-                    f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}."
-                )
+                raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
             shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
         else:
             shards = None
@@ -1145,7 +1143,6 @@ class Position(NGFFNode):
     def _default_chunks(shape, last_data_dims: int):
         chunks = shape[-min(last_data_dims, len(shape)) :]
         return pad_shape(chunks, target=len(shape))
-
 
     def _check_shape(self, data_shape: tuple[int, ...]) -> None:
         if len(data_shape) != len(self.axes):
@@ -3070,9 +3067,7 @@ def open_ome_zarr(
         store_path = Path(store_path)
     _is_new_store = mode in ("w", "w-") or (mode == "a" and _is_fslike(store_path) and not store_path.exists())
     if version == "0.4" and _is_new_store:
-        raise ValueError(
-            "Creating new OME-Zarr v0.4 stores is not supported. Use version='0.5' instead."
-        )
+        raise ValueError("Creating new OME-Zarr v0.4 stores is not supported. Use version='0.5' instead.")
     parse_meta = _check_file_mode(store_path, mode, disable_path_checking=disable_path_checking)
     root, impl = _open_store(
         store_path,

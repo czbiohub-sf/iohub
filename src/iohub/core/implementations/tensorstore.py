@@ -87,9 +87,7 @@ class _TsGroup:
             raise FileExistsError(f"Store already exists: {path}")
         if mode in ("w", "w-", "a") and not path.exists():
             path.mkdir(parents=True, exist_ok=True)
-            (path / "zarr.json").write_text(
-                '{"zarr_format": 3, "node_type": "group", "attributes": {}}'
-            )
+            (path / "zarr.json").write_text('{"zarr_format": 3, "node_type": "group", "attributes": {}}')
         self.path = path
         self.mode = mode
         self._impl = impl

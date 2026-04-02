@@ -23,7 +23,7 @@ ArrayIndex = int | slice | list[int] | np.ndarray
 
 def _array_to_blosc_buffer(
     in_array: np.ndarray,
-    out_path: "StrOrBytesPath",
+    out_path: StrOrBytesPath,
     overwrite: bool = False,
 ) -> None:
     """
@@ -65,7 +65,7 @@ def _array_to_blosc_buffer(
 
 
 def blosc_buffer_to_array(
-    buffer_path: "StrOrBytesPath",
+    buffer_path: StrOrBytesPath,
     shape: tuple[int, ...],
     dtype: np.dtype,
     nthreads: int = 4,
@@ -117,7 +117,7 @@ def _cached(f: Callable) -> Callable:
 
     @wraps(f)
     def _key_cache_wrapper(
-        self: "ClearControlFOV",
+        self: ClearControlFOV,
         key: ArrayIndex | tuple[ArrayIndex, ArrayIndex],
     ) -> np.ndarray:
         if not self._cache:
@@ -157,7 +157,7 @@ class ClearControlFOV(BaseFOV):
 
     def __init__(
         self,
-        data_path: "StrOrBytesPath",
+        data_path: StrOrBytesPath,
         missing_value: int | None = None,
         cache: bool = False,
     ):
@@ -434,7 +434,7 @@ class ClearControlFOV(BaseFOV):
         return metadata["time_delta"]
 
 
-def create_mock_clear_control_dataset(path: "StrOrBytesPath") -> None:
+def create_mock_clear_control_dataset(path: StrOrBytesPath) -> None:
     """
     Creates a (2, 4, 64, 64, 64) Clear Control dataset of random integers.
 

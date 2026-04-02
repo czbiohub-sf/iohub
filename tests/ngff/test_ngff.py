@@ -237,6 +237,31 @@ def test_init_ome_zarr(channel_names, version):
         assert dataset.channel_names == channel_names
 
 
+@pytest.mark.parametrize("mode", ["w", "w-"])
+def test_open_ome_zarr_v04_write_raises(tmp_path, mode):
+    """Creating new v0.4 stores must raise ValueError for all write modes."""
+    with pytest.raises(ValueError, match=r"v0.4"):
+        open_ome_zarr(
+            tmp_path / "out.zarr",
+            layout="fov",
+            mode=mode,
+            channel_names=["DAPI"],
+            version="0.4",
+        )
+
+
+def test_open_ome_zarr_v04_append_new_path_raises(tmp_path):
+    """mode='a' on a nonexistent path is a new store and must also raise."""
+    with pytest.raises(ValueError, match=r"v0.4"):
+        open_ome_zarr(
+            tmp_path / "nonexistent.zarr",
+            layout="fov",
+            mode="a",
+            channel_names=["DAPI"],
+            version="0.4",
+        )
+
+
 @pytest.mark.parametrize("version", ["0.5"])
 @pytest.mark.parametrize(
     "basename",
