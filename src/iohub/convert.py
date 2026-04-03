@@ -4,7 +4,6 @@ from importlib.metadata import version as _get_package_version
 from pathlib import Path
 from typing import Literal
 
-import dask
 import numpy as np
 from tqdm import tqdm
 from tqdm.contrib.itertools import product
@@ -13,7 +12,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import Position, open_ome_zarr
 from iohub.ngff.utils import (
-    _adjust_chunks_for_divisibility,
+    _clamp_chunks_to_shape,
     _limit_zyx_chunk_size,
 )
 from iohub.reader import MMStack, NDTiffDataset, read_images
@@ -265,11 +264,11 @@ class TIFFConverter:
         chunk_zyx_shape = _limit_zyx_chunk_size(shape, bytes_per_pixel, MAX_CHUNK_SIZE, chunks=chunks)
         chunks[-3:] = list(chunk_zyx_shape)
 
-        # Adjust chunks to divide evenly into dimensions
-        chunks = _adjust_chunks_for_divisibility(shape, chunks)
+        # Clamp chunks so they don't exceed dimension sizes
+        chunks = _clamp_chunks_to_shape(shape, chunks)
         for i, (orig, adj, dim) in enumerate(zip(original_chunks, chunks, shape, strict=False)):
-            if orig != adj:
-                _logger.warning(f"Chunk size {orig} on axis {i} adjusted to {adj} (dimension {dim}).")
+            if adj < orig:
+                _logger.warning(f"Chunk size {orig} on axis {i} clamped to {adj} (dimension size {dim}).")
 
         _logger.debug(f"Zarr store chunk size will be set to {chunks}.")
 
@@ -384,13 +383,9 @@ class TIFFConverter:
         _logger.debug("Setting up Zarr store.")
 
         self._init_zarr_arrays()
-        # Calculate chunk size in bytes for dask config
-        # This prevents data loss when rechunking to zarr chunks
-        # See: https://github.com/czbiohub-sf/iohub/issues/367
-        chunk_size_bytes = int(np.prod(self.chunks) * np.dtype(self.reader.dtype).itemsize)
 
         _logger.debug("Converting images.")
-        with logging_redirect_tqdm(), dask.config.set({"array.chunk-size": chunk_size_bytes}):
+        with logging_redirect_tqdm():
             for zarr_pos_name, (_, fov) in tqdm(
                 zip(self.zarr_position_names, self.reader, strict=True),
                 total=len(self.zarr_position_names),
