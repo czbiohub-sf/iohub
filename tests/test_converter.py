@@ -350,7 +350,7 @@ def test_rechunk_xy_to_xyz_preserves_data(shape, target_chunks, tmpdir):
 
 
 @pytest.mark.parametrize(
-    "shape,target_chunks",
+    ("shape", "target_chunks"),
     [
         # Non-divisible Z: 1187 is prime, chunk 512 doesn't divide evenly
         ((1, 1, 1187, 256, 256), (1, 1, 512, 256, 256)),
@@ -365,7 +365,6 @@ def test_rechunk_non_divisible_z_preserves_data(shape, target_chunks, tmpdir):
     """
     import dask
     import dask.array as da
-    from dask.array import to_zarr
 
     data = np.arange(np.prod(shape), dtype=np.uint16).reshape(shape)
 
@@ -379,7 +378,7 @@ def test_rechunk_non_divisible_z_preserves_data(shape, target_chunks, tmpdir):
 
         chunk_size_bytes = int(np.prod(target_chunks) * 2)
         with dask.config.set({"array.chunk-size": chunk_size_bytes}):
-            to_zarr(dask_data.rechunk(target_chunks), zarr_img)
+            zarr_img.write_from_dask(dask_data.rechunk(target_chunks))
 
     with open_ome_zarr(output, layout="hcs", mode="r") as reader:
         written = reader["0/0/0"]["0"][:]

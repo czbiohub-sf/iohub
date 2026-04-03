@@ -139,9 +139,10 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         return da.from_zarr(handle)
 
     def write_from_dask(self, handle: zarr.Array, dask_array: Any) -> None:
-        from dask.array import to_zarr
+        from iohub.core.downsample import iter_work_regions
 
-        to_zarr(dask_array, handle)
+        for region in iter_work_regions(handle.shape, handle.chunks):
+            handle[region] = dask_array[region].compute()
 
     # -- High-performance operations ---------------------------------------
 

@@ -462,46 +462,4 @@ def _clamp_chunks_to_shape(shape: tuple[int, ...], chunks: tuple[int, ...]) -> t
     tuple[int, ...]
         Chunk sizes clamped to at most the dimension size.
     """
-    return tuple(min(c, d) for c, d in zip(chunks, shape))
-
-
-def _downsample_tensorstore(
-    source_ts: ts.TensorStore,
-    target_ts: ts.TensorStore,
-    downsample_factors: list[int],
-    method: str = "mean",
-) -> None:
-    """Downsample source into target using tensorstore.
-
-    Writes data in chunks with transactions for consistency.
-
-    Parameters
-    ----------
-    source_ts : ts.TensorStore
-        Source tensorstore array to downsample from
-    target_ts : ts.TensorStore
-        Target tensorstore array to write downsampled data to
-    downsample_factors : list[int]
-        Downsampling factors for each dimension
-    method : str, optional
-        Downsampling method ("mean", "median", "mode", "min", "max",
-        "stride"), by default "mean"
-    """
-    try:
-        import tensorstore as ts
-    except ImportError:
-        raise ImportError(
-            "Tensorstore is required for downsampling. \
-            Please install it with `pip install tensorstore`."
-        )
-
-    downsampled = ts.downsample(source_ts, downsample_factors=downsample_factors, method=method)
-
-    step = target_ts.chunk_layout.write_chunk.shape[0]
-
-    for start in range(0, downsampled.shape[0], step):
-        with ts.Transaction() as txn:
-            target_with_txn = target_ts.with_transaction(txn)
-            downsampled_with_txn = downsampled.with_transaction(txn)
-            stop = min(start + step, downsampled.shape[0])
-            target_with_txn[start:stop].write(downsampled_with_txn[start:stop]).result()
+    return tuple(min(c, d) for c, d in zip(chunks, shape, strict=False))
