@@ -723,9 +723,10 @@ def test_match_indices_to_batches(indices, shard_size):
 @given(
     setup=process_single_position_setup(),
     constant=st.integers(min_value=1, max_value=3),
+    num_threads=st.sampled_from([1, 2]),
 )
 @settings(max_examples=3, deadline=None)
-def test_process_single_position(setup, constant):
+def test_process_single_position(setup, constant, num_threads):
     (
         position_keys,
         channel_names,
@@ -739,7 +740,6 @@ def test_process_single_position(setup, constant):
         version,
     ) = setup
 
-    # Use the enhanced context manager to get both input and output store paths
     with _temp_ome_zarr_stores(
         position_keys=position_keys,
         channel_names=channel_names,
@@ -750,16 +750,13 @@ def test_process_single_position(setup, constant):
         dtype=dtype,
         version=version,
     ) as (input_store_path, output_store_path):
-        # Populate Store with random data
         populate_store(input_store_path, position_keys, shape, dtype)
 
-        # Choose a single position to process (e.g., the first one)
         for position_key_tuple in position_keys:
             input_position_path = input_store_path / Path(*position_key_tuple)
             output_position_path = output_store_path / Path(*position_key_tuple)
             kwargs = {"constant": constant, "extra_metadata": {"temp": 10}}
 
-            # Apply the transformation using process_single_position
             process_single_position(
                 func=dummy_transform,
                 input_position_path=input_position_path,
@@ -768,18 +765,15 @@ def test_process_single_position(setup, constant):
                 output_channel_indices=channel_indices,
                 input_time_indices=time_indices,
                 output_time_indices=time_indices,
+                num_threads=num_threads,
                 **kwargs,
             )
 
-            # Handle None for process_single_position_setup
             if time_indices is None:
                 time_indices = list(range(shape[0]))
             if channel_indices is None:
                 channel_indices = [[c] for c in range(shape[1])]
 
-            print("time_indices", time_indices)
-            print("channel_indices", channel_indices)
-            # Verify the transformation
             iterable = itertools.product(time_indices, channel_indices)
             for t_idx, chan_idx in iterable:
                 verify_transformation(
