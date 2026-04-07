@@ -396,7 +396,8 @@ def process_single_position(
         output_position_path,
         **kwargs,
     )
-    num_workers = min(num_processes, len(flat_iterable), os.cpu_count())
+    cpu_count = os.cpu_count() or 1
+    num_workers = min(num_processes, len(flat_iterable), cpu_count)
     click.echo(f"\nStarting thread pool with {num_workers} workers")
     if num_workers <= 1:
         for args in flat_iterable:
