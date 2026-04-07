@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import itertools
 import os
+import warnings
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -284,7 +285,8 @@ def process_single_position(
     output_channel_indices: list[slice] | list[list[int]] | None = None,
     input_time_indices: list[int] | None = None,
     output_time_indices: list[int] | None = None,
-    num_processes: int = 1,
+    num_processes: int | None = None,
+    num_threads: int = 1,
     **kwargs,
 ) -> None:
     """
@@ -325,7 +327,11 @@ def process_single_position(
         Must match input_channel_indices if not empty.
         Defaults to None.
     num_processes : int, optional
-        Number of simultaneous processes per position. Defaults to 1.
+        Deprecated. Use ``num_threads`` instead. When set, its value is
+        forwarded to ``num_threads``. If both are set to non-default values
+        and differ, ``num_threads`` takes precedence. Defaults to None.
+    num_threads : int, optional
+        Number of simultaneous threads per position. Defaults to 1.
     kwargs : dict, optional
         Additional arguments to pass to the function.
         A dictionary with key "extra_metadata"
@@ -333,6 +339,14 @@ def process_single_position(
         e.g.,
         kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
     """
+    if num_processes is not None:
+        warnings.warn(
+            "num_processes is deprecated. Use num_threads instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if num_threads < num_processes:
+            num_threads = num_processes
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
     click.echo(f"Output data path:\t{output_position_path}")
@@ -397,7 +411,7 @@ def process_single_position(
         **kwargs,
     )
     cpu_count = os.cpu_count() or 1
-    num_workers = min(num_processes, len(flat_iterable), cpu_count)
+    num_workers = min(num_threads, len(flat_iterable), cpu_count)
     click.echo(f"\nStarting thread pool with {num_workers} workers")
     if num_workers <= 1:
         for args in flat_iterable:
