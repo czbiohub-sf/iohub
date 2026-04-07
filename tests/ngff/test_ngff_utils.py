@@ -720,7 +720,13 @@ def test_match_indices_to_batches(indices, shard_size):
     assert matched_batches == batched_reference
 
 
-def _run_process_single_position(setup, constant, num_processes=1):
+@given(
+    setup=process_single_position_setup(),
+    constant=st.integers(min_value=1, max_value=3),
+    num_processes=st.sampled_from([1, 2]),
+)
+@settings(max_examples=3, deadline=None)
+def test_process_single_position(setup, constant, num_processes):
     (
         position_keys,
         channel_names,
@@ -780,21 +786,3 @@ def _run_process_single_position(setup, constant, num_processes=1):
                     dummy_transform,
                     **kwargs,
                 )
-
-
-@given(
-    setup=process_single_position_setup(),
-    constant=st.integers(min_value=1, max_value=3),
-)
-@settings(max_examples=3, deadline=None)
-def test_process_single_position(setup, constant):
-    _run_process_single_position(setup, constant)
-
-
-@given(
-    setup=process_single_position_setup(),
-    constant=st.integers(min_value=1, max_value=3),
-)
-@settings(max_examples=3, deadline=None)
-def test_process_single_position_threaded(setup, constant):
-    _run_process_single_position(setup, constant, num_processes=2)
