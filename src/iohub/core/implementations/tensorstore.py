@@ -345,13 +345,17 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
     ) -> ts.TensorStore:
         shuffle_map = {"noshuffle": 0, "shuffle": 1, "bitshuffle": 2}
         comp = self.config.compressor
+        # TensorStore zarr2 driver requires bool fill_value for bool dtype
+        resolved_dtype = np.dtype(dtype)
+        if resolved_dtype.kind == "b":
+            fill_value = bool(fill_value)
         spec = {
             "driver": "zarr2",
             "kvstore": {"driver": "file", "path": str(Path(group.path) / name)},
             "metadata": {
                 "shape": list(shape),
                 "chunks": list(chunks),
-                "dtype": np.dtype(dtype).str,  # zarr2 uses NumPy dtype strings e.g. "<u2"
+                "dtype": resolved_dtype.str,  # zarr2 uses NumPy dtype strings e.g. "<u2"
                 "compressor": {
                     "id": "blosc",
                     "cname": comp.cname,
