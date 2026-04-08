@@ -36,6 +36,7 @@ class ZarrConfig(BaseModel):
 class TensorStoreConfig(BaseModel):
     """Config for the TensorStore implementation."""
 
+    compressor: CompressorConfig = Field(default_factory=CompressorConfig)
     data_copy_concurrency: int = Field(default=4, ge=1)
     context: dict | None = None
     file_io_concurrency: int | None = None

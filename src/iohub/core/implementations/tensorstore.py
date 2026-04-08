@@ -37,15 +37,20 @@ class _TsAttrs(dict):
         super().__init__(self._load())
 
     def _load(self) -> dict:
+        if self._group.zarr_driver == "zarr2":
+            zattrs = self._group.path / ".zattrs"
+            if zattrs.exists():
+                return json.loads(zattrs.read_text())
+            return {}
         zarr_json = self._group.path / "zarr.json"
         if zarr_json.exists():
             return json.loads(zarr_json.read_text()).get("attributes", {})
-        zattrs = self._group.path / ".zattrs"
-        if zattrs.exists():
-            return json.loads(zattrs.read_text())
         return {}
 
     def _save(self) -> None:
+        if self._group.zarr_driver == "zarr2":
+            (self._group.path / ".zattrs").write_text(json.dumps(dict(self)))
+            return
         zarr_json = self._group.path / "zarr.json"
         if zarr_json.exists():
             meta = json.loads(zarr_json.read_text())
@@ -63,13 +68,17 @@ class _TsAttrs(dict):
         self._save()
 
 
-def _detect_zarr_driver(path: Path) -> str:
+def _detect_zarr_driver(path: Path, zarr_format: int | None = None) -> str:
     """Detect zarr format for a store root. Called once at open_group time."""
+    if zarr_format == 2:
+        return "zarr2"
+    if zarr_format == 3:
+        return "zarr3"
     if (path / "zarr.json").exists():
         return "zarr3"
     if (path / ".zattrs").exists() or (path / ".zgroup").exists():
         return "zarr2"
-    return "zarr3"  # new stores  will be created as v3 always
+    return "zarr3"
 
 
 class _TsGroup:
@@ -87,7 +96,10 @@ class _TsGroup:
             raise FileExistsError(f"Store already exists: {path}")
         if mode in ("w", "w-", "a") and not path.exists():
             path.mkdir(parents=True, exist_ok=True)
-            (path / "zarr.json").write_text('{"zarr_format": 3, "node_type": "group", "attributes": {}}')
+            if zarr_driver == "zarr2":
+                (path / ".zgroup").write_text('{"zarr_format": 2}')
+            else:
+                (path / "zarr.json").write_text('{"zarr_format": 3, "node_type": "group", "attributes": {}}')
         self.path = path
         self.mode = mode
         self._impl = impl
@@ -99,9 +111,14 @@ class _TsGroup:
         if sub.exists() and not overwrite:
             return _TsGroup(path=sub, mode="a", impl=self._impl, zarr_driver=self.zarr_driver)
         sub.mkdir(parents=True, exist_ok=True)
-        zarr_json = sub / "zarr.json"
-        if not zarr_json.exists() or overwrite:
-            zarr_json.write_text(json.dumps({"zarr_format": 3, "node_type": "group", "attributes": {}}))
+        if self.zarr_driver == "zarr2":
+            zgroup = sub / ".zgroup"
+            if not zgroup.exists() or overwrite:
+                zgroup.write_text('{"zarr_format": 2}')
+        else:
+            zarr_json = sub / "zarr.json"
+            if not zarr_json.exists() or overwrite:
+                zarr_json.write_text(json.dumps({"zarr_format": 3, "node_type": "group", "attributes": {}}))
         return _TsGroup(path=sub, mode="a", impl=self._impl, zarr_driver=self.zarr_driver)
 
     def __contains__(self, name: str) -> bool:
@@ -271,7 +288,8 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
 
     def open_group(self, path: StorePath, mode: str, zarr_format: int | None = None) -> _TsGroup:
         p = Path(path)
-        return _TsGroup(path=p, mode=mode, impl=self, zarr_driver=_detect_zarr_driver(p), root=p)
+        driver = _detect_zarr_driver(p, zarr_format)
+        return _TsGroup(path=p, mode=mode, impl=self, zarr_driver=driver, root=p)
 
     def _iter_children(self, group: _TsGroup, node_type: str) -> list[str]:
         """Return sorted child names matching node_type ('group' or 'array')."""
@@ -306,7 +324,7 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         pass  # TensorStore handles are not persistent connections
 
     def get_zarr_format(self, group: _TsGroup) -> int:
-        return 3  # TensorStore only supports zarr v3
+        return 2 if group.zarr_driver == "zarr2" else 3
 
     # -- Array lifecycle ---------------------------------------------------
 
@@ -325,6 +343,8 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         fill_value: int = 0,
         overwrite: bool = False,
     ) -> ts.TensorStore:
+        shuffle_map = {"noshuffle": 0, "shuffle": 1, "bitshuffle": 2}
+        comp = self.config.compressor
         spec = {
             "driver": "zarr2",
             "kvstore": {"driver": "file", "path": str(Path(group.path) / name)},
@@ -332,7 +352,12 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
                 "shape": list(shape),
                 "chunks": list(chunks),
                 "dtype": np.dtype(dtype).str,  # zarr2 uses NumPy dtype strings e.g. "<u2"
-                "compressor": {"id": "blosc", "cname": "lz4", "clevel": 5, "shuffle": 1},
+                "compressor": {
+                    "id": "blosc",
+                    "cname": comp.cname,
+                    "clevel": comp.clevel,
+                    "shuffle": shuffle_map.get(comp.shuffle, 2),
+                },
                 "fill_value": fill_value,
                 "order": "C",
                 "filters": None,

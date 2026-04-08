@@ -92,7 +92,7 @@ def _open_store(
     try:
         zarr_format = None
         if mode in ("w", "w-") or (is_fs and mode == "a" and not store_path.exists()):
-            zarr_format = 3
+            zarr_format = 2 if version == "0.4" else 3
         root = impl.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except (FileNotFoundError, FileExistsError, PermissionError):
         raise
@@ -382,6 +382,10 @@ class NGFFNode:
             shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
         else:
             shards = None
+        if shards is not None and self._zarr_format == 2:
+            raise ValueError(
+                "Sharding is not supported in Zarr v2 (OME-Zarr v0.4). Remove shards_ratio or use version='0.5'."
+            )
         if self._zarr_format == 3:
             spec = ArraySpec.create(
                 shape=shape,
@@ -3066,8 +3070,6 @@ def open_ome_zarr(
     if _is_fslike(store_path):
         store_path = Path(store_path)
     _is_new_store = mode in ("w", "w-") or (mode == "a" and _is_fslike(store_path) and not store_path.exists())
-    if version == "0.4" and _is_new_store:
-        raise ValueError("Creating new OME-Zarr v0.4 stores is not supported. Use version='0.5' instead.")
     parse_meta = _check_file_mode(store_path, mode, disable_path_checking=disable_path_checking)
     root, impl = _open_store(
         store_path,
