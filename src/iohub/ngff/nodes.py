@@ -842,7 +842,7 @@ class PositionLabel(NGFFNode):
                     )
                 ],
                 image_label=image_label_meta,
-                version="0.5" if self.version == "0.5" else None,
+                version=self.version,
             )
         elif dataset_meta.path not in self.metadata.multiscales[0].get_dataset_paths():
             self.metadata.multiscales[0].datasets.append(dataset_meta)
@@ -1189,7 +1189,7 @@ class Position(NGFFNode):
                     )
                 ],
                 omero=self._omero_meta(id=0, name=self._group.basename),
-                version="0.5" if self.version == "0.5" else None,
+                version=self.version,
             )
         elif dataset_meta.path not in self.metadata.multiscales[0].get_dataset_paths():
             self.metadata.multiscales[0].datasets.append(dataset_meta)

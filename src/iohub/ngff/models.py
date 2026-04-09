@@ -292,8 +292,7 @@ class LabelImageMeta(MetaBase):
     multiscales: list[MultiScaleMeta]
     # SHOULD: image-label with colors, properties, source
     image_label: PositionLabelMeta = Field(alias="image-label")
-    # only for OME-NGFF v0.5
-    version: Literal["0.5"] | None = None
+    version: Literal["0.4", "0.5"]
     model_config = ConfigDict(extra="allow")
 
 
@@ -308,8 +307,7 @@ class ImagesMeta(MetaBase):
     omero: OMEROMeta | None = None
     # labels group support
     labels: LabelsMeta | None = None
-    # only for OME-NGFF v0.5
-    version: Literal["0.5"] | None = None
+    version: Literal["0.4", "0.5"]
     model_config = ConfigDict(extra="allow")
 
 
