@@ -26,6 +26,7 @@ from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 
 from iohub.core import ArraySpec, NGFFArray, get_implementation
+from iohub.core.compat import get_ome_attrs
 from iohub.core.config import ImplementationConfig
 from iohub.core.errors import StoreOpenError
 from iohub.core.protocol import ZarrImplementation
@@ -184,7 +185,7 @@ class NGFFNode:
     @property
     def maybe_wrapped_ome_attrs(self):
         """Container of OME metadata attributes."""
-        return self.zattrs.get("ome") or self.zattrs
+        return get_ome_attrs(self.zattrs)
 
     @property
     def version(self) -> Literal["0.4", "0.5"]:
@@ -2486,7 +2487,7 @@ class Plate(NGFFNode):
         try:
             well_path = self.metadata.wells[0].path
             well_grp = self.zgroup[well_path]
-            attrs = well_grp.attrs.get("ome") or dict(well_grp.attrs)
+            attrs = get_ome_attrs(well_grp.attrs)
             pos_name = attrs["well"]["images"][0]["path"]
             return Position(
                 group=well_grp[pos_name],

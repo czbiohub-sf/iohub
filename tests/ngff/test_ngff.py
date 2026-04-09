@@ -25,6 +25,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
+from iohub.core.compat import get_ome_attrs
 from iohub.core.utils import pad_shape
 from iohub.ngff.models import TO_DICT_SETTINGS
 from iohub.ngff.nodes import (
@@ -825,10 +826,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name, version):
             assert dataset.metadata.multiscales[0].coordinate_transformations == transform
         # read data with plain zarr
         group = zarr.open(store_path)
-        if version == "0.4":
-            maybe_ome = group.attrs
-        elif version == "0.5":
-            maybe_ome = group.attrs["ome"]
+        maybe_ome = get_ome_attrs(group.attrs)
         assert maybe_ome["multiscales"][0]["coordinateTransformations"] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
@@ -1157,7 +1155,7 @@ def test_create_well(row_names: list[str], col_names: list[str]):
         for row_name in row_names:
             for col_name in col_names:
                 dataset.create_well(row_name, col_name)
-        plate_meta = dataset.zattrs.get("ome", dataset.zattrs)["plate"]
+        plate_meta = get_ome_attrs(dataset.zattrs)["plate"]
         assert [c["name"] for c in plate_meta["columns"]] == col_names
         assert [r["name"] for r in plate_meta["rows"]] == row_names
 
@@ -1206,7 +1204,7 @@ def test_create_position(row, col, pos, version):
             version=version,
         )
         _ = dataset.create_position(row_name=row, col_name=col, pos_name=pos)
-        ome = dict(dataset.zgroup.attrs) if version == "0.4" else dataset.zgroup.attrs["ome"]
+        ome = get_ome_attrs(dataset.zgroup.attrs)
         assert [c["name"] for c in ome["plate"]["columns"]] == [col]
         assert [r["name"] for r in ome["plate"]["rows"]] == [row]
         assert (store_path / row / col / pos).is_dir()
@@ -1257,7 +1255,7 @@ def test_create_positions(tmp_path, version):
 
     # Collect positions and compare those
 
-    get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+    get_metadata = lambda x: get_ome_attrs(x.zgroup.attrs)
 
     single_plate_metadata = get_metadata(single)
     batched_plate_metadata = get_metadata(batched)
@@ -1316,7 +1314,7 @@ def test_create_positions_with_tuple_variations(tmp_path, version):
     batched.create_positions(positions)
 
     # Verify metadata matches
-    get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+    get_metadata = lambda x: get_ome_attrs(x.zgroup.attrs)
 
     single_meta = get_metadata(single)
     batched_meta = get_metadata(batched)
