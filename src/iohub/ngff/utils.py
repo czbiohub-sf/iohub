@@ -418,10 +418,12 @@ def process_single_position(
             partial_apply_transform_to_czyx_and_save(*args)
     else:
         with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            list(executor.map(
-                lambda args: partial_apply_transform_to_czyx_and_save(*args),
-                flat_iterable,
-            ))
+            list(
+                executor.map(
+                    lambda args: partial_apply_transform_to_czyx_and_save(*args),
+                    flat_iterable,
+                )
+            )
     click.echo("Shut down thread pool")
 
 

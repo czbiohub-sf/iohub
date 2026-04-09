@@ -25,6 +25,7 @@ from numpy.typing import NDArray
 if TYPE_CHECKING:
     from _typeshed import StrPath
 
+from iohub.core.compat import get_ome_attrs
 from iohub.core.utils import pad_shape
 from iohub.ngff.models import TO_DICT_SETTINGS
 from iohub.ngff.nodes import (
@@ -45,7 +46,7 @@ z_dim_st = st.integers(1, 4)
 y_dim_st = st.integers(1, 32)
 x_dim_st = st.integers(1, 32)
 channel_names_st = c_dim_st.flatmap(lambda c_dim: st.lists(short_text_st, min_size=c_dim, max_size=c_dim, unique=True))
-ngff_versions_st = st.just("0.5")
+ngff_versions_st = st.sampled_from(["0.4", "0.5"])
 short_alpha_numeric = st.text(
     alphabet=list(string.ascii_lowercase + string.ascii_uppercase + string.digits),
     min_size=1,
@@ -238,28 +239,33 @@ def test_init_ome_zarr(channel_names, version):
 
 
 @pytest.mark.parametrize("mode", ["w", "w-"])
-def test_open_ome_zarr_v04_write_raises(tmp_path, mode):
-    """Creating new v0.4 stores must raise ValueError for all write modes."""
-    with pytest.raises(ValueError, match=r"v0.4"):
-        open_ome_zarr(
-            tmp_path / "out.zarr",
-            layout="fov",
-            mode=mode,
-            channel_names=["DAPI"],
-            version="0.4",
-        )
+def test_open_ome_zarr_v04_write_succeeds(tmp_path, mode):
+    """Creating new v0.4 stores must succeed."""
+    store_path = tmp_path / "out.zarr"
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode=mode,
+        channel_names=["DAPI"],
+        version="0.4",
+    ) as ds:
+        assert ds.version == "0.4"
+        assert (store_path / ".zgroup").exists()
+        assert not (store_path / "zarr.json").exists()
 
 
-def test_open_ome_zarr_v04_append_new_path_raises(tmp_path):
-    """mode='a' on a nonexistent path is a new store and must also raise."""
-    with pytest.raises(ValueError, match=r"v0.4"):
-        open_ome_zarr(
-            tmp_path / "nonexistent.zarr",
-            layout="fov",
-            mode="a",
-            channel_names=["DAPI"],
-            version="0.4",
-        )
+def test_open_ome_zarr_v04_append_new_path_succeeds(tmp_path):
+    """mode='a' on a nonexistent path should create a v0.4 store."""
+    store_path = tmp_path / "nonexistent.zarr"
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["DAPI"],
+        version="0.4",
+    ) as ds:
+        assert ds.version == "0.4"
+        assert (store_path / ".zgroup").exists()
 
 
 @pytest.mark.parametrize("version", ["0.5"])
@@ -391,12 +397,14 @@ def test_write_ome_zarr(channels_and_random_5d, arr_name, version):
     channel_names, random_5d = channels_and_random_5d
     with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
         assert_allclose(dataset[arr_name][:], random_5d)
-        # round-trip test with the offical reader implementation
-        ext_reader = ome_zarr.reader.Reader(ome_zarr.io.parse_url(dataset.zgroup.store.root))
-        node = next(iter(ext_reader()))
-        assert node.metadata["channel_names"] == channel_names
-        assert node.specs[0].datasets == [arr_name]
-        assert_allclose(node.data[0], random_5d)
+        if version == "0.5":
+            # round-trip test with the official reader implementation
+            # ome-zarr-py reader requires zarr-python Group with .store.root
+            ext_reader = ome_zarr.reader.Reader(ome_zarr.io.parse_url(dataset.zgroup.store.root))
+            node = next(iter(ext_reader()))
+            assert node.metadata["channel_names"] == channel_names
+            assert node.specs[0].datasets == [arr_name]
+            assert_allclose(node.data[0], random_5d)
 
 
 @given(
@@ -421,9 +429,10 @@ def test_create_zeros(ch_shape_dtype, arr_name, version):
             version=version,
         )
         dataset.create_zeros(name=arr_name, shape=shape, dtype=dtype)
-        assert {e.name for e in (Path(store_path) / arr_name).iterdir()} == {
-            "zarr.json",
-        }
+        if version == "0.5":
+            assert (Path(store_path) / arr_name / "zarr.json").exists()
+        else:
+            assert (Path(store_path) / arr_name / ".zarray").exists()
         if version == "0.5":
             assert dataset[arr_name].metadata.dimension_names == (
                 "T",
@@ -817,10 +826,7 @@ def test_set_transform_fov(ch_shape_dtype, arr_name, version):
             assert dataset.metadata.multiscales[0].coordinate_transformations == transform
         # read data with plain zarr
         group = zarr.open(store_path)
-        if version == "0.4":
-            maybe_ome = group.attrs
-        elif version == "0.5":
-            maybe_ome = group.attrs["ome"]
+        maybe_ome = get_ome_attrs(group.attrs)
         assert maybe_ome["multiscales"][0]["coordinateTransformations"] == [
             translate.model_dump(**TO_DICT_SETTINGS) for translate in transform
         ]
@@ -1149,7 +1155,7 @@ def test_create_well(row_names: list[str], col_names: list[str]):
         for row_name in row_names:
             for col_name in col_names:
                 dataset.create_well(row_name, col_name)
-        plate_meta = dataset.zattrs.get("ome", dataset.zattrs)["plate"]
+        plate_meta = get_ome_attrs(dataset.zattrs)["plate"]
         assert [c["name"] for c in plate_meta["columns"]] == col_names
         assert [r["name"] for r in plate_meta["rows"]] == row_names
 
@@ -1198,7 +1204,7 @@ def test_create_position(row, col, pos, version):
             version=version,
         )
         _ = dataset.create_position(row_name=row, col_name=col, pos_name=pos)
-        ome = dataset.zgroup.attrs["ome"]
+        ome = get_ome_attrs(dataset.zgroup.attrs)
         assert [c["name"] for c in ome["plate"]["columns"]] == [col]
         assert [r["name"] for r in ome["plate"]["rows"]] == [row]
         assert (store_path / row / col / pos).is_dir()
@@ -1249,7 +1255,7 @@ def test_create_positions(tmp_path, version):
 
     # Collect positions and compare those
 
-    get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+    get_metadata = lambda x: get_ome_attrs(x.zgroup.attrs)
 
     single_plate_metadata = get_metadata(single)
     batched_plate_metadata = get_metadata(batched)
@@ -1308,7 +1314,7 @@ def test_create_positions_with_tuple_variations(tmp_path, version):
     batched.create_positions(positions)
 
     # Verify metadata matches
-    get_metadata = lambda x: dict(x.zgroup.attrs["ome"])
+    get_metadata = lambda x: get_ome_attrs(x.zgroup.attrs)
 
     single_meta = get_metadata(single)
     batched_meta = get_metadata(batched)
@@ -1892,3 +1898,69 @@ def test_initialize_pyramid_invalid_dims(implementation, tmp_path):
         pos.create_zeros("0", shape=(1, 1, 2, 8, 8), dtype=np.float32)
         with pytest.raises(ValueError, match="not in dataset axes"):
             pos.initialize_pyramid(levels=2, dims={"w"})
+
+
+# ---------- v0.4 dedicated tests ----------
+
+
+def test_write_ome_zarr_v04_fov_roundtrip(tmp_path):
+    """Full round-trip: create v0.4 FOV store, write image, read back."""
+    store_path = tmp_path / "v04.ome.zarr"
+    data = np.random.default_rng(42).random((1, 2, 3, 64, 64)).astype(np.float32)
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="w-",
+        channel_names=["A", "B"],
+        version="0.4",
+    ) as ds:
+        ds.create_image("0", data)
+        assert ds.version == "0.4"
+        # Verify v2 file structure
+        assert (store_path / ".zgroup").exists()
+        assert (store_path / ".zattrs").exists()
+        assert not (store_path / "zarr.json").exists()
+    # Re-open read-only
+    with open_ome_zarr(store_path, layout="fov", mode="r") as ds:
+        assert ds.version == "0.4"
+        assert_array_equal(ds["0"][:], data)
+        assert ds.channel_names == ["A", "B"]
+
+
+def test_write_ome_zarr_v04_hcs_roundtrip(tmp_path):
+    """HCS plate creation with v0.4."""
+    store_path = tmp_path / "v04_hcs.ome.zarr"
+    data = np.zeros((1, 2, 3, 32, 32), dtype=np.uint16)
+    with open_ome_zarr(
+        store_path,
+        layout="hcs",
+        mode="w-",
+        channel_names=["A", "B"],
+        version="0.4",
+    ) as plate:
+        pos = plate.create_position("A", "1", "0")
+        pos.create_image("0", data)
+        # Flat metadata, no "ome" wrapper
+        assert "plate" in plate.zattrs
+        assert "ome" not in plate.zattrs
+    with open_ome_zarr(store_path, layout="hcs", mode="r") as plate:
+        assert plate.version == "0.4"
+        assert_array_equal(plate["A/1/0"]["0"][:], data)
+
+
+def test_sharding_raises_on_v04(tmp_path):
+    """Sharding must raise ValueError for v0.4."""
+    store_path = tmp_path / "v04_shard.zarr"
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="w-",
+        channel_names=["A"],
+        version="0.4",
+    ) as ds:
+        with pytest.raises(ValueError, match="Sharding is not supported"):
+            ds.create_image(
+                "0",
+                np.zeros((1, 1, 1, 64, 64)),
+                shards_ratio=(1, 1, 1, 2, 2),
+            )

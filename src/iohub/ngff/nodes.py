@@ -26,6 +26,7 @@ from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 
 from iohub.core import ArraySpec, NGFFArray, get_implementation
+from iohub.core.compat import get_ome_attrs
 from iohub.core.config import ImplementationConfig
 from iohub.core.errors import StoreOpenError
 from iohub.core.protocol import ZarrImplementation
@@ -92,7 +93,7 @@ def _open_store(
     try:
         zarr_format = None
         if mode in ("w", "w-") or (is_fs and mode == "a" and not store_path.exists()):
-            zarr_format = 3
+            zarr_format = 2 if version == "0.4" else 3
         root = impl.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except (FileNotFoundError, FileExistsError, PermissionError):
         raise
@@ -184,7 +185,7 @@ class NGFFNode:
     @property
     def maybe_wrapped_ome_attrs(self):
         """Container of OME metadata attributes."""
-        return self.zattrs.get("ome") or self.zattrs
+        return get_ome_attrs(self.zattrs)
 
     @property
     def version(self) -> Literal["0.4", "0.5"]:
@@ -225,16 +226,20 @@ class NGFFNode:
 
     def __getitem__(self, key):
         key = normalize_path(str(key))
-        znode = self.zgroup.get(key)
-        if not znode:
-            raise KeyError(key)
         levels = len(key.split("/")) - 1
         item_type = self._MEMBER_TYPE
         for _ in range(levels):
             item_type = item_type._MEMBER_TYPE
         if issubclass(item_type, NGFFArray):
-            return item_type.from_handle(znode, self._impl)
+            try:
+                handle = self._impl.open_array(self._group, key)
+            except (FileNotFoundError, KeyError) as err:
+                raise KeyError(key) from err
+            return item_type.from_handle(handle, self._impl)
         else:
+            znode = self.zgroup.get(key)
+            if not znode:
+                raise KeyError(key)
             return item_type(group=znode, parse_meta=True, **self._child_attrs)
 
     def __setitem__(self, key, value):
@@ -382,6 +387,10 @@ class NGFFNode:
             shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
         else:
             shards = None
+        if shards is not None and self._zarr_format == 2:
+            raise ValueError(
+                "Sharding is not supported in Zarr v2 (OME-Zarr v0.4). Remove shards_ratio or use version='0.5'."
+            )
         if self._zarr_format == 3:
             spec = ArraySpec.create(
                 shape=shape,
@@ -663,7 +672,10 @@ class PositionLabel(NGFFNode):
     def _parse_meta(self):
         """Parse multiscales and image-label metadata."""
         try:
-            self.metadata = LabelImageMeta.model_validate(self.maybe_wrapped_ome_attrs)
+            attrs = dict(self.maybe_wrapped_ome_attrs)
+            if "version" not in attrs:
+                attrs["version"] = self.version
+            self.metadata = LabelImageMeta.model_validate(attrs)
         except ValidationError as e:
             _logger.warning(str(e))
             self._warn_invalid_meta()
@@ -683,10 +695,11 @@ class PositionLabel(NGFFNode):
 
     def __getitem__(self, key: int | str) -> LabelsArray:
         key = normalize_path(str(key))
-        znode = self.zgroup.get(key)
-        if not znode:
-            raise KeyError(key)
-        return LabelsArray.from_handle(znode, self._impl)
+        try:
+            handle = self._impl.open_array(self._group, key)
+        except (FileNotFoundError, KeyError) as err:
+            raise KeyError(key) from err
+        return LabelsArray.from_handle(handle, self._impl)
 
     def create_label(
         self,
@@ -832,7 +845,7 @@ class PositionLabel(NGFFNode):
                     )
                 ],
                 image_label=image_label_meta,
-                version="0.5" if self.version == "0.5" else None,
+                version=self.version,
             )
         elif dataset_meta.path not in self.metadata.multiscales[0].get_dataset_paths():
             self.metadata.multiscales[0].datasets.append(dataset_meta)
@@ -949,7 +962,10 @@ class Position(NGFFNode):
 
     def _parse_meta(self):
         try:
-            self.metadata = ImagesMeta.model_validate(self.maybe_wrapped_ome_attrs)
+            attrs = dict(self.maybe_wrapped_ome_attrs)
+            if "version" not in attrs:
+                attrs["version"] = self.version
+            self.metadata = ImagesMeta.model_validate(attrs)
             self._set_meta()
         except ValidationError as e:
             _logger.warning(str(e))
@@ -1179,7 +1195,7 @@ class Position(NGFFNode):
                     )
                 ],
                 omero=self._omero_meta(id=0, name=self._group.basename),
-                version="0.5" if self.version == "0.5" else None,
+                version=self.version,
             )
         elif dataset_meta.path not in self.metadata.multiscales[0].get_dataset_paths():
             self.metadata.multiscales[0].datasets.append(dataset_meta)
@@ -1964,13 +1980,10 @@ class Position(NGFFNode):
 
         import dask.array as da
 
-        # Always use zarr-python for the dask array — other backends
-        # (e.g. TensorStore) may not integrate reliably with dask/xarray.
+        # Always use zarr-python for the dask array — TensorStore
+        # may not integrate reliably with dask/xarray.
         arr_name = self.metadata.multiscales[0].datasets[0].path
-        if isinstance(self._group, zarr.Group):
-            data = da.from_zarr(self._group[arr_name])
-        else:
-            data = da.from_zarr(zarr.open_array(str(self._group.path / arr_name), mode="r"))
+        data = da.from_zarr(self._group[arr_name])
         # Build axis unit lookup from OME metadata
         axis_units = {}
         for axis in self.axes:
@@ -2480,7 +2493,7 @@ class Plate(NGFFNode):
         try:
             well_path = self.metadata.wells[0].path
             well_grp = self.zgroup[well_path]
-            attrs = well_grp.attrs.get("ome") or dict(well_grp.attrs)
+            attrs = get_ome_attrs(well_grp.attrs)
             pos_name = attrs["well"]["images"][0]["path"]
             return Position(
                 group=well_grp[pos_name],
@@ -3066,8 +3079,6 @@ def open_ome_zarr(
     if _is_fslike(store_path):
         store_path = Path(store_path)
     _is_new_store = mode in ("w", "w-") or (mode == "a" and _is_fslike(store_path) and not store_path.exists())
-    if version == "0.4" and _is_new_store:
-        raise ValueError("Creating new OME-Zarr v0.4 stores is not supported. Use version='0.5' instead.")
     parse_meta = _check_file_mode(store_path, mode, disable_path_checking=disable_path_checking)
     root, impl = _open_store(
         store_path,
