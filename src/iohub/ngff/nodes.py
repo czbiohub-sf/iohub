@@ -225,16 +225,20 @@ class NGFFNode:
 
     def __getitem__(self, key):
         key = normalize_path(str(key))
-        znode = self.zgroup.get(key)
-        if not znode:
-            raise KeyError(key)
         levels = len(key.split("/")) - 1
         item_type = self._MEMBER_TYPE
         for _ in range(levels):
             item_type = item_type._MEMBER_TYPE
         if issubclass(item_type, NGFFArray):
-            return item_type.from_handle(znode, self._impl)
+            try:
+                handle = self._impl.open_array(self._group, key)
+            except (FileNotFoundError, KeyError) as err:
+                raise KeyError(key) from err
+            return item_type.from_handle(handle, self._impl)
         else:
+            znode = self.zgroup.get(key)
+            if not znode:
+                raise KeyError(key)
             return item_type(group=znode, parse_meta=True, **self._child_attrs)
 
     def __setitem__(self, key, value):
@@ -687,10 +691,11 @@ class PositionLabel(NGFFNode):
 
     def __getitem__(self, key: int | str) -> LabelsArray:
         key = normalize_path(str(key))
-        znode = self.zgroup.get(key)
-        if not znode:
-            raise KeyError(key)
-        return LabelsArray.from_handle(znode, self._impl)
+        try:
+            handle = self._impl.open_array(self._group, key)
+        except (FileNotFoundError, KeyError) as err:
+            raise KeyError(key) from err
+        return LabelsArray.from_handle(handle, self._impl)
 
     def create_label(
         self,
@@ -1968,13 +1973,10 @@ class Position(NGFFNode):
 
         import dask.array as da
 
-        # Always use zarr-python for the dask array — other backends
-        # (e.g. TensorStore) may not integrate reliably with dask/xarray.
+        # Always use zarr-python for the dask array — TensorStore
+        # may not integrate reliably with dask/xarray.
         arr_name = self.metadata.multiscales[0].datasets[0].path
-        if isinstance(self._group, zarr.Group):
-            data = da.from_zarr(self._group[arr_name])
-        else:
-            data = da.from_zarr(zarr.open_array(str(self._group.path / arr_name), mode="r"))
+        data = da.from_zarr(self._group[arr_name])
         # Build axis unit lookup from OME metadata
         axis_units = {}
         for axis in self.axes:

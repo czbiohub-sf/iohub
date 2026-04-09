@@ -1,12 +1,12 @@
 """ZarrImplementation Protocol -- the contract for zarr I/O backends.
 
 Type parameter conventions:
-  G -- the native group handle type (e.g. ``zarr.Group``, ``_TsGroup``)
+  G -- the native group handle type (e.g. ``zarr.Group``)
   A -- the native array handle type (e.g. ``zarr.Array``, ``ts.TensorStore``)
 
 Concrete bindings per implementation:
   ZarrPythonImplementation  ->  G=zarr.Group,  A=zarr.Array
-  TensorStoreImplementation ->  G=_TsGroup,    A=ts.TensorStore
+  TensorStoreImplementation ->  G=zarr.Group,  A=ts.TensorStore
 """
 
 from typing import Any, Protocol, runtime_checkable
