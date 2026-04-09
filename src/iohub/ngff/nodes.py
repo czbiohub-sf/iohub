@@ -672,7 +672,10 @@ class PositionLabel(NGFFNode):
     def _parse_meta(self):
         """Parse multiscales and image-label metadata."""
         try:
-            self.metadata = LabelImageMeta.model_validate(self.maybe_wrapped_ome_attrs)
+            attrs = dict(self.maybe_wrapped_ome_attrs)
+            if "version" not in attrs:
+                attrs["version"] = self.version
+            self.metadata = LabelImageMeta.model_validate(attrs)
         except ValidationError as e:
             _logger.warning(str(e))
             self._warn_invalid_meta()
@@ -959,7 +962,10 @@ class Position(NGFFNode):
 
     def _parse_meta(self):
         try:
-            self.metadata = ImagesMeta.model_validate(self.maybe_wrapped_ome_attrs)
+            attrs = dict(self.maybe_wrapped_ome_attrs)
+            if "version" not in attrs:
+                attrs["version"] = self.version
+            self.metadata = ImagesMeta.model_validate(attrs)
             self._set_meta()
         except ValidationError as e:
             _logger.warning(str(e))
