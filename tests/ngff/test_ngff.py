@@ -553,6 +553,57 @@ def test_ome_zarr_to_tensorstore(channels_and_random_5d, arr_name, version, conc
             assert_array_equal(read_only[arr_name].numpy(), zeros)
 
 
+@pytest.mark.parametrize("recheck_cached_data", [None, "open", True, False])
+def test_tensorstore_recheck_cached_data(monkeypatch, recheck_cached_data):
+    """``TensorStoreConfig.recheck_cached_data`` propagates into ``ts.open``.
+
+    When the option is ``None`` (default) the kwarg must not be forwarded,
+    so the TensorStore driver falls back to its own default. For any other
+    value (``"open"``, ``True``, ``False``) the exact value must reach the
+    ``ts.open`` call — this is the knob used to suppress per-chunk
+    revalidation on networked filesystems during read-heavy training.
+    """
+    pytest.importorskip("tensorstore")
+    import tensorstore as ts
+
+    from iohub.core.config import TensorStoreConfig
+    from iohub.core.implementations import tensorstore as ts_impl
+
+    captured_kwargs: list[dict] = []
+    real_ts_open = ts_impl._ts_open
+
+    def spy_ts_open(spec, **kwargs):
+        captured_kwargs.append(kwargs)
+        return real_ts_open(spec, **kwargs)
+
+    monkeypatch.setattr(ts_impl, "_ts_open", spy_ts_open)
+
+    channel_names = ["DAPI"]
+    random_5d = np.random.default_rng(0).random((1, 1, 1, 4, 4), dtype=np.float32)
+    ts_config = TensorStoreConfig(recheck_cached_data=recheck_cached_data)
+
+    with _temp_ome_zarr(random_5d, channel_names, arr_name="0", version="0.5") as dataset:
+        store_path = Path(dataset.zgroup.store.root)
+        with open_ome_zarr(
+            store_path,
+            layout="fov",
+            mode="r",
+            implementation="tensorstore",
+            implementation_config=ts_config,
+        ) as ts_dataset:
+            handle = ts_dataset["0"].native
+            assert isinstance(handle, ts.TensorStore)
+            assert_array_equal(np.asarray(handle.read().result()), random_5d)
+
+    open_calls = [k for k in captured_kwargs if k.get("open") is True]
+    assert open_calls, "Expected at least one ts.open(open=True) call"
+    last = open_calls[-1]
+    if recheck_cached_data is None:
+        assert "recheck_cached_data" not in last
+    else:
+        assert last.get("recheck_cached_data") == recheck_cached_data
+
+
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,

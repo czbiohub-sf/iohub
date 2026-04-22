@@ -193,13 +193,15 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
                 "driver": driver,
                 "kvstore": {"driver": "file", "path": key},
             }
-            self._array_cache[key] = _ts_open(
-                spec,
-                open=True,
-                read=True,
-                write=writable,
-                context=self._context(),
-            )
+            open_kwargs: dict[str, Any] = {
+                "open": True,
+                "read": True,
+                "write": writable,
+                "context": self._context(),
+            }
+            if self.config.recheck_cached_data is not None:
+                open_kwargs["recheck_cached_data"] = self.config.recheck_cached_data
+            self._array_cache[key] = _ts_open(spec, **open_kwargs)
         return self._array_cache[key]
 
     # -- Array I/O ---------------------------------------------------------

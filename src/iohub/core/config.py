@@ -34,7 +34,42 @@ class ZarrConfig(BaseModel):
 
 
 class TensorStoreConfig(BaseModel):
-    """Config for the TensorStore implementation."""
+    """Config for the TensorStore implementation.
+
+    Parameters
+    ----------
+    compressor : CompressorConfig
+        Default compressor settings used at array creation.
+    data_copy_concurrency : int
+        Concurrency limit for TensorStore's ``data_copy_concurrency``
+        resource, bounding threads used to copy data between buffers.
+    context : dict or None
+        Optional raw ``ts.Context`` options merged into the context built
+        from this config. Individual fields on this config take precedence.
+    file_io_concurrency : int or None
+        Concurrency limit for TensorStore's ``file_io_concurrency``
+        resource, bounding concurrent filesystem reads/writes. Useful to
+        raise on high-latency networked filesystems (e.g. NFS) where the
+        default (32) under-saturates the link.
+    file_io_sync : bool
+        Whether TensorStore issues ``fsync`` on writes.
+    file_io_locking : {"auto", "disabled"}
+        File-locking policy for the ``file`` kvstore driver.
+    cache_pool_bytes : int or None
+        Aggregate byte budget for TensorStore's chunk cache pool. ``None``
+        disables caching.
+    recheck_cached_data : bool, "open" or None
+        Controls whether cached chunk data is re-validated on each read.
+        ``None`` (default) uses the TensorStore driver default, which
+        revalidates cached metadata on every access — one stat/GETATTR per
+        chunk. ``"open"`` checks freshness only when the array is opened
+        and trusts the cache thereafter — recommended for long-running
+        read-heavy workloads on NFS/VAST where the underlying zarr files
+        do not change. ``False`` disables freshness checks entirely.
+    extra_context : dict or None
+        Additional raw ``ts.Context`` entries merged after all typed
+        fields, useful as an escape hatch for knobs not modeled here.
+    """
 
     compressor: CompressorConfig = Field(default_factory=CompressorConfig)
     data_copy_concurrency: int = Field(default=4, ge=1)
@@ -43,6 +78,7 @@ class TensorStoreConfig(BaseModel):
     file_io_sync: bool = True
     file_io_locking: Literal["auto", "disabled"] = "auto"
     cache_pool_bytes: int | None = None
+    recheck_cached_data: bool | Literal["open"] | None = None
     extra_context: dict | None = None
 
 
