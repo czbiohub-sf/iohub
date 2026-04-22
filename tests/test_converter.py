@@ -390,10 +390,10 @@ class TestVersionParameter:
     """Tests for the OME-NGFF version parameter on TIFFConverter."""
 
     def test_default_version(self, example_ome_tiff, tmpdir):
-        """Default version should be '0.5'."""
+        """Default version should be '0.4'."""
         output = tmpdir / "converted.zarr"
         converter = TIFFConverter(example_ome_tiff, output)
-        assert converter.version == "0.5"
+        assert converter.version == "0.4"
 
     @pytest.mark.parametrize("ver", ["0.5"])
     def test_explicit_version(self, example_ome_tiff, tmpdir, ver):

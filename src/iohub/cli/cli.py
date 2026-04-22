@@ -81,9 +81,9 @@ def info(files, verbose):
     "--ome-zarr-version",
     "-v",
     required=False,
-    default="0.5",
-    type=click.Choice(["0.5"]),
-    help="OME-NGFF version for the output Zarr store. '0.5' uses Zarr v3 format.",
+    default="0.4",
+    type=click.Choice(["0.4", "0.5"]),
+    help="OME-NGFF version for the output Zarr store. '0.4' uses Zarr v2 format; '0.5' uses Zarr v3 format.",
 )
 def convert(input, output, grid_layout, chunks, ome_zarr_version):
     """Converts Micro-Manager TIFF datasets to OME-Zarr"""
