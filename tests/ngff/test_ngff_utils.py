@@ -281,7 +281,11 @@ def apply_transform_czyx_setup(draw):
     ) = draw(plate_setup())
     T, C = shape[:2]
 
-    # Define a helper strategy to generate channel indices based on C
+    # Define a helper strategy to generate channel indices based on C.
+    # Integer lists are drawn ``unique=True`` and sorted: zarrs only accelerates
+    # monotonically-increasing unique oindex selectors and falls back to the
+    # buggy BatchedCodecPipeline (zarr-python#2834 / iohub#404) for duplicate
+    # or unsorted inputs.
     channel_indices_strategy = st.one_of(
         st.builds(
             slice,
@@ -293,7 +297,8 @@ def apply_transform_czyx_setup(draw):
             st.integers(min_value=0, max_value=C - 1),
             min_size=1,
             max_size=min(3, C),
-        ),
+            unique=True,
+        ).map(sorted),
     )
 
     time_indices_strategy = st.one_of(
@@ -301,7 +306,8 @@ def apply_transform_czyx_setup(draw):
             st.integers(min_value=0, max_value=T - 1),
             min_size=1,
             max_size=min(3, T),
-        ),
+            unique=True,
+        ).map(sorted),
     )
 
     # Generate input and output channel indices based on C
@@ -357,7 +363,11 @@ def process_single_position_setup(draw):
 
     T, C = shape[:2]
 
-    # Define a helper strategy to generate channel indices based on C
+    # Define a helper strategy to generate channel indices based on C.
+    # Integer lists are drawn ``unique=True`` and sorted: zarrs only accelerates
+    # monotonically-increasing unique oindex selectors and falls back to the
+    # buggy BatchedCodecPipeline (zarr-python#2834 / iohub#404) for duplicate
+    # or unsorted inputs.
     channel_indices_strategy = st.one_of(
         st.none(),
         st.lists(
@@ -375,8 +385,8 @@ def process_single_position_setup(draw):
                 st.integers(min_value=0, max_value=C - 1),
                 min_size=1,
                 max_size=C,
-                # ensure each inner list has one element),
-            ),
+                unique=True,
+            ).map(sorted),
             min_size=1,
             max_size=min(3, C),
         ),
@@ -388,7 +398,8 @@ def process_single_position_setup(draw):
             st.integers(min_value=0, max_value=T - 1),
             min_size=1,
             max_size=min(3, T),
-        ),
+            unique=True,
+        ).map(sorted),
     )
 
     # Generate input and output channel indices based on C
