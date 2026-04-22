@@ -54,7 +54,7 @@ tensorstore = [
     "tensorstore>=0.1.64",
 ]
 
-[project.entry-points."iohub.zarr-implementations"]
+[project.entry-points."iohub.zarr_implementations"]
 zarr = "iohub.core.implementations.zarr_python:ZarrPythonImplementation"
 tensorstore = "iohub.core.implementations.tensorstore:TensorStoreImplementation"
 
