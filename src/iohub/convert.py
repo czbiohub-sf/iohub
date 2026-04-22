@@ -92,8 +92,8 @@ class TIFFConverter:
         and is ignored for other formats, by default None
         (attempt to apply to OME-TIFF datasets, disable this with ``False``)
     version : Literal["0.4", "0.5"], optional
-        OME-NGFF version for the output Zarr store, by default "0.5".
-        Both versions use Zarr v3 format; "0.4" is deprecated for new stores.
+        OME-NGFF version for the output Zarr store, by default "0.4".
+        "0.4" uses Zarr v2 format; "0.5" uses Zarr v3 format.
     implementation : str, optional
         Zarr backend implementation to use for writing.
         None (default) uses zarr-python. Pass "tensorstore"
@@ -113,7 +113,7 @@ class TIFFConverter:
         grid_layout: int = False,
         chunks: tuple[int] | Literal["XY", "XYZ"] | None = None,
         hcs_plate: bool | None = None,
-        version: Literal["0.4", "0.5"] = "0.5",
+        version: Literal["0.4", "0.5"] = "0.4",
         implementation: str | None = None,
     ):
         self.implementation = implementation
