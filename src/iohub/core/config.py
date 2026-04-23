@@ -38,23 +38,10 @@ class TensorStoreConfig(BaseModel):
 
     Parameters
     ----------
-    compressor : CompressorConfig
-        Default compressor settings used at array creation.
-    data_copy_concurrency : int
-        Concurrency limit for TensorStore's ``data_copy_concurrency``
-        resource, bounding threads used to copy data between buffers.
-    context : dict or None
-        Optional raw ``ts.Context`` options merged into the context built
-        from this config. Individual fields on this config take precedence.
     file_io_concurrency : int or None
         Concurrency limit for TensorStore's ``file_io_concurrency``
-        resource, bounding concurrent filesystem reads/writes. Useful to
-        raise on high-latency networked filesystems (e.g. NFS) where the
-        default (32) under-saturates the link.
-    file_io_sync : bool
-        Whether TensorStore issues ``fsync`` on writes.
-    file_io_locking : {"auto", "disabled"}
-        File-locking policy for the ``file`` kvstore driver.
+        resource. Raise above the default (32) on high-latency networked
+        filesystems (e.g. NFS) where the default under-saturates the link.
     cache_pool_bytes : int or None
         Aggregate byte budget for TensorStore's chunk cache pool. ``None``
         disables caching.
@@ -66,9 +53,6 @@ class TensorStoreConfig(BaseModel):
         and trusts the cache thereafter — recommended for long-running
         read-heavy workloads on NFS/VAST where the underlying zarr files
         do not change. ``False`` disables freshness checks entirely.
-    extra_context : dict or None
-        Additional raw ``ts.Context`` entries merged after all typed
-        fields, useful as an escape hatch for knobs not modeled here.
     """
 
     compressor: CompressorConfig = Field(default_factory=CompressorConfig)
