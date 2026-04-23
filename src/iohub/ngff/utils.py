@@ -15,15 +15,13 @@ import click
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
+from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.nodes import TransformationMeta
 
 
 #: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
 _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
-
-#: Maximum chunk size in bytes used for the v0.4 default-chunk calculation.
-_V04_MAX_CHUNK_SIZE_BYTES: float = 500e6
 
 
 def create_empty_plate(
@@ -494,7 +492,7 @@ def _default_chunks(
         chunk_zyx_shape = _limit_zyx_chunk_size(
             shape,
             np.dtype(dtype).itemsize,
-            _V04_MAX_CHUNK_SIZE_BYTES,
+            V04_MAX_CHUNK_SIZE_BYTES,
         )
         return (1, 1, *chunk_zyx_shape)
     # v0.5: DCA-aligned small chunks, clamped to the array shape.

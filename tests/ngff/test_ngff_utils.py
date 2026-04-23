@@ -11,11 +11,11 @@ import pytest
 from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
+from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
-    _V04_MAX_CHUNK_SIZE_BYTES,
     _V05_DEFAULT_ZYX_CHUNKS,
     apply_transform_to_tczyx_and_save,
     create_empty_plate,
@@ -915,7 +915,7 @@ def test_v04_default_chunks_cover_full_zyx(tmp_path):
 
 
 def test_v04_default_chunks_capped_by_byte_limit(tmp_path):
-    """v0.4 chunks halve Z until the chunk fits under _V04_MAX_CHUNK_SIZE_BYTES."""
+    """v0.4 chunks halve Z until the chunk fits under V04_MAX_CHUNK_SIZE_BYTES."""
     # Pick a shape whose single (Z, Y, X) volume in float32 exceeds the cap.
     # float32 is 4 bytes; cap is 500 MB → a (256, 1024, 1024) volume is
     # 1 GiB, so the default must halve Z at least once.
@@ -936,7 +936,7 @@ def test_v04_default_chunks_capped_by_byte_limit(tmp_path):
     assert (y_chunk, x_chunk) == (shape[3], shape[4])
     assert z_chunk < shape[2], "Z should have been halved to respect byte cap"
     bytes_per_chunk = z_chunk * y_chunk * x_chunk * np.dtype(dtype).itemsize
-    assert bytes_per_chunk <= _V04_MAX_CHUNK_SIZE_BYTES
+    assert bytes_per_chunk <= V04_MAX_CHUNK_SIZE_BYTES
 
 
 def test_v04_default_has_no_sharding(tmp_path):
