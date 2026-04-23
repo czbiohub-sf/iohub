@@ -969,11 +969,9 @@ def test_v04_rejects_explicit_shards_ratio(tmp_path):
 
 # -- Write path on sharded v0.5 stores ---------------------------------------
 #
-# iohub ships with ``zarrs`` as a required dependency and the
-# ``ZarrsCodecPipeline`` is the active codec pipeline. That pipeline handles
-# oindex writes into sharded Zarr v3 arrays correctly, so the upstream
-# zarr-python#2834 bug (which affects ``BatchedCodecPipeline``) does not
-# surface through iohub's default code path. These tests pin that behavior.
+# Round-trip writes into v0.5 stores with non-trivial shard layouts,
+# exercising both the #401 default (shard per (T, C) slot) and a
+# channel-spanning shard that groups multiple channels into one shard.
 
 
 def test_process_single_position_on_sharded_v05_store(tmp_path):
@@ -1012,16 +1010,16 @@ def test_process_single_position_on_sharded_v05_store(tmp_path):
     np.testing.assert_array_almost_equal(out_data, dummy_transform(in_data, constant=2))
 
 
-def test_apply_transform_to_tczyx_on_multi_time_shard(tmp_path):
-    """Multi-time oindex write into a shard that spans multiple T slots.
+def test_apply_transform_to_tczyx_on_multi_channel_shard(tmp_path):
+    """Multi-channel oindex write into a shard that spans multiple C slots.
 
-    This is the exact pattern that breaks under zarr-python's default
-    ``BatchedCodecPipeline`` (upstream bug #2834). It works under iohub's
-    ``ZarrsCodecPipeline``-backed config, which is the guarantee we want
-    to lock in.
+    Grouping channels within a single shard is a common layout for
+    stores produced downstream (e.g. multi-channel stitched outputs);
+    ``apply_transform_to_tczyx_and_save`` should round-trip correctly
+    when the write addresses both channels of a single shard in one call.
     """
-    shape = (4, 1, 4, 16, 16)
-    shards_ratio = (2, 1, 1, 1, 1)  # shard_t = 2 -> one write spans both T slots
+    shape = (1, 4, 4, 16, 16)
+    shards_ratio = (1, 2, 1, 1, 1)  # shard_c = 2 -> one write spans two C slots
     position_key = ("A", "1", "0")
     input_store = tmp_path / "input.zarr"
     output_store = tmp_path / "output.zarr"
@@ -1029,7 +1027,7 @@ def test_apply_transform_to_tczyx_on_multi_time_shard(tmp_path):
         create_empty_plate(
             store_path=store,
             position_keys=[position_key],
-            channel_names=["c0"],
+            channel_names=[f"c{i}" for i in range(shape[1])],
             shape=shape,
             chunks=(1, 1, 4, 16, 16),
             shards_ratio=shards_ratio,
@@ -1041,14 +1039,14 @@ def test_apply_transform_to_tczyx_on_multi_time_shard(tmp_path):
         func=dummy_transform,
         input_position_path=input_store / Path(*position_key),
         output_position_path=output_store / Path(*position_key),
-        input_channel_indices=[0],
-        output_channel_indices=[0],
-        input_time_indices=[0, 1],
-        output_time_indices=[0, 1],
+        input_channel_indices=[0, 1],
+        output_channel_indices=[0, 1],
+        input_time_indices=[0],
+        output_time_indices=[0],
         constant=2,
     )
 
     with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
-        in_slice = in_ds["/".join(position_key)].data[:2, :1]
-        out_slice = out_ds["/".join(position_key)].data[:2, :1]
+        in_slice = in_ds["/".join(position_key)].data[:1, :2]
+        out_slice = out_ds["/".join(position_key)].data[:1, :2]
     np.testing.assert_array_almost_equal(out_slice, dummy_transform(in_slice, constant=2))
