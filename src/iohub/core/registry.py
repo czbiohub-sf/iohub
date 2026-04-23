@@ -42,7 +42,7 @@ def _discover() -> None:
                     exc_info=True,
                 )
         # Entrypoint plugins can override builtins
-        for ep in entry_points(group="iohub.zarr-implementations"):
+        for ep in entry_points(group="iohub.zarr_implementations"):
             try:
                 _IMPLEMENTATIONS[ep.name] = ep.load()
             except Exception as err:  # noqa: BLE001 — plugin loading may fail in many ways
