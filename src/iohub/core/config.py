@@ -57,18 +57,10 @@ class TensorStoreConfig(BaseModel):
         read-heavy workloads on NFS/VAST where the underlying zarr files
         do not change. ``False`` disables freshness checks entirely.
     shared_context : tensorstore.Context or None
-        When set, every ``TensorStoreImplementation`` that receives this
-        config reuses the provided ``ts.Context`` instead of building its
-        own. Allows a single cache pool and thread pool to be shared across
-        many ``open_ome_zarr`` calls — critical for multi-plate training
-        workloads where each plate would otherwise open with an independent
-        cache. When ``shared_context`` is set, the other ``ts.Context``
-        knobs on this config (``data_copy_concurrency``, ``cache_pool_bytes``,
-        ``file_io_concurrency``, ``file_io_sync``, ``file_io_locking``,
-        ``context``, ``extra_context``) are ignored — the caller is
-        responsible for configuring the shared context. Only
-        ``recheck_cached_data`` (which is per-array, not per-context)
-        continues to apply.
+        If set, reuse this ``ts.Context`` instead of building a new one.
+        Lets multiple ``open_ome_zarr`` calls share one cache pool and
+        thread pool. When set, the other context knobs on this config are
+        ignored; only ``recheck_cached_data`` still applies.
     """
 
     # Allow non-pydantic types (ts.Context) in the model.
