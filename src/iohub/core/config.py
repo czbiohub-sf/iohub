@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+if TYPE_CHECKING:
+    pass
 
 
 class CompressorConfig(BaseModel):
@@ -53,7 +56,23 @@ class TensorStoreConfig(BaseModel):
         and trusts the cache thereafter — recommended for long-running
         read-heavy workloads on NFS/VAST where the underlying zarr files
         do not change. ``False`` disables freshness checks entirely.
+    shared_context : tensorstore.Context or None
+        When set, every ``TensorStoreImplementation`` that receives this
+        config reuses the provided ``ts.Context`` instead of building its
+        own. Allows a single cache pool and thread pool to be shared across
+        many ``open_ome_zarr`` calls — critical for multi-plate training
+        workloads where each plate would otherwise open with an independent
+        cache. When ``shared_context`` is set, the other ``ts.Context``
+        knobs on this config (``data_copy_concurrency``, ``cache_pool_bytes``,
+        ``file_io_concurrency``, ``file_io_sync``, ``file_io_locking``,
+        ``context``, ``extra_context``) are ignored — the caller is
+        responsible for configuring the shared context. Only
+        ``recheck_cached_data`` (which is per-array, not per-context)
+        continues to apply.
     """
+
+    # Allow non-pydantic types (ts.Context) in the model.
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     compressor: CompressorConfig = Field(default_factory=CompressorConfig)
     data_copy_concurrency: int = Field(default=4, ge=1)
@@ -64,6 +83,7 @@ class TensorStoreConfig(BaseModel):
     cache_pool_bytes: int | None = None
     recheck_cached_data: bool | Literal["open"] | None = None
     extra_context: dict | None = None
+    shared_context: Any = None  # ts.Context; Any avoids importing tensorstore at import-time
 
 
 ImplementationConfig = ZarrConfig | TensorStoreConfig

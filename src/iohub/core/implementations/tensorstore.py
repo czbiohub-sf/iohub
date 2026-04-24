@@ -94,6 +94,13 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
     def _context(self) -> ts.Context:
         import tensorstore as ts
 
+        # If the caller provided a shared Context on the config, always use it.
+        # Sharing one Context across many TensorStoreImplementation instances
+        # lets a single cache pool + thread pool serve every open_ome_zarr
+        # call — important for workloads that open dozens of plates.
+        if self.config.shared_context is not None:
+            return self.config.shared_context
+
         if not hasattr(self, "_ctx") or self._ctx is None:
             ctx_opts = dict(self.config.context or {})
             if self.config.data_copy_concurrency:
