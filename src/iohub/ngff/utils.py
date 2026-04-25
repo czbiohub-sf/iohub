@@ -166,8 +166,8 @@ def _apply_transform_to_czyx(
         kwargs["input_time_index"] = input_time_index
 
     click.echo(f"Processing t={input_time_index}, c={input_channel_indices}")
-    input_dataset = open_ome_zarr(input_position_path, layout="fov", mode="r")
-    czyx_data = input_dataset.data.oindex[input_time_index, input_channel_indices]
+    with open_ome_zarr(input_position_path, layout="fov", mode="r") as input_dataset:
+        czyx_data = input_dataset.data.oindex[input_time_index, input_channel_indices]
     if not _check_nan_n_zeros(czyx_data):
         return func(czyx_data, **kwargs)
     else:
@@ -473,17 +473,28 @@ def process_single_position(
 
 def _check_nan_n_zeros(input_array) -> bool:
     """Checks if any of the channels are all zeros or nans."""
-    if len(input_array.shape) == 3:
-        if np.all(input_array == 0) or np.all(np.isnan(input_array)):
-            return True
-    elif len(input_array.shape) == 4:
-        num_channels = input_array.shape[0]
-        for c in range(num_channels):
-            zyx_array = input_array[c, :, :, :]
-            if np.all(zyx_array == 0) or np.all(np.isnan(zyx_array)):
-                return True
+    if input_array.ndim == 3:
+        return _zyx_is_all_zero_or_nan(input_array)
+    elif input_array.ndim == 4:
+        return any(_zyx_is_all_zero_or_nan(input_array[c]) for c in range(input_array.shape[0]))
     else:
         raise ValueError("Input array must be 3D or 4D")
+
+
+def _zyx_is_all_zero_or_nan(zyx_array) -> bool:
+    """All-zero or all-NaN test that short-circuits on the first counter-example.
+
+    `np.any(arr)` returns False iff every element is 0/False, and short-circuits
+    in C as soon as it finds a truthy value. The previous `np.all(arr == 0)`
+    materialised a full boolean mask of the input volume before reducing it.
+    """
+    if not np.any(zyx_array):
+        return True  # all zeros
+    # NaN is truthy in numpy bool context, so the explicit NaN check is only
+    # needed when np.any returned True (otherwise the array is all zeros and
+    # would not reach here).
+    if zyx_array.dtype.kind == "f" and np.isnan(zyx_array).all():
+        return True  # all NaN
     return False
 
 
