@@ -7,13 +7,16 @@ from typing import Literal
 
 import hypothesis.strategies as st
 import numpy as np
+import pytest
 from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
+from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
+    _V05_DEFAULT_ZYX_CHUNKS,
     apply_transform_to_tczyx_and_save,
     create_empty_plate,
     process_single_position,
@@ -278,7 +281,11 @@ def apply_transform_czyx_setup(draw):
     ) = draw(plate_setup())
     T, C = shape[:2]
 
-    # Define a helper strategy to generate channel indices based on C
+    # Define a helper strategy to generate channel indices based on C.
+    # Integer lists are drawn ``unique=True`` and sorted: zarrs only accelerates
+    # monotonically-increasing unique oindex selectors and falls back to the
+    # buggy BatchedCodecPipeline (zarr-python#2834 / iohub#404) for duplicate
+    # or unsorted inputs.
     channel_indices_strategy = st.one_of(
         st.builds(
             slice,
@@ -290,7 +297,8 @@ def apply_transform_czyx_setup(draw):
             st.integers(min_value=0, max_value=C - 1),
             min_size=1,
             max_size=min(3, C),
-        ),
+            unique=True,
+        ).map(sorted),
     )
 
     time_indices_strategy = st.one_of(
@@ -298,7 +306,8 @@ def apply_transform_czyx_setup(draw):
             st.integers(min_value=0, max_value=T - 1),
             min_size=1,
             max_size=min(3, T),
-        ),
+            unique=True,
+        ).map(sorted),
     )
 
     # Generate input and output channel indices based on C
@@ -354,7 +363,11 @@ def process_single_position_setup(draw):
 
     T, C = shape[:2]
 
-    # Define a helper strategy to generate channel indices based on C
+    # Define a helper strategy to generate channel indices based on C.
+    # Integer lists are drawn ``unique=True`` and sorted: zarrs only accelerates
+    # monotonically-increasing unique oindex selectors and falls back to the
+    # buggy BatchedCodecPipeline (zarr-python#2834 / iohub#404) for duplicate
+    # or unsorted inputs.
     channel_indices_strategy = st.one_of(
         st.none(),
         st.lists(
@@ -372,8 +385,8 @@ def process_single_position_setup(draw):
                 st.integers(min_value=0, max_value=C - 1),
                 min_size=1,
                 max_size=C,
-                # ensure each inner list has one element),
-            ),
+                unique=True,
+            ).map(sorted),
             min_size=1,
             max_size=min(3, C),
         ),
@@ -385,7 +398,8 @@ def process_single_position_setup(draw):
             st.integers(min_value=0, max_value=T - 1),
             min_size=1,
             max_size=min(3, T),
-        ),
+            unique=True,
+        ).map(sorted),
     )
 
     # Generate input and output channel indices based on C
@@ -786,3 +800,253 @@ def test_process_single_position(setup, constant, num_threads):
                     dummy_transform,
                     **kwargs,
                 )
+
+
+# -- Explicit tests for version-specific chunk/shard defaults -----------------
+#
+# The hypothesis-based test_create_empty_plate exercises many parameter
+# combinations but does not assert the exact defaults the issue #401 spec
+# prescribes. These tests pin those defaults down so CI fails deterministically
+# if they regress, rather than relying on a favorable hypothesis draw.
+
+
+def _open_array(store_path: Path, position_key: tuple[str, str, str]):
+    return open_ome_zarr(store_path)["/".join(position_key)].data
+
+
+@pytest.mark.parametrize(
+    ("shape", "expected_chunks"),
+    [
+        # Large shape: chunks clamped to DCA spec (16, 256, 256).
+        ((2, 2, 64, 1024, 1024), (1, 1, 16, 256, 256)),
+        # Small Z: clamped to Z.
+        ((2, 2, 8, 1024, 1024), (1, 1, 8, 256, 256)),
+        # Small YX: clamped to YX.
+        ((2, 2, 64, 128, 200), (1, 1, 16, 128, 200)),
+        # Fully smaller than defaults.
+        ((1, 1, 4, 32, 32), (1, 1, 4, 32, 32)),
+    ],
+)
+def test_v05_default_chunks(tmp_path, shape, expected_chunks):
+    """v0.5 default chunks are DCA-aligned (16, 256, 256), clamped to shape."""
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=[f"c{i}" for i in range(shape[1])],
+        shape=shape,
+        version="0.5",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    assert arr.chunks == expected_chunks
+
+
+def test_v05_default_shards_cover_zyx(tmp_path):
+    """v0.5 default shards have shape (1, 1, Z, Y, X) — one shard per (T, C)."""
+    shape = (3, 2, 64, 1024, 1024)
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=[f"c{i}" for i in range(shape[1])],
+        shape=shape,
+        version="0.5",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    # Shard spans one full (Z, Y, X) volume per (T, C) slot.
+    assert arr.shards == (1, 1, shape[2], shape[3], shape[4])
+    # And chunks stay DCA-aligned.
+    assert arr.chunks == (1, 1, *_V05_DEFAULT_ZYX_CHUNKS)
+
+
+def test_v05_default_shards_with_non_divisible_zyx(tmp_path):
+    """Shards still cover the full (Z, Y, X) even when dims are not multiples of chunks."""
+    # Z=20, Y=300, X=300 — none divide evenly into (16, 256, 256).
+    shape = (1, 1, 20, 300, 300)
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=["c0"],
+        shape=shape,
+        version="0.5",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    # Shard = chunk * ceil(dim/chunk) — must be >= dim along each axis.
+    assert arr.chunks == (1, 1, 16, 256, 256)
+    assert arr.shards[0] == 1
+    assert arr.shards[1] == 1
+    assert arr.shards[2] >= 20
+    assert arr.shards[3] >= 300
+    assert arr.shards[4] >= 300
+
+
+def test_v05_explicit_shards_ratio_is_honored(tmp_path):
+    """An explicit shards_ratio overrides the default."""
+    shape = (4, 2, 16, 256, 256)
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=[f"c{i}" for i in range(shape[1])],
+        shape=shape,
+        chunks=(1, 1, 16, 256, 256),
+        shards_ratio=(2, 2, 1, 1, 1),
+        version="0.5",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    assert arr.chunks == (1, 1, 16, 256, 256)
+    assert arr.shards == (2, 2, 16, 256, 256)
+
+
+def test_v04_default_chunks_cover_full_zyx(tmp_path):
+    """v0.4 default chunks are (1, 1, Z, Y, X) when under the byte cap."""
+    shape = (2, 2, 4, 64, 64)
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=[f"c{i}" for i in range(shape[1])],
+        shape=shape,
+        version="0.4",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    assert arr.chunks == (1, 1, shape[2], shape[3], shape[4])
+
+
+def test_v04_default_chunks_capped_by_byte_limit(tmp_path):
+    """v0.4 chunks halve Z until the chunk fits under V04_MAX_CHUNK_SIZE_BYTES."""
+    # Pick a shape whose single (Z, Y, X) volume in float32 exceeds the cap.
+    # float32 is 4 bytes; cap is 500 MB → a (256, 1024, 1024) volume is
+    # 1 GiB, so the default must halve Z at least once.
+    shape = (1, 1, 256, 1024, 1024)
+    dtype = np.float32
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=["c0"],
+        shape=shape,
+        dtype=dtype,
+        version="0.4",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    t_chunk, c_chunk, z_chunk, y_chunk, x_chunk = arr.chunks
+    assert (t_chunk, c_chunk) == (1, 1)
+    assert (y_chunk, x_chunk) == (shape[3], shape[4])
+    assert z_chunk < shape[2], "Z should have been halved to respect byte cap"
+    bytes_per_chunk = z_chunk * y_chunk * x_chunk * np.dtype(dtype).itemsize
+    assert bytes_per_chunk <= V04_MAX_CHUNK_SIZE_BYTES
+
+
+def test_v04_default_has_no_sharding(tmp_path):
+    """v0.4 (Zarr v2) never has a sharding codec, regardless of the new defaults."""
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=["c0"],
+        shape=(2, 1, 8, 64, 64),
+        version="0.4",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    assert arr.shards is None
+
+
+def test_v04_rejects_explicit_shards_ratio(tmp_path):
+    """Passing shards_ratio on a v0.4 store raises (Zarr v2 has no sharding)."""
+    store = tmp_path / "test.zarr"
+    with pytest.raises(ValueError, match="Sharding is not supported in Zarr v2"):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[("A", "1", "0")],
+            channel_names=["c0"],
+            shape=(2, 1, 8, 64, 64),
+            shards_ratio=(1, 1, 1, 1, 1),
+            version="0.4",
+        )
+
+
+# -- Write path on sharded v0.5 stores ---------------------------------------
+#
+# Round-trip writes into v0.5 stores with non-trivial shard layouts,
+# exercising both the #401 default (shard per (T, C) slot) and a
+# channel-spanning shard that groups multiple channels into one shard.
+
+
+def test_process_single_position_on_sharded_v05_store(tmp_path):
+    """process_single_position writes to a default-sharded v0.5 store correctly."""
+    shape = (2, 1, 4, 16, 16)
+    position_key = ("A", "1", "0")
+    input_store = tmp_path / "input.zarr"
+    output_store = tmp_path / "output.zarr"
+    for store in (input_store, output_store):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[position_key],
+            channel_names=["c0"],
+            shape=shape,
+            version="0.5",
+        )
+    populate_store(input_store, [position_key], shape, np.float32)
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        input_channel_indices=[[0]],
+        output_channel_indices=[[0]],
+        input_time_indices=[0, 1],
+        output_time_indices=[0, 1],
+        constant=2,
+    )
+
+    out_arr = _open_array(output_store, position_key)
+    assert out_arr.shards == (1, 1, shape[2], shape[3], shape[4])
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        in_data = in_ds["/".join(position_key)].data[:]
+        out_data = out_ds["/".join(position_key)].data[:]
+    np.testing.assert_array_almost_equal(out_data, dummy_transform(in_data, constant=2))
+
+
+def test_apply_transform_to_tczyx_on_multi_channel_shard(tmp_path):
+    """Multi-channel oindex write into a shard that spans multiple C slots.
+
+    Grouping channels within a single shard is a common layout for
+    stores produced downstream (e.g. multi-channel stitched outputs);
+    ``apply_transform_to_tczyx_and_save`` should round-trip correctly
+    when the write addresses both channels of a single shard in one call.
+    """
+    shape = (1, 4, 4, 16, 16)
+    shards_ratio = (1, 2, 1, 1, 1)  # shard_c = 2 -> one write spans two C slots
+    position_key = ("A", "1", "0")
+    input_store = tmp_path / "input.zarr"
+    output_store = tmp_path / "output.zarr"
+    for store in (input_store, output_store):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[position_key],
+            channel_names=[f"c{i}" for i in range(shape[1])],
+            shape=shape,
+            chunks=(1, 1, 4, 16, 16),
+            shards_ratio=shards_ratio,
+            version="0.5",
+        )
+    populate_store(input_store, [position_key], shape, np.float32)
+
+    apply_transform_to_tczyx_and_save(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        input_channel_indices=[0, 1],
+        output_channel_indices=[0, 1],
+        input_time_indices=[0],
+        output_time_indices=[0],
+        constant=2,
+    )
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        in_slice = in_ds["/".join(position_key)].data[:1, :2]
+        out_slice = out_ds["/".join(position_key)].data[:1, :2]
+    np.testing.assert_array_almost_equal(out_slice, dummy_transform(in_slice, constant=2))

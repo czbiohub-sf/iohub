@@ -15,8 +15,13 @@ import click
 import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
+from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.nodes import TransformationMeta
+
+
+#: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
+_V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 
 
 def create_empty_plate(
@@ -29,7 +34,6 @@ def create_empty_plate(
     version: Literal["0.4", "0.5"] = "0.5",
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
-    max_chunk_size_bytes: float = 500e6,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -50,22 +54,24 @@ def create_empty_plate(
     shape : tuple[int, ...]
         TCZYX shape of the plate.
     chunks : tuple[int, ...], optional
-        TCZYX chunk size of the plate. If None, the chunk size is calculated
-        based on the shape to be less than max_chunk_size_bytes.
+        TCZYX chunk size of the plate. If None, a version-specific default
+        is used:
+        - "0.4": ``(1, 1, Z, Y, X)`` capped in Z to 500 MB.
+        - "0.5": ``(1, 1, 16, 256, 256)`` clamped to ``shape``.
         Defaults to None.
     shards_ratio : tuple[int, ...], optional
-        TCZYX shards ratio of the plate.
-        If None, no sharding is applied.
+        TCZYX shards ratio of the plate (shard size = chunks * shards_ratio).
+        If None, a version-specific default is used:
+        - "0.4": no sharding (Zarr v2 does not support it).
+        - "0.5": ratio that yields a shard size of ``(1, 1, Z, Y, X)``.
         Defaults to None.
     version : Literal["0.4", "0.5"], optional
         OME-Zarr version to use for the plate.
-        Defaults to "0.4".
+        Defaults to "0.5".
     scale : tuple[float, ...], optional
         TCZYX scale of the plate. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
         Data type of the plate. Defaults to np.float32.
-    max_chunk_size_bytes : float, optional
-        Maximum chunk size in bytes. Defaults to 500e6 (500MB).
 
     Examples
     --------
@@ -101,20 +107,16 @@ def create_empty_plate(
 
     Notes
     -----
-    - If `chunks` is not provided, the function calculates an appropriate
-    chunk size to keep the chunks under the specified `max_chunk_size_bytes`.
+    - If `chunks` is not provided, a version-specific default is used (see
+    parameter description).
     - The function ensures that positions and channels are appended to an
     existing plate if they are not already present.
     """
-    # Limiting the chunking to 500MB
     if chunks is None:
-        chunk_zyx_shape = _limit_zyx_chunk_size(
-            shape,
-            np.dtype(dtype).itemsize,
-            max_chunk_size_bytes,
-        )
+        chunks = _default_chunks(shape, dtype, version)
 
-        chunks = 2 * (1,) + chunk_zyx_shape
+    if shards_ratio is None and version == "0.5":
+        shards_ratio = _default_shards_ratio(shape, chunks)
 
     # Create plate
     output_plate = open_ome_zarr(
@@ -478,3 +480,31 @@ def _clamp_chunks_to_shape(shape: tuple[int, ...], chunks: tuple[int, ...]) -> t
         Chunk sizes clamped to at most the dimension size.
     """
     return tuple(min(c, d) for c, d in zip(chunks, shape, strict=False))
+
+
+def _default_chunks(
+    shape: tuple[int, ...],
+    dtype: DTypeLike,
+    version: Literal["0.4", "0.5"],
+) -> tuple[int, ...]:
+    """Version-specific default TCZYX chunk size for a plate array."""
+    if version == "0.4":
+        chunk_zyx_shape = _limit_zyx_chunk_size(
+            shape,
+            np.dtype(dtype).itemsize,
+            V04_MAX_CHUNK_SIZE_BYTES,
+        )
+        return (1, 1, *chunk_zyx_shape)
+    # v0.5: DCA-aligned small chunks, clamped to the array shape.
+    return _clamp_chunks_to_shape(shape, (1, 1, *_V05_DEFAULT_ZYX_CHUNKS))
+
+
+def _default_shards_ratio(
+    shape: tuple[int, ...],
+    chunks: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Shards ratio yielding a shard of (1, 1, Z, Y, X)."""
+    ratios = [1, 1]
+    for dim, chunk in zip(shape[-3:], chunks[-3:], strict=False):
+        ratios.append(-(-dim // chunk))
+    return tuple(ratios)
