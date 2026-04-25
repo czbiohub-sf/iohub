@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import inspect
 import itertools
+import multiprocessing as mp
 import os
 import warnings
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
@@ -287,8 +288,10 @@ def process_single_position(
     output_channel_indices: list[slice] | list[list[int]] | None = None,
     input_time_indices: list[int] | None = None,
     output_time_indices: list[int] | None = None,
+    num_workers: int = 1,
+    use_threads: bool = False,
     num_processes: int | None = None,
-    num_threads: int = 1,
+    num_threads: int | None = None,
     **kwargs,
 ) -> None:
     """
@@ -328,12 +331,20 @@ def process_single_position(
         If empty, write to all channels.
         Must match input_channel_indices if not empty.
         Defaults to None.
+    num_workers : int, optional
+        Number of simultaneous workers (processes or threads) per position.
+        If <= 1, the work is performed serially in the calling process.
+        Defaults to 1.
+    use_threads : bool, optional
+        If True, parallelize across threads via ``ThreadPoolExecutor``;
+        otherwise spawn worker processes via ``ProcessPoolExecutor``.
+        Defaults to False.
     num_processes : int, optional
-        Deprecated. Use ``num_threads`` instead. When set, its value is
-        forwarded to ``num_threads``. If both are set to non-default values
-        and differ, ``num_threads`` takes precedence. Defaults to None.
+        Deprecated. Use ``num_workers`` instead. When set, its value is
+        forwarded to ``num_workers``.
     num_threads : int, optional
-        Number of simultaneous threads per position. Defaults to 1.
+        Deprecated. Use ``num_workers`` (and ``use_threads=True``) instead.
+        When set, its value is forwarded to ``num_workers``.
     kwargs : dict, optional
         Additional arguments to pass to the function.
         A dictionary with key "extra_metadata"
@@ -343,12 +354,19 @@ def process_single_position(
     """
     if num_processes is not None:
         warnings.warn(
-            "num_processes is deprecated. Use num_threads instead.",
+            "num_processes is deprecated; use num_workers instead.",
             DeprecationWarning,
             stacklevel=2,
         )
-        if num_threads < num_processes:
-            num_threads = num_processes
+        num_workers = num_processes
+    if num_threads is not None:
+        warnings.warn(
+            "num_threads is deprecated; use num_workers "
+            "(with use_threads=True for a thread pool) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        num_workers = num_threads
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
     click.echo(f"Output data path:\t{output_position_path}")
@@ -413,20 +431,41 @@ def process_single_position(
         **kwargs,
     )
     cpu_count = os.cpu_count() or 1
-    num_workers = min(num_threads, len(flat_iterable), cpu_count)
-    click.echo(f"\nStarting thread pool with {num_workers} workers")
+    num_workers = min(num_workers, len(flat_iterable), cpu_count)
     if num_workers <= 1:
+        click.echo("\nRunning serially in the calling process (num_workers <= 1)")
         for args in flat_iterable:
             partial_apply_transform_to_czyx_and_save(*args)
+        click.echo("Done")
+    elif use_threads:
+        click.echo(f"\nStarting thread pool with {num_workers} threads")
+        with ThreadPoolExecutor(max_workers=num_workers) as p:
+            futures = [
+                p.submit(partial_apply_transform_to_czyx_and_save, *args)
+                for args in flat_iterable
+            ]
+            for fut in as_completed(futures):
+                fut.result()
+        click.echo("Shut down thread pool")
     else:
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            list(
-                executor.map(
-                    lambda args: partial_apply_transform_to_czyx_and_save(*args),
-                    flat_iterable,
-                )
-            )
-    click.echo("Shut down thread pool")
+        click.echo(f"\nStarting multiprocess pool with {num_workers} processes")
+        # NOTE: spawn (not fork) — tensorstore runs internal C++ threads
+        # that are not fork-safe, so a forked worker can deadlock or
+        # segfault before our code runs. See google/tensorstore#61.
+        # NOTE: ProcessPoolExecutor (not mp.Pool) so silent worker death
+        # (e.g. cgroup OOM-kill) surfaces as BrokenProcessPool instead
+        # of hanging indefinitely on pool.starmap.
+        context = mp.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=num_workers, mp_context=context
+        ) as p:
+            futures = [
+                p.submit(partial_apply_transform_to_czyx_and_save, *args)
+                for args in flat_iterable
+            ]
+            for fut in as_completed(futures):
+                fut.result()
+        click.echo("Shut down multiprocess pool")
 
 
 # -- Pure utility functions ------------------------------------------------
