@@ -737,10 +737,11 @@ def test_match_indices_to_batches(indices, shard_size):
 @given(
     setup=process_single_position_setup(),
     constant=st.integers(min_value=1, max_value=3),
-    num_threads=st.sampled_from([1, 2]),
+    num_workers=st.sampled_from([1, 2]),
+    use_threads=st.booleans(),
 )
 @settings(max_examples=3, deadline=None)
-def test_process_single_position(setup, constant, num_threads):
+def test_process_single_position(setup, constant, num_workers, use_threads):
     (
         position_keys,
         channel_names,
@@ -779,7 +780,8 @@ def test_process_single_position(setup, constant, num_threads):
                 output_channel_indices=channel_indices,
                 input_time_indices=time_indices,
                 output_time_indices=time_indices,
-                num_threads=num_threads,
+                num_workers=num_workers,
+                use_threads=use_threads,
                 **kwargs,
             )
 
