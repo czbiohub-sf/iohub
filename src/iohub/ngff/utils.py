@@ -280,6 +280,21 @@ def _slice_to_list(indices: list[int] | slice) -> list[int]:
     return indices
 
 
+def _available_cpus() -> int:
+    """Return the CPU count the current process is allowed to use.
+
+    Slurm exports ``SLURM_CPUS_PER_TASK`` for tasks that ask for more than
+    one CPU, which reflects the cgroup CPU allocation rather than the
+    host's total CPU count. Honouring it here prevents oversubscribing
+    the cgroup when ``os.cpu_count()`` reports the whole node (e.g. 128)
+    while slurm only granted us a few cores.
+    """
+    slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
+    if slurm_cpus and slurm_cpus.isdigit():
+        return int(slurm_cpus)
+    return os.cpu_count() or 1
+
+
 def process_single_position(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
@@ -430,8 +445,7 @@ def process_single_position(
         output_position_path,
         **kwargs,
     )
-    cpu_count = os.cpu_count() or 1
-    num_workers = min(num_workers, len(flat_iterable), cpu_count)
+    num_workers = min(num_workers, len(flat_iterable), _available_cpus())
     if num_workers <= 1:
         click.echo("\nRunning serially in the calling process (num_workers <= 1)")
         for args in flat_iterable:

@@ -14,6 +14,7 @@ from numpy.typing import DTypeLike
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
+    _available_cpus,
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
     _V05_DEFAULT_ZYX_CHUNKS,
@@ -802,6 +803,26 @@ def test_process_single_position(setup, constant, num_workers, use_threads):
                     dummy_transform,
                     **kwargs,
                 )
+
+
+@pytest.mark.parametrize(
+    ("env", "expected_min", "expected_max"),
+    [
+        ("4", 4, 4),  # honour SLURM_CPUS_PER_TASK exactly
+        (None, 1, None),  # fall back to os.cpu_count() when unset
+        ("", 1, None),  # fall back when empty
+        ("abc", 1, None),  # fall back when non-numeric
+    ],
+)
+def test_available_cpus_honours_slurm_env(monkeypatch, env, expected_min, expected_max):
+    if env is None:
+        monkeypatch.delenv("SLURM_CPUS_PER_TASK", raising=False)
+    else:
+        monkeypatch.setenv("SLURM_CPUS_PER_TASK", env)
+    n = _available_cpus()
+    assert n >= expected_min
+    if expected_max is not None:
+        assert n == expected_max
 
 
 @pytest.mark.parametrize("legacy_kwarg", ["num_processes", "num_threads"])
