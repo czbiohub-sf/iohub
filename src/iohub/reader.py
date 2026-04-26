@@ -101,8 +101,13 @@ def _get_sub_dirs(directory: Path) -> list[str]:
 
 
 def _infer_format(path: Path):
+    from iohub.core.ozx import is_ozx_path, read_ozx_version
+
     extra_info = None
-    if ngff_version := _check_zarr_data_type(path):
+    if is_ozx_path(path):
+        data_type = "omezarr"
+        extra_info = read_ozx_version(path) or "0.5"
+    elif ngff_version := _check_zarr_data_type(path):
         data_type = "omezarr"
         extra_info = ngff_version
     elif _check_ndtiff(path):

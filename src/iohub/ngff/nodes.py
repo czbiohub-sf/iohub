@@ -26,9 +26,10 @@ from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 
 from iohub.core import ArraySpec, NGFFArray, get_implementation
-from iohub.core.compat import get_ome_attrs
+from iohub.core.compat import get_ome_attrs, zarr_format_for_version
 from iohub.core.config import ImplementationConfig
 from iohub.core.errors import StoreOpenError
+from iohub.core.ozx import OzxStore, is_ozx_path, read_ozx_version
 from iohub.core.protocol import ZarrImplementation
 from iohub.core.types import StorePath
 from iohub.core.utils import normalize_path, pad_shape
@@ -89,17 +90,57 @@ def _open_store(
         _logger.warning(
             f"IOHub is only tested against OME-NGFF v0.4 and v0.5. Requested version {version} may not work properly."
         )
+    # RFC-9 (.ozx): wrap the filesystem path in an OzxStore before handing
+    # it to the zarr implementation so the archive comment is written and
+    # RFC-9 defaults (ZIP_STORED, ZIP64) are applied.
+    if is_fs and is_ozx_path(store_path):
+        store_path, version = _open_ozx_store(store_path, mode, version, implementation)
+        is_fs = False  # downstream sees a Store, not a filesystem path
     impl = get_implementation(implementation, implementation_config)
     try:
         zarr_format = None
         if mode in ("w", "w-") or (is_fs and mode == "a" and not store_path.exists()):
-            zarr_format = 2 if version == "0.4" else 3
+            zarr_format = zarr_format_for_version(version)
         root = impl.open_group(store_path, mode=mode, zarr_format=zarr_format)
     except (FileNotFoundError, FileExistsError, PermissionError):
         raise
     except Exception as e:
         raise StoreOpenError(f"Cannot open Zarr root group at {store_path!r}") from e
     return root, impl
+
+
+def _open_ozx_store(
+    path: Path,
+    mode: Literal["r", "r+", "a", "w", "w-"],
+    version: Literal["0.4", "0.5"],
+    implementation: str | None,
+) -> tuple[OzxStore, Literal["0.4", "0.5"]]:
+    """Build an ``OzxStore`` for an ``.ozx`` path and resolve the NGFF version.
+
+    iohub's mode taxonomy (``{r, r+, a, w, w-}``) maps onto ZipStore's
+    narrower set (``{r, w, a}``). ``r+`` degrades to ``r`` because zip
+    entries are immutable — the first write would error anyway.
+    """
+    if implementation not in (None, "zarr"):
+        raise ValueError(f"Implementation {implementation!r} does not support RFC-9 .ozx archives; use 'zarr'.")
+    if mode == "r+":
+        _logger.warning("RFC-9 .ozx archives cannot be mutated in place; opening read-only instead.")
+
+    exists = path.exists()
+    if mode in ("w", "w-") or (mode == "a" and not exists):
+        zip_mode: Literal["r", "w", "a"] = "w"
+    elif mode == "a":
+        zip_mode = "a"
+    else:
+        zip_mode = "r"
+
+    # Trust the archive's advertised version over the caller's hint.
+    resolved: Literal["0.4", "0.5"] = version
+    if zip_mode != "w" and exists:
+        advertised = read_ozx_version(path)
+        if advertised in ("0.4", "0.5"):
+            resolved = advertised  # type: ignore[assignment]
+    return OzxStore(path, mode=zip_mode, ome_version=resolved), resolved
 
 
 def _scale_integers(values: tuple[int, ...], factor: int) -> tuple[int, ...]:
@@ -2910,11 +2951,12 @@ def _check_file_mode(
             raise FileExistsError(store_path)
     elif mode == "w":
         if is_fs and store_path.exists():
-            if ".zarr" not in str(store_path.resolve()) and not disable_path_checking:
+            resolved = str(store_path.resolve())
+            if ".zarr" not in resolved and not is_ozx_path(resolved) and not disable_path_checking:
                 raise ValueError(
-                    "Cannot overwrite a path that does not contain '.zarr', "
-                    "use `disable_path_checking=True` if you are sure that "
-                    f"{store_path} should be overwritten."
+                    "Cannot overwrite a path that does not contain '.zarr' "
+                    "or end with '.ozx', use `disable_path_checking=True` "
+                    f"if you are sure that {store_path} should be overwritten."
                 )
             _logger.warning(f"Overwriting data at {store_path}")
     else:
