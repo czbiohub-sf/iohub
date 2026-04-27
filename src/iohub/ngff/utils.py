@@ -4,7 +4,6 @@ import inspect
 import itertools
 import multiprocessing as mp
 import os
-import warnings
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -305,8 +304,6 @@ def process_single_position(
     output_time_indices: list[int] | None = None,
     num_workers: int = 1,
     use_threads: bool = False,
-    num_processes: int | None = None,
-    num_threads: int | None = None,
     **kwargs,
 ) -> None:
     """
@@ -354,12 +351,6 @@ def process_single_position(
         If True, parallelize across threads via ``ThreadPoolExecutor``;
         otherwise spawn worker processes via ``ProcessPoolExecutor``.
         Defaults to False.
-    num_processes : int, optional
-        Deprecated. Use ``num_workers`` instead. When set, its value is
-        forwarded to ``num_workers``.
-    num_threads : int, optional
-        Deprecated. Use ``num_workers`` (and ``use_threads=True``) instead.
-        When set, its value is forwarded to ``num_workers``.
     kwargs : dict, optional
         Additional arguments to pass to the function.
         A dictionary with key "extra_metadata"
@@ -367,21 +358,6 @@ def process_single_position(
         e.g.,
         kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
     """
-    if num_processes is not None:
-        warnings.warn(
-            "num_processes is deprecated; use num_workers instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        num_workers = num_processes
-    if num_threads is not None:
-        warnings.warn(
-            "num_threads is deprecated; use num_workers "
-            "(with use_threads=True for a thread pool) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        num_workers = num_threads
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
     click.echo(f"Output data path:\t{output_position_path}")

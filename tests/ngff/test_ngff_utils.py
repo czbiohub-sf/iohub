@@ -825,32 +825,6 @@ def test_available_cpus_honours_slurm_env(monkeypatch, env, expected_min, expect
         assert n == expected_max
 
 
-@pytest.mark.parametrize("legacy_kwarg", ["num_processes", "num_threads"])
-def test_process_single_position_legacy_kwargs_deprecated(tmp_path, legacy_kwarg):
-    """`num_processes` and `num_threads` emit DeprecationWarning and forward to `num_workers`."""
-    shape = (1, 1, 2, 4, 4)
-    position_key = ("A", "1", "0")
-    input_store = tmp_path / "input.zarr"
-    output_store = tmp_path / "output.zarr"
-    for store in (input_store, output_store):
-        create_empty_plate(
-            store_path=store,
-            position_keys=[position_key],
-            channel_names=["c0"],
-            shape=shape,
-        )
-    populate_store(input_store, [position_key], shape, np.float32)
-
-    with pytest.warns(DeprecationWarning, match=f"{legacy_kwarg} is deprecated"):
-        process_single_position(
-            func=dummy_transform,
-            input_position_path=input_store / Path(*position_key),
-            output_position_path=output_store / Path(*position_key),
-            constant=1,
-            **{legacy_kwarg: 2},
-        )
-
-
 # -- Explicit tests for version-specific chunk/shard defaults -----------------
 #
 # The hypothesis-based test_create_empty_plate exercises many parameter
