@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import inspect
 import itertools
+import multiprocessing as mp
 import os
-import warnings
 from collections import defaultdict
 from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
@@ -165,8 +165,8 @@ def _apply_transform_to_czyx(
         kwargs["input_time_index"] = input_time_index
 
     click.echo(f"Processing t={input_time_index}, c={input_channel_indices}")
-    input_dataset = open_ome_zarr(input_position_path, layout="fov", mode="r")
-    czyx_data = input_dataset.data.oindex[input_time_index, input_channel_indices]
+    with open_ome_zarr(input_position_path, layout="fov", mode="r") as input_dataset:
+        czyx_data = input_dataset.data.oindex[input_time_index, input_channel_indices]
     if not _check_nan_n_zeros(czyx_data):
         return func(czyx_data, **kwargs)
     else:
@@ -279,6 +279,21 @@ def _slice_to_list(indices: list[int] | slice) -> list[int]:
     return indices
 
 
+def _available_cpus() -> int:
+    """Return the CPU count the current process is allowed to use.
+
+    Slurm exports ``SLURM_CPUS_PER_TASK`` for tasks that ask for more than
+    one CPU, which reflects the cgroup CPU allocation rather than the
+    host's total CPU count. Honouring it here prevents oversubscribing
+    the cgroup when ``os.cpu_count()`` reports the whole node (e.g. 128)
+    while slurm only granted us a few cores.
+    """
+    slurm_cpus = os.environ.get("SLURM_CPUS_PER_TASK")
+    if slurm_cpus and slurm_cpus.isdigit():
+        return int(slurm_cpus)
+    return os.cpu_count() or 1
+
+
 def process_single_position(
     func: Callable[[NDArray, Any], NDArray],
     input_position_path: Path,
@@ -287,8 +302,8 @@ def process_single_position(
     output_channel_indices: list[slice] | list[list[int]] | None = None,
     input_time_indices: list[int] | None = None,
     output_time_indices: list[int] | None = None,
-    num_processes: int | None = None,
-    num_threads: int = 1,
+    num_workers: int = 1,
+    use_threads: bool = False,
     **kwargs,
 ) -> None:
     """
@@ -328,12 +343,14 @@ def process_single_position(
         If empty, write to all channels.
         Must match input_channel_indices if not empty.
         Defaults to None.
-    num_processes : int, optional
-        Deprecated. Use ``num_threads`` instead. When set, its value is
-        forwarded to ``num_threads``. If both are set to non-default values
-        and differ, ``num_threads`` takes precedence. Defaults to None.
-    num_threads : int, optional
-        Number of simultaneous threads per position. Defaults to 1.
+    num_workers : int, optional
+        Number of simultaneous workers (processes or threads) per position.
+        If <= 1, the work is performed serially in the calling process.
+        Defaults to 1.
+    use_threads : bool, optional
+        If True, parallelize across threads via ``ThreadPoolExecutor``;
+        otherwise spawn worker processes via ``ProcessPoolExecutor``.
+        Defaults to False.
     kwargs : dict, optional
         Additional arguments to pass to the function.
         A dictionary with key "extra_metadata"
@@ -341,14 +358,6 @@ def process_single_position(
         e.g.,
         kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
     """
-    if num_processes is not None:
-        warnings.warn(
-            "num_processes is deprecated. Use num_threads instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if num_threads < num_processes:
-            num_threads = num_processes
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
     click.echo(f"Output data path:\t{output_position_path}")
@@ -412,21 +421,41 @@ def process_single_position(
         output_position_path,
         **kwargs,
     )
-    cpu_count = os.cpu_count() or 1
-    num_workers = min(num_threads, len(flat_iterable), cpu_count)
-    click.echo(f"\nStarting thread pool with {num_workers} workers")
+    num_workers = min(num_workers, len(flat_iterable), _available_cpus())
     if num_workers <= 1:
+        click.echo("\nRunning serially in the calling process (num_workers <= 1)")
         for args in flat_iterable:
             partial_apply_transform_to_czyx_and_save(*args)
+        click.echo("Done")
+    elif use_threads:
+        click.echo(f"\nStarting thread pool with {num_workers} threads")
+        with ThreadPoolExecutor(max_workers=num_workers) as p:
+            futures = [
+                p.submit(partial_apply_transform_to_czyx_and_save, *args)
+                for args in flat_iterable
+            ]
+            for fut in as_completed(futures):
+                fut.result()
+        click.echo("Shut down thread pool")
     else:
-        with ThreadPoolExecutor(max_workers=num_workers) as executor:
-            list(
-                executor.map(
-                    lambda args: partial_apply_transform_to_czyx_and_save(*args),
-                    flat_iterable,
-                )
-            )
-    click.echo("Shut down thread pool")
+        click.echo(f"\nStarting multiprocess pool with {num_workers} processes")
+        # NOTE: spawn (not fork) — tensorstore runs internal C++ threads
+        # that are not fork-safe, so a forked worker can deadlock or
+        # segfault before our code runs. See google/tensorstore#61.
+        # NOTE: ProcessPoolExecutor (not mp.Pool) so silent worker death
+        # (e.g. cgroup OOM-kill) surfaces as BrokenProcessPool instead
+        # of hanging indefinitely on pool.starmap.
+        context = mp.get_context("spawn")
+        with ProcessPoolExecutor(
+            max_workers=num_workers, mp_context=context
+        ) as p:
+            futures = [
+                p.submit(partial_apply_transform_to_czyx_and_save, *args)
+                for args in flat_iterable
+            ]
+            for fut in as_completed(futures):
+                fut.result()
+        click.echo("Shut down multiprocess pool")
 
 
 # -- Pure utility functions ------------------------------------------------
@@ -434,17 +463,28 @@ def process_single_position(
 
 def _check_nan_n_zeros(input_array) -> bool:
     """Checks if any of the channels are all zeros or nans."""
-    if len(input_array.shape) == 3:
-        if np.all(input_array == 0) or np.all(np.isnan(input_array)):
-            return True
-    elif len(input_array.shape) == 4:
-        num_channels = input_array.shape[0]
-        for c in range(num_channels):
-            zyx_array = input_array[c, :, :, :]
-            if np.all(zyx_array == 0) or np.all(np.isnan(zyx_array)):
-                return True
+    if input_array.ndim == 3:
+        return _zyx_is_all_zero_or_nan(input_array)
+    elif input_array.ndim == 4:
+        return any(_zyx_is_all_zero_or_nan(input_array[c]) for c in range(input_array.shape[0]))
     else:
         raise ValueError("Input array must be 3D or 4D")
+
+
+def _zyx_is_all_zero_or_nan(zyx_array) -> bool:
+    """All-zero or all-NaN test that short-circuits on the first counter-example.
+
+    `np.any(arr)` returns False iff every element is 0/False, and short-circuits
+    in C as soon as it finds a truthy value. The previous `np.all(arr == 0)`
+    materialised a full boolean mask of the input volume before reducing it.
+    """
+    if not np.any(zyx_array):
+        return True  # all zeros
+    # NaN is truthy in numpy bool context, so the explicit NaN check is only
+    # needed when np.any returned True (otherwise the array is all zeros and
+    # would not reach here).
+    if zyx_array.dtype.kind == "f" and np.isnan(zyx_array).all():
+        return True  # all NaN
     return False
 
 
