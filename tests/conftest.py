@@ -1,7 +1,6 @@
 import csv
 import os
 import shutil
-import sys
 from pathlib import Path
 
 import fsspec
@@ -12,19 +11,6 @@ from wget import download
 
 settings.register_profile("default", deadline=None)
 settings.load_profile("default")
-
-
-# Make the repo root importable from `multiprocessing` spawn children so that
-# tests using ProcessPoolExecutor (e.g. test_process_single_position with
-# use_threads=False) can unpickle helpers like `tests.ngff.test_ngff_utils.
-# dummy_transform`. pytest's `--import-mode=importlib` only manipulates the
-# parent process's sys.path, not the env that spawn children inherit.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-os.environ["PYTHONPATH"] = os.pathsep.join(
-    [str(_REPO_ROOT)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
-)
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
 
 
 @pytest.fixture
