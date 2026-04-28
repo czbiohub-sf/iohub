@@ -12,6 +12,7 @@ Adds on top of zarr-python's ``ZipStore``:
 from __future__ import annotations
 
 import json
+import stat
 import logging
 import shutil
 import zipfile
@@ -36,6 +37,21 @@ _VERSION = "version"
 _ZIP_FILE = "zipFile"
 _CENTRAL_DIRECTORY = "centralDirectory"
 _JSON_FIRST = "jsonFirst"
+
+# Reproducibility: pin every variable field on each ZipInfo so two
+# `pack_ozx` runs over the same source produce byte-identical archives.
+# The defaults Python's ``zipfile`` would otherwise pick — wall-clock
+# mtime, OS-specific create_system, OS-specific external_attr — make
+# downstream sha256 verification meaningless across machines and runs.
+#
+# - 1980-01-01 is the earliest representable zip timestamp.
+# - create_system 3 is the canonical Unix creator; using it on every
+#   platform ensures Windows-side packs match Linux-side packs.
+# - external_attr is a regular-file 0o644 in the upper 16 bits, where
+#   external file attributes live for Unix-created entries.
+_REPRODUCIBLE_DATE_TIME = (1980, 1, 1, 0, 0, 0)
+_REPRODUCIBLE_FILE_ATTR = (stat.S_IFREG | 0o644) << 16
+_CREATE_SYSTEM_UNIX = 3
 
 
 def is_ozx_path(path: str | Path) -> bool:
@@ -220,6 +236,22 @@ def _bfs_order(names: Iterable[str]) -> list[str]:
     return [name for _, name in meta] + chunks
 
 
+def _reproducible_zip_info(arcname: str) -> zipfile.ZipInfo:
+    """Build a ``ZipInfo`` with every variable header field pinned.
+
+    Pass to ``zipfile.ZipFile.open(zinfo, mode="w")`` instead of a
+    bare arcname — that path lets Python stamp ``date_time``,
+    ``create_system``, and ``external_attr`` from runtime state,
+    which is what makes consecutive ``pack_ozx`` runs produce
+    different bytes for the same source.
+    """
+    zinfo = zipfile.ZipInfo(filename=arcname, date_time=_REPRODUCIBLE_DATE_TIME)
+    zinfo.compress_type = zipfile.ZIP_STORED
+    zinfo.create_system = _CREATE_SYSTEM_UNIX
+    zinfo.external_attr = _REPRODUCIBLE_FILE_ATTR
+    return zinfo
+
+
 def _write_ozx_archive(
     out_path: Path,
     ordered: list[str],
@@ -230,7 +262,9 @@ def _write_ozx_archive(
     """Write an RFC-9 ``.ozx`` to ``out_path`` from a callable entry source.
 
     Owns the destination ``ZipFile``, the archive comment, and the
-    unlink-on-failure cleanup.
+    unlink-on-failure cleanup. Each entry's header is built from
+    :func:`_reproducible_zip_info` so the resulting bytes are stable
+    across machines and re-runs given identical input.
     """
     try:
         with zipfile.ZipFile(
@@ -240,7 +274,11 @@ def _write_ozx_archive(
             allowZip64=True,
         ) as zout:
             for arcname in ordered:
-                with open_member(arcname) as src_f, zout.open(arcname, mode="w") as dst_f:
+                zinfo = _reproducible_zip_info(arcname)
+                with (
+                    open_member(arcname) as src_f,
+                    zout.open(zinfo, mode="w", force_zip64=True) as dst_f,
+                ):
                     shutil.copyfileobj(src_f, dst_f, length=_COPY_BUFFER_BYTES)
             zout.comment = _build_comment(version, json_first=True)
     except Exception:

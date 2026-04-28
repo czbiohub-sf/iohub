@@ -87,6 +87,68 @@ def test_pack_ozx_from_directory(tmp_path: Path) -> None:
         pack_ozx(src_dir, dst)
 
 
+def test_pack_ozx_is_byte_reproducible(tmp_path: Path) -> None:
+    """Two pack_ozx runs over the same source produce byte-identical archives.
+
+    Without pinning ``date_time`` / ``create_system`` / ``external_attr``
+    on each ``ZipInfo``, Python's default ``zipfile`` behaviour stamps
+    wall-clock mtimes into every Local File Header, so consecutive packs
+    diverge at the byte level — and any sha256-based artifact integrity
+    check (Croissant ``cr:FileObject.sha256``, OZX MANIFEST.json) fails.
+    """
+    src_dir = tmp_path / "src.zarr"
+    with open_ome_zarr(
+        src_dir, layout="fov", mode="w", channel_names=["c"], version="0.5"
+    ) as pos:
+        arr = pos.create_zeros(
+            "0", shape=(1, 1, 1, 4, 4), dtype=np.uint8, chunks=(1, 1, 1, 2, 2)
+        )
+        arr[:] = np.arange(16, dtype=np.uint8).reshape(arr.shape)
+
+    a = tmp_path / "a.ozx"
+    b = tmp_path / "b.ozx"
+    pack_ozx(src_dir, a)
+    pack_ozx(src_dir, b)
+    assert a.read_bytes() == b.read_bytes()
+
+
+def test_pack_ozx_pinned_zip_metadata(tmp_path: Path) -> None:
+    """Every entry's ZipInfo has the pinned date_time / create_system / external_attr.
+
+    Guards the upper-half of the reproducibility chain — the round-trip
+    test confirms the bytes match across two runs, this confirms
+    *which* fields were pinned. If a future refactor drops one of the
+    pins, that field starts drifting silently across machines but the
+    byte-equality test still passes for two same-machine same-second
+    runs; this assertion catches that.
+    """
+    src_dir = tmp_path / "src.zarr"
+    with open_ome_zarr(
+        src_dir, layout="fov", mode="w", channel_names=["c"], version="0.5"
+    ) as pos:
+        pos.create_zeros(
+            "0", shape=(1, 1, 1, 2, 2), dtype=np.uint8, chunks=(1, 1, 1, 2, 2)
+        )
+    dst = tmp_path / "out.ozx"
+    pack_ozx(src_dir, dst)
+
+    with zipfile.ZipFile(dst) as zf:
+        infos = zf.infolist()
+    assert infos, "expected at least one zip entry"
+    expected_attr = (0o100000 | 0o644) << 16  # stat.S_IFREG | 0o644, shifted
+    for info in infos:
+        assert info.date_time == (1980, 1, 1, 0, 0, 0), (
+            f"{info.filename}: date_time {info.date_time} not pinned"
+        )
+        assert info.create_system == 3, (
+            f"{info.filename}: create_system {info.create_system} not Unix (3)"
+        )
+        assert info.external_attr == expected_attr, (
+            f"{info.filename}: external_attr {oct(info.external_attr)} "
+            f"not {oct(expected_attr)}"
+        )
+
+
 def test_tensorstore_rejected_for_ozx(tmp_path: Path) -> None:
     """TS cannot write .ozx (its zip kvstore is read-only). Fail loud, not late."""
     pytest.importorskip("tensorstore")
