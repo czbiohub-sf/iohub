@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from click.testing import CliRunner
 
@@ -217,3 +218,127 @@ def test_cli_rename_wells(csv_data_file_1):
 
         assert result.exit_code == 0
         assert "Renaming" in result.output
+
+
+def _make_pyramid_test_plate(store_path: Path) -> tuple[tuple[int, ...], list[str]]:
+    """Create a tiny plate with a single position and a level-0 array.
+
+    Returns the level-0 shape and the position key (row, col, fov).
+    """
+    shape = (1, 2, 8, 64, 64)
+    rng = np.random.default_rng(0)
+    data = rng.integers(0, 255, size=shape, dtype=np.uint16)
+    position_key = ("A", "1", "0")
+    with open_ome_zarr(
+        store_path,
+        layout="hcs",
+        mode="w",
+        channel_names=["ch1", "ch2"],
+    ) as plate:
+        position = plate.create_position(*position_key)
+        position.create_image("0", data)
+    return shape, list(position_key)
+
+
+def test_cli_compute_pyramid(tmp_path, caplog):
+    store_path = tmp_path / "compute_pyramid.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "compute-pyramid",
+            "-i",
+            str(position_path),
+            "--levels",
+            "3",
+            "--method",
+            "mean",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert any("Computing pyramid" in record.message for record in caplog.records)
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1", "2"]
+        assert pos["0"].shape == shape
+        # Cascade YX/Z downsampling halves spatial axes per level.
+        assert pos["1"].shape[-2:] == (shape[-2] // 2, shape[-1] // 2)
+        assert pos["2"].shape[-2:] == (shape[-2] // 4, shape[-1] // 4)
+
+
+def test_cli_compute_pyramid_plate_glob(tmp_path):
+    store_path = tmp_path / "compute_pyramid_plate.zarr"
+    _, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    # Pass the plate root: `_validate_and_process_paths` expands it into positions.
+    result = runner.invoke(
+        cli,
+        ["compute-pyramid", "-i", str(store_path), "-l", "2"],
+    )
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1"]
+
+
+def test_cli_compute_pyramid_dims(tmp_path):
+    store_path = tmp_path / "compute_pyramid_dims.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "compute-pyramid",
+            "-i",
+            str(position_path),
+            "-l",
+            "2",
+            "--dims",
+            "y,x",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        # Z is preserved; YX halved.
+        assert pos["1"].shape[-3] == shape[-3]
+        assert pos["1"].shape[-2:] == (shape[-2] // 2, shape[-1] // 2)
+
+
+def test_cli_compute_pyramid_help():
+    runner = CliRunner()
+    for option in ("-h", "--help"):
+        result = runner.invoke(cli, ["compute-pyramid", option])
+        assert result.exit_code == 0
+        assert "compute-pyramid" in result.output or "Compute multiscale" in result.output
+
+
+def test_cli_compute_pyramid_invalid_dims(tmp_path):
+    store_path = tmp_path / "compute_pyramid_bad_dims.zarr"
+    _, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "compute-pyramid",
+            "-i",
+            str(position_path),
+            "-l",
+            "2",
+            "--dims",
+            "y,bogus",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "bogus" in result.output

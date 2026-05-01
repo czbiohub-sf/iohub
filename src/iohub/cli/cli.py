@@ -1,3 +1,4 @@
+import logging
 import pathlib
 
 import click
@@ -7,6 +8,8 @@ from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
+
+_logger = logging.getLogger(__name__)
 
 VERSION = __version__
 
@@ -161,6 +164,65 @@ def set_scale(
                 if value is None:
                     continue
                 dataset.set_scale(image, name, value)
+
+
+_PYRAMID_METHODS = ["mean", "median", "mode", "min", "max", "stride"]
+_PYRAMID_DIM_CHOICES = ["t", "z", "y", "x"]
+
+
+def _parse_dims(ctx, param, value):
+    if value is None:
+        return None
+    tokens = [t.strip().lower() for t in value.split(",") if t.strip()]
+    if not tokens:
+        return None
+    invalid = [t for t in tokens if t not in _PYRAMID_DIM_CHOICES]
+    if invalid:
+        raise click.BadParameter(f"Unknown dim(s) {invalid}. Valid choices: {_PYRAMID_DIM_CHOICES}.")
+    return set(tokens)
+
+
+@cli.command(name="compute-pyramid")
+@click.help_option("-h", "--help")
+@input_position_dirpaths()
+@click.option(
+    "--levels",
+    "-l",
+    required=True,
+    type=click.IntRange(min=2),
+    help="Total number of pyramid levels including level 0 (e.g. 4 = level 0 + 3 extra).",
+)
+@click.option(
+    "--method",
+    "-m",
+    required=False,
+    default="mean",
+    show_default=True,
+    type=click.Choice(_PYRAMID_METHODS),
+    help="Downsampling method.",
+)
+@click.option(
+    "--dims",
+    "-d",
+    required=False,
+    default=None,
+    callback=_parse_dims,
+    help=("Comma-separated axes to downsample (e.g. 'y,x' for YX-only). Defaults to 'z,y,x' inside iohub."),
+)
+def compute_pyramid(input_position_dirpaths, levels, method, dims):
+    """Compute multiscale pyramid levels in place for OME-Zarr positions.
+
+    The level-0 array is preserved; new downsampled levels are appended.
+
+    ```
+    iohub compute-pyramid -i input.zarr/*/*/* --levels 4
+    iohub compute-pyramid -i input.zarr/*/*/* -l 3 -m median --dims y,x
+    ```
+    """
+    for input_position_dirpath in input_position_dirpaths:
+        _logger.info(f"Computing pyramid for {input_position_dirpath}")
+        with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
+            dataset.compute_pyramid(levels=levels, method=method, dims=dims)
 
 
 @cli.command(name="rename-wells")
