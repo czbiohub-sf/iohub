@@ -21,11 +21,9 @@ from iohub.core.ozx import (
     OzxSummary,
     is_ozx_path,
     pack_ozx,
-    read_ozx_comment,
-    read_ozx_json_first,
     read_ozx_version,
     summarize_ozx,
-    write_ozx_comment,
+    unpack_ozx,
 )
 from iohub.core.protocol import (
     ArrayBackend,
@@ -87,13 +85,11 @@ __all__ = [
     "normalize_path",
     "pack_ozx",
     "pad_shape",
-    "read_ozx_comment",
-    "read_ozx_json_first",
     "read_ozx_version",
     "register_implementation",
     "set_default_implementation",
     "summarize_ozx",
-    "write_ozx_comment",
+    "unpack_ozx",
     # Compat
     "zarr_format_for_version",
 ]

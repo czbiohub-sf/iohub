@@ -140,6 +140,77 @@ def test_cli_convert_invalid_version(tmpdir):
     assert "Invalid value" in result.output
 
 
+def test_cli_info_verbose_ozx_shows_rfc9(tmpdir):
+    """``iohub info -v <ozx>`` shows the FOV summary plus the RFC-9 block."""
+    import numpy as np
+
+    from iohub.core.ozx import pack_ozx
+    from tests.conftest import make_fov_zarr
+
+    src = Path(tmpdir) / "src.zarr"
+    make_fov_zarr(src, np.zeros((1, 1, 1, 4, 4), dtype=np.uint8))
+    ozx = Path(tmpdir) / "src.ozx"
+    pack_ozx(src, ozx)
+
+    runner = CliRunner()
+    res = runner.invoke(cli, ["info", "-v", str(ozx)])
+    assert res.exit_code == 0, res.output
+    # FOV summary still present.
+    assert "Format:" in res.output
+    assert "Channel names:" in res.output
+    # RFC-9 block appended in verbose mode.
+    assert "=== RFC-9 archive ===" in res.output
+    assert "OME version:" in res.output
+    assert "jsonFirst:" in res.output
+
+
+def test_cli_info_non_verbose_ozx_skips_rfc9(tmpdir):
+    """Non-verbose ``info`` on a .ozx omits the RFC-9 block."""
+    import numpy as np
+
+    from iohub.core.ozx import pack_ozx
+    from tests.conftest import make_fov_zarr
+
+    src = Path(tmpdir) / "src.zarr"
+    make_fov_zarr(src, np.zeros((1, 1, 1, 2, 2), dtype=np.uint8))
+    ozx = Path(tmpdir) / "src.ozx"
+    pack_ozx(src, ozx)
+
+    runner = CliRunner()
+    res = runner.invoke(cli, ["info", str(ozx)])
+    assert res.exit_code == 0, res.output
+    assert "RFC-9 archive" not in res.output
+
+
+def test_cli_convert_zarr_to_ozx_and_back(tmpdir):
+    """`iohub convert` packs .zarr → .ozx and unpacks .ozx → .zarr based on suffix."""
+    import numpy as np
+
+    from tests.conftest import make_fov_zarr
+
+    src = Path(tmpdir) / "src.zarr"
+    data = np.arange(16, dtype=np.uint8).reshape(1, 1, 1, 4, 4)
+    make_fov_zarr(src, data)
+
+    runner = CliRunner()
+
+    ozx = Path(tmpdir) / "out.ozx"
+    res = runner.invoke(cli, ["convert", "-i", str(src), "-o", str(ozx)])
+    assert res.exit_code == 0, res.output
+    assert "packed" in res.output
+    assert ozx.is_file()
+
+    # Unpack: ozx → zarr
+    restored = Path(tmpdir) / "restored.zarr"
+    res = runner.invoke(cli, ["convert", "-i", str(ozx), "-o", str(restored)])
+    assert res.exit_code == 0, res.output
+    assert "unpacked" in res.output
+    assert restored.is_dir()
+
+    with open_ome_zarr(restored, mode="r") as pos:
+        np.testing.assert_array_equal(pos["0"][:], np.arange(16, dtype=np.uint8).reshape(1, 1, 1, 4, 4))
+
+
 def test_cli_set_scale(caplog):
     with _temp_copy(hcs_ref) as store_path:
         store_path = Path(store_path)

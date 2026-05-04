@@ -8,6 +8,7 @@ import natsort
 import tifffile as tiff
 import zarr
 
+from iohub.core.ozx import is_ozx_path, read_ozx_version, summarize_ozx
 from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
@@ -101,8 +102,6 @@ def _get_sub_dirs(directory: Path) -> list[str]:
 
 
 def _infer_format(path: Path):
-    from iohub.core.ozx import is_ozx_path, read_ozx_version
-
     extra_info = None
     if is_ozx_path(path):
         data_type = "omezarr"
@@ -275,6 +274,8 @@ def print_info(path: StrOrBytesPath, verbose=False):
                         f">>> dataset = open_ome_zarr('{path}', mode='r')",
                     ]
                 )
+                if is_ozx_path(path):
+                    msgs.extend(_rfc9_info_lines(path))
             if isinstance(reader, Position):
                 print("Zarr hierarchy:")
                 reader.print_tree()
@@ -282,6 +283,18 @@ def print_info(path: StrOrBytesPath, verbose=False):
     finally:
         if hasattr(reader, "close"):
             reader.close()
+
+
+def _rfc9_info_lines(path: Path) -> list[str]:
+    """Return one-line summary entries for an ``.ozx`` archive's RFC-9 metadata."""
+    s = summarize_ozx(path)
+    return [
+        "\n=== RFC-9 archive ===",
+        f"OME version:\t\t {s.version}",
+        f"jsonFirst:\t\t {s.json_first}",
+        f"Entries:\t\t {s.n_entries:,}  ({s.n_zarr_json} zarr.json, {s.n_duplicates} duplicate names)",
+        f"Size on disk:\t\t {sizeof_fmt(path.stat().st_size)}",
+    ]
 
 
 def sizeof_fmt(num: int) -> str:

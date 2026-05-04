@@ -2,22 +2,24 @@
 
 Adds on top of zarr-python's ``ZipStore``:
 
-1. ``OzxStore`` — RFC-9 defaults (``ZIP_STORED``, ``allowZip64=True``) and
-   writes the archive comment on close.
+1. ``OzxStore`` — RFC-9 defaults (``ZIP_STORED``, ``allowZip64=True``),
+   writes the archive comment on close, fork-safe via ``os.register_at_fork``.
 2. Comment helpers — read and write the ``{"ome": {"version": ..., "zipFile": ...}}`` JSON.
-3. ``pack_ozx`` — emit a BFS-ordered archive from a directory store, satisfying
-   the RFC-9 SHOULD ordering clause in one pass.
+3. ``pack_ozx`` / ``unpack_ozx`` — convert directory stores ↔ archives.
+   Pack writes BFS-ordered entries with ``jsonFirst:true`` in one pass.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
+import weakref
 import zipfile
 from collections.abc import Callable, Iterable
 from pathlib import Path
-from typing import IO, Literal, NamedTuple
+from typing import IO, Literal, NamedTuple, override
 
 from zarr.storage import ZipStore
 
@@ -41,12 +43,14 @@ _JSON_FIRST = "jsonFirst"
 def is_ozx_path(path: str | Path) -> bool:
     """Return True when ``path`` ends with ``.ozx``.
 
+    Case-sensitive to match Zarr's ``.zarr`` precedent within iohub.
+
     Parameters
     ----------
     path : str | Path
         Path to check; existence not required.
     """
-    return Path(path).suffix.lower() == OZX_EXTENSION
+    return Path(path).suffix == OZX_EXTENSION
 
 
 def _build_comment(version: str, *, json_first: bool = False) -> bytes:
@@ -66,22 +70,8 @@ def _parse_comment(raw: bytes) -> dict | None:
         return None
 
 
-def _comment_version(comment: dict | None) -> str | None:
-    return get_ome_attrs(comment or {}).get(_VERSION)
-
-
-def _comment_json_first(comment: dict | None) -> bool:
-    return bool(get_ome_attrs(comment or {}).get(_ZIP_FILE, {}).get(_CENTRAL_DIRECTORY, {}).get(_JSON_FIRST, False))
-
-
-def read_ozx_comment(path: str | Path) -> dict | None:
-    """Return the parsed RFC-9 archive comment, or ``None`` if absent or invalid.
-
-    Parameters
-    ----------
-    path : str | Path
-        ``.ozx`` archive to read.
-    """
+def _read_ozx_comment(path: str | Path) -> dict | None:
+    """Return the parsed RFC-9 archive comment, or ``None`` if absent or invalid."""
     with zipfile.ZipFile(path, mode="r") as zf:
         return _parse_comment(zf.comment)
 
@@ -94,43 +84,44 @@ def read_ozx_version(path: str | Path) -> str | None:
     path : str | Path
         ``.ozx`` archive to read.
     """
-    return _comment_version(read_ozx_comment(path))
-
-
-def read_ozx_json_first(path: str | Path) -> bool:
-    """Return the ``jsonFirst`` ordering hint (defaults to ``False``).
-
-    Parameters
-    ----------
-    path : str | Path
-        ``.ozx`` archive to read.
-    """
-    return _comment_json_first(read_ozx_comment(path))
+    return get_ome_attrs(_read_ozx_comment(path) or {}).get(_VERSION)
 
 
 class OzxSummary(NamedTuple):
-    """RFC-9 attributes carried in an ``.ozx`` archive comment."""
+    """Combined RFC-9 metadata + entry counts read from a ``.ozx``."""
 
     version: str | None
     json_first: bool
+    n_entries: int
+    n_zarr_json: int
+    n_duplicates: int
 
 
 def summarize_ozx(path: str | Path) -> OzxSummary:
-    """Read all RFC-9 attributes in one zip open.
+    """Read all RFC-9 attributes plus entry counts in one zip open.
 
-    Prefer this when you need both the version and ``jsonFirst`` —
-    one open instead of two.
+    Opens the archive once and pulls the comment plus ``namelist`` while
+    the file is open. ``zipfile.BadZipFile`` propagates so corrupt
+    central directories surface explicitly instead of being masked as
+    ``n_entries=0``.
 
     Parameters
     ----------
     path : str | Path
         ``.ozx`` archive to inspect.
     """
-    comment = read_ozx_comment(path)
-    return OzxSummary(_comment_version(comment), _comment_json_first(comment))
+    with zipfile.ZipFile(path, mode="r") as zf:
+        comment = _parse_comment(zf.comment)
+        names = zf.namelist()
+    ome = get_ome_attrs(comment or {})
+    version = ome.get(_VERSION)
+    json_first = bool(ome.get(_ZIP_FILE, {}).get(_CENTRAL_DIRECTORY, {}).get(_JSON_FIRST, False))
+    n_zarr_json = sum(1 for n in names if n.rsplit("/", 1)[-1] == "zarr.json")
+    n_duplicates = len(names) - len(set(names))
+    return OzxSummary(version, json_first, len(names), n_zarr_json, n_duplicates)
 
 
-def write_ozx_comment(
+def _write_ozx_comment(
     path: str | Path,
     *,
     version: str,
@@ -166,7 +157,28 @@ class OzxStore(ZipStore):
     ``jsonFirst`` unset. For a SHOULD-compliant archive ready for
     HTTP-range publishing, write to a directory store first and run
     :func:`pack_ozx`.
+
+    Fork-safe: an ``os.register_at_fork`` hook invalidates the
+    inherited ``ZipFile`` fd in child processes, so each child opens
+    its own. Spawn-safe via ``ZipStore.__getstate__``/``__setstate__``.
     """
+
+    # Identity-keyed live-instance registry. ``ZipStore`` defines
+    # ``__eq__`` (path equality) without ``__hash__``, so ``OzxStore``
+    # is unhashable; ``id(self)`` sidesteps that and the eq/hash
+    # contract violation a ``__hash__`` override would introduce.
+    _live_instances: weakref.WeakValueDictionary[int, OzxStore] = weakref.WeakValueDictionary()
+
+    @classmethod
+    def _invalidate_all_after_fork(cls) -> None:
+        """Drop the inherited ``ZipFile`` fd on every live instance.
+
+        Called by the module-level ``os.register_at_fork`` hook in each
+        forked child so the child re-opens the archive on first read
+        instead of sharing the parent's fd.
+        """
+        for store in list(cls._live_instances.values()):
+            store.invalidate_after_fork()
 
     def __init__(
         self,
@@ -186,7 +198,11 @@ class OzxStore(ZipStore):
             allowZip64=allowZip64,
         )
         self._ome_version = str(ome_version)
+        # Track this instance so the at-fork hook can invalidate its
+        # inherited fd in any child process.
+        type(self)._live_instances[id(self)] = self
 
+    @override
     def close(self) -> None:
         """Write the RFC-9 archive comment (if writable) then close."""
         # ZipStore opens lazily via ``_sync_open``; ``_zf``/``_lock`` only
@@ -200,6 +216,22 @@ class OzxStore(ZipStore):
             except Exception as err:  # noqa: BLE001 — never block close on comment failure
                 _logger.warning("Failed to write OZX archive comment: %s", err)
         super().close()
+
+    def invalidate_after_fork(self) -> None:
+        """Drop the inherited ``ZipFile`` fd after a ``fork()``.
+
+        Called by the module-level ``os.register_at_fork`` hook in every
+        forked child so that the child re-opens the archive on its first
+        read instead of sharing the parent's fd. No-op if the store has
+        not been opened yet.
+        """
+        self._is_open = False
+
+
+# Registration runs at module import; POSIX only. Windows has no fork,
+# and spawn workers re-open via ``ZipStore.__getstate__``/``__setstate__``.
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=OzxStore._invalidate_all_after_fork)
 
 
 def _bfs_order(names: Iterable[str]) -> list[str]:
@@ -296,4 +328,59 @@ def pack_ozx(
     ordered = _bfs_order(rel_names)
 
     _write_ozx_archive(out_path, ordered, version=version, open_member=lambda name: by_name[name].open("rb"))
+    return out_path
+
+
+def unpack_ozx(src: str | Path, dst: str | Path) -> Path:
+    """Unpack an RFC-9 ``.ozx`` archive into an OME-Zarr directory store.
+
+    Walks the archive, dedupes shadow ``zarr.json`` entries (last-wins,
+    matching ``ZipFile.read``), and writes each entry as a file under
+    ``dst``. Reverse of :func:`pack_ozx`.
+
+    Parameters
+    ----------
+    src : str | Path
+        Existing ``.ozx`` archive.
+    dst : str | Path
+        Output directory; must not exist.
+
+    Returns
+    -------
+    Path
+        Path of the written directory store.
+    """
+    src_path = Path(src)
+    if not src_path.is_file():
+        raise FileNotFoundError(f"unpack source must be a file: {src_path}")
+    out_path = Path(dst)
+    if out_path.exists():
+        raise FileExistsError(out_path)
+
+    out_path.mkdir(parents=True)
+    try:
+        with zipfile.ZipFile(src_path, mode="r") as zin:
+            # Dedupe by keeping the last ZipInfo per name — matches
+            # ZipFile.read semantics for archives with shadow entries.
+            infos: dict[str, zipfile.ZipInfo] = {info.filename: info for info in zin.infolist()}
+            for name, info in infos.items():
+                # Skip directory entries (``name/`` with empty content)
+                # that some zip tools (7z, info-zip) emit. They'd
+                # otherwise be written as regular files at the directory
+                # path and break sibling entry creation.
+                if name.endswith("/"):
+                    continue
+                # Refuse traversal: zip entries with .. or absolute paths
+                # could write outside dst. zipfile's extract() does this
+                # by default; we replicate the guard since we resolve
+                # paths manually.
+                target = (out_path / name).resolve()
+                if not target.is_relative_to(out_path.resolve()):
+                    raise ValueError(f"unsafe entry path escapes destination: {name!r}")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zin.open(info, mode="r") as src_f, target.open("wb") as dst_f:
+                    shutil.copyfileobj(src_f, dst_f, length=_COPY_BUFFER_BYTES)
+    except Exception:
+        shutil.rmtree(out_path, ignore_errors=True)
+        raise
     return out_path

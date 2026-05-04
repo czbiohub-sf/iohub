@@ -5,7 +5,7 @@ import click
 from iohub import __version__, open_ome_zarr
 from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
-from iohub.core.ozx import pack_ozx, summarize_ozx
+from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
 
@@ -55,49 +55,65 @@ def info(files, verbose):
     "--input",
     "-i",
     required=True,
-    type=_DATASET_PATH,
-    help="Input Micro-Manager TIFF dataset directory",
+    type=_OME_ZARR_PATH,
+    help="Input dataset: Micro-Manager TIFF dir, OME-Zarr dir, or RFC-9 .ozx archive.",
 )
 @click.option(
     "--output",
     "-o",
     required=True,
-    type=click.Path(exists=False, resolve_path=True),
-    help="Output zarr store (/**/converted.zarr)",
+    type=click.Path(exists=False, resolve_path=True, path_type=pathlib.Path),
+    help="Output path. Suffix selects the operation: .zarr (Zarr dir) or .ozx (zipped).",
 )
 @click.option(
     "--grid-layout",
     "-g",
     required=False,
     is_flag=True,
-    help="Arrange FOVs in a row/column grid layout for tiled acquisition",
+    help="(TIFF → Zarr only) Arrange FOVs in a row/column grid layout.",
 )
 @click.option(
     "--chunks",
     "-c",
     required=False,
     default="XYZ",
-    help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
-    "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
+    help="(TIFF → Zarr only) Zarr chunk size: 'XY', 'XYZ', or a tuple. 'XYZ' caps at 500 MB.",
 )
 @click.option(
     "--ome-zarr-version",
     "-v",
     required=False,
-    default="0.4",
+    default=None,
     type=click.Choice(["0.4", "0.5"]),
-    help="OME-NGFF version for the output Zarr store. '0.4' uses Zarr v2 format; '0.5' uses Zarr v3 format.",
+    help="OME-NGFF version. TIFF default: 0.4. Pack: sniffed from source if omitted.",
 )
 def convert(input, output, grid_layout, chunks, ome_zarr_version):
-    """Converts Micro-Manager TIFF datasets to OME-Zarr"""
-    converter = TIFFConverter(
-        input_dir=input,
-        output_dir=output,
+    """Convert datasets between supported formats.
+
+    Routes by suffix: a TIFF directory plus a ``.zarr`` output runs the
+    Micro-Manager TIFF → OME-Zarr converter; a ``.zarr`` source plus a
+    ``.ozx`` output packs an RFC-9 zip archive; a ``.ozx`` source plus
+    a ``.zarr`` output unpacks back to a directory store.
+    """
+    src = pathlib.Path(input)
+    dst = pathlib.Path(output)
+
+    if is_ozx_path(dst):
+        out = pack_ozx(src, dst, version=ome_zarr_version)
+        click.echo(f"packed: {out}")
+        return
+    if is_ozx_path(src):
+        out = unpack_ozx(src, dst)
+        click.echo(f"unpacked: {out}")
+        return
+    # Default: TIFF → OME-Zarr (TIFFConverter sniffs the input format).
+    TIFFConverter(
+        input_dir=src,
+        output_dir=dst,
         grid_layout=grid_layout,
         chunks=chunks,
-        version=ome_zarr_version,
-    )
-    converter()
+        version=ome_zarr_version or "0.4",
+    )()
 
 
 @cli.command()
@@ -198,91 +214,3 @@ def rename_wells_command(zarrfile, csvfile):
     ```
     """
     rename_wells(zarrfile, csvfile)
-
-
-def _echo_ozx_summary(verb: str, path: pathlib.Path) -> None:
-    """Print the one-liner ``ozx pack`` shows on success."""
-    s = summarize_ozx(path)
-    click.echo(f"{verb}: {path}  (ome version={s.version}, jsonFirst={s.json_first})")
-
-
-@cli.group(name="ozx")
-@click.help_option("-h", "--help")
-def ozx_group():
-    """RFC-9 zipped OME-Zarr (``.ozx``) operations.
-
-    A ``.ozx`` is a single-file OME-Zarr archive (ZIP_STORED + ZIP64)
-    designed for distribution - S3, AWS Open Data, HPC↔compute-cluster
-    transfers - not as a live mutable store. One file to upload,
-    download, and serve.
-
-    Use ``ozx pack`` to bundle a directory store for export and
-    ``ozx info`` to inspect an archive's RFC-9 properties. ``iohub
-    info`` works on ``.ozx`` paths directly for the usual FOV summary.
-    """
-
-
-@ozx_group.command(name="pack")
-@click.help_option("-h", "--help")
-@click.option(
-    "-i",
-    "--input",
-    "src",
-    required=True,
-    type=click.Path(exists=True, file_okay=False, dir_okay=True, resolve_path=True, path_type=pathlib.Path),
-    help="Input OME-Zarr directory store.",
-)
-@click.option(
-    "-o",
-    "--output",
-    "dst",
-    required=True,
-    type=click.Path(exists=False, resolve_path=True, path_type=pathlib.Path),
-    help="Output .ozx path (must not exist).",
-)
-@click.option(
-    "--version",
-    "ome_version",
-    default=None,
-    help="OME-NGFF version to record. Sniffed from source if omitted.",
-)
-def ozx_pack(src, dst, ome_version):
-    """Pack an OME-Zarr directory into an RFC-9 ``.ozx`` archive.
-
-    Writes a ZIP_STORED + ZIP64 archive in one pass with entries in BFS
-    order - root ``zarr.json`` first, other ``zarr.json`` next, chunks
-    last - and ``jsonFirst:true`` in the archive comment. HTTP-range
-    readers can then fetch all metadata in one contiguous Range request
-    on cold opens, the win that matters for S3 and AWS Open Data.
-    """
-    out = pack_ozx(src, dst, version=ome_version)
-    _echo_ozx_summary("packed", out)
-
-
-@ozx_group.command(name="info")
-@click.help_option("-h", "--help")
-@click.argument(
-    "path",
-    type=click.Path(exists=True, dir_okay=False, resolve_path=True, path_type=pathlib.Path),
-)
-def ozx_info(path):
-    """Print RFC-9 archive metadata: version, ``jsonFirst``, entry count, size.
-
-    Use it to sanity-check an archive before publishing (``jsonFirst``
-    should be ``True`` after ``iohub ozx pack``) or to inspect archives
-    received from collaborators or downloaded from public datasets.
-    """
-    import zipfile
-
-    # One zip open for the namelist, one for the comment.
-    with zipfile.ZipFile(path) as zf:
-        names = zf.namelist()
-    summary = summarize_ozx(path)
-    n_entries = len(names)
-    n_meta = sum(1 for n in names if n.rsplit("/", 1)[-1] == "zarr.json")
-    n_dupes = n_entries - len(set(names))
-    click.echo(f"path:        {path}")
-    click.echo(f"size:        {path.stat().st_size:,} bytes")
-    click.echo(f"entries:     {n_entries:,}  ({n_meta} zarr.json, {n_dupes} duplicate names)")
-    click.echo(f"ome version: {summary.version}")
-    click.echo(f"jsonFirst:   {summary.json_first}")
