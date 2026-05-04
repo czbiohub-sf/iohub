@@ -211,6 +211,43 @@ def test_cli_convert_zarr_to_ozx_and_back(tmpdir):
         np.testing.assert_array_equal(pos["0"][:], np.arange(16, dtype=np.uint8).reshape(1, 1, 1, 4, 4))
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "route"),
+    [
+        ("--chunks", "XY", "pack"),
+        ("-g", None, "pack"),
+        ("--chunks", "XY", "unpack"),
+        ("-g", None, "unpack"),
+        ("--ome-zarr-version", "0.5", "unpack"),
+    ],
+)
+def test_cli_convert_rejects_irrelevant_flags(tmpdir, flag, value, route):
+    """TIFF-only flags on pack/unpack and version on unpack must error loudly."""
+    import numpy as np
+
+    from tests.conftest import make_fov_zarr
+
+    src_zarr = Path(tmpdir) / "src.zarr"
+    make_fov_zarr(src_zarr, np.zeros((1, 1, 1, 2, 2), dtype=np.uint8))
+    if route == "pack":
+        src, dst = src_zarr, Path(tmpdir) / "out.ozx"
+    else:
+        ozx = Path(tmpdir) / "src.ozx"
+        from iohub.core.ozx import pack_ozx as _pack
+
+        _pack(src_zarr, ozx)
+        src, dst = ozx, Path(tmpdir) / "out.zarr"
+
+    cmd = ["convert", "-i", str(src), "-o", str(dst), flag]
+    if value is not None:
+        cmd.append(value)
+
+    runner = CliRunner()
+    res = runner.invoke(cli, cmd)
+    assert res.exit_code != 0
+    assert "do not apply" in res.output or "apply only" in res.output
+
+
 def test_cli_set_scale(caplog):
     with _temp_copy(hcs_ref) as store_path:
         store_path = Path(store_path)

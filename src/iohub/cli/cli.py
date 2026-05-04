@@ -97,12 +97,25 @@ def convert(input, output, grid_layout, chunks, ome_zarr_version):
     """
     src = pathlib.Path(input)
     dst = pathlib.Path(output)
+    tiff_only = grid_layout or chunks != "XYZ"
 
     if is_ozx_path(dst):
+        # Pack: 1:1 file copy preserving source chunks. Re-chunking would
+        # mean a full read+rewrite — a different operation, out of scope.
+        if tiff_only:
+            raise click.BadParameter(
+                "--grid-layout and --chunks apply only to TIFF → Zarr conversion. "
+                "Pack copies chunks 1:1 from the source."
+            )
         out = pack_ozx(src, dst, version=ome_zarr_version)
         click.echo(f"packed: {out}")
         return
     if is_ozx_path(src):
+        # Unpack: archive structure dictates everything; no flags apply.
+        if tiff_only or ome_zarr_version is not None:
+            raise click.BadParameter(
+                "--grid-layout, --chunks, and --ome-zarr-version do not apply to .ozx → .zarr unpack."
+            )
         out = unpack_ozx(src, dst)
         click.echo(f"unpacked: {out}")
         return
