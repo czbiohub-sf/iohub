@@ -1,7 +1,5 @@
 """Tests for RFC-9 (Zipped OME-Zarr, ``.ozx``) support."""
 
-from __future__ import annotations
-
 import multiprocessing as mp
 import sys
 import zipfile
