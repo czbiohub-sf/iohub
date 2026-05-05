@@ -65,5 +65,5 @@ def test_print_info_bf2raw(tmp_path, capsys, version):
     store_path = _make_bf2raw_fixture(tmp_path, version)
     print_info(store_path)
     captured = capsys.readouterr().out
-    assert "Series:" in captured
+    assert "Positions:" in captured
     assert f"v{version}" in captured

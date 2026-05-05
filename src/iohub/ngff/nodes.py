@@ -2976,8 +2976,12 @@ class Bioformats2RawSeries(NGFFNode):
             return pos.axes
         return self._DEFAULT_AXES
 
-    def series(self) -> Generator[tuple[str, Position]]:
-        """Iterate over ``(name, Position)`` pairs of all series."""
+    def positions(self) -> Generator[tuple[str, Position]]:
+        """Iterate over ``(name, Position)`` pairs of all series.
+
+        Matches :py:meth:`Plate.positions` and :py:meth:`Well.positions` so
+        downstream code can iterate any FOV-bearing node uniformly.
+        """
         yield from self.iteritems()
 
     def print_tree(self, level: int | None = None):

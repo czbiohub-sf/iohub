@@ -280,11 +280,11 @@ def print_info(path: StrOrBytesPath, verbose=False):
                         f" [{sizeof_fmt(total_bytes_uncompressed)}]"
                     )
             elif isinstance(reader, Bioformats2RawSeries):
-                series = list(reader.series())
-                msgs.append(f"Series:\t\t\t {len(series)}")
-                if series:
-                    name, first = series[0]
-                    msgs.append(f"First series:\t\t '{name}'")
+                positions = list(reader.positions())
+                msgs.append(f"Positions:\t\t {len(positions)}")
+                if positions:
+                    name, first = positions[0]
+                    msgs.append(f"First position:\t\t '{name}'")
                     if "0" in first:
                         msgs.append(f"Chunk size:\t\t {first['0'].chunks}")
                 if verbose:

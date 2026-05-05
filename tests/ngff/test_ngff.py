@@ -2034,7 +2034,7 @@ def test_bf2raw_open_auto(tmp_path, version):
         assert node.version == version
         assert len(node) == 2
         assert list(node) == ["0", "1"]
-        names = [n for n, _ in node.series()]
+        names = [n for n, _ in node.positions()]
         assert names == ["0", "1"]
         assert node["0"].channel_names == ["DAPI"]
         assert node.channel_names == ["DAPI"]
@@ -2062,4 +2062,3 @@ def test_bf2raw_create_not_supported(tmp_path):
             channel_names=["DAPI"],
             version="0.5",
         )
-
