@@ -19,7 +19,6 @@ from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.nodes import TransformationMeta
 
-
 #: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
 _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 
@@ -430,10 +429,7 @@ def process_single_position(
     elif use_threads:
         click.echo(f"\nStarting thread pool with {num_workers} threads")
         with ThreadPoolExecutor(max_workers=num_workers) as p:
-            futures = [
-                p.submit(partial_apply_transform_to_czyx_and_save, *args)
-                for args in flat_iterable
-            ]
+            futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
             for fut in as_completed(futures):
                 fut.result()
         click.echo("Shut down thread pool")
@@ -446,13 +442,8 @@ def process_single_position(
         # (e.g. cgroup OOM-kill) surfaces as BrokenProcessPool instead
         # of hanging indefinitely on pool.starmap.
         context = mp.get_context("spawn")
-        with ProcessPoolExecutor(
-            max_workers=num_workers, mp_context=context
-        ) as p:
-            futures = [
-                p.submit(partial_apply_transform_to_czyx_and_save, *args)
-                for args in flat_iterable
-            ]
+        with ProcessPoolExecutor(max_workers=num_workers, mp_context=context) as p:
+            futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
             for fut in as_completed(futures):
                 fut.result()
         click.echo("Shut down multiprocess pool")

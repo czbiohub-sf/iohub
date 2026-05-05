@@ -1,6 +1,7 @@
 from iohub.core import NGFFArray
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import (
+    Bioformats2RawSeries,
     ImageArray,
     NGFFNode,
     Plate,
@@ -11,6 +12,7 @@ from iohub.ngff.nodes import (
 )
 
 __all__ = [
+    "Bioformats2RawSeries",
     "ImageArray",
     "NGFFArray",
     "NGFFNode",

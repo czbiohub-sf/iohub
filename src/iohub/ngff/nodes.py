@@ -22,6 +22,7 @@ from typing import (
 import numpy as np
 import xarray as xr
 import zarr
+from natsort import natsorted
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from pydantic import ValidationError
 
@@ -36,6 +37,7 @@ from iohub.ngff.display import channel_display_settings
 from iohub.ngff.models import (
     AcquisitionMeta,
     AxisMeta,
+    Bioformats2RawMeta,
     ChannelAxisMeta,
     DatasetMeta,
     ImageMeta,
@@ -2888,6 +2890,134 @@ class Plate(NGFFNode):
         self.dump_meta()
 
 
+class Bioformats2RawSeries(NGFFNode):
+    """A bioformats2raw-layout multi-image collection (read-only).
+
+    The root group is marked with ``"bioformats2raw.layout": 3`` and contains
+    numbered child groups (``0/``, ``1/``, ...), each a full multiscale image.
+    An optional ``OME/`` subgroup carries an OME-XML blob and a ``series``
+    array listing image paths in canonical order.
+
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#bf2raw
+    """
+
+    _MEMBER_TYPE = Position
+
+    def __init__(
+        self,
+        group: zarr.Group,
+        parse_meta: bool = True,
+        channel_names: list[str] | None = None,
+        axes: list[AxisMeta] | None = None,
+        version: Literal["0.4", "0.5"] = "0.5",
+        overwriting_creation: bool = False,
+        impl: ZarrImplementation | None = None,
+    ):
+        super().__init__(
+            group=group,
+            parse_meta=parse_meta,
+            channel_names=channel_names,
+            axes=axes,
+            version=version,
+            overwriting_creation=overwriting_creation,
+            impl=impl,
+        )
+
+    def _parse_meta(self):
+        ome_attrs = dict(self.maybe_wrapped_ome_attrs)
+        try:
+            self.metadata = Bioformats2RawMeta(**ome_attrs)
+        except ValidationError as e:
+            _logger.warning(str(e))
+            self._warn_invalid_meta()
+            return
+        # If the root doesn't carry a `series` list, fall back to the canonical
+        # location at OME/.zattrs (v0.4) or OME/zarr.json (v0.5).
+        if self.metadata.series is None and "OME" in self.zgroup:
+            try:
+                ome_grp_attrs = get_ome_attrs(self.zgroup["OME"].attrs)
+                series = ome_grp_attrs.get("series")
+                if isinstance(series, list):
+                    self.metadata.series = [str(s) for s in series]
+            except (KeyError, AttributeError):
+                pass
+
+    @property
+    def _member_names(self):
+        if hasattr(self, "metadata") and self.metadata.series:
+            return natsorted(self.metadata.series)
+        # Fall back to numeric-named child groups (exclude the OME/ sidecar).
+        return natsorted(k for k in self.group_keys() if k != "OME" and k.isdigit())
+
+    @cached_property
+    def _first_series(self) -> Position | None:
+        """First series Position by direct lookup; mirrors Plate._first_pos."""
+        try:
+            name = self._member_names[0]
+            return Position(
+                group=self.zgroup[name],
+                parse_meta=True,
+                version=self._version,
+                impl=self._impl,
+            )
+        except (IndexError, KeyError, AttributeError):
+            _logger.warning("Cannot read first series metadata.")
+            return None
+
+    @cached_property
+    def channel_names(self):
+        if pos := self._first_series:
+            return pos.channel_names
+        raise AttributeError("No series found to read channel names from.")
+
+    @cached_property
+    def axes(self):
+        if pos := self._first_series:
+            return pos.axes
+        return self._DEFAULT_AXES
+
+    def positions(self) -> Generator[tuple[str, Position]]:
+        """Iterate over ``(name, Position)`` pairs of all series.
+
+        Matches :py:meth:`Plate.positions` and :py:meth:`Well.positions` so
+        downstream code can iterate any FOV-bearing node uniformly.
+        """
+        yield from self.iteritems()
+
+    def print_tree(self, level: int | None = None):
+        """Print hierarchy with series natsorted (e.g. 0, 1, 2, ..., 10).
+
+        Zarr's native tree() walks children in lexicographic order, which
+        groups ``"10"`` between ``"1"`` and ``"2"`` for numeric series. We
+        reorder at the series level and then defer to per-Position trees
+        for the multiscale arrays beneath.
+        """
+        names = self._member_names
+        print("/")
+        for i, name in enumerate(names):
+            is_last_n = i == len(names) - 1
+            print(("└── " if is_last_n else "├── ") + name)
+            if level is not None and level <= 1:
+                continue
+            sub_prefix = "    " if is_last_n else "│   "
+            try:
+                pos = self[name]
+            except (KeyError, ValidationError):
+                continue
+            arr_names = pos.array_keys()
+            for j, ak in enumerate(arr_names):
+                is_last_a = j == len(arr_names) - 1
+                connector = "└── " if is_last_a else "├── "
+                try:
+                    arr = pos[ak]
+                    print(sub_prefix + connector + f"{ak} {tuple(arr.shape)} {arr.dtype}")
+                except (KeyError, AttributeError):
+                    pass
+
+    def dump_meta(self):
+        raise NotImplementedError("Writing bioformats2raw-layout stores is not supported.")
+
+
 def _check_file_mode(
     store_path,
     mode: Literal["r", "r+", "a", "w", "w-"],
@@ -2922,15 +3052,19 @@ def _check_file_mode(
     return parse_meta
 
 
-def _detect_layout(meta_keys: list[str]) -> Literal["fov", "hcs"]:
+def _detect_layout(meta_keys: list[str]) -> Literal["fov", "hcs", "bf2raw"]:
+    # Order matters: per the NGFF spec, "plate" takes precedence over
+    # "bioformats2raw.layout" when both are present at the root.
     if "plate" in meta_keys:
         return "hcs"
+    elif "bioformats2raw.layout" in meta_keys:
+        return "bf2raw"
     elif "multiscales" in meta_keys:
         return "fov"
     else:
         raise KeyError(
-            "Dataset metadata keys ('plate'/'multiscales') not in "
-            f"the found store metadata keys: {meta_keys}. "
+            "Dataset metadata keys ('plate'/'bioformats2raw.layout'/'multiscales') "
+            f"not in the found store metadata keys: {meta_keys}. "
             "Is this a valid OME-Zarr dataset?"
         )
 
@@ -2947,7 +3081,22 @@ def open_ome_zarr(
     implementation: str | None = None,
     implementation_config: ImplementationConfig | None = None,
     **kwargs,
-) -> Plate | Position | TiledPosition: ...
+) -> Plate | Position | TiledPosition | Bioformats2RawSeries: ...
+
+
+@overload
+def open_ome_zarr(
+    store_path: StorePath,
+    layout: Literal["bf2raw"],
+    mode: Literal["r", "r+", "a", "w", "w-"] = "r",
+    channel_names: list[str] | None = None,
+    axes: list[AxisMeta] | None = None,
+    version: Literal["0.4", "0.5"] = "0.5",
+    disable_path_checking: bool = False,
+    implementation: str | None = None,
+    implementation_config: ImplementationConfig | None = None,
+    **kwargs,
+) -> Bioformats2RawSeries: ...
 
 
 @overload
@@ -2997,7 +3146,7 @@ def open_ome_zarr(
 
 def open_ome_zarr(
     store_path: StorePath,
-    layout: Literal["auto", "fov", "hcs", "tiled"] = "auto",
+    layout: Literal["auto", "fov", "hcs", "tiled", "bf2raw"] = "auto",
     mode: Literal["r", "r+", "a", "w", "w-"] = "r",
     channel_names: list[str] | None = None,
     axes: list[AxisMeta] | None = None,
@@ -3006,7 +3155,7 @@ def open_ome_zarr(
     implementation: str | None = None,
     implementation_config: ImplementationConfig | None = None,
     **kwargs,
-) -> Plate | Position | TiledPosition:
+) -> Plate | Position | TiledPosition | Bioformats2RawSeries:
     """Convenience method to open OME-Zarr stores.
 
     Parameters
@@ -3091,7 +3240,7 @@ def open_ome_zarr(
     if "ome" in meta_keys:
         meta_keys = root.attrs["ome"].keys()
         version = root.attrs["ome"].get("version", version)
-    elif parse_meta and ("multiscales" in meta_keys or "plate" in meta_keys):
+    elif parse_meta and ("multiscales" in meta_keys or "plate" in meta_keys or "bioformats2raw.layout" in meta_keys):
         # v0.4 stores have flat metadata (no "ome" wrapper)
         version = "0.4"
     if layout == "auto":
@@ -3108,6 +3257,12 @@ def open_ome_zarr(
         if parse_meta and "plate" not in meta_keys:
             raise ValueError(msg)
         node = Plate
+    elif layout == "bf2raw":
+        if mode in ("w", "w-"):
+            raise NotImplementedError("Creating bioformats2raw-layout stores is not supported.")
+        if parse_meta and "bioformats2raw.layout" not in meta_keys:
+            raise ValueError(msg)
+        node = Bioformats2RawSeries
     else:
         raise ValueError(f"Unknown layout: {layout}")
     return node(

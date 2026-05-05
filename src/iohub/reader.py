@@ -11,7 +11,14 @@ import zarr
 from iohub.fov import BaseFOVMapping
 from iohub.mmstack import MMStack
 from iohub.ndtiff import NDTiffDataset
-from iohub.ngff.nodes import NGFFNode, Plate, Position, TiledPosition, open_ome_zarr
+from iohub.ngff.nodes import (
+    Bioformats2RawSeries,
+    NGFFNode,
+    Plate,
+    Position,
+    TiledPosition,
+    open_ome_zarr,
+)
 
 if TYPE_CHECKING:
     from _typeshed import StrOrBytesPath
@@ -31,16 +38,33 @@ def _find_ngff_version_in_zarr_group(group: zarr.Group) -> str | None:
     return None
 
 
+def _has_bf2raw_marker(group: zarr.Group) -> bool:
+    """Detect ``bioformats2raw.layout`` marker at root, v0.4 or v0.5."""
+    if "bioformats2raw.layout" in group.attrs:
+        return True
+    ome = group.attrs.get("ome")
+    return isinstance(ome, dict) and "bioformats2raw.layout" in ome
+
+
 def _check_zarr_data_type(src: Path):
     try:
         root = zarr.open(src, mode="r")
         if version := _find_ngff_version_in_zarr_group(root):
             return version
-        else:
-            for _, row in root.groups():
-                for _, well in row.groups():
-                    if version := _find_ngff_version_in_zarr_group(well):
-                        return version
+        # bf2raw root carries no version; recurse into first child series
+        if _has_bf2raw_marker(root):
+            for name, child in root.groups():
+                if name == "OME":
+                    continue
+                if version := _find_ngff_version_in_zarr_group(child):
+                    return version
+            # fall back to zarr format → ngff version mapping
+            zarr_format = getattr(root.metadata, "zarr_format", None)
+            return "0.5" if zarr_format == 3 else "0.4"
+        for _, row in root.groups():
+            for _, well in row.groups():
+                if version := _find_ngff_version_in_zarr_group(well):
+                    return version
     except Exception:  # noqa: BLE001 — version detection may fail in many ways
         return False
     return "unknown"
@@ -255,6 +279,17 @@ def print_info(path: StrOrBytesPath, verbose=False):
                         f"No. bytes decompressed:\t\t, {total_bytes_uncompressed}"
                         f" [{sizeof_fmt(total_bytes_uncompressed)}]"
                     )
+            elif isinstance(reader, Bioformats2RawSeries):
+                positions = list(reader.positions())
+                msgs.append(f"Positions:\t\t {len(positions)}")
+                if positions:
+                    name, first = positions[0]
+                    msgs.append(f"First position:\t\t '{name}'")
+                    if "0" in first:
+                        msgs.append(f"Chunk size:\t\t {first['0'].chunks}")
+                if verbose:
+                    print("Zarr hierarchy:")
+                    reader.print_tree()
             else:
                 total_bytes_uncompressed = reader["0"].nbytes
                 msgs.append(f"(Z, Y, X) scale (um):\t {tuple(reader.scale[2:])}")
