@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import platform
 import shutil
@@ -29,6 +30,7 @@ from iohub.core.compat import get_ome_attrs
 from iohub.core.utils import pad_shape
 from iohub.ngff.models import TO_DICT_SETTINGS
 from iohub.ngff.nodes import (
+    Bioformats2RawSeries,
     Plate,
     Position,
     TransformationMeta,
@@ -1964,3 +1966,100 @@ def test_sharding_raises_on_v04(tmp_path):
                 np.zeros((1, 1, 1, 64, 64)),
                 shards_ratio=(1, 1, 1, 2, 2),
             )
+
+
+def _make_bf2raw_fixture(
+    tmp_path: Path,
+    version: Literal["0.4", "0.5"],
+    series_names: tuple[str, ...] = ("0", "1"),
+    write_root_series: bool = False,
+) -> Path:
+    """Build a synthetic bioformats2raw-layout store at ``tmp_path/series.ome.zarr``.
+
+    Marker is written at the root; the canonical ``series`` list is written
+    under the ``OME/`` subgroup. Each series is a real iohub-written FOV with
+    a single ``"DAPI"`` channel and a (1, 1, 2, 4, 4) ``uint8`` array at level "0".
+    """
+    root_path = tmp_path / "series.ome.zarr"
+    root_path.mkdir()
+    if version == "0.5":
+        root_attrs: dict[str, object] = {"bioformats2raw.layout": 3}
+        if write_root_series:
+            root_attrs["series"] = list(series_names)
+        (root_path / "zarr.json").write_text(
+            json.dumps({"zarr_format": 3, "node_type": "group", "attributes": {"ome": root_attrs}})
+        )
+        ome_dir = root_path / "OME"
+        ome_dir.mkdir()
+        (ome_dir / "zarr.json").write_text(
+            json.dumps(
+                {
+                    "zarr_format": 3,
+                    "node_type": "group",
+                    "attributes": {"ome": {"series": list(series_names)}},
+                }
+            )
+        )
+    else:  # v0.4
+        (root_path / ".zgroup").write_text(json.dumps({"zarr_format": 2}))
+        root_attrs_v04: dict[str, object] = {"bioformats2raw.layout": 3}
+        if write_root_series:
+            root_attrs_v04["series"] = list(series_names)
+        (root_path / ".zattrs").write_text(json.dumps(root_attrs_v04))
+        ome_dir = root_path / "OME"
+        ome_dir.mkdir()
+        (ome_dir / ".zgroup").write_text(json.dumps({"zarr_format": 2}))
+        (ome_dir / ".zattrs").write_text(json.dumps({"series": list(series_names)}))
+
+    for idx, name in enumerate(series_names):
+        with open_ome_zarr(
+            root_path / name,
+            layout="fov",
+            mode="w-",
+            channel_names=["DAPI"],
+            version=version,
+        ) as fov:
+            shape = (1, 1, 2, 4, 4)
+            arr = fov.create_zeros("0", shape=shape, dtype=np.uint8)
+            arr[...] = (np.arange(int(np.prod(shape)), dtype=np.uint8) + idx).reshape(shape)
+    return root_path
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_bf2raw_open_auto(tmp_path, version):
+    """``open_ome_zarr`` auto-detects bf2raw layout and returns the right node."""
+    store_path = _make_bf2raw_fixture(tmp_path, version)
+    with open_ome_zarr(store_path, mode="r") as node:
+        assert isinstance(node, Bioformats2RawSeries)
+        assert node.version == version
+        assert len(node) == 2
+        assert list(node) == ["0", "1"]
+        names = [n for n, _ in node.series()]
+        assert names == ["0", "1"]
+        assert node["0"].channel_names == ["DAPI"]
+        assert node.channel_names == ["DAPI"]
+        assert [a.name for a in node.axes] == ["T", "C", "Z", "Y", "X"]
+        assert node["1"]["0"].shape == (1, 1, 2, 4, 4)
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_bf2raw_explicit_layout(tmp_path, version):
+    """``layout='bf2raw'`` succeeds; mismatched layout raises."""
+    store_path = _make_bf2raw_fixture(tmp_path, version)
+    with open_ome_zarr(store_path, layout="bf2raw", mode="r") as node:
+        assert isinstance(node, Bioformats2RawSeries)
+    with pytest.raises(ValueError, match="does not match"):
+        open_ome_zarr(store_path, layout="hcs", mode="r")
+
+
+def test_bf2raw_create_not_supported(tmp_path):
+    """Creating a bf2raw store via open_ome_zarr is explicitly rejected."""
+    with pytest.raises(NotImplementedError, match="not supported"):
+        open_ome_zarr(
+            tmp_path / "new.zarr",
+            layout="bf2raw",
+            mode="w-",
+            channel_names=["DAPI"],
+            version="0.5",
+        )
+

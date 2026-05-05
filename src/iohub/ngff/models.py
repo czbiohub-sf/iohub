@@ -480,3 +480,16 @@ class WellGroupMeta(VersionMeta):
 
     # MUST
     images: list[ImageMeta]
+
+
+class Bioformats2RawMeta(MetaBase):
+    """Transitional bioformats2raw layout marker.
+
+    https://ngff.openmicroscopy.org/specifications/0.5/index.html#bf2raw
+    """
+
+    # MUST: layout marker, currently always 3
+    layout: Literal[3] = Field(alias="bioformats2raw.layout")
+    # MAY: ordered list of series paths (typically lives under the OME/ subgroup,
+    # but some implementations duplicate it on the root)
+    series: list[str] | None = None

@@ -14,10 +14,10 @@ from numpy.typing import DTypeLike
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff.utils import (
+    _V05_DEFAULT_ZYX_CHUNKS,
     _available_cpus,
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
-    _V05_DEFAULT_ZYX_CHUNKS,
     apply_transform_to_tczyx_and_save,
     create_empty_plate,
     process_single_position,
