@@ -369,7 +369,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#iohub-convert" class="md-nav__link">
+  <a href="#convert" class="md-nav__link">
     <span class="md-ellipsis">
       
         convert
@@ -380,7 +380,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-info" class="md-nav__link">
+  <a href="#info" class="md-nav__link">
     <span class="md-ellipsis">
       
         info
@@ -391,7 +391,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-rename-wells" class="md-nav__link">
+  <a href="#rename-wells" class="md-nav__link">
     <span class="md-ellipsis">
       
         rename-wells
@@ -402,7 +402,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-set-scale" class="md-nav__link">
+  <a href="#set-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
         set-scale
@@ -987,7 +987,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#iohub-convert" class="md-nav__link">
+  <a href="#convert" class="md-nav__link">
     <span class="md-ellipsis">
       
         convert
@@ -998,7 +998,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-info" class="md-nav__link">
+  <a href="#info" class="md-nav__link">
     <span class="md-ellipsis">
       
         info
@@ -1009,7 +1009,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-rename-wells" class="md-nav__link">
+  <a href="#rename-wells" class="md-nav__link">
     <span class="md-ellipsis">
       
         rename-wells
@@ -1020,7 +1020,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-set-scale" class="md-nav__link">
+  <a href="#set-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
         set-scale
@@ -1100,8 +1100,12 @@
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-convert">iohub convert<a class="headerlink" href="#iohub-convert" title="Permanent link">&para;</a></h3>
-<p>Converts Micro-Manager TIFF datasets to OME-Zarr</p>
+<h3 id="convert">convert<a class="headerlink" href="#convert" title="Permanent link">&para;</a></h3>
+<p>Convert datasets between supported formats.</p>
+<p>Routes by suffix: a TIFF directory plus a <code>.zarr</code> output runs the
+Micro-Manager TIFF → OME-Zarr converter; a <code>.zarr</code> source plus a
+<code>.ozx</code> output packs an RFC-9 zip archive; a <code>.ozx</code> source plus
+a <code>.zarr</code> output unpacks back to a directory store.</p>
 <p><strong>Usage:</strong></p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>iohub convert [OPTIONS]
 </span></code></pre></div>
@@ -1124,41 +1128,41 @@
 </tr>
 <tr>
 <td><code>--input</code>, <code>-i</code></td>
-<td>directory</td>
-<td>Input Micro-Manager TIFF dataset directory</td>
+<td>path</td>
+<td>Input dataset: Micro-Manager TIFF dir, OME-Zarr dir, or RFC-9 .ozx archive.</td>
 <td><code>Sentinel.UNSET</code></td>
 </tr>
 <tr>
 <td><code>--output</code>, <code>-o</code></td>
 <td>path</td>
-<td>Output zarr store (/**/converted.zarr)</td>
+<td>Output path. Suffix selects the operation: .zarr (Zarr dir) or .ozx (zipped).</td>
 <td><code>Sentinel.UNSET</code></td>
 </tr>
 <tr>
 <td><code>--grid-layout</code>, <code>-g</code></td>
 <td>boolean</td>
-<td>Arrange FOVs in a row/column grid layout for tiled acquisition</td>
+<td>(TIFF → Zarr only) Arrange FOVs in a row/column grid layout.</td>
 <td><code>False</code></td>
 </tr>
 <tr>
 <td><code>--chunks</code>, <code>-c</code></td>
 <td>text</td>
-<td>Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk dimensions. If 'XYZ', chunk size will be limited to 500 MB.</td>
+<td>(TIFF → Zarr only) Zarr chunk size: 'XY', 'XYZ', or a tuple. 'XYZ' caps at 500 MB.</td>
 <td><code>XYZ</code></td>
 </tr>
 <tr>
 <td><code>--ome-zarr-version</code>, <code>-v</code></td>
 <td>choice (<code>0.4</code> &#x7C; <code>0.5</code>)</td>
-<td>OME-NGFF version for the output Zarr store. '0.4' uses Zarr v2 format; '0.5' uses Zarr v3 format.</td>
-<td><code>0.4</code></td>
+<td>OME-NGFF version. TIFF default: 0.4. Pack: sniffed from source if omitted.</td>
+<td>None</td>
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-info">iohub info<a class="headerlink" href="#iohub-info" title="Permanent link">&para;</a></h3>
-<p>View basic metadata of a list of FILES.</p>
-<p>Supported formats are Micro-Manager-acquired TIFF datasets
-(single-page TIFF, multi-page OME-TIFF, NDTIFF)
-and OME-Zarr (v0.1 linear HCS layout and all v0.4 layouts).</p>
+<h3 id="info">info<a class="headerlink" href="#info" title="Permanent link">&para;</a></h3>
+<p>View metadata for one or more FILES.</p>
+<p>Supports Micro-Manager TIFF datasets (multi-page OME-TIFF, NDTIFF),
+OME-Zarr directory stores (v0.4 and v0.5), and RFC-9 zipped
+OME-Zarr archives (<code>.ozx</code>).</p>
 <p><strong>Usage:</strong></p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>iohub info [OPTIONS] FILES...
 </span></code></pre></div>
@@ -1187,7 +1191,7 @@ and OME-Zarr (v0.1 linear HCS layout and all v0.4 layouts).</p>
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-rename-wells">iohub rename-wells<a class="headerlink" href="#iohub-rename-wells" title="Permanent link">&para;</a></h3>
+<h3 id="rename-wells">rename-wells<a class="headerlink" href="#rename-wells" title="Permanent link">&para;</a></h3>
 <p>Rename wells in an plate.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>iohub rename-wells -i plate.zarr -c names.csv
 </span></code></pre></div>
@@ -1229,7 +1233,7 @@ and OME-Zarr (v0.1 linear HCS layout and all v0.4 layouts).</p>
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-set-scale">iohub set-scale<a class="headerlink" href="#iohub-set-scale" title="Permanent link">&para;</a></h3>
+<h3 id="set-scale">set-scale<a class="headerlink" href="#set-scale" title="Permanent link">&para;</a></h3>
 <p>Update scale metadata in OME-Zarr datasets.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>iohub set-scale -i input.zarr/*/*/* -t 1.0 -z 1.0 -y 0.5 -x 0.5
 </span></code></pre></div>
