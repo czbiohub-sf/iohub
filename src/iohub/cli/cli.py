@@ -5,12 +5,15 @@ import click
 from iohub import __version__, open_ome_zarr
 from iohub.cli.parsing import input_position_dirpaths
 from iohub.convert import TIFFConverter
+from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
 
 VERSION = __version__
 
 _DATASET_PATH = click.Path(exists=True, file_okay=False, resolve_path=True, path_type=pathlib.Path)
+# Like _DATASET_PATH but also accepts files (e.g. ``.ozx`` archives).
+_OME_ZARR_PATH = click.Path(exists=True, resolve_path=True, path_type=pathlib.Path)
 
 
 @click.group()
@@ -26,7 +29,7 @@ def cli():
     "files",
     nargs=-1,
     required=True,
-    type=_DATASET_PATH,
+    type=_OME_ZARR_PATH,
 )
 @click.option(
     "--verbose",
@@ -35,11 +38,11 @@ def cli():
     help="Show usage guide to open dataset in Python and full tree for HCS Plates in OME-Zarr",
 )
 def info(files, verbose):
-    """View basic metadata of a list of FILES.
+    """View metadata for one or more FILES.
 
-    Supported formats are Micro-Manager-acquired TIFF datasets
-    (single-page TIFF, multi-page OME-TIFF, NDTIFF)
-    and OME-Zarr (v0.1 linear HCS layout and all v0.4 layouts).
+    Supports Micro-Manager TIFF datasets (multi-page OME-TIFF, NDTIFF),
+    OME-Zarr directory stores (v0.4 and v0.5), and RFC-9 zipped
+    OME-Zarr archives (``.ozx``).
     """
     for file in files:
         click.echo(f"Reading file:\t {file}")
@@ -52,49 +55,78 @@ def info(files, verbose):
     "--input",
     "-i",
     required=True,
-    type=_DATASET_PATH,
-    help="Input Micro-Manager TIFF dataset directory",
+    type=_OME_ZARR_PATH,
+    help="Input dataset: Micro-Manager TIFF dir, OME-Zarr dir, or RFC-9 .ozx archive.",
 )
 @click.option(
     "--output",
     "-o",
     required=True,
-    type=click.Path(exists=False, resolve_path=True),
-    help="Output zarr store (/**/converted.zarr)",
+    type=click.Path(exists=False, resolve_path=True, path_type=pathlib.Path),
+    help="Output path. Suffix selects the operation: .zarr (Zarr dir) or .ozx (zipped).",
 )
 @click.option(
     "--grid-layout",
     "-g",
     required=False,
     is_flag=True,
-    help="Arrange FOVs in a row/column grid layout for tiled acquisition",
+    help="(TIFF → Zarr only) Arrange FOVs in a row/column grid layout.",
 )
 @click.option(
     "--chunks",
     "-c",
     required=False,
     default="XYZ",
-    help="Zarr chunk size given as 'XY', 'XYZ', or a tuple of chunk "
-    "dimensions. If 'XYZ', chunk size will be limited to 500 MB.",
+    help="(TIFF → Zarr only) Zarr chunk size: 'XY', 'XYZ', or a tuple. 'XYZ' caps at 500 MB.",
 )
 @click.option(
     "--ome-zarr-version",
     "-v",
     required=False,
-    default="0.4",
+    default=None,
     type=click.Choice(["0.4", "0.5"]),
-    help="OME-NGFF version for the output Zarr store. '0.4' uses Zarr v2 format; '0.5' uses Zarr v3 format.",
+    help="OME-NGFF version. TIFF default: 0.4. Pack: sniffed from source if omitted.",
 )
 def convert(input, output, grid_layout, chunks, ome_zarr_version):
-    """Converts Micro-Manager TIFF datasets to OME-Zarr"""
-    converter = TIFFConverter(
-        input_dir=input,
-        output_dir=output,
+    """Convert datasets between supported formats.
+
+    Routes by suffix: a TIFF directory plus a ``.zarr`` output runs the
+    Micro-Manager TIFF → OME-Zarr converter; a ``.zarr`` source plus a
+    ``.ozx`` output packs an RFC-9 zip archive; a ``.ozx`` source plus
+    a ``.zarr`` output unpacks back to a directory store.
+    """
+    src = pathlib.Path(input)
+    dst = pathlib.Path(output)
+    tiff_only = grid_layout or chunks != "XYZ"
+
+    if is_ozx_path(dst):
+        # Pack: 1:1 file copy preserving source chunks. Re-chunking would
+        # mean a full read+rewrite — a different operation, out of scope.
+        if tiff_only:
+            raise click.BadParameter(
+                "--grid-layout and --chunks apply only to TIFF → Zarr conversion. "
+                "Pack copies chunks 1:1 from the source."
+            )
+        out = pack_ozx(src, dst, version=ome_zarr_version)
+        click.echo(f"packed: {out}")
+        return
+    if is_ozx_path(src):
+        # Unpack: archive structure dictates everything; no flags apply.
+        if tiff_only or ome_zarr_version is not None:
+            raise click.BadParameter(
+                "--grid-layout, --chunks, and --ome-zarr-version do not apply to .ozx → .zarr unpack."
+            )
+        out = unpack_ozx(src, dst)
+        click.echo(f"unpacked: {out}")
+        return
+    # Default: TIFF → OME-Zarr (TIFFConverter sniffs the input format).
+    TIFFConverter(
+        input_dir=src,
+        output_dir=dst,
         grid_layout=grid_layout,
         chunks=chunks,
-        version=ome_zarr_version,
-    )
-    converter()
+        version=ome_zarr_version or "0.4",
+    )()
 
 
 @cli.command()

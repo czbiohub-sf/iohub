@@ -15,6 +15,16 @@ from iohub.core.errors import (
     PathNormalizationError,
     StoreOpenError,
 )
+from iohub.core.ozx import (
+    OZX_EXTENSION,
+    OzxStore,
+    OzxSummary,
+    is_ozx_path,
+    pack_ozx,
+    read_ozx_version,
+    summarize_ozx,
+    unpack_ozx,
+)
 from iohub.core.protocol import (
     ArrayBackend,
     ArrayIO,
@@ -37,6 +47,7 @@ from iohub.core.types import (
 from iohub.core.utils import normalize_path, pad_shape
 
 __all__ = [
+    "OZX_EXTENSION",
     # Types
     "AccessMode",
     "ArrayBackend",
@@ -55,6 +66,9 @@ __all__ = [
     # Arrays
     "NGFFArray",
     "NGFFVersion",
+    # OZX (RFC-9 zipped OME-Zarr)
+    "OzxStore",
+    "OzxSummary",
     "PathNormalizationError",
     "StoreOpenError",
     "StorePath",
@@ -65,12 +79,17 @@ __all__ = [
     # Registry
     "available_implementations",
     "get_implementation",
+    "is_ozx_path",
     "ngff_version_for_format",
     # Utils
     "normalize_path",
+    "pack_ozx",
     "pad_shape",
+    "read_ozx_version",
     "register_implementation",
     "set_default_implementation",
+    "summarize_ozx",
+    "unpack_ozx",
     # Compat
     "zarr_format_for_version",
 ]

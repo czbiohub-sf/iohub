@@ -249,3 +249,18 @@ def aqz_ome_zarr_05(tmpdir):
     del stream
 
     return store_path
+
+
+def make_fov_zarr(path: Path, data: np.ndarray, version: str = "0.5") -> None:
+    """Write ``data`` into a fresh FOV-layout OME-Zarr at ``path``.
+
+    Test helper shared by ``tests/ngff/test_ozx.py`` and the ozx-aware
+    CLI tests in ``tests/cli/test_cli.py`` — both repeat the same write
+    pattern when building tiny fixtures.
+    """
+    from iohub import open_ome_zarr
+
+    chunks = tuple(max(1, s // 2) for s in data.shape)
+    with open_ome_zarr(path, layout="fov", mode="w", channel_names=["c"], version=version) as pos:
+        arr = pos.create_zeros("0", shape=data.shape, dtype=data.dtype, chunks=chunks)
+        arr[:] = data
