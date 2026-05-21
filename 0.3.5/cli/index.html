@@ -369,7 +369,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#iohub-convert" class="md-nav__link">
+  <a href="#convert" class="md-nav__link">
     <span class="md-ellipsis">
       
         convert
@@ -380,7 +380,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-info" class="md-nav__link">
+  <a href="#info" class="md-nav__link">
     <span class="md-ellipsis">
       
         info
@@ -391,7 +391,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-rename-wells" class="md-nav__link">
+  <a href="#rename-wells" class="md-nav__link">
     <span class="md-ellipsis">
       
         rename-wells
@@ -402,7 +402,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-set-scale" class="md-nav__link">
+  <a href="#set-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
         set-scale
@@ -987,7 +987,7 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#iohub-convert" class="md-nav__link">
+  <a href="#convert" class="md-nav__link">
     <span class="md-ellipsis">
       
         convert
@@ -998,7 +998,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-info" class="md-nav__link">
+  <a href="#info" class="md-nav__link">
     <span class="md-ellipsis">
       
         info
@@ -1009,7 +1009,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-rename-wells" class="md-nav__link">
+  <a href="#rename-wells" class="md-nav__link">
     <span class="md-ellipsis">
       
         rename-wells
@@ -1020,7 +1020,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#iohub-set-scale" class="md-nav__link">
+  <a href="#set-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
         set-scale
@@ -1100,7 +1100,7 @@
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-convert">iohub convert<a class="headerlink" href="#iohub-convert" title="Permanent link">&para;</a></h3>
+<h3 id="convert">convert<a class="headerlink" href="#convert" title="Permanent link">&para;</a></h3>
 <p>Convert datasets between supported formats.</p>
 <p>Routes by suffix: a TIFF directory plus a <code>.zarr</code> output runs the
 Micro-Manager TIFF → OME-Zarr converter; a <code>.zarr</code> source plus a
@@ -1158,7 +1158,7 @@ a <code>.zarr</code> output unpacks back to a directory store.</p>
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-info">iohub info<a class="headerlink" href="#iohub-info" title="Permanent link">&para;</a></h3>
+<h3 id="info">info<a class="headerlink" href="#info" title="Permanent link">&para;</a></h3>
 <p>View metadata for one or more FILES.</p>
 <p>Supports Micro-Manager TIFF datasets (multi-page OME-TIFF, NDTIFF),
 OME-Zarr directory stores (v0.4 and v0.5), and RFC-9 zipped
@@ -1191,7 +1191,7 @@ OME-Zarr archives (<code>.ozx</code>).</p>
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-rename-wells">iohub rename-wells<a class="headerlink" href="#iohub-rename-wells" title="Permanent link">&para;</a></h3>
+<h3 id="rename-wells">rename-wells<a class="headerlink" href="#rename-wells" title="Permanent link">&para;</a></h3>
 <p>Rename wells in an plate.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>iohub rename-wells -i plate.zarr -c names.csv
 </span></code></pre></div>
@@ -1233,7 +1233,7 @@ OME-Zarr archives (<code>.ozx</code>).</p>
 </tr>
 </tbody>
 </table>
-<h3 id="iohub-set-scale">iohub set-scale<a class="headerlink" href="#iohub-set-scale" title="Permanent link">&para;</a></h3>
+<h3 id="set-scale">set-scale<a class="headerlink" href="#set-scale" title="Permanent link">&para;</a></h3>
 <p>Update scale metadata in OME-Zarr datasets.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>iohub set-scale -i input.zarr/*/*/* -t 1.0 -z 1.0 -y 0.5 -x 0.5
 </span></code></pre></div>
