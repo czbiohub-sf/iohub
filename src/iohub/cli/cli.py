@@ -178,7 +178,9 @@ def _parse_dims(ctx, param, value):
         return None
     invalid = [t for t in tokens if t not in _PYRAMID_DIM_CHOICES]
     if invalid:
-        raise click.BadParameter(f"Unknown dim(s) {invalid}. Valid choices: {_PYRAMID_DIM_CHOICES}.")
+        invalid_dims = ", ".join(dict.fromkeys(invalid))
+        valid_dims = ", ".join(_PYRAMID_DIM_CHOICES)
+        raise click.BadParameter(f"Unknown dim(s): {invalid_dims}. Valid choices: {valid_dims}.")
     return set(tokens)
 
 
