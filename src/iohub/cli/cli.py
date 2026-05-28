@@ -166,8 +166,8 @@ def set_scale(
                 dataset.set_scale(image, name, value)
 
 
-_PYRAMID_METHODS = ["mean", "median", "mode", "min", "max", "stride"]
-_PYRAMID_DIM_CHOICES = ["t", "z", "y", "x"]
+_PYRAMID_METHODS = ("mean", "median", "mode", "min", "max", "stride")
+_PYRAMID_DIM_CHOICES = ("t", "z", "y", "x")
 
 
 def _parse_dims(ctx, param, value):
@@ -201,7 +201,7 @@ def _parse_dims(ctx, param, value):
     default="mean",
     show_default=True,
     type=click.Choice(_PYRAMID_METHODS),
-    help="Downsampling method.",
+    help="The Downsampling method.",
 )
 @click.option(
     "--dims",
