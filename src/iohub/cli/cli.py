@@ -209,12 +209,12 @@ def _parse_dims(ctx, param, value):
     required=False,
     default=None,
     callback=_parse_dims,
-    help=("Comma-separated axes to downsample (e.g. 'y,x' for YX-only). Defaults to 'z,y,x' inside iohub."),
+    help=("Comma-separated axes to downsample (e.g. 'y,x' for YX-only). Defaults to 'z,y,x'."),
 )
 def compute_pyramid(input_position_dirpaths, levels, method, dims):
     """Compute multiscale pyramid levels in place for OME-Zarr positions.
 
-    The level-0 array is preserved; new downsampled levels are appended.
+    The level 0 array is preserved; new downsampled levels are appended.
 
     ```
     iohub compute-pyramid -i input.zarr/*/*/* --levels 4
