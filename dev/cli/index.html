@@ -369,7 +369,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#convert" class="md-nav__link">
+  <a href="#iohub-compute-pyramid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compute-pyramid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub-convert" class="md-nav__link">
     <span class="md-ellipsis">
       
         convert
@@ -380,7 +391,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#info" class="md-nav__link">
+  <a href="#iohub-info" class="md-nav__link">
     <span class="md-ellipsis">
       
         info
@@ -391,7 +402,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#rename-wells" class="md-nav__link">
+  <a href="#iohub-rename-wells" class="md-nav__link">
     <span class="md-ellipsis">
       
         rename-wells
@@ -402,7 +413,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#set-scale" class="md-nav__link">
+  <a href="#iohub-set-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
         set-scale
@@ -987,7 +998,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#convert" class="md-nav__link">
+  <a href="#iohub-compute-pyramid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        compute-pyramid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub-convert" class="md-nav__link">
     <span class="md-ellipsis">
       
         convert
@@ -998,7 +1020,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#info" class="md-nav__link">
+  <a href="#iohub-info" class="md-nav__link">
     <span class="md-ellipsis">
       
         info
@@ -1009,7 +1031,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#rename-wells" class="md-nav__link">
+  <a href="#iohub-rename-wells" class="md-nav__link">
     <span class="md-ellipsis">
       
         rename-wells
@@ -1020,7 +1042,7 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#set-scale" class="md-nav__link">
+  <a href="#iohub-set-scale" class="md-nav__link">
     <span class="md-ellipsis">
       
         set-scale
@@ -1100,14 +1122,66 @@
 </tr>
 </tbody>
 </table>
-<h3 id="convert">convert<a class="headerlink" href="#convert" title="Permanent link">&para;</a></h3>
+<h3 id="iohub-compute-pyramid">iohub compute-pyramid<a class="headerlink" href="#iohub-compute-pyramid" title="Permanent link">&para;</a></h3>
+<p>Compute multiscale pyramid levels in place for OME-Zarr positions.</p>
+<p>The level 0 array is preserved; new downsampled levels are appended.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>iohub compute-pyramid -i input.zarr/*/*/* --levels 4
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>iohub compute-pyramid -i input.zarr/*/*/* -l 3 -m median --dims y,x
+</span></code></pre></div>
+<p><strong>Usage:</strong></p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>iohub compute-pyramid [OPTIONS]
+</span></code></pre></div>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>boolean</td>
+<td>Show this message and exit.</td>
+<td><code>False</code></td>
+</tr>
+<tr>
+<td><code>--input-position-dirpaths</code>, <code>-i</code></td>
+<td>tuple</td>
+<td>List of paths to input positions, each with the same TCZYX shape. Supports wildcards e.g. 'input.zarr/<em>/</em>/*'.</td>
+<td><code>Sentinel.UNSET</code></td>
+</tr>
+<tr>
+<td><code>--levels</code>, <code>-l</code></td>
+<td>integer range (<code>2</code> and above)</td>
+<td>Total number of pyramid levels including level 0 (e.g. 4 = level 0 + 3 extra).</td>
+<td><code>Sentinel.UNSET</code></td>
+</tr>
+<tr>
+<td><code>--method</code>, <code>-m</code></td>
+<td>choice (<code>mean</code> &#x7C; <code>median</code> &#x7C; <code>mode</code> &#x7C; <code>min</code> &#x7C; <code>max</code> &#x7C; <code>stride</code>)</td>
+<td>The Downsampling method.</td>
+<td><code>mean</code></td>
+</tr>
+<tr>
+<td><code>--dims</code>, <code>-d</code></td>
+<td>text</td>
+<td>Comma-separated axes to downsample (e.g. 'y,x' for YX-only). Defaults to 'z,y,x'.</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<h3 id="iohub-convert">iohub convert<a class="headerlink" href="#iohub-convert" title="Permanent link">&para;</a></h3>
 <p>Convert datasets between supported formats.</p>
 <p>Routes by suffix: a TIFF directory plus a <code>.zarr</code> output runs the
 Micro-Manager TIFF → OME-Zarr converter; a <code>.zarr</code> source plus a
 <code>.ozx</code> output packs an RFC-9 zip archive; a <code>.ozx</code> source plus
 a <code>.zarr</code> output unpacks back to a directory store.</p>
 <p><strong>Usage:</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>iohub convert [OPTIONS]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>iohub convert [OPTIONS]
 </span></code></pre></div>
 <p><strong>Options:</strong></p>
 <table>
@@ -1158,13 +1232,13 @@ a <code>.zarr</code> output unpacks back to a directory store.</p>
 </tr>
 </tbody>
 </table>
-<h3 id="info">info<a class="headerlink" href="#info" title="Permanent link">&para;</a></h3>
+<h3 id="iohub-info">iohub info<a class="headerlink" href="#iohub-info" title="Permanent link">&para;</a></h3>
 <p>View metadata for one or more FILES.</p>
 <p>Supports Micro-Manager TIFF datasets (multi-page OME-TIFF, NDTIFF),
 OME-Zarr directory stores (v0.4 and v0.5), and RFC-9 zipped
 OME-Zarr archives (<code>.ozx</code>).</p>
 <p><strong>Usage:</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>iohub info [OPTIONS] FILES...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>iohub info [OPTIONS] FILES...
 </span></code></pre></div>
 <p><strong>Options:</strong></p>
 <table>
@@ -1191,16 +1265,16 @@ OME-Zarr archives (<code>.ozx</code>).</p>
 </tr>
 </tbody>
 </table>
-<h3 id="rename-wells">rename-wells<a class="headerlink" href="#rename-wells" title="Permanent link">&para;</a></h3>
+<h3 id="iohub-rename-wells">iohub rename-wells<a class="headerlink" href="#iohub-rename-wells" title="Permanent link">&para;</a></h3>
 <p>Rename wells in an plate.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>iohub rename-wells -i plate.zarr -c names.csv
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>iohub rename-wells -i plate.zarr -c names.csv
 </span></code></pre></div>
 <p>The CSV file must have two columns with old and new names in the form:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>A / 1, B / 2
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>A / 2, B / 2
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>A / 1, B / 2
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>A / 2, B / 2
 </span></code></pre></div></p>
 <p><strong>Usage:</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>iohub rename-wells [OPTIONS]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>iohub rename-wells [OPTIONS]
 </span></code></pre></div>
 <p><strong>Options:</strong></p>
 <table>
@@ -1233,15 +1307,15 @@ OME-Zarr archives (<code>.ozx</code>).</p>
 </tr>
 </tbody>
 </table>
-<h3 id="set-scale">set-scale<a class="headerlink" href="#set-scale" title="Permanent link">&para;</a></h3>
+<h3 id="iohub-set-scale">iohub set-scale<a class="headerlink" href="#iohub-set-scale" title="Permanent link">&para;</a></h3>
 <p>Update scale metadata in OME-Zarr datasets.</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>iohub set-scale -i input.zarr/*/*/* -t 1.0 -z 1.0 -y 0.5 -x 0.5
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>iohub set-scale -i input.zarr/*/*/* -t 1.0 -z 1.0 -y 0.5 -x 0.5
 </span></code></pre></div>
 <p>Supports setting a single axis at a time:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>iohub set-scale -i input.zarr/*/*/* -z 2.0
+<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>iohub set-scale -i input.zarr/*/*/* -z 2.0
 </span></code></pre></div>
 <p><strong>Usage:</strong></p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>iohub set-scale [OPTIONS]
+<div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>iohub set-scale [OPTIONS]
 </span></code></pre></div>
 <p><strong>Options:</strong></p>
 <table>
