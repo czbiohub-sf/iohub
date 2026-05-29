@@ -37,6 +37,9 @@
         <loc>https://czbiohub-sf.github.io/iohub/dev/examples/view_clearcontrol_dataset/</loc>
       </url>
       <url>
+        <loc>https://czbiohub-sf.github.io/iohub/dev/examples/torch_dataloader/</loc>
+      </url>
+      <url>
         <loc>https://czbiohub-sf.github.io/iohub/dev/api/</loc>
       </url>
       <url>
