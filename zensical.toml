@@ -61,6 +61,7 @@ nav = [
     "examples/create_pyramid.md",
     "examples/coordinate_transform.md",
     "examples/view_clearcontrol_dataset.md",
+    "examples/torch_dataloader.md",
   ] },
   { "API Reference" = [
     "api/index.md",
