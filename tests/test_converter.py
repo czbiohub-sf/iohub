@@ -408,7 +408,7 @@ class TestVersionParameter:
         with pytest.raises(ValueError, match="Unsupported OME-NGFF version"):
             TIFFConverter(example_ome_tiff, output, version="0.3")
 
-    @pytest.mark.parametrize("impl", ["zarr", "tensorstore"])
+    @pytest.mark.parametrize("impl", ["zarrs-python", "tensorstore"])
     @pytest.mark.parametrize("ver", ["0.5"])
     def test_convert_writes_correct_version_and_preserves_data(self, example_ome_tiff, tmpdir, ver, impl):
         """Conversion write+read roundtrip preserves data for both backends."""

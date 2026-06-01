@@ -123,8 +123,11 @@ def _open_ozx_store(
     narrower set (``{r, w, a}``). ``r+`` degrades to ``r`` because zip
     entries are immutable — the first write would error anyway.
     """
-    if implementation not in (None, "zarr"):
-        raise ValueError(f"Implementation {implementation!r} does not support RFC-9 .ozx archives; use 'zarr'.")
+    if implementation not in (None, "zarr-python", "zarrs-python"):
+        raise ValueError(
+            f"Implementation {implementation!r} does not support RFC-9 .ozx archives; "
+            "use 'zarr-python' or 'zarrs-python'."
+        )
     if mode == "r+":
         _logger.warning("RFC-9 .ozx archives cannot be mutated in place; opening read-only instead.")
 
@@ -3248,8 +3251,11 @@ def open_ome_zarr(
             if the input path is not checked carefully.
 
     implementation : str, optional
-        Name of the zarr implementation to use (e.g. "zarr", "tensorstore"),
-        by default None (uses the default implementation)
+        Name of the zarr implementation to use
+        (e.g. "zarrs-python", "zarr-python", "tensorstore"),
+        by default None (uses the default implementation, "zarrs-python").
+        "zarrs-python" uses the zarrs (Rust) codec pipeline;
+        "zarr-python" uses the pure-Python codec pipeline.
     implementation_config : ImplementationConfig, optional
         Configuration for the chosen implementation
         (e.g. ``ZarrConfig``, ``TensorStoreConfig``),

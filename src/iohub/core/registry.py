@@ -11,14 +11,15 @@ from iohub.core.config import ImplementationConfig
 from iohub.core.errors import ImplementationNotFoundError
 
 _logger = logging.getLogger(__name__)
-_default: str = "zarr"
+_default: str = "zarrs-python"
 _IMPLEMENTATIONS: dict[str, type] = {}
 _discovered: bool = False
 _lock = threading.RLock()
 
-# Built-in implementations (always available, loaded before entrypoints)
+# Built-in implementations (always available, loaded before entrypoints).
 _BUILTINS: dict[str, str] = {
-    "zarr": "iohub.core.implementations.zarr_python:ZarrPythonImplementation",
+    "zarr-python": "iohub.core.implementations.zarr_python:ZarrPythonImplementation",
+    "zarrs-python": "iohub.core.implementations.zarr_python:ZarrsPythonImplementation",
 }
 
 
@@ -87,4 +88,4 @@ def _reset() -> None:
     global _discovered, _default
     _IMPLEMENTATIONS.clear()
     _discovered = False
-    _default = "zarr"
+    _default = "zarrs-python"

@@ -42,7 +42,7 @@ def test_discover_zero_plugins_loads_builtins():
     """Builtins must be loaded even when no entrypoint plugins are installed."""
     with patch("iohub.core.registry.entry_points", return_value=[]):
         impls = available_implementations()
-    assert "zarr" in impls
+    assert "zarrs-python" in impls
 
 
 def test_discover_idempotent():
@@ -64,9 +64,9 @@ def test_discover_failed_builtin_logs_and_defers_error(caplog):
                 available_implementations()
 
     assert _reg._discovered is True
-    assert "zarr" not in _reg._IMPLEMENTATIONS
+    assert "zarrs-python" not in _reg._IMPLEMENTATIONS
     with pytest.raises(ImplementationNotFoundError):
-        get_implementation("zarr")
+        get_implementation("zarrs-python")
 
 
 # ---------------------------------------------------------------------------
@@ -75,18 +75,18 @@ def test_discover_failed_builtin_logs_and_defers_error(caplog):
 
 
 def test_reset_roundtrip():
-    """After _reset(), get_implementation() re-discovers and returns the zarr impl."""
-    get_implementation("zarr")  # populate
+    """After _reset(), get_implementation() re-discovers and returns the impl."""
+    get_implementation("zarrs-python")  # populate
     _reset()
-    impl = get_implementation("zarr")
+    impl = get_implementation("zarrs-python")
     assert impl is not None
 
 
 def test_reset_clears_default():
-    """_reset() restores _default to 'zarr'."""
-    set_default_implementation("zarr")
+    """_reset() restores _default to 'zarrs-python'."""
+    set_default_implementation("zarr-python")
     _reset()
-    assert _reg._default == "zarr"
+    assert _reg._default == "zarrs-python"
 
 
 # ---------------------------------------------------------------------------
@@ -95,23 +95,58 @@ def test_reset_clears_default():
 
 
 def test_get_implementation_zarr_returns_instance():
-    impl = get_implementation("zarr")
+    impl = get_implementation("zarr-python")
     from iohub.core.implementations.zarr_python import ZarrPythonImplementation
 
     assert isinstance(impl, ZarrPythonImplementation)
 
 
 def test_get_implementation_unknown_raises():
-    get_implementation("zarr")  # ensure discovered
+    get_implementation("zarr-python")  # ensure discovered
     with pytest.raises(ImplementationNotFoundError, match="nonexistent"):
         get_implementation("nonexistent")
 
 
-def test_get_implementation_default_is_zarr():
+def test_get_implementation_default_is_zarrs_python():
+    """The default implementation is zarrs-python (zarrs codec pipeline)."""
     impl = get_implementation()
-    from iohub.core.implementations.zarr_python import ZarrPythonImplementation
+    from iohub.core.config import ZARRS_CODEC_PIPELINE
+    from iohub.core.implementations.zarr_python import ZarrsPythonImplementation
 
-    assert isinstance(impl, ZarrPythonImplementation)
+    assert isinstance(impl, ZarrsPythonImplementation)
+    assert impl.config.codec_pipeline == ZARRS_CODEC_PIPELINE
+
+
+# ---------------------------------------------------------------------------
+# zarr-python vs zarrs-python implementation names
+# ---------------------------------------------------------------------------
+
+
+def test_available_implementations_includes_new_names():
+    impls = available_implementations()
+    assert {"zarr-python", "zarrs-python"} <= set(impls)
+
+
+def test_zarr_python_uses_python_codec_pipeline():
+    from iohub.core.config import PYTHON_CODEC_PIPELINE
+
+    impl = get_implementation("zarr-python")
+    assert impl.config.codec_pipeline == PYTHON_CODEC_PIPELINE
+
+
+def test_zarrs_python_uses_zarrs_codec_pipeline():
+    from iohub.core.config import ZARRS_CODEC_PIPELINE
+
+    impl = get_implementation("zarrs-python")
+    assert impl.config.codec_pipeline == ZARRS_CODEC_PIPELINE
+
+
+def test_explicit_config_overrides_implementation_default():
+    """An explicit ZarrConfig.codec_pipeline wins over the impl's default."""
+    from iohub.core.config import PYTHON_CODEC_PIPELINE, ZarrConfig
+
+    impl = get_implementation("zarrs-python", config=ZarrConfig(codec_pipeline=PYTHON_CODEC_PIPELINE))
+    assert impl.config.codec_pipeline == PYTHON_CODEC_PIPELINE
 
 
 # ---------------------------------------------------------------------------
@@ -120,13 +155,13 @@ def test_get_implementation_default_is_zarr():
 
 
 def test_set_default_implementation_happy():
-    register_implementation("custom", type(get_implementation("zarr")))
+    register_implementation("custom", type(get_implementation("zarrs-python")))
     set_default_implementation("custom")
     assert _reg._default == "custom"
 
 
 def test_set_default_implementation_unknown_raises():
-    get_implementation("zarr")  # ensure discovered
+    get_implementation("zarrs-python")  # ensure discovered
     with pytest.raises(ImplementationNotFoundError, match="nonexistent"):
         set_default_implementation("nonexistent")
 
@@ -136,5 +171,5 @@ def test_set_default_implementation_unknown_raises():
 # ---------------------------------------------------------------------------
 
 
-def test_available_implementations_includes_zarr():
-    assert "zarr" in available_implementations()
+def test_available_implementations_includes_zarr_python():
+    assert "zarr-python" in available_implementations()

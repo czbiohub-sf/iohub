@@ -231,3 +231,21 @@ def test_tensorstore_rejected_for_ozx(tmp_path: Path) -> None:
             version="0.5",
             implementation="tensorstore",
         )
+
+
+@pytest.mark.parametrize("implementation", ["zarr-python", "zarrs-python"])
+def test_zarr_python_implementations_roundtrip_ozx(tmp_path: Path, implementation: str) -> None:
+    """Both zarr-python codec pipelines write and read ``.ozx`` archives."""
+    path = tmp_path / f"{implementation}.ozx"
+    data = np.arange(16, dtype=np.uint8).reshape(1, 1, 1, 4, 4)
+    with open_ome_zarr(
+        path,
+        layout="fov",
+        mode="w",
+        channel_names=["c"],
+        version="0.5",
+        implementation=implementation,
+    ) as pos:
+        pos.create_image("0", data)
+    with open_ome_zarr(path, mode="r", implementation=implementation) as pos:
+        np.testing.assert_array_equal(pos["0"][:], data)

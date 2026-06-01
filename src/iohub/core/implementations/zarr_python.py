@@ -7,7 +7,7 @@ from typing import Any
 import numpy as np
 import zarr
 
-from iohub.core.config import ZarrConfig
+from iohub.core.config import PYTHON_CODEC_PIPELINE, ZARRS_CODEC_PIPELINE, ZarrConfig
 from iohub.core.downsample import downsample_block, iter_work_regions, target_region_to_source
 from iohub.core.protocol import ZarrImplementation
 from iohub.core.specs import ArraySpec
@@ -15,10 +15,13 @@ from iohub.core.types import StorePath
 
 
 class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
-    """Zarr-python backed I/O implementation."""
+    """Zarr-python backed I/O using the pure-Python codec pipeline."""
+
+    #: Default codec pipeline when no explicit ``ZarrConfig`` is provided.
+    _DEFAULT_CODEC_PIPELINE: str = PYTHON_CODEC_PIPELINE
 
     def __init__(self, config: ZarrConfig | None = None):
-        self.config = config or ZarrConfig()
+        self.config = config or ZarrConfig(codec_pipeline=self._DEFAULT_CODEC_PIPELINE)
         # Apply codec pipeline config globally — zarr-python reads this at I/O time,
         # not at group-open time, so it must persist beyond the open_group call.
         zarr.config.set(
@@ -180,3 +183,9 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         """Return shard/chunk-aligned regions for parallel iteration."""
         step_shape = self.get_shards(target) or target.chunks
         return iter_work_regions(target.shape, step_shape)
+
+
+class ZarrsPythonImplementation(ZarrPythonImplementation):
+    """Zarr-python backed I/O using the zarrs (Rust) codec pipeline."""
+
+    _DEFAULT_CODEC_PIPELINE: str = ZARRS_CODEC_PIPELINE

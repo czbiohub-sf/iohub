@@ -1,10 +1,10 @@
 # Reading OME-Zarr in a PyTorch DataLoader
 
-iohub auto-selects the [zarrs](https://github.com/zarrs/zarrs-python) (Rust)
-codec pipeline whenever the `zarrs` package is installed. It is fast, but its
-parallel codec runs on a process-global thread pool that is **not fork-safe**.
-PyTorch's `DataLoader` forks worker processes on Linux when `num_workers > 0`,
-and the first chunk decode inside a forked worker deadlocks.
+iohub defaults to the `zarrs-python` implementation, which uses the
+[zarrs](https://github.com/zarrs/zarrs-python) (Rust) codec pipeline. It is
+fast, but its parallel codec runs on a process-global thread pool that is
+**not fork-safe**. PyTorch's `DataLoader` forks worker processes on Linux when
+`num_workers > 0`, and the first chunk decode inside a forked worker deadlocks.
 
 ## A tiny dataset
 
@@ -88,6 +88,16 @@ The simplest fix is to read in the main process, with no workers and no `fork()`
 
     Spawn re-imports your modules and pickles the `Dataset` for each worker,
     so startup is slower and throughput drops by roughly 10-20%.
+
+!!! tip "Or opt out of the Rust pipeline"
+
+    Pass `implementation="zarr-python"` to `open_ome_zarr` to use the pure-Python
+    codec pipeline, which is fork-safe and works with forked `DataLoader`
+    workers at the cost of slower decoding:
+
+    ```python title="dataset.py"
+    open_ome_zarr(store_path, mode="r", implementation="zarr-python")
+    ```
 
 !!! note "Why this happens"
 
