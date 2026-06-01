@@ -18,7 +18,6 @@ from numpy.typing import DTypeLike, NDArray
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
-from iohub.ngff.models import ImagesMeta
 from iohub.ngff.nodes import TransformationMeta
 
 _logger = logging.getLogger(__name__)
@@ -78,12 +77,12 @@ def create_empty_plate(
         Data type of the plate. Defaults to np.float32.
     copy_metadata_from : Path or str, optional
         Path to a source HCS plate from which to copy per-position metadata.
-        When set, label references and any custom (non-OME) zattrs (e.g.
-        ``extra_metadata``) are transferred from matching positions in the
-        source plate. Coordinate transforms and axis definitions are **not**
-        copied, since processing steps frequently change the data scale and
-        ``create_empty_plate`` already sets the correct output transforms
-        via the ``scale`` parameter.
+        When set, any custom (non-OME) zattrs (e.g. ``extra_metadata``) are
+        transferred from matching positions in the source plate. Coordinate
+        transforms, axis definitions, and label references are **not** copied:
+        transforms change across processing steps (``create_empty_plate``
+        already sets correct output transforms via ``scale``), and label
+        arrays require a separate data-copy step.
         Defaults to None (no metadata copy).
 
     Examples
@@ -129,35 +128,35 @@ def create_empty_plate(
         shards_ratio = _default_shards_ratio(shape, chunks)
 
     # Create plate
-    output_plate = open_ome_zarr(
+    with open_ome_zarr(
         str(store_path),
         layout="hcs",
         mode="a",
         channel_names=channel_names,
         version=version,
-    )
-    # Create positions
-    for position_key in position_keys:
-        position_key_string = "/".join(position_key)
-        # Check if position is already in the store, if not create it
-        if position_key_string not in output_plate.zgroup:
-            position = output_plate.create_position(*position_key)
-            _ = position.create_zeros(
-                name="0",
-                shape=shape,
-                chunks=chunks,
-                shards_ratio=shards_ratio,
-                dtype=dtype,
-                transform=[TransformationMeta(type="scale", scale=scale)],
-            )
-        else:
-            position = output_plate[position_key_string]
+    ) as output_plate:
+        # Create positions
+        for position_key in position_keys:
+            position_key_string = "/".join(position_key)
+            # Check if position is already in the store, if not create it
+            if position_key_string not in output_plate.zgroup:
+                position = output_plate.create_position(*position_key)
+                _ = position.create_zeros(
+                    name="0",
+                    shape=shape,
+                    chunks=chunks,
+                    shards_ratio=shards_ratio,
+                    dtype=dtype,
+                    transform=[TransformationMeta(type="scale", scale=scale)],
+                )
+            else:
+                position = output_plate[position_key_string]
 
-        # Check if channel_names are already in the store, if not append them
-        for channel_name in channel_names:
-            metadata_channel_names = position.channel_names
-            if channel_name not in metadata_channel_names:
-                position.append_channel(channel_name, resize_arrays=True)
+            # Check if channel_names are already in the store, if not append them
+            for channel_name in channel_names:
+                metadata_channel_names = position.channel_names
+                if channel_name not in metadata_channel_names:
+                    position.append_channel(channel_name, resize_arrays=True)
 
     if copy_metadata_from is not None:
         _copy_position_metadata(Path(copy_metadata_from), Path(store_path))
@@ -172,13 +171,12 @@ def _copy_position_metadata(
     source_plate_path: Path,
     dest_plate_path: Path,
 ) -> None:
-    """Copy per-position custom zattrs and label references from source to dest.
+    """Copy per-position custom (non-OME) zattrs from source to dest.
 
-    Transfers label references and any custom (non-OME) zattrs such as
-    ``extra_metadata``. Does **not** copy coordinate transforms or axis
-    definitions, since processing steps frequently change the data scale
-    and ``create_empty_plate`` already sets the correct output transforms
-    via its ``scale`` parameter.
+    Transfers any custom zattrs such as ``extra_metadata``. Does **not**
+    copy coordinate transforms, axis definitions, or label references:
+    transforms change across processing steps, and label arrays require
+    a separate data-copy step.
     """
     with open_ome_zarr(str(source_plate_path), mode="r") as src_plate:
         with open_ome_zarr(str(dest_plate_path), mode="r+") as dst_plate:
@@ -190,17 +188,8 @@ def _copy_position_metadata(
 
                 dst_pos = dst_plate[name]
 
-                src_ome = dict(src_pos.maybe_wrapped_ome_attrs)
-                src_ome.setdefault("version", "0.5")
-                src_meta = ImagesMeta.model_validate(src_ome)
-
                 raw_attrs = dict(src_pos.zattrs)
                 custom_attrs = {k: v for k, v in raw_attrs.items() if k not in _OME_KEYS}
-
-                src_labels = getattr(src_meta, "labels", None)
-                if src_labels is not None:
-                    dst_pos.metadata.labels = src_labels
-                    dst_pos.dump_meta()
 
                 for k, v in custom_attrs.items():
                     dst_pos.zattrs[k] = v
