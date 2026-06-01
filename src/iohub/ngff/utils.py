@@ -77,11 +77,13 @@ def create_empty_plate(
     dtype : DTypeLike, optional
         Data type of the plate. Defaults to np.float32.
     copy_metadata_from : Path or str, optional
-        Path to a source HCS plate from which to copy per-position OME metadata.
-        When set, axis definitions, FOV-level coordinate transforms, label
-        references, and any custom (non-OME) zattrs are transferred from
-        matching positions in the source plate. The output's dataset layout,
-        omero channel info, and version are preserved.
+        Path to a source HCS plate from which to copy per-position metadata.
+        When set, label references and any custom (non-OME) zattrs (e.g.
+        ``extra_metadata``) are transferred from matching positions in the
+        source plate. Coordinate transforms and axis definitions are **not**
+        copied, since processing steps frequently change the data scale and
+        ``create_empty_plate`` already sets the correct output transforms
+        via the ``scale`` parameter.
         Defaults to None (no metadata copy).
 
     Examples
@@ -170,11 +172,13 @@ def _copy_position_metadata(
     source_plate_path: Path,
     dest_plate_path: Path,
 ) -> None:
-    """Copy per-position OME metadata and custom zattrs from source to dest.
+    """Copy per-position custom zattrs and label references from source to dest.
 
-    Transfers axis definitions, FOV-level coordinate transforms, label
-    references, and any custom (non-OME) zattrs. Preserves the destination's
-    dataset layout, omero channel info, and version.
+    Transfers label references and any custom (non-OME) zattrs such as
+    ``extra_metadata``. Does **not** copy coordinate transforms or axis
+    definitions, since processing steps frequently change the data scale
+    and ``create_empty_plate`` already sets the correct output transforms
+    via its ``scale`` parameter.
     """
     with open_ome_zarr(str(source_plate_path), mode="r") as src_plate:
         with open_ome_zarr(str(dest_plate_path), mode="r+") as dst_plate:
@@ -187,34 +191,16 @@ def _copy_position_metadata(
                 dst_pos = dst_plate[name]
 
                 src_ome = dict(src_pos.maybe_wrapped_ome_attrs)
+                src_ome.setdefault("version", "0.5")
+                src_meta = ImagesMeta.model_validate(src_ome)
 
                 raw_attrs = dict(src_pos.zattrs)
                 custom_attrs = {k: v for k, v in raw_attrs.items() if k not in _OME_KEYS}
 
-                saved_datasets = dst_pos.metadata.multiscales[0].datasets
-                saved_omero = dst_pos.metadata.omero
-
-                src_ome.setdefault("version", "0.5")
-                src_meta = ImagesMeta.model_validate(src_ome)
-
-                dst_pos.metadata.multiscales[0].axes = src_meta.multiscales[0].axes
-                dst_pos.metadata.multiscales[0].coordinate_transformations = src_meta.multiscales[
-                    0
-                ].coordinate_transformations
-                for field in ("name", "type", "metadata"):
-                    val = getattr(src_meta.multiscales[0], field, None)
-                    if val is not None:
-                        setattr(dst_pos.metadata.multiscales[0], field, val)
-
                 src_labels = getattr(src_meta, "labels", None)
                 if src_labels is not None:
                     dst_pos.metadata.labels = src_labels
-
-                dst_pos.metadata.multiscales[0].datasets = saved_datasets
-                dst_pos.metadata.omero = saved_omero
-                dst_pos.metadata.version = "0.5"
-
-                dst_pos.dump_meta()
+                    dst_pos.dump_meta()
 
                 for k, v in custom_attrs.items():
                     dst_pos.zattrs[k] = v

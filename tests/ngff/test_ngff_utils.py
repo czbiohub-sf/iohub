@@ -613,12 +613,11 @@ def test_create_empty_plate_copy_metadata_from():
                 # Custom zattrs should be copied
                 assert dst_pos.zattrs["extra_metadata"] == custom_zattrs["extra_metadata"]
 
-                # Axes from source should be present
-                src_axes = dst_pos.metadata.multiscales[0].axes
-                assert src_axes is not None
-
                 # Dataset layout (shape/chunks) should be from the dest, not source
                 assert dst_pos.data.shape == dst_shape
+
+                # Scale should be the dest's scale, not the source's
+                assert tuple(dst_pos.scale) == pytest.approx(dst_scale)
 
                 # Omero channel info should be preserved (dest's channels)
                 assert dst_pos.channel_names == dst_channels
