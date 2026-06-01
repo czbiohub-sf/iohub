@@ -668,6 +668,114 @@ def test_create_empty_plate_copy_metadata_subset_positions():
                 assert pos.zattrs["source_position"] == name
 
 
+def test_create_empty_plate_copy_metadata_skips_existing_positions():
+    """copy_metadata_from only writes to newly created positions.
+
+    Positions that already exist in the output plate must be left
+    unchanged, even when the source plate has metadata for them.
+    """
+    position_keys = [("A", "1", "0"), ("A", "1", "1")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        # Source plate tags every position.
+        create_empty_plate(
+            store_path=src_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+        )
+        with open_ome_zarr(str(src_path), mode="r+") as plate:
+            for _name, pos in plate.positions():
+                pos.zattrs["extra_metadata"] = {"origin": "source"}
+
+        # Pre-create A/1/0 in the destination with its own metadata.
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=[("A", "1", "0")],
+            channel_names=channel_names,
+            shape=shape,
+        )
+        with open_ome_zarr(str(dst_path), mode="r+") as plate:
+            plate["A/1/0"].zattrs["extra_metadata"] = {"origin": "dest"}
+
+        # Append both positions with copy_metadata_from.
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            copy_metadata_from=src_path,
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            # Pre-existing position is left untouched.
+            assert dst_plate["A/1/0"].zattrs["extra_metadata"] == {"origin": "dest"}
+            # Newly created position receives the source metadata.
+            assert dst_plate["A/1/1"].zattrs["extra_metadata"] == {"origin": "source"}
+
+
+def test_create_empty_plate_copy_metadata_missing_source_root():
+    """A non-existent copy_metadata_from source raises FileNotFoundError."""
+    with TemporaryDirectory() as temp_dir:
+        dst_path = Path(temp_dir) / "dest.zarr"
+        missing_src = Path(temp_dir) / "does_not_exist.zarr"
+
+        with pytest.raises(FileNotFoundError):
+            create_empty_plate(
+                store_path=dst_path,
+                position_keys=[("A", "1", "0")],
+                channel_names=["DAPI"],
+                shape=(1, 1, 16, 32, 32),
+                copy_metadata_from=missing_src,
+            )
+
+
+def test_create_empty_plate_copy_metadata_position_absent_in_source():
+    """Positions missing from the source are created without metadata."""
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        # Source only has A/1/0.
+        create_empty_plate(
+            store_path=src_path,
+            position_keys=[("A", "1", "0")],
+            channel_names=channel_names,
+            shape=shape,
+        )
+        with open_ome_zarr(str(src_path), mode="r+") as plate:
+            plate["A/1/0"].zattrs["extra_metadata"] = {"origin": "source"}
+
+        # Dest requests A/1/0 (present) and A/1/1 (absent in source).
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=[("A", "1", "0"), ("A", "1", "1")],
+            channel_names=channel_names,
+            shape=shape,
+            copy_metadata_from=src_path,
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            # Both positions exist with their data arrays and channels.
+            dst_names = {name for name, _ in dst_plate.positions()}
+            assert dst_names == {"A/1/0", "A/1/1"}
+            assert dst_plate["A/1/1"].data.shape == shape
+            assert dst_plate["A/1/1"].channel_names == channel_names
+
+            # Present source position got its metadata copied.
+            assert dst_plate["A/1/0"].zattrs["extra_metadata"] == {"origin": "source"}
+            # Absent source position has no copied custom metadata.
+            assert "extra_metadata" not in dict(dst_plate["A/1/1"].zattrs)
+
+
 @given(
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),
