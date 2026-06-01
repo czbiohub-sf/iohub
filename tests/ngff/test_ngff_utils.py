@@ -567,6 +567,103 @@ def test_create_empty_plate(plate_setup, extra_channels):
                 assert position.data.shape == shape
 
 
+def test_create_empty_plate_copy_metadata_from():
+    """Test that copy_metadata_from copies per-position metadata."""
+    from iohub.ngff.nodes import TransformationMeta
+
+    position_keys = [("A", "1", "0"), ("A", "1", "1")]
+    channel_names = ["DAPI", "GFP"]
+    shape = (1, 2, 32, 64, 64)
+    scale = (1, 1, 0.5, 0.108, 0.108)
+    custom_zattrs = {"extra_metadata": {"temperature": 37.0, "protocol": "v2"}}
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        # Create source plate with custom metadata
+        create_empty_plate(
+            store_path=src_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            scale=scale,
+        )
+
+        # Add custom zattrs to source positions
+        with open_ome_zarr(str(src_path), mode="r+") as plate:
+            for name, pos in plate.positions():
+                for k, v in custom_zattrs.items():
+                    pos.zattrs[k] = v
+
+        # Create dest plate with different channel names but copy_metadata_from
+        dst_channels = ["Phase", "Fluorescence"]
+        dst_shape = (1, 2, 16, 64, 64)
+        dst_scale = (1, 1, 1.0, 0.108, 0.108)
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=dst_channels,
+            shape=dst_shape,
+            scale=dst_scale,
+            copy_metadata_from=src_path,
+        )
+
+        # Verify metadata was copied
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            for name, dst_pos in dst_plate.positions():
+                # Custom zattrs should be copied
+                assert dst_pos.zattrs["extra_metadata"] == custom_zattrs["extra_metadata"]
+
+                # Axes from source should be present
+                src_axes = dst_pos.metadata.multiscales[0].axes
+                assert src_axes is not None
+
+                # Dataset layout (shape/chunks) should be from the dest, not source
+                assert dst_pos.data.shape == dst_shape
+
+                # Omero channel info should be preserved (dest's channels)
+                assert dst_pos.channel_names == dst_channels
+
+
+def test_create_empty_plate_copy_metadata_subset_positions():
+    """Test copy_metadata_from when dest has a subset of source positions."""
+    position_keys_src = [("A", "1", "0"), ("A", "1", "1"), ("B", "1", "0")]
+    position_keys_dst = [("A", "1", "0"), ("B", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        create_empty_plate(
+            store_path=src_path,
+            position_keys=position_keys_src,
+            channel_names=channel_names,
+            shape=shape,
+        )
+
+        # Tag source positions
+        with open_ome_zarr(str(src_path), mode="r+") as plate:
+            for name, pos in plate.positions():
+                pos.zattrs["source_position"] = name
+
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys_dst,
+            channel_names=channel_names,
+            shape=shape,
+            copy_metadata_from=src_path,
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            dst_names = {name for name, _ in dst_plate.positions()}
+            assert dst_names == {"A/1/0", "B/1/0"}
+            for name, pos in dst_plate.positions():
+                assert pos.zattrs["source_position"] == name
+
+
 @given(
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),

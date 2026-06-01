@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import itertools
+import logging
 import multiprocessing as mp
 import os
 from collections import defaultdict
@@ -17,7 +18,10 @@ from numpy.typing import DTypeLike, NDArray
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
+from iohub.ngff.models import ImagesMeta
 from iohub.ngff.nodes import TransformationMeta
+
+_logger = logging.getLogger(__name__)
 
 #: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
 _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
@@ -33,6 +37,7 @@ def create_empty_plate(
     version: Literal["0.4", "0.5"] = "0.5",
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
+    copy_metadata_from: Path | str | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -71,6 +76,13 @@ def create_empty_plate(
         TCZYX scale of the plate. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
         Data type of the plate. Defaults to np.float32.
+    copy_metadata_from : Path or str, optional
+        Path to a source HCS plate from which to copy per-position OME metadata.
+        When set, axis definitions, FOV-level coordinate transforms, label
+        references, and any custom (non-OME) zattrs are transferred from
+        matching positions in the source plate. The output's dataset layout,
+        omero channel info, and version are preserved.
+        Defaults to None (no metadata copy).
 
     Examples
     --------
@@ -92,16 +104,13 @@ def create_empty_plate(
     ...     scale=(1, 1, 0.5, 0.5, 0.5),
     ... )
 
-    Create a plate with sharding:
+    Create a plate copying metadata from an input plate:
     >>> create_empty_plate(
-    ...     store_path=Path("/path/to/store"),
+    ...     store_path=Path("/path/to/output.zarr"),
     ...     position_keys=[("A", "1", "0")],
     ...     channel_names=["DAPI"],
-    ...     shape=(1, 1, 64, 2048, 2048),
-    ...     chunks=(1, 1, 8, 128, 128),
-    ...     scale=(1, 1, 0.5, 0.5, 0.5),
-    ...     shards_ratio=(10, 1, 8, 16, 16),
-    ...     version="0.5",
+    ...     shape=(1, 1, 256, 256, 256),
+    ...     copy_metadata_from=Path("/path/to/input.zarr"),
     ... )
 
     Notes
@@ -147,6 +156,74 @@ def create_empty_plate(
             metadata_channel_names = position.channel_names
             if channel_name not in metadata_channel_names:
                 position.append_channel(channel_name, resize_arrays=True)
+
+    if copy_metadata_from is not None:
+        _copy_position_metadata(Path(copy_metadata_from), Path(store_path))
+
+
+# -- Per-position metadata copy --------------------------------------------
+
+_OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
+
+
+def _copy_position_metadata(
+    source_plate_path: Path,
+    dest_plate_path: Path,
+) -> None:
+    """Copy per-position OME metadata and custom zattrs from source to dest.
+
+    Transfers axis definitions, FOV-level coordinate transforms, label
+    references, and any custom (non-OME) zattrs. Preserves the destination's
+    dataset layout, omero channel info, and version.
+    """
+    with open_ome_zarr(str(source_plate_path), mode="r") as src_plate:
+        with open_ome_zarr(str(dest_plate_path), mode="r+") as dst_plate:
+            dst_positions = {name for name, _ in dst_plate.positions()}
+
+            for name, src_pos in src_plate.positions():
+                if name not in dst_positions:
+                    continue
+
+                dst_pos = dst_plate[name]
+
+                src_ome = dict(src_pos.maybe_wrapped_ome_attrs)
+
+                raw_attrs = dict(src_pos.zattrs)
+                custom_attrs = {
+                    k: v for k, v in raw_attrs.items() if k not in _OME_KEYS
+                }
+
+                saved_datasets = dst_pos.metadata.multiscales[0].datasets
+                saved_omero = dst_pos.metadata.omero
+
+                src_ome.setdefault("version", "0.5")
+                src_meta = ImagesMeta.model_validate(src_ome)
+
+                dst_pos.metadata.multiscales[0].axes = (
+                    src_meta.multiscales[0].axes
+                )
+                dst_pos.metadata.multiscales[0].coordinate_transformations = (
+                    src_meta.multiscales[0].coordinate_transformations
+                )
+                for field in ("name", "type", "metadata"):
+                    val = getattr(src_meta.multiscales[0], field, None)
+                    if val is not None:
+                        setattr(dst_pos.metadata.multiscales[0], field, val)
+
+                src_labels = getattr(src_meta, "labels", None)
+                if src_labels is not None:
+                    dst_pos.metadata.labels = src_labels
+
+                dst_pos.metadata.multiscales[0].datasets = saved_datasets
+                dst_pos.metadata.omero = saved_omero
+                dst_pos.metadata.version = "0.5"
+
+                dst_pos.dump_meta()
+
+                for k, v in custom_attrs.items():
+                    dst_pos.zattrs[k] = v
+
+                _logger.debug("Copied metadata for position %s", name)
 
 
 # -- Transform helpers -----------------------------------------------------
