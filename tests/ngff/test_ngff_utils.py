@@ -569,8 +569,6 @@ def test_create_empty_plate(plate_setup, extra_channels):
 
 def test_create_empty_plate_copy_metadata_from():
     """Test that copy_metadata_from copies per-position metadata."""
-    from iohub.ngff.nodes import TransformationMeta
-
     position_keys = [("A", "1", "0"), ("A", "1", "1")]
     channel_names = ["DAPI", "GFP"]
     shape = (1, 2, 32, 64, 64)
@@ -592,7 +590,7 @@ def test_create_empty_plate_copy_metadata_from():
 
         # Add custom zattrs to source positions
         with open_ome_zarr(str(src_path), mode="r+") as plate:
-            for name, pos in plate.positions():
+            for _name, pos in plate.positions():
                 for k, v in custom_zattrs.items():
                     pos.zattrs[k] = v
 
@@ -611,7 +609,7 @@ def test_create_empty_plate_copy_metadata_from():
 
         # Verify metadata was copied
         with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
-            for name, dst_pos in dst_plate.positions():
+            for _name, dst_pos in dst_plate.positions():
                 # Custom zattrs should be copied
                 assert dst_pos.zattrs["extra_metadata"] == custom_zattrs["extra_metadata"]
 

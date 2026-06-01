@@ -189,9 +189,7 @@ def _copy_position_metadata(
                 src_ome = dict(src_pos.maybe_wrapped_ome_attrs)
 
                 raw_attrs = dict(src_pos.zattrs)
-                custom_attrs = {
-                    k: v for k, v in raw_attrs.items() if k not in _OME_KEYS
-                }
+                custom_attrs = {k: v for k, v in raw_attrs.items() if k not in _OME_KEYS}
 
                 saved_datasets = dst_pos.metadata.multiscales[0].datasets
                 saved_omero = dst_pos.metadata.omero
@@ -199,12 +197,10 @@ def _copy_position_metadata(
                 src_ome.setdefault("version", "0.5")
                 src_meta = ImagesMeta.model_validate(src_ome)
 
-                dst_pos.metadata.multiscales[0].axes = (
-                    src_meta.multiscales[0].axes
-                )
-                dst_pos.metadata.multiscales[0].coordinate_transformations = (
-                    src_meta.multiscales[0].coordinate_transformations
-                )
+                dst_pos.metadata.multiscales[0].axes = src_meta.multiscales[0].axes
+                dst_pos.metadata.multiscales[0].coordinate_transformations = src_meta.multiscales[
+                    0
+                ].coordinate_transformations
                 for field in ("name", "type", "metadata"):
                     val = getattr(src_meta.multiscales[0], field, None)
                     if val is not None:
