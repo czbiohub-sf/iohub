@@ -13,6 +13,7 @@ from numpy.typing import DTypeLike
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
+from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
     _available_cpus,
@@ -568,7 +569,7 @@ def test_create_empty_plate(plate_setup, extra_channels):
 
 
 def test_create_empty_plate_copy_metadata_from():
-    """Test that copy_metadata_from copies per-position metadata."""
+    """Test that copy_metadata_from copies custom zattrs but not labels."""
     position_keys = [("A", "1", "0"), ("A", "1", "1")]
     channel_names = ["DAPI", "GFP"]
     shape = (1, 2, 32, 64, 64)
@@ -579,7 +580,7 @@ def test_create_empty_plate_copy_metadata_from():
         src_path = Path(temp_dir) / "source.zarr"
         dst_path = Path(temp_dir) / "dest.zarr"
 
-        # Create source plate with custom metadata
+        # Create source plate with custom metadata and label references
         create_empty_plate(
             store_path=src_path,
             position_keys=position_keys,
@@ -588,11 +589,13 @@ def test_create_empty_plate_copy_metadata_from():
             scale=scale,
         )
 
-        # Add custom zattrs to source positions
         with open_ome_zarr(str(src_path), mode="r+") as plate:
             for _name, pos in plate.positions():
                 for k, v in custom_zattrs.items():
                     pos.zattrs[k] = v
+                # Write a label reference into the source OME metadata
+                pos.metadata.labels = LabelsMeta(labels=["nuclei"])
+                pos.dump_meta()
 
         # Create dest plate with different channel names but copy_metadata_from
         dst_channels = ["Phase", "Fluorescence"]
@@ -621,6 +624,10 @@ def test_create_empty_plate_copy_metadata_from():
 
                 # Omero channel info should be preserved (dest's channels)
                 assert dst_pos.channel_names == dst_channels
+
+                # Label references should NOT be copied (no backing arrays)
+                dst_labels = getattr(dst_pos.metadata, "labels", None)
+                assert dst_labels is None or dst_labels == []
 
 
 def test_create_empty_plate_copy_metadata_subset_positions():
