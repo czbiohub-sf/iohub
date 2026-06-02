@@ -776,6 +776,101 @@ def test_create_empty_plate_copy_metadata_position_absent_in_source():
             assert "extra_metadata" not in dict(dst_plate["A/1/1"].zattrs)
 
 
+def test_create_empty_plate_copy_metadata_map():
+    """copy_metadata_map copies zattrs using an explicit position mapping."""
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        create_empty_plate(
+            store_path=src_path,
+            position_keys=[("A", "1", "0")],
+            channel_names=channel_names,
+            shape=shape,
+        )
+        with open_ome_zarr(str(src_path), mode="r+") as plate:
+            plate["A/1/0"].zattrs["extra_metadata"] = {"origin": "source"}
+
+        # Dest uses renamed keys; map points the renamed key back to source.
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=[("A", "1d0", "0"), ("A", "1d1", "0")],
+            channel_names=channel_names,
+            shape=shape,
+            copy_metadata_map={
+                "A/1d0/0": src_path / "A" / "1" / "0",
+            },
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            assert dst_plate["A/1d0/0"].zattrs["extra_metadata"] == {
+                "origin": "source"
+            }
+            assert "extra_metadata" not in dict(dst_plate["A/1d1/0"].zattrs)
+
+
+def test_create_empty_plate_copy_metadata_map_skips_existing():
+    """copy_metadata_map does not overwrite pre-existing positions."""
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        create_empty_plate(
+            store_path=src_path,
+            position_keys=[("A", "1", "0")],
+            channel_names=channel_names,
+            shape=shape,
+        )
+        with open_ome_zarr(str(src_path), mode="r+") as plate:
+            plate["A/1/0"].zattrs["extra_metadata"] = {"origin": "source"}
+
+        # Pre-create dest with its own metadata.
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=[("A", "1d0", "0")],
+            channel_names=channel_names,
+            shape=shape,
+        )
+        with open_ome_zarr(str(dst_path), mode="r+") as plate:
+            plate["A/1d0/0"].zattrs["extra_metadata"] = {"origin": "dest"}
+
+        # Re-run with copy_metadata_map — existing position should be untouched.
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=[("A", "1d0", "0")],
+            channel_names=channel_names,
+            shape=shape,
+            copy_metadata_map={
+                "A/1d0/0": src_path / "A" / "1" / "0",
+            },
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            assert dst_plate["A/1d0/0"].zattrs["extra_metadata"] == {
+                "origin": "dest"
+            }
+
+
+def test_create_empty_plate_copy_metadata_mutual_exclusivity():
+    """Passing both copy_metadata_from and copy_metadata_map raises ValueError."""
+    with TemporaryDirectory() as temp_dir:
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            create_empty_plate(
+                store_path=Path(temp_dir) / "dest.zarr",
+                position_keys=[("A", "1", "0")],
+                channel_names=["DAPI"],
+                shape=(1, 1, 16, 32, 32),
+                copy_metadata_from=Path(temp_dir) / "source.zarr",
+                copy_metadata_map={"A/1/0": Path(temp_dir) / "source.zarr/A/1/0"},
+            )
+
+
 @given(
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),
