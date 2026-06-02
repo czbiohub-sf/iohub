@@ -55,7 +55,8 @@ tensorstore = [
 ]
 
 [project.entry-points."iohub.zarr_implementations"]
-zarr = "iohub.core.implementations.zarr_python:ZarrPythonImplementation"
+zarr-python = "iohub.core.implementations.zarr_python:ZarrPythonImplementation"
+zarrs-python = "iohub.core.implementations.zarr_python:ZarrsPythonImplementation"
 tensorstore = "iohub.core.implementations.tensorstore:TensorStoreImplementation"
 
 [dependency-groups]

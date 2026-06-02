@@ -684,7 +684,7 @@ def test_write_more_channels(channels_and_random_5d, arr_name, version):
             pass
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarr-python", "zarrs-python", "tensorstore"])
 @given(
     ch_shape_dtype=_channels_and_random_5d_shape_and_dtype(),
     arr_name=short_alpha_numeric,
@@ -944,7 +944,7 @@ def test_create_tiled(channel_names, version):
     grid_shape=tiles_rc_st,
     arr_name=short_alpha_numeric,
 )
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 @settings(suppress_health_check=[HealthCheck.too_slow])
 def test_make_tiles(implementation, channels_and_random_5d, grid_shape, arr_name):
     if implementation == "tensorstore":
@@ -980,7 +980,7 @@ def test_make_tiles(implementation, channels_and_random_5d, grid_shape, arr_name
                     tiles.get_tile(*args)
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     grid_shape=tiles_rc_st,
@@ -1034,7 +1034,7 @@ def test_write_read_tiles(implementation, channels_and_random_5d, grid_shape, ar
                 assert_allclose(data, read)
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 @given(channel_names=channel_names_st)
 @settings(max_examples=16)
 def test_create_hcs(implementation, channel_names):
@@ -1050,7 +1050,7 @@ def test_create_hcs(implementation, channel_names):
         assert dataset.channel_names == channel_names
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 @pytest.mark.parametrize("version", ["0.5"])
 def test_open_hcs_create_empty(implementation, version):
     if implementation == "tensorstore":
@@ -1698,7 +1698,7 @@ def test_initialize_pyramid(tmp_path):
             ]
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 def test_compute_pyramid(tmp_path, implementation):
     """Test pyramid computation fills levels with downsampled data."""
     if implementation == "tensorstore":
@@ -1732,7 +1732,7 @@ def test_compute_pyramid(tmp_path, implementation):
             pos.compute_pyramid(levels=2, method="mean")
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 def test_delete_pyramid(tmp_path, implementation):
     """Test delete_pyramid removes all pyramid levels except level 0."""
     if implementation == "tensorstore":
@@ -1784,7 +1784,7 @@ def test_delete_pyramid(tmp_path, implementation):
 
 
 @given(config=_pyramid_config())
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 @settings(max_examples=32)
 def test_initialize_pyramid_shapes(implementation, config):
     if implementation == "tensorstore":
@@ -1823,7 +1823,7 @@ def test_initialize_pyramid_shapes(implementation, config):
                 prev_shape = current_shape
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 @given(config=_pyramid_config())
 @settings(max_examples=32)
 def test_initialize_pyramid_scale_metadata(implementation, config):
@@ -1859,7 +1859,7 @@ def test_initialize_pyramid_scale_metadata(implementation, config):
 
 
 @given(config=_pyramid_config())
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 @settings(max_examples=16, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_compute_pyramid_shapes(implementation, config):
     """Test compute_pyramid fills correct shapes for any dims subset."""
@@ -1890,7 +1890,7 @@ def test_compute_pyramid_shapes(implementation, config):
                 prev_shape = current_shape
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 def test_initialize_pyramid_invalid_dims(implementation, tmp_path):
     """Test that unknown axis names in dims raise ValueError."""
     if implementation == "tensorstore":

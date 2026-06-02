@@ -488,7 +488,7 @@ class TestWriteXarray:
 # ── TensorStore backend tests ─────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 def test_to_xarray_tensorstore(implementation, tmp_path):
     """to_xarray() works with both zarr-python and tensorstore backends."""
     pytest.importorskip("tensorstore") if implementation == "tensorstore" else None
@@ -520,7 +520,7 @@ def test_to_xarray_tensorstore(implementation, tmp_path):
     assert_allclose(xa.coords["y"].values, np.arange(16) * 0.25)
 
 
-@pytest.mark.parametrize("implementation", ["zarr", "tensorstore"])
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
 def test_write_xarray_tensorstore(implementation, tmp_path):
     """write_xarray() roundtrip works with both zarr-python and tensorstore backends."""
     pytest.importorskip("tensorstore") if implementation == "tensorstore" else None

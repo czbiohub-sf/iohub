@@ -15,20 +15,21 @@ class CompressorConfig(BaseModel):
     shuffle: str = "bitshuffle"
 
 
-def _default_codec_pipeline() -> str:
-    """Use zarrs (Rust) codec pipeline if available, else default Python."""
-    try:
-        import zarrs  # noqa: F401
-
-        return "zarrs.ZarrsCodecPipeline"
-    except ImportError:
-        return "zarr.core.codec_pipeline.BatchedCodecPipeline"
+# Dotted paths to the codec pipelines selectable via the implementation name.
+PYTHON_CODEC_PIPELINE = "zarr.core.codec_pipeline.BatchedCodecPipeline"
+ZARRS_CODEC_PIPELINE = "zarrs.ZarrsCodecPipeline"
 
 
 class ZarrConfig(BaseModel):
-    """Config for the zarr-python implementation."""
+    """Config for the zarr-python implementation.
 
-    codec_pipeline: str = Field(default_factory=_default_codec_pipeline)
+    The codec pipeline defaults to the pure-Python pipeline. The selected
+    implementation name (``zarr-python`` vs ``zarrs-python``) determines which
+    pipeline is used when no explicit ``codec_pipeline`` is given; an explicit
+    value here always takes precedence.
+    """
+
+    codec_pipeline: str = PYTHON_CODEC_PIPELINE
     validate_checksums: bool = True
     compressor: CompressorConfig = Field(default_factory=CompressorConfig)
 
