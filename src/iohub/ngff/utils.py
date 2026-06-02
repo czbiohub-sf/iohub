@@ -37,7 +37,6 @@ def create_empty_plate(
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     copy_metadata_from: Path | str | None = None,
-    copy_metadata_map: dict[str, Path | str] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -82,15 +81,7 @@ def create_empty_plate(
         transferred from matching positions in the source plate. Metadata is
         only transferred for newly created positions. Coordinate transforms,
         axis definitions, and label references are **not** copied.
-        Mutually exclusive with ``copy_metadata_map``.
         Defaults to None (no metadata copy).
-    copy_metadata_map : dict[str, Path | str], optional
-        Explicit mapping from destination position key strings
-        (e.g. ``"A/1d0/0"``) to source position paths. Use this when
-        source and destination plates have different position keys (e.g.
-        after renaming duplicates during concatenation).
-        Mutually exclusive with ``copy_metadata_from``.
-        Defaults to None.
 
     Examples
     --------
@@ -133,18 +124,6 @@ def create_empty_plate(
     ...     copy_metadata_from=Path("/path/to/input.zarr"),
     ... )
 
-    Copy metadata with renamed positions (e.g. after concatenation):
-    >>> create_empty_plate(
-    ...     store_path=Path("/path/to/output.zarr"),
-    ...     position_keys=[("A", "1d0", "0"), ("A", "1d1", "0")],
-    ...     channel_names=["DAPI"],
-    ...     shape=(1, 1, 256, 256, 256),
-    ...     copy_metadata_map={
-    ...         "A/1d0/0": Path("/path/to/plate1.zarr/A/1/0"),
-    ...         "A/1d1/0": Path("/path/to/plate2.zarr/A/1/0"),
-    ...     },
-    ... )
-
     Notes
     -----
     - If `chunks` is not provided, a version-specific default is used (see
@@ -157,11 +136,6 @@ def create_empty_plate(
 
     if shards_ratio is None and version == "0.5":
         shards_ratio = _default_shards_ratio(shape, chunks)
-
-    if copy_metadata_from is not None and copy_metadata_map is not None:
-        raise ValueError(
-            "copy_metadata_from and copy_metadata_map are mutually exclusive"
-        )
 
     # Fail loudly if the metadata source root is wrong; missing individual
     # positions within it are still skipped gracefully in the loop below.
@@ -195,17 +169,11 @@ def create_empty_plate(
 
             # Copy per-position custom (non-OME) zattrs from a source plate.
             # Only for newly created positions; pre-existing ones are left as-is.
-            if copy_metadata_from is not None or copy_metadata_map is not None:
-                if copy_metadata_map is not None:
-                    src_path = copy_metadata_map.get(position_key_string)
-                else:
-                    src_path = copy_metadata_from / position_key_string
-                src_pos = None
-                if src_path is not None:
-                    try:
-                        src_pos = open_ome_zarr(src_path, mode="r")
-                    except FileNotFoundError:
-                        src_pos = None
+            if copy_metadata_from is not None:
+                try:
+                    src_pos = open_ome_zarr(copy_metadata_from / position_key_string, mode="r")
+                except FileNotFoundError:
+                    src_pos = None
                 if src_pos is not None:
                     for k, v in dict(src_pos.zattrs).items():
                         if k not in _OME_KEYS:
