@@ -4468,8 +4468,11 @@ by default False</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Name of the zarr implementation to use (e.g. "zarr", "tensorstore"),
-by default None (uses the default implementation)</p>
+                <p>Name of the zarr implementation to use
+(e.g. "zarrs-python", "zarr-python", "tensorstore"),
+by default None (uses the default implementation, "zarrs-python").
+"zarrs-python" uses the zarrs (Rust) codec pipeline;
+"zarr-python" uses the pure-Python codec pipeline.</p>
               </div>
             </td>
             <td>

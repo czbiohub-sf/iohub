@@ -1086,11 +1086,11 @@
 
 
 <h1 id="reading-ome-zarr-in-a-pytorch-dataloader">Reading OME-Zarr in a PyTorch DataLoader<a class="headerlink" href="#reading-ome-zarr-in-a-pytorch-dataloader" title="Permanent link">&para;</a></h1>
-<p>iohub auto-selects the <a href="https://github.com/zarrs/zarrs-python">zarrs</a> (Rust)
-codec pipeline whenever the <code>zarrs</code> package is installed. It is fast, but its
-parallel codec runs on a process-global thread pool that is <strong>not fork-safe</strong>.
-PyTorch's <code>DataLoader</code> forks worker processes on Linux when <code>num_workers &gt; 0</code>,
-and the first chunk decode inside a forked worker deadlocks.</p>
+<p>iohub defaults to the <code>zarrs-python</code> implementation, which uses the
+<a href="https://github.com/zarrs/zarrs-python">zarrs</a> (Rust) codec pipeline. It is
+fast, but its parallel codec runs on a process-global thread pool that is
+<strong>not fork-safe</strong>. PyTorch's <code>DataLoader</code> forks worker processes on Linux when
+<code>num_workers &gt; 0</code>, and the first chunk decode inside a forked worker deadlocks.</p>
 <h2 id="a-tiny-dataset">A tiny dataset<a class="headerlink" href="#a-tiny-dataset" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><span class="filename">dataset.py</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
@@ -1164,6 +1164,14 @@ fresh process:</p>
 </span></code></pre></div>
 <p>Spawn re-imports your modules and pickles the <code>Dataset</code> for each worker,
 so startup is slower and throughput drops by roughly 10-20%.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Or opt out of the Rust pipeline</p>
+<p>Pass <code>implementation="zarr-python"</code> to <code>open_ome_zarr</code> to use the pure-Python
+codec pipeline, which is fork-safe and works with forked <code>DataLoader</code>
+workers at the cost of slower decoding:</p>
+<div class="language-python highlight"><span class="filename">dataset.py</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">open_ome_zarr</span><span class="p">(</span><span class="n">store_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r&quot;</span><span class="p">,</span> <span class="n">implementation</span><span class="o">=</span><span class="s2">&quot;zarr-python&quot;</span><span class="p">)</span>
+</span></code></pre></div>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Why this happens</p>
