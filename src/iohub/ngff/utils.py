@@ -36,7 +36,7 @@ def create_empty_plate(
     version: Literal["0.4", "0.5"] = "0.5",
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
-    copy_metadata_from: Path | str | None = None,
+    metadata_sources: Path | str | list[Path | str] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -75,12 +75,15 @@ def create_empty_plate(
         TCZYX scale of the plate. Defaults to (1, 1, 1, 1, 1).
     dtype : DTypeLike, optional
         Data type of the plate. Defaults to np.float32.
-    copy_metadata_from : Path or str, optional
-        Path to a source HCS plate from which to copy per-position metadata.
-        When set, any custom (non-OME) zattrs (e.g. ``extra_metadata``) are
-        transferred from matching positions in the source plate. Metadata is
-        only transferred for newly created positions. Coordinate transforms,
-        axis definitions, and label references are **not** copied.
+    metadata_sources : Path or str or list of Path or str, optional
+        Path(s) to one or more source HCS plates from which to copy
+        per-position metadata. When set, any custom (non-OME) zattrs
+        (e.g. ``extra_metadata``) are transferred from matching positions in
+        the source plate(s). Metadata is only transferred for newly created
+        positions, and a given zattrs key is only copied if it does not
+        already exist on the destination position (so earlier sources take
+        precedence over later ones). Coordinate transforms, axis definitions,
+        and label references are **not** copied.
         Defaults to None (no metadata copy).
 
     Examples
@@ -121,7 +124,7 @@ def create_empty_plate(
     ...     position_keys=[("A", "1", "0")],
     ...     channel_names=["DAPI"],
     ...     shape=(1, 1, 256, 256, 256),
-    ...     copy_metadata_from=Path("/path/to/input.zarr"),
+    ...     metadata_sources=Path("/path/to/input.zarr"),
     ... )
 
     Notes
@@ -137,12 +140,18 @@ def create_empty_plate(
     if shards_ratio is None and version == "0.5":
         shards_ratio = _default_shards_ratio(shape, chunks)
 
-    # Fail loudly if the metadata source root is wrong; missing individual
-    # positions within it are still skipped gracefully in the loop below.
-    if copy_metadata_from is not None:
-        copy_metadata_from = Path(copy_metadata_from)
-        if not copy_metadata_from.exists():
-            raise FileNotFoundError(f"copy_metadata_from source plate not found at {copy_metadata_from}")
+    # Normalize to a list of Paths. Fail loudly if any metadata source root
+    # is wrong; missing individual positions within them are still skipped
+    # gracefully in the loop below.
+    if metadata_sources is None:
+        metadata_sources = []
+    elif isinstance(metadata_sources, (str, Path)):
+        metadata_sources = [Path(metadata_sources)]
+    else:
+        metadata_sources = [Path(source) for source in metadata_sources]
+    for source in metadata_sources:
+        if not source.exists():
+            raise FileNotFoundError(f"metadata_sources source plate not found at {source}")
 
     # Create plate
     output_plate = open_ome_zarr(
@@ -167,18 +176,19 @@ def create_empty_plate(
                 transform=[TransformationMeta(type="scale", scale=scale)],
             )
 
-            # Copy per-position custom (non-OME) zattrs from a source plate.
-            # Only for newly created positions; pre-existing ones are left as-is.
-            if copy_metadata_from is not None:
+            # Copy per-position custom (non-OME) zattrs from source plate(s).
+            # Only for newly created positions; pre-existing ones are left
+            # as-is. A key is only copied if it is not already present on the
+            # destination, so earlier sources take precedence over later ones.
+            for source in metadata_sources:
                 try:
-                    src_pos = open_ome_zarr(copy_metadata_from / position_key_string, mode="r")
+                    src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
                 except FileNotFoundError:
-                    src_pos = None
-                if src_pos is not None:
-                    for k, v in dict(src_pos.zattrs).items():
-                        if k not in _OME_KEYS:
-                            position.zattrs[k] = v
-                    src_pos.close()
+                    continue
+                for k, v in dict(src_pos.zattrs).items():
+                    if k not in _OME_KEYS and k not in position.zattrs:
+                        position.zattrs[k] = v
+                src_pos.close()
         else:
             position = output_plate[position_key_string]
 
