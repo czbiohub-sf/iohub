@@ -1095,6 +1095,85 @@ def test_process_single_position(setup, constant, num_workers, use_threads):
                 )
 
 
+def test_process_single_position_preserves_existing_extra_metadata():
+    """extra_metadata from metadata_sources is not clobbered when omitted."""
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 1, 4, 4)
+    pre_existing = {"deskew": {"angle": 30.0}}
+
+    with _temp_ome_zarr_stores(
+        position_keys=position_keys,
+        channel_names=channel_names,
+        shape=shape,
+    ) as (input_store_path, output_store_path):
+        populate_store(input_store_path, position_keys, shape, np.float32)
+
+        # Simulate metadata_sources: write extra_metadata before processing
+        with open_ome_zarr(
+            output_store_path / "A/1/0", layout="fov", mode="r+"
+        ) as pos:
+            pos.zattrs["extra_metadata"] = pre_existing
+
+        # Call without extra_metadata kwarg — should NOT clobber
+        process_single_position(
+            func=dummy_transform,
+            input_position_path=input_store_path / Path("A", "1", "0"),
+            output_position_path=output_store_path / Path("A", "1", "0"),
+            input_channel_indices=[[0]],
+            output_channel_indices=[[0]],
+            input_time_indices=[0],
+            output_time_indices=[0],
+            constant=2,
+        )
+
+        with open_ome_zarr(
+            output_store_path / "A/1/0", layout="fov", mode="r"
+        ) as pos:
+            assert pos.zattrs["extra_metadata"] == pre_existing
+
+
+def test_process_single_position_merges_extra_metadata():
+    """extra_metadata kwarg merges with pre-existing metadata."""
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 1, 4, 4)
+    pre_existing = {"deskew": {"angle": 30.0}}
+    new_metadata = {"flat_field": {"method": "basic"}}
+
+    with _temp_ome_zarr_stores(
+        position_keys=position_keys,
+        channel_names=channel_names,
+        shape=shape,
+    ) as (input_store_path, output_store_path):
+        populate_store(input_store_path, position_keys, shape, np.float32)
+
+        # Simulate metadata_sources: write extra_metadata before processing
+        with open_ome_zarr(
+            output_store_path / "A/1/0", layout="fov", mode="r+"
+        ) as pos:
+            pos.zattrs["extra_metadata"] = pre_existing
+
+        # Call WITH extra_metadata — should merge, not replace
+        process_single_position(
+            func=dummy_transform,
+            input_position_path=input_store_path / Path("A", "1", "0"),
+            output_position_path=output_store_path / Path("A", "1", "0"),
+            input_channel_indices=[[0]],
+            output_channel_indices=[[0]],
+            input_time_indices=[0],
+            output_time_indices=[0],
+            constant=2,
+            extra_metadata=new_metadata,
+        )
+
+        with open_ome_zarr(
+            output_store_path / "A/1/0", layout="fov", mode="r"
+        ) as pos:
+            result = pos.zattrs["extra_metadata"]
+            assert result == {"deskew": {"angle": 30.0}, "flat_field": {"method": "basic"}}
+
+
 @pytest.mark.parametrize(
     ("env", "expected_min", "expected_max"),
     [

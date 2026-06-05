@@ -408,6 +408,11 @@ def process_single_position(
         can be passed to be stored at a FOV level,
         e.g.,
         kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
+        When ``extra_metadata`` is a dict it is **merged** into any
+        existing ``extra_metadata`` on the output position (so metadata
+        written by ``create_empty_plate``'s ``metadata_sources`` is
+        preserved).  When ``extra_metadata`` is not provided, existing
+        metadata is left untouched.
     """
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
@@ -453,10 +458,21 @@ def process_single_position(
             a time index beyond the maximum index of
             the dataset = {time_ubound}""")
 
-    # Write extra metadata to the output store
+    # Merge extra metadata into the output store.  When extra_metadata is
+    # None the existing value (e.g. copied by create_empty_plate's
+    # metadata_sources) is preserved.  When a dict is given it is merged
+    # into any existing dict so that upstream keys are not lost.
     extra_metadata = kwargs.pop("extra_metadata", None)
-    with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
-        output_dataset.zattrs["extra_metadata"] = extra_metadata
+    if extra_metadata is not None:
+        with open_ome_zarr(
+            output_position_path, layout="fov", mode="r+"
+        ) as output_dataset:
+            existing = output_dataset.zattrs.get("extra_metadata")
+            if isinstance(existing, dict):
+                existing.update(extra_metadata)
+                output_dataset.zattrs["extra_metadata"] = existing
+            else:
+                output_dataset.zattrs["extra_metadata"] = extra_metadata
 
     # Loop through (T, C), applying transform and writing as we go
     iterable = itertools.product(
