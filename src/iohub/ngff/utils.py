@@ -78,8 +78,9 @@ def create_empty_plate(
     metadata_sources : Path or str or list of Path or str, optional
         Path(s) to one or more source HCS plates from which to copy
         per-position metadata. When set, any custom (non-OME) zattrs
-        (e.g. ``extra_metadata``) are transferred from matching positions in
-        the source plate(s). Metadata is only transferred for newly created
+        (e.g. provenance keys such as ``biahub-flat_field``) are transferred
+        from matching positions in the source plate(s). Metadata is only
+        transferred for newly created
         positions, and a given zattrs key is only copied if it does not
         already exist on the destination position (so earlier sources take
         precedence over later ones). Coordinate transforms, axis definitions,
@@ -408,6 +409,14 @@ def process_single_position(
         can be passed to be stored at a FOV level,
         e.g.,
         kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
+        Each item of the ``extra_metadata`` dict is written as a separate
+        top-level key on the output position's zattrs (e.g. ``Temperature``
+        and ``CO2_level`` above), not nested under an ``extra_metadata`` key.
+        This lets successive processing steps accumulate sibling provenance
+        keys instead of overwriting a single shared key. Any keys already
+        present on the output position (e.g. copied by
+        ``create_empty_plate``'s ``metadata_sources``) are preserved unless
+        the same key is provided here.
     """
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
@@ -453,10 +462,17 @@ def process_single_position(
             a time index beyond the maximum index of
             the dataset = {time_ubound}""")
 
-    # Write extra metadata to the output store
+    # Write extra metadata to the output store. Each entry is stored as a
+    # top-level zattrs key rather than nested under a single "extra_metadata"
+    # key, so successive processing steps record their provenance as sibling
+    # keys (e.g. "biahub-flat_field", "biahub-deskew") instead of overwriting
+    # one shared key. Existing keys (e.g. metadata copied by
+    # create_empty_plate's metadata_sources) are preserved.
     extra_metadata = kwargs.pop("extra_metadata", None)
-    with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
-        output_dataset.zattrs["extra_metadata"] = extra_metadata
+    if extra_metadata:
+        with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
+            for key, value in extra_metadata.items():
+                output_dataset.zattrs[key] = value
 
     # Loop through (T, C), applying transform and writing as we go
     iterable = itertools.product(

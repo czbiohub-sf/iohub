@@ -469,9 +469,11 @@ def verify_transformation(
         # Extract extra metadata if provided
         extra_metadata = kwargs.pop("extra_metadata", None)
 
-        # Check if extra_metadata is provided
+        # Each extra_metadata entry is written as a top-level zattrs key,
+        # not nested under an "extra_metadata" key.
         if extra_metadata is not None:
-            assert output_position.zattrs["extra_metadata"] == extra_metadata
+            for key, value in extra_metadata.items():
+                assert output_position.zattrs[key] == value
 
         # Check the transformation for each time point and channel
         input_data = input_position.data.oindex[time_indices, channel_indices]
