@@ -405,18 +405,28 @@ def process_single_position(
         Defaults to False.
     kwargs : dict, optional
         Additional arguments to pass to the function.
-        A dictionary with key "extra_metadata"
-        can be passed to be stored at a FOV level,
-        e.g.,
-        kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
-        Each item of the ``extra_metadata`` dict is written as a separate
-        top-level key on the output position's zattrs (e.g. ``Temperature``
-        and ``CO2_level`` above), not nested under an ``extra_metadata`` key.
-        This lets successive processing steps accumulate sibling provenance
-        keys instead of overwriting a single shared key. Any keys already
-        present on the output position (e.g. copied by
-        ``create_empty_plate``'s ``metadata_sources``) are preserved unless
-        the same key is provided here.
+        A dictionary with key "extra_metadata" can be passed to record
+        per-step provenance at the FOV level. Each item of the
+        ``extra_metadata`` dict is written as a separate top-level key on the
+        output position's zattrs, *not* nested under an ``extra_metadata`` key.
+        Typically each processing step contributes a single namespaced entry
+        keyed by ``"<package>-<step>"`` whose value is the step's
+        configuration, e.g. a deskew step that reads a flat-field-corrected
+        input::
+
+            process_single_position(
+                deskew_czyx,
+                input_position_path,   # already carries "biahub-flat_field"
+                output_position_path,
+                extra_metadata={"biahub-deskew": settings.model_dump()},
+            )
+
+        Because entries are written as top-level keys, successive steps
+        accumulate sibling provenance keys (here ``biahub-flat_field`` and
+        ``biahub-deskew``) instead of overwriting one shared key. Keys already
+        present on the output position (e.g. copied from the input by
+        ``create_empty_plate``'s ``metadata_sources``) are preserved unless the
+        same key is passed here, in which case it is overwritten.
     """
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
