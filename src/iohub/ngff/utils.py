@@ -4,6 +4,7 @@ import inspect
 import itertools
 import multiprocessing as mp
 import os
+import warnings
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
@@ -406,27 +407,15 @@ def process_single_position(
     kwargs : dict, optional
         Additional arguments to pass to the function.
         A dictionary with key "extra_metadata" can be passed to record
-        per-step provenance at the FOV level. Each item of the
-        ``extra_metadata`` dict is written as a separate top-level key on the
-        output position's zattrs, *not* nested under an ``extra_metadata`` key.
-        Typically each processing step contributes a single namespaced entry
-        keyed by ``"<package>-<step>"`` whose value is the step's
-        configuration, e.g. a deskew step that reads a flat-field-corrected
-        input::
-
-            process_single_position(
-                deskew_czyx,
-                input_position_path,   # already carries "biahub-flat_field"
-                output_position_path,
-                extra_metadata={"biahub-deskew": settings.model_dump()},
-            )
-
-        Because entries are written as top-level keys, successive steps
-        accumulate sibling provenance keys (here ``biahub-flat_field`` and
-        ``biahub-deskew``) instead of overwriting one shared key. Keys already
-        present on the output position (e.g. copied from the input by
-        ``create_empty_plate``'s ``metadata_sources``) are preserved unless the
-        same key is passed here, in which case it is overwritten.
+        per-step provenance at the FOV level, typically a single namespaced
+        entry keyed by ``"<package>-<step>"``,
+        e.g. ``extra_metadata={"biahub-deskew": settings.model_dump()}``.
+        Each item is written as a separate top-level key on the output
+        position's zattrs (*not* nested under an ``extra_metadata`` key), so
+        successive steps accumulate sibling provenance keys instead of
+        overwriting one shared key. If a key is already present on the output
+        position (e.g. copied from the input by ``create_empty_plate``'s
+        ``metadata_sources``) it is overwritten and a warning is raised.
     """
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
@@ -476,12 +465,19 @@ def process_single_position(
     # top-level zattrs key rather than nested under a single "extra_metadata"
     # key, so successive processing steps record their provenance as sibling
     # keys (e.g. "biahub-flat_field", "biahub-deskew") instead of overwriting
-    # one shared key. Existing keys (e.g. metadata copied by
-    # create_empty_plate's metadata_sources) are preserved.
+    # one shared key. Overwriting a pre-existing key (e.g. metadata copied by
+    # create_empty_plate's metadata_sources) warns rather than silently
+    # clobbering upstream provenance.
     extra_metadata = kwargs.pop("extra_metadata", None)
     if extra_metadata:
         with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
             for key, value in extra_metadata.items():
+                if key in output_dataset.zattrs:
+                    warnings.warn(
+                        f"extra_metadata key {key!r} already exists on "
+                        f"{output_position_path} and will be overwritten.",
+                        stacklevel=2,
+                    )
                 output_dataset.zattrs[key] = value
 
     # Loop through (T, C), applying transform and writing as we go
