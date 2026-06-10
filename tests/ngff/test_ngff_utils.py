@@ -1113,6 +1113,29 @@ def test_process_single_position_rejects_reserved_ome_keys():
             )
 
 
+
+def test_process_single_position_warns_on_overwrite_of_existing_zattrs_key():
+    shape = (1, 1, 1, 2, 2)
+    with TemporaryDirectory() as temp_dir:
+        store_path = Path(temp_dir) / "test.zarr"
+        create_empty_plate(store_path, [("A", "1", "0")], ["c"], shape)
+        position_path = store_path / "A" / "1" / "0"
+
+        with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+            pos.zattrs["biahub-test"] = {"v": 1}
+
+        with pytest.warns(UserWarning, match="will be overwritten"):
+            process_single_position(
+                func=lambda x: x,
+                input_position_path=position_path,
+                output_position_path=position_path,
+                extra_metadata={"biahub-test": {"v": 2}},
+                num_workers=1,
+            )
+
+        with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+            assert pos.zattrs["biahub-test"] == {"v": 2}
+
 @pytest.mark.parametrize(
     ("env", "expected_min", "expected_max"),
     [
