@@ -1097,6 +1097,22 @@ def test_process_single_position(setup, constant, num_workers, use_threads):
                 )
 
 
+def test_process_single_position_rejects_reserved_ome_keys():
+    """extra_metadata keys colliding with reserved OME-Zarr keys raise."""
+    shape = (1, 1, 2, 4, 4)
+    with TemporaryDirectory() as temp_dir:
+        store_path = Path(temp_dir) / "test.zarr"
+        create_empty_plate(store_path, [("A", "1", "0")], ["c"], shape)
+        position_path = store_path / "A" / "1" / "0"
+        with pytest.raises(ValueError, match="reserved OME-Zarr"):
+            process_single_position(
+                func=lambda x: x,
+                input_position_path=position_path,
+                output_position_path=position_path,
+                extra_metadata={"multiscales": {"oops": 1}},
+            )
+
+
 @pytest.mark.parametrize(
     ("env", "expected_min", "expected_max"),
     [

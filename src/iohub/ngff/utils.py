@@ -416,6 +416,8 @@ def process_single_position(
         overwriting one shared key. If a key is already present on the output
         position (e.g. copied from the input by ``create_empty_plate``'s
         ``metadata_sources``) it is overwritten and a warning is raised.
+        Reserved OME-Zarr keys (``ome``, ``multiscales``, ``omero``,
+        ``labels``, ``version``) are rejected with a ``ValueError``.
     """
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
@@ -470,6 +472,13 @@ def process_single_position(
     # clobbering upstream provenance.
     extra_metadata = kwargs.pop("extra_metadata", None)
     if extra_metadata:
+        reserved = _OME_KEYS.intersection(extra_metadata)
+        if reserved:
+            raise ValueError(
+                f"extra_metadata keys {sorted(reserved)} are reserved OME-Zarr "
+                f"keys and cannot be written as top-level zattrs. Use a "
+                f"namespaced key (e.g. '<package>-<step>') instead."
+            )
         with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
             for key, value in extra_metadata.items():
                 if key in output_dataset.zattrs:
