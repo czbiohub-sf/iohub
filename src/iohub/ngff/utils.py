@@ -406,10 +406,10 @@ def process_single_position(
         Defaults to False.
     kwargs : dict, optional
         Additional arguments to pass to the function.
-        A dictionary with key "extra_metadata" can be passed to record
-        per-step provenance at the FOV level, typically a single namespaced
-        entry keyed by ``"<package>-<step>"``,
-        e.g. ``extra_metadata={"biahub-deskew": settings.model_dump()}``.
+        An ``extra_metadata`` kwarg (a dict) can be passed to record per-step
+        provenance at the FOV level, typically a single namespaced entry keyed
+        by ``"<package>-<step>"``, e.g.
+        ``extra_metadata={"biahub-deskew": settings.model_dump()}``.
         Each item is written as a separate top-level key on the output
         position's zattrs (*not* nested under an ``extra_metadata`` key), so
         successive steps accumulate sibling provenance keys instead of
