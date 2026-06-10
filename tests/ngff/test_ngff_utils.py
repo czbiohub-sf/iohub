@@ -474,6 +474,8 @@ def verify_transformation(
         if extra_metadata is not None:
             for key, value in extra_metadata.items():
                 assert output_position.zattrs[key] == value
+            # The legacy wrapper key must not be written.
+            assert "extra_metadata" not in dict(output_position.zattrs)
 
         # Check the transformation for each time point and channel
         input_data = input_position.data.oindex[time_indices, channel_indices]
@@ -1113,6 +1115,28 @@ def test_process_single_position_rejects_reserved_ome_keys():
             )
 
 
+def test_process_single_position_rejects_invalid_extra_metadata():
+    """Non-mapping or non-string-keyed extra_metadata raises TypeError."""
+    shape = (1, 1, 2, 4, 4)
+    with TemporaryDirectory() as temp_dir:
+        store_path = Path(temp_dir) / "test.zarr"
+        create_empty_plate(store_path, [("A", "1", "0")], ["c"], shape)
+        position_path = store_path / "A" / "1" / "0"
+        with pytest.raises(TypeError, match="must be a mapping"):
+            process_single_position(
+                func=lambda x: x,
+                input_position_path=position_path,
+                output_position_path=position_path,
+                extra_metadata=["not", "a", "mapping"],
+            )
+        with pytest.raises(TypeError, match="must be strings"):
+            process_single_position(
+                func=lambda x: x,
+                input_position_path=position_path,
+                output_position_path=position_path,
+                extra_metadata={1: {"oops": 1}},
+            )
+
 
 def test_process_single_position_warns_on_overwrite_of_existing_zattrs_key():
     shape = (1, 1, 1, 2, 2)
@@ -1135,6 +1159,7 @@ def test_process_single_position_warns_on_overwrite_of_existing_zattrs_key():
 
         with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
             assert pos.zattrs["biahub-test"] == {"v": 2}
+
 
 @pytest.mark.parametrize(
     ("env", "expected_min", "expected_max"),

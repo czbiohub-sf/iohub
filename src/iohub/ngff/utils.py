@@ -6,7 +6,7 @@ import multiprocessing as mp
 import os
 import warnings
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
@@ -471,7 +471,15 @@ def process_single_position(
     # create_empty_plate's metadata_sources) warns rather than silently
     # clobbering upstream provenance.
     extra_metadata = kwargs.pop("extra_metadata", None)
-    if extra_metadata:
+    if extra_metadata is not None:
+        if not isinstance(extra_metadata, Mapping):
+            raise TypeError(
+                f"extra_metadata must be a mapping, got "
+                f"{type(extra_metadata).__name__}."
+            )
+        non_string_keys = [key for key in extra_metadata if not isinstance(key, str)]
+        if non_string_keys:
+            raise TypeError(f"extra_metadata keys must be strings, got {non_string_keys}.")
         reserved = _OME_KEYS.intersection(extra_metadata)
         if reserved:
             raise ValueError(
