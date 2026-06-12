@@ -168,15 +168,16 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         factors: list[int],
         method: str = "mean",
     ) -> None:
-        """Read, downsample, and write a single shard-aligned region."""
+        """Read, downsample, and write a single shard-aligned region.
+
+        The caller-supplied ``factors`` are passed through to
+        ``downsample_block``. Partial trailing blocks on odd-sized source
+        axes are handled inside ``downsample_block`` by edge padding so the
+        downsampled output matches the ceiling-division target region shape.
+        """
         source_region = target_region_to_source(target_region, factors, source.shape)
         source_data = np.asarray(source[source_region])
-        local_factors = []
-        for sl_src, sl_tgt, f in zip(source_region, target_region, factors, strict=False):
-            src_size = sl_src.stop - sl_src.start
-            tgt_size = sl_tgt.stop - sl_tgt.start
-            local_factors.append(max(1, src_size // tgt_size) if tgt_size > 0 else f)
-        downsampled = downsample_block(source_data, local_factors, method)
+        downsampled = downsample_block(source_data, factors, method)
         target[target_region] = downsampled
 
     def iter_work_regions(self, target: zarr.Array) -> list[tuple[slice, ...]]:
