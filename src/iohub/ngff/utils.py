@@ -4,8 +4,9 @@ import inspect
 import itertools
 import multiprocessing as mp
 import os
+import warnings
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
@@ -78,8 +79,9 @@ def create_empty_plate(
     metadata_sources : Path or str or list of Path or str, optional
         Path(s) to one or more source HCS plates from which to copy
         per-position metadata. When set, any custom (non-OME) zattrs
-        (e.g. ``extra_metadata``) are transferred from matching positions in
-        the source plate(s). Metadata is only transferred for newly created
+        (e.g. provenance keys such as ``biahub-flat_field``) are transferred
+        from matching positions in the source plate(s). Metadata is only
+        transferred for newly created
         positions, and a given zattrs key is only copied if it does not
         already exist on the destination position (so earlier sources take
         precedence over later ones). Coordinate transforms, axis definitions,
@@ -404,10 +406,18 @@ def process_single_position(
         Defaults to False.
     kwargs : dict, optional
         Additional arguments to pass to the function.
-        A dictionary with key "extra_metadata"
-        can be passed to be stored at a FOV level,
-        e.g.,
-        kwargs={"extra_metadata": {"Temperature": 37.5, "CO2_level": 0.5}}.
+        An ``extra_metadata`` kwarg (a dict) can be passed to record per-step
+        provenance at the FOV level, typically a single namespaced entry keyed
+        by ``"<package>-<step>"``, e.g.
+        ``extra_metadata={"biahub-deskew": settings.model_dump()}``.
+        Each item is written as a separate top-level key on the output
+        position's zattrs (*not* nested under an ``extra_metadata`` key), so
+        successive steps accumulate sibling provenance keys instead of
+        overwriting one shared key. If a key is already present on the output
+        position (e.g. copied from the input by ``create_empty_plate``'s
+        ``metadata_sources``) it is overwritten and a warning is raised.
+        Reserved OME-Zarr keys (``ome``, ``multiscales``, ``omero``,
+        ``labels``, ``version``) are rejected with a ``ValueError``.
     """
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
@@ -453,10 +463,39 @@ def process_single_position(
             a time index beyond the maximum index of
             the dataset = {time_ubound}""")
 
-    # Write extra metadata to the output store
+    # Write extra metadata to the output store. Each entry is stored as a
+    # top-level zattrs key rather than nested under a single "extra_metadata"
+    # key, so successive processing steps record their provenance as sibling
+    # keys (e.g. "biahub-flat_field", "biahub-deskew") instead of overwriting
+    # one shared key. Overwriting a pre-existing key (e.g. metadata copied by
+    # create_empty_plate's metadata_sources) warns rather than silently
+    # clobbering upstream provenance.
     extra_metadata = kwargs.pop("extra_metadata", None)
-    with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
-        output_dataset.zattrs["extra_metadata"] = extra_metadata
+    if extra_metadata is not None:
+        if not isinstance(extra_metadata, Mapping):
+            raise TypeError(
+                f"extra_metadata must be a mapping, got "
+                f"{type(extra_metadata).__name__}."
+            )
+        non_string_keys = [key for key in extra_metadata if not isinstance(key, str)]
+        if non_string_keys:
+            raise TypeError(f"extra_metadata keys must be strings, got {non_string_keys}.")
+        reserved = _OME_KEYS.intersection(extra_metadata)
+        if reserved:
+            raise ValueError(
+                f"extra_metadata keys {sorted(reserved)} are reserved OME-Zarr "
+                f"keys and cannot be written as top-level zattrs. Use a "
+                f"namespaced key (e.g. '<package>-<step>') instead."
+            )
+        with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
+            for key, value in extra_metadata.items():
+                if key in output_dataset.zattrs:
+                    warnings.warn(
+                        f"extra_metadata key {key!r} already exists on "
+                        f"{output_position_path} and will be overwritten.",
+                        stacklevel=2,
+                    )
+                output_dataset.zattrs[key] = value
 
     # Loop through (T, C), applying transform and writing as we go
     iterable = itertools.product(
