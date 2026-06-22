@@ -15,24 +15,18 @@ from iohub.cli.parsing import (
 )
 from iohub.convert import TIFFConverter
 from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
+from iohub.core.types import NGFFVersion
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
 
 _logger = logging.getLogger(__name__)
 
-VERSION = __version__
-
-app = typer.Typer(
-    add_completion=True,
-    no_args_is_help=False,
-    context_settings={"help_option_names": ["-h", "--help"]},
-)
+app = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]})
 
 
 def _version_callback(value: bool) -> None:
     if value:
-        # Match Click's ``version_option`` output ("<prog>, version <x>").
-        typer.echo(f"iohub, version {VERSION}")
+        typer.echo(f"iohub, version {__version__}")
         raise typer.Exit()
 
 
@@ -82,13 +76,6 @@ def info(
         print_info(file, verbose=verbose)
 
 
-class OMEZarrVersion(StrEnum):
-    """OME-NGFF versions accepted by ``convert``."""
-
-    v0_4 = "0.4"
-    v0_5 = "0.5"
-
-
 @app.command()
 def convert(
     input: Annotated[
@@ -127,7 +114,7 @@ def convert(
         ),
     ] = "XYZ",
     ome_zarr_version: Annotated[
-        OMEZarrVersion | None,
+        NGFFVersion | None,
         typer.Option(
             "--ome-zarr-version",
             "-v",
@@ -144,7 +131,6 @@ def convert(
     """
     src = pathlib.Path(input)
     dst = pathlib.Path(output)
-    version = ome_zarr_version.value if ome_zarr_version is not None else None
     tiff_only = grid_layout or chunks != "XYZ"
 
     if is_ozx_path(dst):
@@ -155,12 +141,12 @@ def convert(
                 "--grid-layout and --chunks apply only to TIFF → Zarr conversion. "
                 "Pack copies chunks 1:1 from the source."
             )
-        out = pack_ozx(src, dst, version=version)
+        out = pack_ozx(src, dst, version=ome_zarr_version)
         typer.echo(f"packed: {out}")
         return
     if is_ozx_path(src):
         # Unpack: archive structure dictates everything; no flags apply.
-        if tiff_only or version is not None:
+        if tiff_only or ome_zarr_version is not None:
             raise typer.BadParameter(
                 "--grid-layout, --chunks, and --ome-zarr-version do not apply to .ozx → .zarr unpack."
             )
@@ -173,7 +159,7 @@ def convert(
         output_dir=dst,
         grid_layout=grid_layout,
         chunks=chunks,
-        version=version or "0.4",
+        version=ome_zarr_version or "0.4",
     )()
 
 
@@ -208,8 +194,6 @@ def set_scale(
 
 
 class PyramidMethod(StrEnum):
-    """Downsampling methods accepted by ``compute-pyramid``."""
-
     mean = "mean"
     median = "median"
     mode = "mode"

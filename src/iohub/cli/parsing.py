@@ -11,34 +11,20 @@ from typer.core import TyperGroup, TyperOption
 from iohub.ngff import Plate, open_ome_zarr
 
 if TYPE_CHECKING:
-    # Typer's vendored Click parser types. Imported only for type checking so
-    # the module never couples to these private names at import time (a Typer
-    # upgrade that renames them fails the guard test, not every iohub import).
     from typer._click.core import Context
     from typer._click.parser import _OptionParser
 
 
 def expand_position_dirpaths(patterns: list[str]) -> list[Path]:
-    """Expand input patterns into OME-Zarr FOV position dirpaths.
+    """Expand patterns into OME-Zarr FOV position dirpaths.
 
-    Each pattern may be one of:
-
-    - a single position path (used as-is),
-    - a plate root, which is expanded into all of its positions, or
-    - a glob pattern such as ``input.zarr/*/*/*``.
-
-    Globs are expanded whether the shell expanded them first (``OptionEatAll``
-    collects the resulting tokens) or they reach Python intact (e.g. quoted, or
-    on a shell that does not glob, such as on Windows). Non-directory matches
-    (such as ``zarr.json``) are ignored.
-
-    Raises ``typer.BadParameter`` if no pattern matches any directory.
+    Each pattern may be a position path, a plate root (expanded into all of its
+    positions), or a glob. Non-directory matches are ignored. Raises
+    ``typer.BadParameter`` if nothing matches.
     """
     positions: list[Path] = []
     for pattern in patterns:
-        # glob.glob handles arbitrary absolute/relative user patterns (Path.glob
-        # can't take an absolute pattern). Non-directory matches (e.g. a
-        # well-level zarr.json swept up by ``*/*/*``) are skipped.
+        # glob.glob (not Path.glob) handles absolute patterns.
         for match in natsorted(glob.glob(pattern)):  # noqa: PTH207
             path = Path(match)
             if not path.is_dir():
@@ -54,17 +40,10 @@ def expand_position_dirpaths(patterns: list[str]) -> list[Path]:
 
 
 class OptionEatAll(TyperOption):
-    """A Typer option that greedily consumes the tokens that follow it.
+    """An option that collects all following tokens, up to the next flag.
 
-    ``-i a b c`` is collected as ``["a", "b", "c"]`` (consumption stops at the
-    next option flag), so an *unquoted* shell glob like ``-i input.zarr/*/*/*``
-    works without quoting. Typer/Click options otherwise take only a fixed
-    number of values, so we hook the parser ourselves — the Typer-era version
-    of the classic Click ``OptionEatAll`` recipe.
-
-    Use only on a ``multiple`` (list) option: each eaten token is forwarded to
-    the option's append action, i.e. ``-i a b c`` behaves like ``-i a -i b -i c``.
-
+    ``-i a b c`` yields ``["a", "b", "c"]``, so unquoted shell globs like
+    ``-i input.zarr/*/*/*`` work. Use only on a ``multiple`` (list) option.
     """
 
     def add_to_parser(self, parser: _OptionParser, ctx: Context) -> None:
@@ -89,7 +68,7 @@ def install_eat_all_positions(group: TyperGroup) -> None:
     """Re-class every ``input_position_dirpaths`` option to ``OptionEatAll``.
 
     Typer exposes no ``cls=`` hook for options, so the swap happens on the
-    already-built command params after ``typer.main.get_command``. Idempotent.
+    already-built command params after ``typer.main.get_command``.
     """
     for command in group.commands.values():
         for param in command.params:
@@ -97,8 +76,6 @@ def install_eat_all_positions(group: TyperGroup) -> None:
                 param.__class__ = OptionEatAll
 
 
-# Shared ``-i`` option: a position path, plate root, or glob. ``OptionEatAll``
-# (installed in cli.py) lets one ``-i`` consume several space-separated paths.
 InputPositionDirpaths = Annotated[
     list[str],
     typer.Option(
