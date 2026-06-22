@@ -1,83 +1,113 @@
-from collections.abc import Callable
-from pathlib import Path
+from __future__ import annotations
 
-import click
+import glob
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated
+
+import typer
 from natsort import natsorted
+from typer.core import TyperGroup, TyperOption
 
 from iohub.ngff import Plate, open_ome_zarr
 
-
-def _validate_and_process_paths(ctx: click.Context, opt: click.Option, value: list[str]) -> list[Path]:
-    # Sort and validate the input paths,
-    # expanding plates into lists of positions
-    input_paths = [p for p in map(Path, natsorted(value)) if p.is_dir()]
-    for path in input_paths:
-        with open_ome_zarr(path, mode="r") as dataset:
-            if isinstance(dataset, Plate):
-                plate_path = input_paths.pop()
-                input_paths.extend(plate_path / position[0] for position in dataset.positions())
-
-    return input_paths
+if TYPE_CHECKING:
+    # Typer's vendored Click parser types. Imported only for type checking so
+    # the module never couples to these private names at import time (a Typer
+    # upgrade that renames them fails the guard test, not every iohub import).
+    from typer._click.core import Context
+    from typer._click.parser import _OptionParser
 
 
-def input_position_dirpaths() -> Callable:
-    def decorator(f: Callable) -> Callable:
-        return click.option(
-            "--input-position-dirpaths",
-            "-i",
-            cls=OptionEatAll,
-            type=tuple,
-            required=True,
-            callback=_validate_and_process_paths,
-            help=(
-                "List of paths to input positions, "
-                "each with the same TCZYX shape. "
-                "Supports wildcards e.g. 'input.zarr/*/*/*'."
-            ),
-        )(f)
+def expand_position_dirpaths(patterns: list[str]) -> list[Path]:
+    """Expand input patterns into OME-Zarr FOV position dirpaths.
 
-    return decorator
+    Each pattern may be one of:
+
+    - a single position path (used as-is),
+    - a plate root, which is expanded into all of its positions, or
+    - a glob pattern such as ``input.zarr/*/*/*``.
+
+    Globs are expanded whether the shell expanded them first (``OptionEatAll``
+    collects the resulting tokens) or they reach Python intact (e.g. quoted, or
+    on a shell that does not glob, such as on Windows). Non-directory matches
+    (such as ``zarr.json``) are ignored.
+
+    Raises ``typer.BadParameter`` if no pattern matches any directory.
+    """
+    positions: list[Path] = []
+    for pattern in patterns:
+        # glob.glob handles arbitrary absolute/relative user patterns (Path.glob
+        # can't take an absolute pattern). Non-directory matches (e.g. a
+        # well-level zarr.json swept up by ``*/*/*``) are skipped.
+        for match in natsorted(glob.glob(pattern)):  # noqa: PTH207
+            path = Path(match)
+            if not path.is_dir():
+                continue
+            with open_ome_zarr(path, mode="r") as node:
+                if isinstance(node, Plate):
+                    positions.extend(path / name for name, _ in node.positions())
+                else:
+                    positions.append(path)
+    if not positions:
+        raise typer.BadParameter(f"No positions matched: {list(patterns)}")
+    return positions
 
 
-# Copied directly from https://stackoverflow.com/a/48394004
-# Enables `-i ./input.zarr/*/*/*`
-class OptionEatAll(click.Option):
-    def __init__(self, *args, **kwargs):
-        self.save_other_options = kwargs.pop("save_other_options", True)
-        nargs = kwargs.pop("nargs", -1)
-        assert nargs == -1, f"nargs, if set, must be -1 not {nargs}"
-        super().__init__(*args, **kwargs)
-        self._previous_parser_process = None
-        self._eat_all_parser = None
+class OptionEatAll(TyperOption):
+    """A Typer option that greedily consumes the tokens that follow it.
 
-    def add_to_parser(self, parser, ctx):
-        def parser_process(value, state):
-            # method to hook to the parser.process
-            done = False
-            value = [value]
-            if self.save_other_options:
-                # grab everything up to the next option
-                while state.rargs and not done:
-                    for prefix in self._eat_all_parser.prefixes:
-                        if state.rargs[0].startswith(prefix):
-                            done = True
-                    if not done:
-                        value.append(state.rargs.pop(0))
-            else:
-                # grab everything remaining
-                value += state.rargs
-                state.rargs[:] = []
-            value = tuple(value)
+    ``-i a b c`` is collected as ``["a", "b", "c"]`` (consumption stops at the
+    next option flag), so an *unquoted* shell glob like ``-i input.zarr/*/*/*``
+    works without quoting. Typer/Click options otherwise take only a fixed
+    number of values, so we hook the parser ourselves — the Typer-era version
+    of the classic Click ``OptionEatAll`` recipe.
 
-            # call the actual process
-            self._previous_parser_process(value, state)
+    Use only on a ``multiple`` (list) option: each eaten token is forwarded to
+    the option's append action, i.e. ``-i a b c`` behaves like ``-i a -i b -i c``.
 
-        retval = super().add_to_parser(parser, ctx)
-        for name in self.opts:
-            our_parser = parser._long_opt.get(name) or parser._short_opt.get(name)
-            if our_parser:
-                self._eat_all_parser = our_parser
-                self._previous_parser_process = our_parser.process
-                our_parser.process = parser_process
-                break
-        return retval
+    """
+
+    def add_to_parser(self, parser: _OptionParser, ctx: Context) -> None:
+        super().add_to_parser(parser, ctx)
+        for opt_name in self.opts:
+            registered = parser._long_opt.get(opt_name) or parser._short_opt.get(opt_name)
+            if registered is None:
+                continue
+            append_one = registered.process
+
+            def eat_all(value, state, _append=append_one, _prefixes=registered.prefixes):
+                _append(value, state)
+                # Keep eating until the next option flag (or the end of args).
+                while state.rargs and not any(state.rargs[0].startswith(p) for p in _prefixes):
+                    _append(state.rargs.pop(0), state)
+
+            registered.process = eat_all
+            break
+
+
+def install_eat_all_positions(group: TyperGroup) -> None:
+    """Re-class every ``input_position_dirpaths`` option to ``OptionEatAll``.
+
+    Typer exposes no ``cls=`` hook for options, so the swap happens on the
+    already-built command params after ``typer.main.get_command``. Idempotent.
+    """
+    for command in group.commands.values():
+        for param in command.params:
+            if isinstance(param, TyperOption) and param.name == "input_position_dirpaths":
+                param.__class__ = OptionEatAll
+
+
+# Shared ``-i`` option: a position path, plate root, or glob. ``OptionEatAll``
+# (installed in cli.py) lets one ``-i`` consume several space-separated paths.
+InputPositionDirpaths = Annotated[
+    list[str],
+    typer.Option(
+        "--input-position-dirpaths",
+        "-i",
+        help=(
+            "Input positions. Accepts position paths, a plate root (expanded "
+            "into all positions), or a shell glob. One -i may "
+            "take several space-separated paths."
+        ),
+    ),
+]
