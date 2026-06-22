@@ -8,7 +8,7 @@ import numpy as np
 
 
 def downsample_block(data: np.ndarray, factors: list[int], method: str) -> np.ndarray:
-    """Downsample an N-D numpy block by integer factors.
+    """Downsample an N-D numpy block by integer factors (1 = pass through).
 
     Axes whose size is not an exact multiple of the corresponding factor
     are edge-padded up to the next multiple before pooling, so the output
@@ -16,22 +16,6 @@ def downsample_block(data: np.ndarray, factors: list[int], method: str) -> np.nd
     block on such an axis is averaged together with the boundary value,
     which matches the ceiling-division shape that ``initialize_pyramid``
     allocates for downstream pyramid levels.
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        Source block.
-    factors : list of int
-        Integer downsample factor per axis. Use 1 for axes that should pass
-        through unchanged.
-    method : str
-        Aggregation method: ``"mean"``, ``"median"``, ``"min"``, ``"max"``,
-        ``"mode"``, or ``"stride"``.
-
-    Returns
-    -------
-    numpy.ndarray
-        Downsampled block with shape ``tuple(ceil(s / f) for s, f in zip(data.shape, factors))``.
     """
     if method == "stride":
         return data[tuple(slice(None, None, f) for f in factors)]

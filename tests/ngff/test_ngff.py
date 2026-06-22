@@ -1758,15 +1758,20 @@ def test_downsample_block_odd_axis():
 def test_compute_pyramid_odd_axis(tmp_path, implementation):
     """Regression: pyramid mean-pool covers the full extent of an odd source axis.
 
-    The zarr-python backend previously recomputed a per-region "local
-    factor" from ``src_size // tgt_size`` inside ``downsample_region``.
-    When the source axis was odd (for example X=21 -> target L1 X=11),
-    floor division collapsed the X factor from 2 to 1, so the downsampled
-    block kept its full X resolution and zarr-python truncated the
-    assignment to the leading ``tgt_size`` columns. The second half of
-    the axis was silently discarded. This test puts a strictly increasing
-    ramp along X and asserts that the last L1 column tracks the last L0
-    column rather than capping at the L0 midpoint.
+    The zarr-python backend (and zarrs-python, which subclasses it)
+    previously recomputed a per-region "local factor" from
+    ``src_size // tgt_size`` inside ``downsample_region``. When the source
+    axis was odd (for example X=21 -> target L1 X=11), floor division
+    collapsed the X factor from 2 to 1, so the downsampled block kept its
+    full X resolution and zarr-python truncated the assignment to the
+    leading ``tgt_size`` columns. The second half of the axis was silently
+    discarded. This test puts a strictly increasing ramp along X and asserts
+    that the last L1 column tracks the last L0 column rather than capping at
+    the L0 midpoint.
+
+    tensorstore uses its own native ``ts.downsample`` path (never had the
+    bug), but is parametrized here because it is the primary pyramiding
+    backend and must hold the same odd-axis contract.
     """
     if implementation == "tensorstore":
         pytest.importorskip("tensorstore")

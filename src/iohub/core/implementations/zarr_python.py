@@ -170,10 +170,8 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
     ) -> None:
         """Read, downsample, and write a single shard-aligned region.
 
-        The caller-supplied ``factors`` are passed through to
-        ``downsample_block``. Partial trailing blocks on odd-sized source
-        axes are handled inside ``downsample_block`` by edge padding so the
-        downsampled output matches the ceiling-division target region shape.
+        Factors pass through to ``downsample_block`` unchanged; recomputing a
+        per-region factor reintroduces the odd-axis truncation bug.
         """
         source_region = target_region_to_source(target_region, factors, source.shape)
         source_data = np.asarray(source[source_region])
