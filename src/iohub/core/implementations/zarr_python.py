@@ -168,11 +168,7 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         factors: list[int],
         method: str = "mean",
     ) -> None:
-        """Read, downsample, and write a single shard-aligned region.
-
-        Factors pass through to ``downsample_block`` unchanged; recomputing a
-        per-region factor reintroduces the odd-axis truncation bug.
-        """
+        """Read, downsample, and write a single shard-aligned region."""
         source_region = target_region_to_source(target_region, factors, source.shape)
         source_data = np.asarray(source[source_region])
         downsampled = downsample_block(source_data, factors, method)
