@@ -127,7 +127,6 @@ def _make_position(rng, tmp_dir, channel_names, shape, scales=None, name="test.z
 @given(params=_xarray_roundtrip_params())
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[
         HealthCheck.data_too_large,
         HealthCheck.function_scoped_fixture,
@@ -159,7 +158,6 @@ def test_roundtrip_data_and_scales(rng, params):
 @given(time_unit=time_unit_st, space_unit=space_unit_st)
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 def test_roundtrip_coordinate_units(rng, time_unit, space_unit):
@@ -183,7 +181,6 @@ def test_roundtrip_coordinate_units(rng, time_unit, space_unit):
 @given(attrs=json_attrs_st)
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 def test_roundtrip_value_attrs(rng, attrs):
@@ -210,7 +207,6 @@ def test_roundtrip_value_attrs(rng, attrs):
 @given(params=_xarray_roundtrip_params())
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[
         HealthCheck.data_too_large,
         HealthCheck.function_scoped_fixture,
@@ -246,7 +242,6 @@ def test_write_channel_subset(rng, params):
 @given(params=_xarray_roundtrip_params())
 @settings(
     max_examples=16,
-    deadline=2000,
     suppress_health_check=[
         HealthCheck.data_too_large,
         HealthCheck.function_scoped_fixture,

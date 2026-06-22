@@ -1,0 +1,27 @@
+rules:
+  # Require every action to be pinned to a full commit SHA.
+  unpinned-uses:
+    config:
+      policies:
+        "*": hash-pin
+  # Only allow actions from these trusted owners; add new owners deliberately.
+  forbidden-uses:
+    config:
+      allow:
+        - actions/*
+        - astral-sh/*
+        - j178/*
+        - re-actors/*
+        - zizmorcore/*
+  # python-version / platform come from the in-workflow matrix, not external input.
+  template-injection:
+    ignore:
+      - test.yml
+      - pr.yml
+  # docs.yml's deploy job intentionally persists credentials to push docs via mike.
+  artipacked:
+    ignore:
+      - docs.yml
+  # Requiring an explicit name on every job/step is stylistic noise for this repo.
+  anonymous-definition:
+    disable: true
