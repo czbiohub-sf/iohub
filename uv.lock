@@ -748,7 +748,7 @@ requires-dist = [
     { name = "pydantic-extra-types", specifier = ">=2.9.0" },
     { name = "rich" },
     { name = "tensorstore", marker = "extra == 'tensorstore'", specifier = ">=0.1.64" },
-    { name = "tifffile", specifier = ">=2025.5.21" },
+    { name = "tifffile", specifier = ">=2026.5.2" },
     { name = "tqdm" },
     { name = "xarray", specifier = ">=2024.1.1" },
     { name = "zarr", specifier = ">=3.1.6" },
