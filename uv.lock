@@ -690,6 +690,7 @@ source = { editable = "." }
 dependencies = [
     { name = "blosc2" },
     { name = "dask", extra = ["array"] },
+    { name = "lazy-loader" },
     { name = "natsort" },
     { name = "ndtiff" },
     { name = "pandas" },
@@ -750,6 +751,7 @@ test = [
 requires-dist = [
     { name = "blosc2" },
     { name = "dask", extras = ["array"] },
+    { name = "lazy-loader", specifier = ">=0.4" },
     { name = "natsort", specifier = ">=8.4.0" },
     { name = "ndtiff", specifier = ">=2.2.1" },
     { name = "pandas", specifier = ">=2" },

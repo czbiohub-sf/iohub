@@ -8,11 +8,16 @@ import typer
 from natsort import natsorted
 from typer.core import TyperGroup, TyperOption
 
-from iohub.ngff import Plate, open_ome_zarr
-
 if TYPE_CHECKING:
     from typer._click.core import Context
     from typer._click.parser import _OptionParser
+
+__all__ = [
+    "InputPositionDirpaths",
+    "OptionEatAll",
+    "expand_position_dirpaths",
+    "install_eat_all_positions",
+]
 
 
 def expand_position_dirpaths(patterns: list[str]) -> list[Path]:
@@ -22,6 +27,8 @@ def expand_position_dirpaths(patterns: list[str]) -> list[Path]:
     positions), or a glob. Non-directory matches are ignored. Raises
     ``typer.BadParameter`` if nothing matches.
     """
+    from iohub.ngff import Plate, open_ome_zarr
+
     positions: list[Path] = []
     for pattern in patterns:
         # glob.glob (not Path.glob) handles absolute patterns.

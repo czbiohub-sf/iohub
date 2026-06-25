@@ -1,23 +1,21 @@
 import logging
 import pathlib
 from enum import StrEnum
+from importlib.metadata import version
 from typing import Annotated
 
 import typer
 from typer.core import TyperGroup
 from typer.main import get_command
 
-from iohub import __version__, open_ome_zarr
+# Heavy iohub imports (ngff/convert/reader/...) are deferred into the command
+# bodies so ``-h``/``--version``/completion don't pay for the scientific stack.
 from iohub.cli.parsing import (
     InputPositionDirpaths,
     expand_position_dirpaths,
     install_eat_all_positions,
 )
-from iohub.convert import TIFFConverter
-from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
 from iohub.core.types import NGFFVersion
-from iohub.reader import print_info
-from iohub.rename_wells import rename_wells
 
 _logger = logging.getLogger(__name__)
 
@@ -26,7 +24,7 @@ app = typer.Typer(context_settings={"help_option_names": ["-h", "--help"]})
 
 def _version_callback(value: bool) -> None:
     if value:
-        typer.echo(f"iohub, version {__version__}")
+        typer.echo(f"iohub, version {version('iohub')}")
         raise typer.Exit()
 
 
@@ -71,6 +69,8 @@ def info(
     OME-Zarr directory stores (v0.4 and v0.5), and RFC-9 zipped
     OME-Zarr archives (``.ozx``).
     """
+    from iohub.reader import print_info
+
     for file in files:
         typer.echo(f"Reading file:\t {file}")
         print_info(file, verbose=verbose)
@@ -129,6 +129,9 @@ def convert(
     ``.ozx`` output packs an RFC-9 zip archive; a ``.ozx`` source plus
     a ``.zarr`` output unpacks back to a directory store.
     """
+    from iohub.convert import TIFFConverter
+    from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
+
     src = pathlib.Path(input)
     dst = pathlib.Path(output)
     tiff_only = grid_layout or chunks != "XYZ"
@@ -183,6 +186,8 @@ def set_scale(
 
     `iohub set-scale -i input.zarr/A/1/0 -z 2.0`
     """
+    from iohub import open_ome_zarr
+
     if image is None:
         image = "0"
     for input_position_dirpath in expand_position_dirpaths(input_position_dirpaths):
@@ -252,6 +257,8 @@ def compute_pyramid(
 
     `iohub compute-pyramid -i input.zarr/A/1/0 -l 3 -m median --dims y,x`
     """
+    from iohub import open_ome_zarr
+
     parsed_dims = _parse_dims(dims)
     for input_position_dirpath in expand_position_dirpaths(input_position_dirpaths):
         _logger.info(f"Computing pyramid for {input_position_dirpath}")
@@ -293,6 +300,8 @@ def rename_wells_command(
     A / 2, B / 2
     ```
     """
+    from iohub.rename_wells import rename_wells
+
     rename_wells(zarrfile, csvfile)
 
 
