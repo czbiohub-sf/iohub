@@ -1,10 +1,8 @@
 # Greedy CLI options (`OptionEatAll`)
 
-Typer and Click options take a fixed number of values, so `-i a b c` fails — you
-must repeat the flag (`-i a -i b -i c`). iohub's CLI restores the greedy form,
-where one `-i` eats every following path (so an unquoted shell glob like
-`-i input.zarr/*/*/*` works), and exposes the building blocks for downstream
-Typer CLIs.
+A Typer option normally takes one value, so `-i a b c` fails. iohub makes `-i`
+greedy: one flag eats every path that follows, so `-i input.zarr/*/*/*` works
+unquoted. These building blocks are exported for your own Typer CLI to reuse.
 
 ```python
 from iohub.cli import (
