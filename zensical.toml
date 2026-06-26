@@ -51,6 +51,7 @@ nav = [
   { "Home" = "index.md" },
   { "Getting Started" = "getting_started.md" },
   { "CLI Reference" = "cli.md" },
+  { "Greedy CLI options" = "greedy-cli-options.md" },
   { "Examples" = [
     "examples/index.md",
     "examples/single_fov_ome_zarr.md",
