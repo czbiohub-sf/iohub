@@ -8,7 +8,9 @@ from zarr.storage import StoreLike
 
 # Zarr format / NGFF version
 type ZarrFormat = Literal[2, 3]
-type NGFFVersion = Literal["0.4", "0.5"]
+# Plain alias (not a PEP 695 ``type``) so tools can introspect it as a runtime
+# Literal — e.g. Typer reads it directly to build the CLI's version choices.
+NGFFVersion = Literal["0.4", "0.5"]
 
 # Store access mode
 type AccessMode = Literal["r", "r+", "a", "w", "w-"]
