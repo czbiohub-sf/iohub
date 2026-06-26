@@ -12,9 +12,6 @@ from iohub.cli import (
     OptionEatAll,               # the greedy-option class itself
 )
 ```
-
-These imports are lightweight — they do not pull in iohub's array stack.
-
 ## Reuse iohub's position input
 
 The common case: accept the same `-i` as iohub, with plate/glob expansion and
@@ -83,5 +80,3 @@ cli()
 ```bash
 mytool cat -f a b c   # -> ['a', 'b', 'c']
 ```
-
-That swap is exactly what `install_eat_all_positions` does internally.
