@@ -44,14 +44,19 @@ def test_convert_round_trip(tmp_path, version):
     out = tmp_path / "out.zarr"
     TIFFConverter(ND2_PATH, out, version=version)()
     with nd2.ND2File(ND2_PATH) as expected, open_ome_zarr(out, mode="r", version=version) as plate:
-        # squeeze=False keeps all present axes; padded to (T, C, Z, Y, X),
-        # plus a leading P axis only when the file has stage positions.
-        exp = np.asarray(expected.to_xarray(squeeze=False))
-        if "P" in expected.sizes:
-            exp = exp[0]  # first FOV
+        # nd2 returns axes in native (non-canonical) order, e.g. (Z, C) for
+        # some files; align by label to canonical (T, C, Z, Y, X) before
+        # comparing so the check holds for any axis combination.
+        xda = expected.to_xarray(squeeze=False)
+        if "P" in xda.dims:
+            xda = xda.isel(P=0)  # first FOV
+        for dim in ("T", "C", "Z"):
+            if dim not in xda.dims:
+                xda = xda.expand_dims(dim)
+        exp = xda.transpose("T", "C", "Z", "Y", "X").to_numpy()
         _, pos = next(plate.positions())
         got = pos["0"][:]  # (T, C, Z, Y, X)
         # native dtype preserved (no float16 downcast)
         assert got.dtype == expected.dtype
-        # byte-for-byte match, no axis swaps
+        # byte-for-byte match, canonical order, no axis swaps
         np.testing.assert_array_equal(got, exp)
