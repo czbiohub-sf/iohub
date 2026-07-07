@@ -682,6 +682,7 @@ dependencies = [
     { name = "blosc2" },
     { name = "dask", extra = ["array"] },
     { name = "natsort" },
+    { name = "nd2" },
     { name = "ndtiff" },
     { name = "pandas" },
     { name = "pillow" },
@@ -741,6 +742,7 @@ requires-dist = [
     { name = "blosc2" },
     { name = "dask", extras = ["array"] },
     { name = "natsort", specifier = ">=8.4.0" },
+    { name = "nd2", specifier = ">=0.10.1" },
     { name = "ndtiff", specifier = ">=2.2.1" },
     { name = "pandas", specifier = ">=2" },
     { name = "pillow", specifier = ">=9.4.0" },
@@ -1311,6 +1313,23 @@ wheels = [
 ]
 
 [[package]]
+name = "nd2"
+version = "0.11.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dask", extra = ["array"] },
+    { name = "numpy" },
+    { name = "ome-types" },
+    { name = "pydantic-core", marker = "python_full_version >= '3.13'" },
+    { name = "resource-backed-dask-array" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e3/e7/2bf7dcb2c011aad251d7041ff592c8ceab30fa6d5c40b654434f0e25e5ba/nd2-0.11.3.tar.gz", hash = "sha256:c153fccee87ef3df27accd18cf813502ceb19289de266a61cc29a5346c43fc91", size = 880585, upload-time = "2026-03-27T19:55:35.165Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/51/4f3af9658395bf5549b424b8620df790ba60513d0c093222a55ec5cbb720/nd2-0.11.3-py3-none-any.whl", hash = "sha256:5cf735dc02bb7b8fb400f657f8c04e73f51c28c1032c644a7746948c13be38f9", size = 102111, upload-time = "2026-03-27T19:55:33.398Z" },
+]
+
+[[package]]
 name = "ndindex"
 version = "1.10.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1535,6 +1554,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e8/46/52fc0d2a68d7643f0f149eeea5a5d8ea2a3507056ac8afa83c9212606e8b/numpy-2.5.0-cp314-cp314t-win32.whl", hash = "sha256:edadfbd4794b1086c0d822f81863e8a68fc129d132fd0bb9e31e955d7fbbbdb7", size = 6253168, upload-time = "2026-06-21T20:57:45.101Z" },
     { url = "https://files.pythonhosted.org/packages/2a/be/6c8d1118b5f13b2881dc095d5b345de19c6638b8959c17409b6eff84c8aa/numpy-2.5.0-cp314-cp314t-win_amd64.whl", hash = "sha256:f7e5fa4382967ae6548bd2f174219afb908e294b0d5f625af01166edd5f7d9aa", size = 12736286, upload-time = "2026-06-21T20:57:46.935Z" },
     { url = "https://files.pythonhosted.org/packages/fd/6a/d3a169aaf8536cf228d56a09e04bcb713a2fe4410d4e2105b9419b5a9c89/numpy-2.5.0-cp314-cp314t-win_arm64.whl", hash = "sha256:016623417bb330d719d579daf2d6b9a01ddc52e41a9ed61a47f39fde46dcd865", size = 10686451, upload-time = "2026-06-21T20:57:49.313Z" },
+]
+
+[[package]]
+name = "ome-types"
+version = "0.6.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+    { name = "pydantic-core", marker = "python_full_version >= '3.13'" },
+    { name = "pydantic-extra-types" },
+    { name = "xsdata" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/48/4c/d252c1619c733eec9b4d2d21fe369fd21a2594954b396bf4352edea1e272/ome_types-0.6.3.tar.gz", hash = "sha256:eef4138cda5edfdcb2a44cfb90b714a59ead1b69e4c5ce5f9892ad397ccaaa68", size = 121784, upload-time = "2025-11-26T00:28:24.34Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fc/6a/1000cad1700ab0af4d1b1d0a9c23c34badddb4f547c008bde2a6c61968f1/ome_types-0.6.3-py3-none-any.whl", hash = "sha256:ce9753ff351bbc534ee5c5038d3cf60b1e4c13d69ad2e6b5a5b75de2a52521a5", size = 245802, upload-time = "2025-11-26T00:28:22.853Z" },
 ]
 
 [[package]]
@@ -2098,6 +2132,19 @@ wheels = [
 ]
 
 [[package]]
+name = "resource-backed-dask-array"
+version = "0.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "dask", extra = ["array"] },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/62/80/b8952048ae1772d33b95dbf7d7107cf364c037cc229a2690fc8fa9ee8e48/resource_backed_dask_array-0.1.0.tar.gz", hash = "sha256:8fabcccf5c7e29059b5badd6786dd7675a258a203c58babf10077d9c90ada54f", size = 10300, upload-time = "2022-02-18T02:10:06.981Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/b5/852f619e53fa7fb70d8915fcae66632df3958cac7e926c4ac38458958674/resource_backed_dask_array-0.1.0-py2.py3-none-any.whl", hash = "sha256:ec457fa72d81f0340a67ea6557a5a5919323a11cccc978a950df29fa69fe5679", size = 8044, upload-time = "2022-02-18T02:10:05.559Z" },
+]
+
+[[package]]
 name = "rich"
 version = "14.3.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2591,6 +2638,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/0f/03/e3353b72e518574b32993989d8f696277bf878e9d508c7dd22e86c0dab5b/xarray-2026.2.0.tar.gz", hash = "sha256:978b6acb018770554f8fd964af4eb02f9bcc165d4085dbb7326190d92aa74bcf", size = 3111388, upload-time = "2026-02-13T22:20:50.18Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/99/92/545eb2ca17fc0e05456728d7e4378bfee48d66433ae3b7e71948e46826fb/xarray-2026.2.0-py3-none-any.whl", hash = "sha256:e927d7d716ea71dea78a13417970850a640447d8dd2ceeb65c5687f6373837c9", size = 1405358, upload-time = "2026-02-13T22:20:47.847Z" },
+]
+
+[[package]]
+name = "xsdata"
+version = "26.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2f/c9/71e9e8eac669091fd434ed494d806c8cc37614aecb34ce4c62c283f99abf/xsdata-26.2.tar.gz", hash = "sha256:c631af71aaa75734f8ce92a08fcf8389d905dee2aab0b5032c9032e9071009a6", size = 349690, upload-time = "2026-02-15T16:13:31.274Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/92/f0edcbc2f895ecea14a68e492b24c157625e251279a94b172a6b263290e7/xsdata-26.2-py3-none-any.whl", hash = "sha256:85a591a4405d903416afbd4a917e8dda8ea44641a3e66d72134bc2a31b3c16b0", size = 235561, upload-time = "2026-02-15T16:13:29.614Z" },
 ]
 
 [[package]]
