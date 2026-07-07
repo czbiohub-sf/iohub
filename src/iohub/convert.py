@@ -9,6 +9,7 @@ from tqdm import tqdm
 from tqdm.contrib.itertools import product
 from tqdm.contrib.logging import logging_redirect_tqdm
 
+from iohub.nd2 import ND2Dataset
 from iohub.ngff.models import TransformationMeta
 from iohub.ngff.nodes import Position, open_ome_zarr
 from iohub.ngff.utils import (
@@ -130,6 +131,7 @@ class TIFFConverter:
         if reader_type := type(self.reader) not in (
             MMStack,
             NDTiffDataset,
+            ND2Dataset,
         ):
             raise TypeError(f"Reader type {reader_type} not supported for conversion.")
         _logger.debug("Finished initializing data.")
@@ -395,7 +397,9 @@ class TIFFConverter:
             ):
                 zarr_img = self.writer[zarr_pos_name]["0"]
                 zarr_img.write_from_dask(fov.xdata.data.rechunk(self.chunks))
-                self._convert_image_plane_metadata(fov, f"{zarr_pos_name.lstrip('/')}/0")
+                # ND2 has no per-frame plane metadata export in v1.
+                if not isinstance(self.reader, ND2Dataset):
+                    self._convert_image_plane_metadata(fov, f"{zarr_pos_name.lstrip('/')}/0")
 
         self.writer.zgroup.attrs.update(self.metadata)
         self.writer.close()

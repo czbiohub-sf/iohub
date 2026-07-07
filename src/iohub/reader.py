@@ -127,7 +127,9 @@ def _get_sub_dirs(directory: Path) -> list[str]:
 
 def _infer_format(path: Path):
     extra_info = None
-    if is_ozx_path(path):
+    if path.is_file() and path.suffix.lower() == ".nd2":
+        data_type = "nd2"
+    elif is_ozx_path(path):
         data_type = "omezarr"
         extra_info = read_ozx_version(path) or "0.5"
     elif ngff_version := _check_zarr_data_type(path):
@@ -146,7 +148,7 @@ def _infer_format(path: Path):
 
 def read_images(
     path: StrOrBytesPath,
-    data_type: Literal["ometiff", "ndtiff", "omezarr"] | None = None,
+    data_type: Literal["ometiff", "ndtiff", "omezarr", "nd2"] | None = None,
 ) -> BaseFOVMapping | Plate | Position | TiledPosition:
     """Read image arrays and metadata from a Micro-Manager dataset.
 
@@ -194,6 +196,10 @@ def read_images(
             raise ValueError(f"NGFF version {extra_info} is not supported.")
     elif data_type == "ndtiff":
         return NDTiffDataset(path)
+    elif data_type == "nd2":
+        from iohub.nd2 import ND2Dataset
+
+        return ND2Dataset(path)
     else:
         raise ValueError(f"Reader of type {data_type} is not implemented")
 
