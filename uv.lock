@@ -433,6 +433,19 @@ wheels = [
 ]
 
 [[package]]
+name = "czarr"
+version = "0.0.1a0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "session-info2" },
+    { name = "zarr" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fa/3f/a419a480b6472965ebc05bc02660eb293f6d6fb14cb5526aadd253571b9e/czarr-0.0.1a0.tar.gz", hash = "sha256:b3ef7b9a1f414bd87140e3b955516987e82905096009b43590debc1fe07af2b3", size = 307217, upload-time = "2026-07-07T22:26:52.784Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/df/3aa00230f2a88591f6a90ee7a5b2aa4b01019a7515eeb7b43f1b8928c8b8/czarr-0.0.1a0-py3-none-any.whl", hash = "sha256:f062bd15d75d76c255e3ec9b5dc3febd62028f06f8313e09f27a48a88be9328f", size = 104699, upload-time = "2026-07-07T22:26:51.053Z" },
+]
+
+[[package]]
 name = "dask"
 version = "2026.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -696,6 +709,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+czarr = [
+    { name = "czarr" },
+]
 tensorstore = [
     { name = "tensorstore" },
 ]
@@ -739,6 +755,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "blosc2" },
+    { name = "czarr", marker = "extra == 'czarr'" },
     { name = "dask", extras = ["array"] },
     { name = "natsort", specifier = ">=8.4.0" },
     { name = "ndtiff", specifier = ">=2.2.1" },
@@ -754,7 +771,7 @@ requires-dist = [
     { name = "zarr", specifier = ">=3.1.6" },
     { name = "zarrs", specifier = ">=0.2.3" },
 ]
-provides-extras = ["tensorstore"]
+provides-extras = ["czarr", "tensorstore"]
 
 [package.metadata.requires-dev]
 acquire-zarr = [{ name = "acquire-zarr" }]
@@ -824,7 +841,7 @@ name = "itkwasm-downsample-emscripten"
 version = "1.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "itkwasm", marker = "sys_platform == 'emscripten'" },
+    { name = "itkwasm" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/cb/b0/5ac52684cc39721362215e77574f6d0b311bab7c174c293a31c96c19b2c3/itkwasm_downsample_emscripten-1.8.1.tar.gz", hash = "sha256:905f39d4ae9ccb58e8ccfc5de7313c5d59c10073258e63aab6fa667e6403672e", size = 120396, upload-time = "2025-11-09T16:09:30.397Z" }
 wheels = [
@@ -836,8 +853,8 @@ name = "itkwasm-downsample-wasi"
 version = "1.8.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "importlib-resources", marker = "sys_platform != 'emscripten'" },
-    { name = "itkwasm", marker = "sys_platform != 'emscripten'" },
+    { name = "importlib-resources" },
+    { name = "itkwasm" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d0/b5/ebea8e41b2be5633bea1f4f7ae7996c8cdde25b3d96b3e7d450ebade088d/itkwasm_downsample_wasi-1.8.1.tar.gz", hash = "sha256:3b290a9194654460f0f92b0aebdcfa76a87a2d8ede525c8719d6709a42ac30a4", size = 4403183, upload-time = "2025-11-09T16:08:48.522Z" }
 wheels = [
@@ -2337,6 +2354,15 @@ wheels = [
 ]
 
 [[package]]
+name = "session-info2"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/50/17/c6a81d91781734bd10d7842c32de665f34395b4db234abdc80dac271632b/session_info2-0.4.1.tar.gz", hash = "sha256:3bb2bf7b73b2e13a1737e9aa91a6dae55e2c49e83bee973f24245f31ae264a1f", size = 25207, upload-time = "2026-04-08T11:30:55.959Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/d7/6893c9c2a52e4bcbeca2a2bf2aee970a686cc7bf555f97db13b00f35250e/session_info2-0.4.1-py3-none-any.whl", hash = "sha256:423b3f6bb7023433cfc3f791a6fdbb6a2cfbe226770ae6c127c3b2c4cf5a9d56", size = 17696, upload-time = "2026-04-08T11:30:54.707Z" },
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2699,7 +2725,7 @@ wheels = [
 
 [[package]]
 name = "zarr"
-version = "3.1.6"
+version = "3.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "donfig" },
@@ -2709,9 +2735,9 @@ dependencies = [
     { name = "packaging" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/5a/b8a0cf39a14c770c30bd1f2d120c54000c8cd9e84e8e79f38d9a7ce58071/zarr-3.1.6.tar.gz", hash = "sha256:d95e72cbea4b90e9a70679468b8266400331756232576ae2b43400ac5108d0eb", size = 386531, upload-time = "2026-03-23T17:25:18.748Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/93/8d/aeb164004f87543b06ef54f885d02c342c31ceb274e2bbec470a98927621/zarr-3.2.1.tar.gz", hash = "sha256:71565b738a0e7e8ed226f0516eba8c6bb53440ad7669a8c48ebb3534a161d035", size = 675161, upload-time = "2026-05-05T12:37:22.383Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/de/7c/ba8ca8cbe9dbef8e83a95fc208fed8e6686c98b4719aaa0aa7f3d31fe390/zarr-3.1.6-py3-none-any.whl", hash = "sha256:b5a82c5079d1c3d4ee8f06746fa3b9a98a7d804300fa3f4be154362a33e1207e", size = 295655, upload-time = "2026-03-23T17:25:17.189Z" },
+    { url = "https://files.pythonhosted.org/packages/88/0a/469e2bd01be1490336e6c8707386845655d59261543315778a3ccc7e8019/zarr-3.2.1-py3-none-any.whl", hash = "sha256:f78cdd3d9687ad0e9f9cba2c5683b64f0c52589c19f685eeabe872e93cc0d2c7", size = 319617, upload-time = "2026-05-05T12:37:20.66Z" },
 ]
 
 [[package]]

@@ -7,4 +7,5 @@ For direct imports::
 
     from iohub.core.implementations.zarr_python import ZarrPythonImplementation
     from iohub.core.implementations.tensorstore import TensorStoreImplementation
+    from iohub.core.implementations.czarr import CzarrImplementation
 """

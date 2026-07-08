@@ -67,4 +67,54 @@ class TensorStoreConfig(BaseModel):
     extra_context: dict | None = None
 
 
-ImplementationConfig = ZarrConfig | TensorStoreConfig
+CZARR_CODEC_PIPELINE = "czarr.pipeline.CzarrPipeline"
+
+
+class CzarrConfig(BaseModel):
+    """Config for the czarr (GPU-accelerated) implementation.
+
+    Benchmark-only backend (see SRI-3); not intended for iohub's main branch.
+
+    By default this behaves like ``zarrs-python``: a drop-in codec-pipeline
+    swap (``czarr.pipeline.CzarrPipeline``) plus per-codec registry overrides,
+    with zarr's plain ``LocalStore`` and CPU buffer prototypes untouched.
+    Reads/writes stay ``numpy.ndarray`` in/out and only the decode step runs
+    on the GPU (nvCOMP) -- bytes are still read from disk on the CPU first.
+
+    Parameters
+    ----------
+    batch_size : int or None
+        ``codec_pipeline.batch_size``. ``None`` leaves zarr's own default
+        (micro-batched); czarr's own ``configure_gpu()`` defaults this to
+        "one whole-batch nvCOMP call" for perf -- set explicitly to match.
+    async_concurrency : int
+        ``async.concurrency`` -- concurrent decode-batch limit.
+    rmm_pool_gb : float or None
+        If set, installs a process-wide RMM memory pool on first use via
+        ``czarr.use_rmm_pool()`` -- czarr does not revert this on teardown,
+        regardless of ``gpu_buffers``.
+    gpu_buffers : bool
+        Opt-in to the real disk-to-GPU path (GPUDirect Storage / cuFile),
+        for the SRI-9 disk-to-GPU benchmark scenario specifically. Swaps
+        zarr's global buffer/ndbuffer prototypes to GPU and opens the store
+        as ``czarr.GPULocalStore`` (its ``get()`` only takes the cuFile fast
+        path when a GPU buffer is requested) -- verified on an H100 node:
+        cuFile fires per shard and results are bit-identical to the CPU
+        path. Reads then return ``cupy.ndarray`` internally, converted back
+        to ``numpy.ndarray`` by this implementation to satisfy the Protocol.
+
+        This mutates process-global zarr state more invasively than the
+        default (any other backend's ``np.asarray(handle[selection])`` in
+        the *same process* will raise ``TypeError`` on the resulting cupy
+        arrays) -- do not interleave with other backends in one process;
+        give the disk-to-GPU benchmark run its own process.
+    """
+
+    compressor: CompressorConfig = Field(default_factory=CompressorConfig)
+    batch_size: int | None = None
+    async_concurrency: int = 32
+    rmm_pool_gb: float | None = None
+    gpu_buffers: bool = False
+
+
+ImplementationConfig = ZarrConfig | TensorStoreConfig | CzarrConfig

@@ -53,11 +53,20 @@ Source = "https://github.com/czbiohub-sf/iohub"
 tensorstore = [
     "tensorstore>=0.1.64",
 ]
+# Benchmark-only (SRI-3). This extra alone is not enough to use the backend:
+# PyPI's `czarr` is a CUDA-agnostic core with no cupy/CUDA deps by design --
+# install the CUDA-matched extra directly on a Linux+NVIDIA host, e.g.
+# `uv pip install "czarr[cu13]"` (or `-e /path/to/czarr[cu13]` from a local
+# checkout of https://github.com/srivarra/czarr for unreleased changes).
+czarr = [
+    "czarr",
+]
 
 [project.entry-points."iohub.zarr_implementations"]
 zarr-python = "iohub.core.implementations.zarr_python:ZarrPythonImplementation"
 zarrs-python = "iohub.core.implementations.zarr_python:ZarrsPythonImplementation"
 tensorstore = "iohub.core.implementations.tensorstore:TensorStoreImplementation"
+czarr = "iohub.core.implementations.czarr:CzarrImplementation"
 
 [dependency-groups]
 test = [
