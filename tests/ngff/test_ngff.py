@@ -516,6 +516,23 @@ def test_position_data(channels_and_random_5d, arr_name, version):
             _ = dataset.data
 
 
+def test_getitem_returns_existing_empty_group():
+    """`NGFFNode.__getitem__` returns an existing but empty group.
+
+    The container branch used ``if not znode`` on a ``zarr.Group``, which has
+    ``__len__`` but no ``__bool__``, so an empty group's zero member count
+    raised a spurious ``KeyError`` (and every open paid a ``nmembers()``
+    listing). The check must be ``is None``: an existing empty well is returned,
+    while a genuinely missing key still raises.
+    """
+    image = np.zeros((1, 1, 1, 2, 2), dtype=np.uint16)
+    with _temp_ome_zarr_plate(image, ["a"], "0", [("A", "1", "0")], version="0.5") as dataset:
+        dataset.zgroup.create_group("A/2")  # existing but empty well
+        assert dataset["A/2"] is not None
+        with pytest.raises(KeyError):
+            dataset["Z/9"]  # genuinely missing
+
+
 @given(
     channels_and_random_5d=_channels_and_random_5d(),
     arr_name=short_alpha_numeric,

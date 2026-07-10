@@ -284,7 +284,11 @@ class NGFFNode:
             return item_type.from_handle(handle, self._impl)
         else:
             znode = self.zgroup.get(key)
-            if not znode:
+            # Use ``is None`` rather than truthiness: ``zarr.Group`` has no
+            # ``__bool__``, so ``not znode`` would fall back to ``__len__`` ->
+            # ``nmembers()``, a full member-listing that dominates the
+            # position-open cost. ``.get`` already returns ``None`` when absent.
+            if znode is None:
                 raise KeyError(key)
             return item_type(group=znode, parse_meta=True, **self._child_attrs)
 
