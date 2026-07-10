@@ -34,6 +34,7 @@ from iohub.ngff.nodes import (
     Plate,
     Position,
     TransformationMeta,
+    Well,
     _case_insensitive_local_fs,
     _open_store,
     _scale_dims,
@@ -514,6 +515,25 @@ def test_position_data(channels_and_random_5d, arr_name, version):
     with pytest.raises(KeyError):
         with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
             _ = dataset.data
+
+
+def test_getitem_returns_existing_empty_group():
+    """`NGFFNode.__getitem__` returns an existing but empty group.
+
+    The container branch used ``if not znode`` on a ``zarr.Group``, which has
+    ``__len__`` but no ``__bool__``, so an empty group's zero member count
+    raised a spurious ``KeyError`` (and every open paid a ``nmembers()``
+    listing). The check must be ``is None``: an existing empty well is returned,
+    while a genuinely missing key still raises.
+    """
+    image = np.zeros((1, 1, 1, 2, 2), dtype=np.uint16)
+    with _temp_ome_zarr_plate(image, ["a"], "0", [("A", "1", "0")], version="0.5") as dataset:
+        dataset.create_well("A", "2")  # existing well, no positions yet
+        node = dataset["A/2"]
+        assert isinstance(node, Well)  # returned and correctly typed
+        assert list(node) == []  # empty but usable
+        with pytest.raises(KeyError):
+            dataset["Z/9"]  # genuinely missing
 
 
 @given(

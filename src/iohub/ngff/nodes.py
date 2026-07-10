@@ -284,7 +284,8 @@ class NGFFNode:
             return item_type.from_handle(handle, self._impl)
         else:
             znode = self.zgroup.get(key)
-            if not znode:
+            # Not ``not znode``: zarr Group has no __bool__, so truthiness calls __len__ -> nmembers().
+            if znode is None:
                 raise KeyError(key)
             return item_type(group=znode, parse_meta=True, **self._child_attrs)
 
