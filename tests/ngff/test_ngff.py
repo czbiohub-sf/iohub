@@ -34,6 +34,7 @@ from iohub.ngff.nodes import (
     Plate,
     Position,
     TransformationMeta,
+    Well,
     _case_insensitive_local_fs,
     _open_store,
     _scale_dims,
@@ -527,8 +528,10 @@ def test_getitem_returns_existing_empty_group():
     """
     image = np.zeros((1, 1, 1, 2, 2), dtype=np.uint16)
     with _temp_ome_zarr_plate(image, ["a"], "0", [("A", "1", "0")], version="0.5") as dataset:
-        dataset.zgroup.create_group("A/2")  # existing but empty well
-        assert dataset["A/2"] is not None
+        dataset.create_well("A", "2")  # existing well, no positions yet
+        node = dataset["A/2"]
+        assert isinstance(node, Well)  # returned and correctly typed
+        assert list(node) == []  # empty but usable
         with pytest.raises(KeyError):
             dataset["Z/9"]  # genuinely missing
 
