@@ -473,10 +473,7 @@ def process_single_position(
     extra_metadata = kwargs.pop("extra_metadata", None)
     if extra_metadata is not None:
         if not isinstance(extra_metadata, Mapping):
-            raise TypeError(
-                f"extra_metadata must be a mapping, got "
-                f"{type(extra_metadata).__name__}."
-            )
+            raise TypeError(f"extra_metadata must be a mapping, got {type(extra_metadata).__name__}.")
         non_string_keys = [key for key in extra_metadata if not isinstance(key, str)]
         if non_string_keys:
             raise TypeError(f"extra_metadata keys must be strings, got {non_string_keys}.")
@@ -491,8 +488,7 @@ def process_single_position(
             for key, value in extra_metadata.items():
                 if key in output_dataset.zattrs:
                     warnings.warn(
-                        f"extra_metadata key {key!r} already exists on "
-                        f"{output_position_path} and will be overwritten.",
+                        f"extra_metadata key {key!r} already exists on {output_position_path} and will be overwritten.",
                         stacklevel=2,
                     )
                 output_dataset.zattrs[key] = value
