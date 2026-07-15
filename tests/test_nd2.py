@@ -1,13 +1,6 @@
-"""Tests for the ND2 reader and converter.
-
-Requires a real ND2 file; set ``IOHUB_TEST_ND2`` to its path to run.
-Osprey ND2s live under a group-restricted path, so these are skipped in CI.
-"""
+"""Tests for the ND2 reader and converter."""
 
 from __future__ import annotations
-
-import os
-from pathlib import Path
 
 import nd2
 import numpy as np
@@ -16,12 +9,9 @@ import pytest
 from iohub import open_ome_zarr, read_images
 from iohub.convert import TIFFConverter
 from iohub.nd2 import ND2Dataset
+from tests.conftest import nd2_tcz
 
-ND2_PATH = os.environ.get("IOHUB_TEST_ND2")
-pytestmark = pytest.mark.skipif(
-    not (ND2_PATH and Path(ND2_PATH).is_file()),
-    reason="Set IOHUB_TEST_ND2 to a readable .nd2 file to run",
-)
+ND2_PATH = nd2_tcz
 
 
 def test_read_images_dispatch():
