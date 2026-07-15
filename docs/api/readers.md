@@ -16,6 +16,12 @@
 
 ::: iohub.ndtiff.NDTiffFOV
 
+## ND2
+
+::: iohub.nd2.ND2Dataset
+
+::: iohub.nd2.ND2FOV
+
 ## ClearControl
 
 ::: iohub.clearcontrol.ClearControlFOV

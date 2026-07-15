@@ -32,6 +32,7 @@ dependencies = [
     "tifffile>=2026.5.2",
     "natsort>=8.4.0",
     "ndtiff>=2.2.1",
+    "nd2>=0.10.1",
     "zarr>=3.1.6",
     "rich",
     "tqdm",

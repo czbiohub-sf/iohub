@@ -62,6 +62,8 @@ def download_data():
     # See the last line of
     # https://github.com/ome/ngff/issues/140#issuecomment-1309972511
     ome_hcs_url = "https://zenodo.org/record/8091756/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"
+    # Small ND2 dataset from OME
+    nd2_url = "https://downloads.openmicroscopy.org/images/ND2/jonas/header_test1.nd2"
 
     # download files to temp folder
     if not any(test_data.iterdir()):
@@ -71,6 +73,11 @@ def download_data():
             download(url, out=str(output))
             shutil.unpack_archive(output, extract_dir=test_data)
         _download_ndtiff_v3_labeled_positions(test_data)
+
+    nd2_path = test_data / Path(nd2_url).name
+    if not nd2_path.is_file():
+        print("Downloading ND2 test file...")
+        download(nd2_url, out=str(nd2_path))
     return test_data
 
 
@@ -121,6 +128,9 @@ ndtiff_v2_ptcz = test_datasets / "MM20_pycromanager" / "mm2.0-20210713_pm0.13.2_
 
 
 ndtiff_v3_labeled_positions = test_datasets / "ndtiff_v3_labeled_positions"
+
+
+nd2_tcz = test_datasets / "header_test1.nd2"
 
 
 @pytest.fixture
