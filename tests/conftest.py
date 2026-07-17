@@ -36,7 +36,7 @@ def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
     ghfs = fsspec.filesystem(
         "github",
         org="micro-manager",
-        repo="NDTiffStorage",
+        repo="NDStorage",
         username=os.environ.get("GITHUB_ACTOR"),
         token=os.environ.get("GITHUB_TOKEN"),
     )
