@@ -41,6 +41,8 @@ dependencies = [
     "xarray>=2024.1.1",
     "dask[array]",
     "zarrs>=0.2.3",
+    "typer>=0.26.7",
+    "lazy-loader>=0.4",
 ]
 dynamic = ["version"]
 
@@ -77,8 +79,8 @@ acquire-zarr = [
 doc = [
     "zensical>=0.0.31",
     "mkdocstrings-python>=2.0.2",
-    "mkdocs-click>=0.8",
     "mike",
+    "mkdocs-typer2[zensical]>=0.4.1",
 ]
 dev = [
     { include-group = "test" },
