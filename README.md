@@ -34,6 +34,9 @@ N-dimensional bioimaging produces data and metadata in various formats,
 and iohub aims to become a unified Python interface to the most common formats
 used at the Biohub and in the broader imaging community.
 
+> **Project status:** Active development. iohub is alpha software, and its APIs
+> and file-format support may change between releases.
+
 ## Supported formats
 
 ### Read
@@ -152,3 +155,14 @@ iohub bridges the gaps among them with the following features:
 - OME-Zarr metadata is automatically constructed and updated for writing,
 and verified against the specification when reading.
 - Adherence to the latest OME-NGFF specification (v0.5) whenever possible.
+
+## Community
+
+Read the [contributing guide](CONTRIBUTING.md) before proposing a change.
+Participation in iohub is governed by the
+[Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+Do not report security vulnerabilities in public issues. Follow our
+[security policy](SECURITY.md) to report them privately.

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and discussions
+    url: https://github.com/czbiohub-sf/iohub/discussions
+    about: Ask for help, share ideas, or discuss usage with the community.
+  - name: Report a security vulnerability
+    url: https://github.com/czbiohub-sf/iohub/security/policy
+    about: Review the security policy and report vulnerabilities privately.
