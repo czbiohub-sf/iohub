@@ -418,6 +418,23 @@ class NGFFNode:
         """Close Zarr store."""
         self._impl.close(self._group)
 
+    def consolidate_metadata(self) -> None:
+        """Consolidate this node's descendant metadata into its own metadata file.
+
+        Speeds up opening large hierarchies (e.g. HCS plates) since readers
+        no longer need to walk every child group/array to collect metadata.
+        Call this once after finishing writes; consolidated metadata goes
+        stale if the hierarchy is mutated afterward.
+
+        !!! warning
+
+            Consolidated metadata for Zarr v3 (OME-Zarr v0.5) is still
+            experimental upstream and may not be supported by all Zarr
+            implementations. See the
+            [Zarr consolidated metadata documentation](https://zarr.readthedocs.io/en/stable/user-guide/consolidated_metadata/).
+        """
+        self._group = zarr.consolidate_metadata(self._group.store, path=self._group.path or None)
+
     def _create_zarr_array(
         self,
         name: str,
