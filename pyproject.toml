@@ -8,7 +8,7 @@ description = "N-dimensional bioimaging data I/O with OME metadata in Python"
 authors = [
     {name = "Biohub and iohub contributors", email = "iohub@czbiohub.org"},
 ]
-license = {file = "LICENSE"}
+license = {file = "LICENSE.md"}
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
@@ -36,7 +36,7 @@ dependencies = [
     "zarr>=3.1.6",
     "rich",
     "tqdm",
-    "pillow>=9.4.0",
+    "pillow>=12.3.0",
     "blosc2",
     "xarray>=2024.1.1",
     "dask[array]",

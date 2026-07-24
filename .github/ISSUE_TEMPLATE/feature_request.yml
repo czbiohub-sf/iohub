@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a new feature for iohub
+type: Feature
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Share whatever context you have.
+
+        Do not include credentials, personal data, confidential data, or restricted datasets.
+        Report security vulnerabilities privately according to our [security policy](https://github.com/czbiohub-sf/iohub/security/policy).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to accomplish, and what prevents you from doing it today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed improvement
+      description: If you have a solution in mind, describe the behavior or workflow you want.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Describe any alternatives or workarounds you considered.
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add examples or other relevant details. Use public or synthetic data.
