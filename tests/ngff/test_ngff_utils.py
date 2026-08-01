@@ -1670,3 +1670,56 @@ def test_shutdown_stops_dispatching_new_units(tmp_path):
         written = out_ds["/".join(position_key)].data[:]
     assert np.any(written[0]), "the in-flight write did not complete"
     assert not np.any(written[1:]), "work continued after the termination signal"
+
+
+@pytest.mark.parametrize(
+    ("time_indices", "channel_indices"),
+    [
+        ([0], [0]),  # list of indices, as process_single_position usually yields
+        ([0], 0),  # scalar channel: a caller passed a flat channel list
+        (0, 0),  # scalar in both dimensions
+        ([0], slice(0, 1)),  # slice, as a caller grouping channels may pass
+    ],
+    ids=["lists", "scalar-channel", "scalar-both", "slice-channel"],
+)
+def test_plan_write_unit_accepts_every_selection_form(tmp_path, time_indices, channel_indices):
+    """Scalar and slice selections are legal and must be planned, not rejected.
+
+    ``process_single_position`` hands a bare int to
+    ``apply_transform_to_tczyx_and_save`` whenever a caller passes a flat list
+    of channel indices instead of a list of channel groups, which is what
+    ``biahub concatenate`` does. Treating that as a sequence raised
+    ``TypeError: 'int' object is not iterable`` and aborted the step.
+    """
+    shape = (4, 3, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    _, output_store = _make_stores(tmp_path, shape, position_key)
+
+    with open_ome_zarr(output_store / Path(*position_key), layout="fov", mode="r") as dataset:
+        unit = plan_write_unit(dataset.data, time_indices, channel_indices)
+
+    assert unit is not None
+    assert unit.time_indices == (0,)
+    assert unit.channel_indices == (0,)
+    assert len(unit.shards) == 1
+
+
+def test_process_single_position_with_flat_channel_indices(tmp_path):
+    """End-to-end with concatenate's calling convention (flat channel list)."""
+    shape = (2, 3, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        input_channel_indices=[0, 1, 2],
+        output_channel_indices=[0, 1, 2],
+        constant=2,
+        resume=True,
+    )
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = dummy_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)

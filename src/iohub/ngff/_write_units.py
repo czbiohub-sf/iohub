@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import math
+import operator
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -120,8 +121,8 @@ def tracking_available(array) -> bool:
 
 def plan_write_unit(
     array,
-    time_indices: Sequence[int],
-    channel_indices: Sequence[int] | slice,
+    time_indices: int | Sequence[int] | slice,
+    channel_indices: int | Sequence[int] | slice,
     token: str = "",
 ) -> WriteUnit | None:
     """Describe the files a ``(timepoints, channels)`` write owns.
@@ -151,7 +152,7 @@ def plan_write_unit(
     if len(grid) != len(shape):
         return None
 
-    times = tuple(sorted(dict.fromkeys(time_indices)))
+    times = tuple(sorted(dict.fromkeys(_as_indices(time_indices, shape[0]))))
     channels = tuple(sorted(dict.fromkeys(_as_indices(channel_indices, shape[1]))))
     if not times or not channels:
         return None
@@ -225,10 +226,22 @@ def _covered_cells(indices: tuple[int, ...], step: int, extent: int) -> tuple[in
     return tuple(cells)
 
 
-def _as_indices(indices: Sequence[int] | slice, extent: int) -> tuple[int, ...]:
+def _as_indices(indices: int | Sequence[int] | slice, extent: int) -> tuple[int, ...]:
+    """Normalise a selection along one dimension to a tuple of indices.
+
+    Accepts every form a caller may pass to an orthogonal selection: a slice, a
+    sequence of indices, or a bare scalar. A scalar is a legal selection —
+    ``arr.oindex[[t], 3]`` addresses one channel — and
+    ``process_single_position`` produces one whenever a caller passes a flat
+    list of channel indices rather than a list of channel groups, which
+    ``biahub concatenate`` does.
+    """
     if isinstance(indices, slice):
         return tuple(range(*indices.indices(extent)))
-    return tuple(indices)
+    try:
+        return (operator.index(indices),)
+    except TypeError:
+        return tuple(operator.index(index) for index in indices)
 
 
 def _chunk_key_encoding(array):
