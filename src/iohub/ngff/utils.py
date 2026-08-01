@@ -278,10 +278,16 @@ def _plan_output_write(
     output_channel_indices: list[int] | slice,
     output_time_indices: list[int],
     resume: bool,
+    resume_token: str,
 ) -> tuple[WriteUnit | None, bool]:
     """Describe the files this write owns, and whether it already finished."""
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
-        unit = plan_write_unit(output_dataset.data, output_time_indices, output_channel_indices)
+        unit = plan_write_unit(
+            output_dataset.data,
+            output_time_indices,
+            output_channel_indices,
+            token=resume_token,
+        )
         if unit is None:
             return None, False
         return unit, bool(resume and unit_is_complete(unit, output_dataset.data))
@@ -297,6 +303,7 @@ def apply_transform_to_tczyx_and_save(
     output_time_indices: list[int] | slice,
     *,
     resume: bool = False,
+    resume_token: str = "",
     **kwargs,
 ) -> None:
     """Load a TCZYX array from a position store.
@@ -317,6 +324,7 @@ def apply_transform_to_tczyx_and_save(
         output_channel_indices,
         _slice_to_list(output_time_indices),
         resume,
+        resume_token,
     )
     if already_written:
         click.echo(f"Skipping t={output_time_indices}, c={output_channel_indices}: already written")
@@ -419,6 +427,7 @@ def process_single_position(
     num_workers: int = 1,
     use_threads: bool = False,
     resume: bool = False,
+    resume_token: str = "",
     **kwargs,
 ) -> None:
     """
@@ -475,6 +484,11 @@ def process_single_position(
         ones. Leave False when re-running with changed inputs or settings,
         since a finished unit is skipped without checking whether it would
         now produce different data. Defaults to False.
+    resume_token : str, optional
+        Fingerprint of whatever determines the output, typically the resolved
+        settings of the calling step. Mixed into each unit's identity so that
+        ``resume=True`` after a parameter change recomputes rather than
+        skipping work that would now produce different data. Defaults to "".
     kwargs : dict, optional
         Additional arguments to pass to the function.
         An ``extra_metadata`` kwarg (a dict) can be passed to record per-step
@@ -583,6 +597,7 @@ def process_single_position(
         input_position_path,
         output_position_path,
         resume=resume,
+        resume_token=resume_token,
         **kwargs,
     )
     num_workers = min(num_workers, len(flat_iterable), _available_cpus())

@@ -50,11 +50,14 @@ class WriteUnit:
     #: used to probe whether the file decodes.
     shards: tuple[tuple[Path, tuple[int, ...]], ...]
     marker_dir: Path
+    #: Opaque string mixed into the unit's identity, so that a caller whose
+    #: inputs or settings changed does not match the previous run's markers.
+    token: str = ""
 
     @property
     def name(self) -> str:
         """Stable identifier for this unit, reproducible across processes."""
-        payload = repr((self.time_indices, self.channel_indices)).encode()
+        payload = repr((self.time_indices, self.channel_indices, self.token)).encode()
         digest = hashlib.sha256(payload).hexdigest()[:12]
         times = f"t{self.time_indices[0]}-{self.time_indices[-1]}"
         channels = f"c{self.channel_indices[0]}-{self.channel_indices[-1]}"
@@ -79,6 +82,14 @@ class WriteUnit:
         self.marker_dir.mkdir(parents=True, exist_ok=True)
         self.done_marker.unlink(missing_ok=True)
         self.inflight_marker.touch()
+        self.clear()
+
+    def clear(self) -> None:
+        """Remove the files this unit owns, so the write cannot read them back.
+
+        Useful on its own for a write that is not tracked for resume: it still
+        wants a file torn by an earlier kill replaced rather than merged into.
+        """
         for path, _ in self.shards:
             path.unlink(missing_ok=True)
 
@@ -99,19 +110,19 @@ def tracking_available(array) -> bool:
     """Whether write units can be tracked for ``array`` at all.
 
     False for a store whose chunk key layout is not modelled here (Zarr v2,
-    i.e. OME-Zarr v0.4) or that is not backed by a filesystem. Says nothing
-    about whether a *particular* write owns its files; see
-    :func:`plan_write_unit` for that.
+    i.e. OME-Zarr v0.4), one not backed by a filesystem, or one reached
+    through an implementation other than zarr-python. Says nothing about
+    whether a *particular* write owns its files; see :func:`plan_write_unit`
+    for that.
     """
-    return (
-        _array_directory(array) is not None and getattr(array.native.metadata, "chunk_key_encoding", None) is not None
-    )
+    return _array_directory(array) is not None and _chunk_key_encoding(array) is not None
 
 
 def plan_write_unit(
     array,
     time_indices: Sequence[int],
     channel_indices: Sequence[int] | slice,
+    token: str = "",
 ) -> WriteUnit | None:
     """Describe the files a ``(timepoints, channels)`` write owns.
 
@@ -124,9 +135,14 @@ def plan_write_unit(
 
     Assumes the write spans the entire ZYX extent of the array, which is what
     :func:`iohub.ngff.utils.apply_transform_to_tczyx_and_save` does.
+
+    ``token`` is mixed into the unit's identity. Pass a fingerprint of
+    whatever determines the output — settings, input revision — so that a run
+    with different parameters does not match the markers of the previous one
+    and skip work that would now produce different data.
     """
     directory = _array_directory(array)
-    encoding = getattr(array.native.metadata, "chunk_key_encoding", None)
+    encoding = _chunk_key_encoding(array)
     if directory is None or encoding is None:
         return None
 
@@ -160,6 +176,7 @@ def plan_write_unit(
         channel_indices=channels,
         shards=shards,
         marker_dir=directory / MARKER_DIRNAME,
+        token=token,
     )
 
 
@@ -214,9 +231,21 @@ def _as_indices(indices: Sequence[int] | slice, extent: int) -> tuple[int, ...]:
     return tuple(indices)
 
 
+def _chunk_key_encoding(array):
+    """Chunk key encoding of ``array``, or None if it does not expose one.
+
+    Absent for Zarr v2 metadata and for handles from implementations other
+    than zarr-python (e.g. tensorstore), which are left untracked.
+    """
+    metadata = getattr(array.native, "metadata", None)
+    return getattr(metadata, "chunk_key_encoding", None)
+
+
 def _array_directory(array) -> Path | None:
     """Filesystem directory backing ``array``, or None if it is not local."""
-    root = getattr(array.native.store, "root", None)
-    if root is None:
+    native = array.native
+    root = getattr(getattr(native, "store", None), "root", None)
+    path = getattr(native, "path", None)
+    if root is None or path is None:
         return None
-    return Path(root) / array.native.path
+    return Path(root) / path
