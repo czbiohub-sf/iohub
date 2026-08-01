@@ -17,7 +17,19 @@ import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
+from iohub.core.interrupt import (
+    cooperative_shutdown,
+    deferred_termination,
+    install_worker_handlers,
+    shutdown_requested,
+)
 from iohub.ngff import open_ome_zarr
+from iohub.ngff._write_units import (
+    WriteUnit,
+    plan_write_unit,
+    tracking_available,
+    unit_is_complete,
+)
 from iohub.ngff.nodes import TransformationMeta
 
 #: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
@@ -242,14 +254,37 @@ def _save_transformed(
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
     output_time_indices: int | list[int],
+    write_unit: WriteUnit | None = None,
 ) -> None:
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
         arr = output_dataset.data
-        arr._impl.write_oindex(
-            arr.native,
-            (output_time_indices, output_channel_indices),
-            transformed,
-        )
+        # Termination signals are blocked across the whole write so that a
+        # preempted job is not killed part-way through a shard, and so that
+        # the completion marker cannot be missed for a write that did land.
+        with deferred_termination():
+            if write_unit is not None:
+                write_unit.begin()
+            arr._impl.write_oindex(
+                arr.native,
+                (output_time_indices, output_channel_indices),
+                transformed,
+            )
+            if write_unit is not None:
+                write_unit.complete()
+
+
+def _plan_output_write(
+    output_position_path: Path,
+    output_channel_indices: list[int] | slice,
+    output_time_indices: list[int],
+    resume: bool,
+) -> tuple[WriteUnit | None, bool]:
+    """Describe the files this write owns, and whether it already finished."""
+    with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
+        unit = plan_write_unit(output_dataset.data, output_time_indices, output_channel_indices)
+        if unit is None:
+            return None, False
+        return unit, bool(resume and unit_is_complete(unit, output_dataset.data))
 
 
 def apply_transform_to_tczyx_and_save(
@@ -260,12 +295,33 @@ def apply_transform_to_tczyx_and_save(
     output_channel_indices: list[int] | slice,
     input_time_indices: list[int] | slice,
     output_time_indices: list[int] | slice,
+    *,
+    resume: bool = False,
     **kwargs,
 ) -> None:
     """Load a TCZYX array from a position store.
 
     Apply a transformation and save the result.
+
+    When the write owns its output files outright (see
+    :mod:`iohub.ngff._write_units`) they are cleared before writing rather
+    than written over, and completion is recorded in a marker file. Pass
+    ``resume=True`` to skip a unit that a previous run already finished.
     """
+    if shutdown_requested():
+        click.echo(f"Skipping t={input_time_indices}, c={input_channel_indices} due to pending termination")
+        return
+
+    unit, already_written = _plan_output_write(
+        output_position_path,
+        output_channel_indices,
+        _slice_to_list(output_time_indices),
+        resume,
+    )
+    if already_written:
+        click.echo(f"Skipping t={output_time_indices}, c={output_channel_indices}: already written")
+        return
+
     input_time_indices = _slice_to_list(input_time_indices)
     results = {}
     for i, input_time_index in enumerate(input_time_indices):
@@ -292,8 +348,13 @@ def apply_transform_to_tczyx_and_save(
             output_position_path=output_position_path,
             output_channel_indices=output_channel_indices,
             output_time_indices=output_time_indices,
+            write_unit=unit,
         )
         _echo_finished(input_time_indices, input_channel_indices, skipped=False)
+    elif unit is not None:
+        # Every timepoint was skipped, so there is nothing to write. Record
+        # the unit as finished anyway: a resumed run would skip it again.
+        unit.complete()
     del results
 
 
@@ -357,6 +418,7 @@ def process_single_position(
     output_time_indices: list[int] | None = None,
     num_workers: int = 1,
     use_threads: bool = False,
+    resume: bool = False,
     **kwargs,
 ) -> None:
     """
@@ -404,6 +466,15 @@ def process_single_position(
         If True, parallelize across threads via ``ThreadPoolExecutor``;
         otherwise spawn worker processes via ``ProcessPoolExecutor``.
         Defaults to False.
+    resume : bool, optional
+        If True, skip shard-aligned ``(time, channel)`` units that a previous
+        run already finished, as recorded by the markers described in
+        :mod:`iohub.ngff._write_units`. Intended for retrying a run that was
+        interrupted — for example by Slurm preemption, which this function
+        handles by finishing the write it is in and declining to start new
+        ones. Leave False when re-running with changed inputs or settings,
+        since a finished unit is skipped without checking whether it would
+        now produce different data. Defaults to False.
     kwargs : dict, optional
         Additional arguments to pass to the function.
         An ``extra_metadata`` kwarg (a dict) can be passed to record per-step
@@ -428,6 +499,12 @@ def process_single_position(
         input_data_shape = input_dataset.data.shape
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
         output_shards = output_dataset.data.shards
+        if resume and not tracking_available(output_dataset.data):
+            warnings.warn(
+                f"resume=True was requested but progress cannot be tracked for {output_position_path}, "
+                "so every unit will be recomputed. Tracking requires a local Zarr v3 (OME-Zarr v0.5) store.",
+                stacklevel=2,
+            )
 
     # Process time indices
     if input_time_indices is None:
@@ -505,35 +582,64 @@ def process_single_position(
         func,
         input_position_path,
         output_position_path,
+        resume=resume,
         **kwargs,
     )
     num_workers = min(num_workers, len(flat_iterable), _available_cpus())
-    if num_workers <= 1:
-        click.echo("\nRunning serially in the calling process (num_workers <= 1)")
-        for args in flat_iterable:
-            partial_apply_transform_to_czyx_and_save(*args)
-        click.echo("Done")
-    elif use_threads:
-        click.echo(f"\nStarting thread pool with {num_workers} threads")
-        with ThreadPoolExecutor(max_workers=num_workers) as p:
-            futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
-            for fut in as_completed(futures):
-                fut.result()
-        click.echo("Shut down thread pool")
-    else:
-        click.echo(f"\nStarting multiprocess pool with {num_workers} processes")
-        # NOTE: spawn (not fork) — tensorstore runs internal C++ threads
-        # that are not fork-safe, so a forked worker can deadlock or
-        # segfault before our code runs. See google/tensorstore#61.
-        # NOTE: ProcessPoolExecutor (not mp.Pool) so silent worker death
-        # (e.g. cgroup OOM-kill) surfaces as BrokenProcessPool instead
-        # of hanging indefinitely on pool.starmap.
-        context = mp.get_context("spawn")
-        with ProcessPoolExecutor(max_workers=num_workers, mp_context=context) as p:
-            futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
-            for fut in as_completed(futures):
-                fut.result()
-        click.echo("Shut down multiprocess pool")
+    # A termination signal (Slurm preemption, or the walltime warning) stops
+    # new units from being dispatched while letting in-flight writes finish,
+    # then propagates as the signal it was so that the exit status still
+    # reads as "signalled" to whatever supervises this process.
+    with cooperative_shutdown() as shutdown:
+        if num_workers <= 1:
+            click.echo("\nRunning serially in the calling process (num_workers <= 1)")
+            for args in flat_iterable:
+                if shutdown.requested:
+                    break
+                partial_apply_transform_to_czyx_and_save(*args)
+            click.echo("Done")
+        elif use_threads:
+            click.echo(f"\nStarting thread pool with {num_workers} threads")
+            with ThreadPoolExecutor(max_workers=num_workers) as p:
+                futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
+                _drain(futures, shutdown)
+            click.echo("Shut down thread pool")
+        else:
+            click.echo(f"\nStarting multiprocess pool with {num_workers} processes")
+            # NOTE: spawn (not fork) — tensorstore runs internal C++ threads
+            # that are not fork-safe, so a forked worker can deadlock or
+            # segfault before our code runs. See google/tensorstore#61.
+            # NOTE: ProcessPoolExecutor (not mp.Pool) so silent worker death
+            # (e.g. cgroup OOM-kill) surfaces as BrokenProcessPool instead
+            # of hanging indefinitely on pool.starmap.
+            context = mp.get_context("spawn")
+            # Workers share the parent's process group and so receive the
+            # same signals; the initializer stops the default disposition
+            # from killing one part-way through a write.
+            with ProcessPoolExecutor(
+                max_workers=num_workers,
+                mp_context=context,
+                initializer=install_worker_handlers,
+            ) as p:
+                futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
+                _drain(futures, shutdown)
+            click.echo("Shut down multiprocess pool")
+        if shutdown.requested:
+            click.echo("Termination requested: finished in-flight writes and stopped dispatching new ones")
+        shutdown.reraise()
+
+
+def _drain(futures: list, shutdown) -> None:
+    """Wait for submitted work, abandoning what has not started on shutdown."""
+    cancelled = False
+    for future in as_completed(futures):
+        if shutdown.requested and not cancelled:
+            for pending in futures:
+                pending.cancel()
+            cancelled = True
+        if future.cancelled():
+            continue
+        future.result()
 
 
 # -- Pure utility functions ------------------------------------------------

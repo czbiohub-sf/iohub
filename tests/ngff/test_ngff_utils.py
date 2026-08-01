@@ -1,6 +1,9 @@
 import itertools
+import os
+import shutil
 import string
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
@@ -12,7 +15,9 @@ from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
+from iohub.core.interrupt import clear_shutdown, request_shutdown
 from iohub.ngff import open_ome_zarr
+from iohub.ngff._write_units import MARKER_DIRNAME, plan_write_unit
 from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
@@ -1429,3 +1434,239 @@ def test_apply_transform_to_tczyx_on_multi_channel_shard(tmp_path):
         in_slice = in_ds["/".join(position_key)].data[:1, :2]
         out_slice = out_ds["/".join(position_key)].data[:1, :2]
     np.testing.assert_array_almost_equal(out_slice, dummy_transform(in_slice, constant=2))
+
+
+# -- Interrupted-write repair and resume -----------------------------------
+
+
+def counting_transform(data, constant=2, call_log_dir=None):
+    """Multiply like dummy_transform, recording one file per invocation.
+
+    A file per call rather than a counter so the tally survives being made
+    from worker processes.
+    """
+    if call_log_dir is not None:
+        log = Path(call_log_dir)
+        log.mkdir(parents=True, exist_ok=True)
+        (log / os.urandom(8).hex()).touch()
+    return data * constant
+
+
+def stopping_transform(data, constant=2):
+    """Request shutdown, imitating a preemption signal arriving mid-run."""
+    request_shutdown()
+    return data * constant
+
+
+def _call_count(call_log_dir: Path) -> int:
+    return len(list(call_log_dir.iterdir())) if call_log_dir.exists() else 0
+
+
+def _shard_files(store_path: Path, position_key: tuple[str, str, str]) -> list[Path]:
+    chunk_root = store_path / Path(*position_key) / "0" / "c"
+    return sorted(p for p in chunk_root.rglob("*") if p.is_file())
+
+
+def _make_stores(tmp_path: Path, shape, position_key, **plate_kwargs):
+    input_store = tmp_path / "input.zarr"
+    output_store = tmp_path / "output.zarr"
+    for store in (input_store, output_store):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[position_key],
+            channel_names=[f"c{c}" for c in range(shape[1])],
+            shape=shape,
+            version="0.5",
+            **plate_kwargs,
+        )
+    populate_store(input_store, [position_key], shape, np.float32)
+    return input_store, output_store
+
+
+def _tear(path: Path) -> None:
+    """Truncate a shard, as a job killed part-way through a write would."""
+    data = path.read_bytes()
+    path.write_bytes(data[: len(data) // 2])
+
+
+#: A geometry matching what reconstruction pipelines produce: inner chunks
+#: that do not divide the data extent, so the shard grid rounds up past the
+#: array bound and no write can cover a whole shard. Every write is then a
+#: read-modify-write, which is what makes a torn shard fatal on retry rather
+#: than merely wasteful. The shard also spans ten timepoints, so one write
+#: unit is a batch of ten.
+_RMW_SHAPE = (23, 1, 17, 20, 20)
+_RMW_PLATE = {"chunks": (1, 1, 16, 16, 16), "shards_ratio": (10, 1, 2, 2, 2)}
+#: Timepoints in the first shard-aligned batch of ``_RMW_SHAPE``.
+_RMW_UNIT_SIZE = 10
+
+
+def test_plan_write_unit_only_claims_fully_covered_shards(tmp_path):
+    """A unit owns a shard only if it writes every in-bounds element of it."""
+    shape = (23, 2, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    _, output_store = _make_stores(
+        tmp_path,
+        shape,
+        position_key,
+        chunks=(1, 1, 4, 8, 8),
+        shards_ratio=(10, 1, 1, 1, 1),
+    )
+    position_path = output_store / Path(*position_key)
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as dataset:
+        array = dataset.data
+        assert array.shards == (10, 1, 4, 8, 8)
+
+        # A whole shard row of timepoints is owned, and maps to one file.
+        unit = plan_write_unit(array, list(range(10)), [0])
+        assert unit is not None
+        assert [path for path, _ in unit.shards] == [position_path / "0" / "c" / "0" / "0" / "0" / "0" / "0"]
+
+        # The ragged final row is owned too: t=20..22 is all of it that exists.
+        assert plan_write_unit(array, [20, 21, 22], [0]) is not None
+
+        # A subset of a shard row is shared with another write, so untracked.
+        assert plan_write_unit(array, [0, 1], [0]) is None
+        assert plan_write_unit(array, [*range(10), 10], [0]) is None
+
+
+def test_write_over_torn_shard_recovers(tmp_path):
+    """A shard left half-written by a killed job is replaced, not read back.
+
+    Without clearing the file first, the write is a read-modify-write which
+    re-reads the damaged shard and fails on its checksum, so every retry of
+    the position fails the same way.
+    """
+    shape = _RMW_SHAPE
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key, **_RMW_PLATE)
+    run = partial(
+        process_single_position,
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+    )
+
+    run()
+    shards = _shard_files(output_store, position_key)
+    assert shards
+    _tear(shards[0])
+
+    run()
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = dummy_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+@pytest.mark.parametrize("num_workers", [1, 2])
+@pytest.mark.parametrize("use_threads", [False, True])
+def test_resume_skips_units_already_written(tmp_path, num_workers, use_threads):
+    shape = (4, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        num_workers=num_workers,
+        use_threads=use_threads,
+        constant=2,
+        call_log_dir=str(call_log),
+    )
+
+    run(resume=True)
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+
+    run(resume=True)
+    assert _call_count(call_log) == first_pass, "resume recomputed units that were already written"
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+def test_resume_without_markers_recomputes_everything(tmp_path):
+    """Resuming a store written by an earlier version recomputes it."""
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+    )
+
+    run()
+    marker_dir = output_store / Path(*position_key) / "0" / MARKER_DIRNAME
+    assert list(marker_dir.iterdir())
+    shutil.rmtree(marker_dir)
+
+    run(resume=True)
+    assert _call_count(call_log) == 2 * shape[0]
+
+
+def test_resume_recomputes_a_unit_whose_shard_is_torn(tmp_path):
+    """A completion marker is not trusted over an unreadable shard."""
+    shape = _RMW_SHAPE
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key, **_RMW_PLATE)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+    )
+
+    run(resume=True)
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+    _tear(_shard_files(output_store, position_key)[0])
+
+    run(resume=True)
+    # Only the torn unit is recomputed: its whole batch of timepoints, and
+    # nothing from the units that are still intact.
+    expected = first_pass + _RMW_UNIT_SIZE
+    assert _call_count(call_log) == expected, "torn shard was skipped instead of rewritten"
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+def test_shutdown_stops_dispatching_new_units(tmp_path):
+    """After a termination signal, remaining units are left for a resume."""
+    shape = (4, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    clear_shutdown()
+    try:
+        process_single_position(
+            func=stopping_transform,
+            input_position_path=input_store / Path(*position_key),
+            output_position_path=output_store / Path(*position_key),
+            constant=2,
+            resume=True,
+        )
+    finally:
+        clear_shutdown()
+
+    # The unit in flight when the signal arrived completed; the rest did not.
+    marker_dir = output_store / Path(*position_key) / "0" / MARKER_DIRNAME
+    assert len(list(marker_dir.glob("*.done"))) == 1
+    with open_ome_zarr(output_store) as out_ds:
+        written = out_ds["/".join(position_key)].data[:]
+    assert np.any(written[0]), "the in-flight write did not complete"
+    assert not np.any(written[1:]), "work continued after the termination signal"
