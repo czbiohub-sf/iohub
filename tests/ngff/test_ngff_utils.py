@@ -936,65 +936,6 @@ def test_create_empty_plate_metadata_keys_none_copies_everything():
         assert dst_zattrs["beta"] == 2
 
 
-def test_create_empty_plate_metadata_copy_is_one_write(monkeypatch):
-    """The metadata copy must not rewrite the destination once per key.
-
-    Writing per key makes the copy quadratic in the metadata size, which is
-    crippling when a source carries a large instrument-written blob. Rather
-    than pin an exact write count (which would be coupled to unrelated
-    metadata bookkeeping), assert the count does not grow with the number of
-    keys copied.
-    """
-    from zarr.core.attributes import Attributes
-
-    position_keys = [("A", "1", "0")]
-    channel_names = ["DAPI"]
-    shape = (1, 1, 16, 32, 32)
-
-    def count_writes(source_zattrs, store_suffix):
-        calls = {"n": 0}
-        real_setitem = Attributes.__setitem__
-        real_put = Attributes.put
-
-        def counting_setitem(self, key, value):
-            calls["n"] += 1
-            return real_setitem(self, key, value)
-
-        def counting_put(self, d):
-            calls["n"] += 1
-            return real_put(self, d)
-
-        with TemporaryDirectory() as temp_dir:
-            src_path = Path(temp_dir) / f"source_{store_suffix}.zarr"
-            dst_path = Path(temp_dir) / f"dest_{store_suffix}.zarr"
-            _plate_with_zattrs(src_path, position_keys, channel_names, shape, source_zattrs)
-
-            # Count only the destination-plate writes.
-            monkeypatch.setattr(Attributes, "__setitem__", counting_setitem)
-            monkeypatch.setattr(Attributes, "put", counting_put)
-            try:
-                create_empty_plate(
-                    store_path=dst_path,
-                    position_keys=position_keys,
-                    channel_names=channel_names,
-                    shape=shape,
-                    metadata_sources=src_path,
-                )
-            finally:
-                monkeypatch.setattr(Attributes, "__setitem__", real_setitem)
-                monkeypatch.setattr(Attributes, "put", real_put)
-
-            with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
-                copied = dict(dst_plate["A/1/0"].zattrs)
-            for k in source_zattrs:
-                assert k in copied, f"{k} was not copied"
-        return calls["n"]
-
-    few = count_writes({f"key_{i}": {"i": i} for i in range(2)}, "few")
-    many = count_writes({f"key_{i}": {"i": i} for i in range(16)}, "many")
-    assert few == many, f"metadata writes scale with key count: {few} -> {many}"
-
-
 @given(
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),

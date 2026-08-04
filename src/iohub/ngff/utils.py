@@ -221,14 +221,7 @@ def create_empty_plate(
             # as-is. A key is only copied if it is not already present on the
             # destination, so earlier sources take precedence over later ones.
             #
-            # Collect across all sources first, then write once. Assigning to
-            # `position.zattrs` serializes the whole group metadata document,
-            # so a per-key write would rewrite (and re-read, for the membership
-            # test) the destination once per copied key -- quadratic in the
-            # metadata size, which is ruinous when a source carries a large
-            # instrument-written blob. `Attributes.update` is the MutableMapping
-            # default and delegates to per-key `__setitem__`, so it is *not* a
-            # single write; `Attributes.put` is, hence the explicit merge.
+            # Collect across all sources first, then write once.
             existing = dict(position.zattrs)
             collected: dict[str, Any] = {}
             for source in metadata_sources:
