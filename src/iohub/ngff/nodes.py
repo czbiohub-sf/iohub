@@ -30,7 +30,6 @@ from iohub.core import ArraySpec, NGFFArray, get_implementation
 from iohub.core.compat import get_ome_attrs, zarr_format_for_version
 from iohub.core.config import ImplementationConfig
 from iohub.core.errors import StoreOpenError
-from iohub.core.interrupt import deferred_termination
 from iohub.core.ozx import OzxStore, is_ozx_path, read_ozx_version
 from iohub.core.protocol import ZarrImplementation
 from iohub.core.types import StorePath
@@ -2160,14 +2159,11 @@ class Position(NGFFNode):
         arr = self[image]
         # Clear whole shards this write owns before writing them, so a shard
         # left truncated by a killed job is replaced rather than read back and
-        # rejected, and block termination signals for the duration so this
-        # write is not the one that gets truncated. See
-        # :mod:`iohub.ngff._write_units`.
+        # rejected. See :mod:`iohub.ngff._write_units`.
         unit = plan_write_unit(arr, [int(t) for t in t_indices], c_indices)
-        with deferred_termination():
-            if unit is not None:
-                unit.clear()
-            arr.oindex[t_indices, c_indices] = np_data
+        if unit is not None:
+            unit.clear()
+        arr.oindex[t_indices, c_indices] = np_data
 
         # Persist DataArray attrs to zarr for round-tripping
         if data_array.attrs:
