@@ -15,7 +15,6 @@ from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
-from iohub.core.interrupt import clear_shutdown, request_shutdown
 from iohub.ngff import open_ome_zarr
 from iohub.ngff._write_units import MARKER_DIRNAME, plan_write_unit
 from iohub.ngff.models import LabelsMeta
@@ -1452,12 +1451,6 @@ def counting_transform(data, constant=2, call_log_dir=None):
     return data * constant
 
 
-def stopping_transform(data, constant=2):
-    """Request shutdown, imitating a preemption signal arriving mid-run."""
-    request_shutdown()
-    return data * constant
-
-
 def _call_count(call_log_dir: Path) -> int:
     return len(list(call_log_dir.iterdir())) if call_log_dir.exists() else 0
 
@@ -1644,32 +1637,6 @@ def test_resume_recomputes_a_unit_whose_shard_is_torn(tmp_path):
     with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
         expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
         np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
-
-
-def test_shutdown_stops_dispatching_new_units(tmp_path):
-    """After a termination signal, remaining units are left for a resume."""
-    shape = (4, 1, 4, 8, 8)
-    position_key = ("A", "1", "0")
-    input_store, output_store = _make_stores(tmp_path, shape, position_key)
-    clear_shutdown()
-    try:
-        process_single_position(
-            func=stopping_transform,
-            input_position_path=input_store / Path(*position_key),
-            output_position_path=output_store / Path(*position_key),
-            constant=2,
-            resume=True,
-        )
-    finally:
-        clear_shutdown()
-
-    # The unit in flight when the signal arrived completed; the rest did not.
-    marker_dir = output_store / Path(*position_key) / "0" / MARKER_DIRNAME
-    assert len(list(marker_dir.glob("*.done"))) == 1
-    with open_ome_zarr(output_store) as out_ds:
-        written = out_ds["/".join(position_key)].data[:]
-    assert np.any(written[0]), "the in-flight write did not complete"
-    assert not np.any(written[1:]), "work continued after the termination signal"
 
 
 @pytest.mark.parametrize(

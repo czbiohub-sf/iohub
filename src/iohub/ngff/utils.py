@@ -17,12 +17,6 @@ import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
-from iohub.core.interrupt import (
-    cooperative_shutdown,
-    deferred_termination,
-    install_worker_handlers,
-    shutdown_requested,
-)
 from iohub.ngff import open_ome_zarr
 from iohub.ngff._write_units import (
     WriteUnit,
@@ -258,19 +252,15 @@ def _save_transformed(
 ) -> None:
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
         arr = output_dataset.data
-        # Termination signals are blocked across the whole write so that a
-        # preempted job is not killed part-way through a shard, and so that
-        # the completion marker cannot be missed for a write that did land.
-        with deferred_termination():
-            if write_unit is not None:
-                write_unit.begin()
-            arr._impl.write_oindex(
-                arr.native,
-                (output_time_indices, output_channel_indices),
-                transformed,
-            )
-            if write_unit is not None:
-                write_unit.complete()
+        if write_unit is not None:
+            write_unit.begin()
+        arr._impl.write_oindex(
+            arr.native,
+            (output_time_indices, output_channel_indices),
+            transformed,
+        )
+        if write_unit is not None:
+            write_unit.complete()
 
 
 def _plan_output_write(
@@ -315,10 +305,6 @@ def apply_transform_to_tczyx_and_save(
     than written over, and completion is recorded in a marker file. Pass
     ``resume=True`` to skip a unit that a previous run already finished.
     """
-    if shutdown_requested():
-        click.echo(f"Skipping t={input_time_indices}, c={input_channel_indices} due to pending termination")
-        return
-
     unit, already_written = _plan_output_write(
         output_position_path,
         output_channel_indices,
@@ -479,9 +465,8 @@ def process_single_position(
         If True, skip shard-aligned ``(time, channel)`` units that a previous
         run already finished, as recorded by the markers described in
         :mod:`iohub.ngff._write_units`. Intended for retrying a run that was
-        interrupted — for example by Slurm preemption, which this function
-        handles by finishing the write it is in and declining to start new
-        ones. Leave False when re-running with changed inputs or settings,
+        interrupted, for example by Slurm preemption. Leave False when
+        re-running with changed inputs or settings,
         since a finished unit is skipped without checking whether it would
         now produce different data. Defaults to False.
     resume_token : str, optional
@@ -601,60 +586,32 @@ def process_single_position(
         **kwargs,
     )
     num_workers = min(num_workers, len(flat_iterable), _available_cpus())
-    # A termination signal (Slurm preemption, or the walltime warning) stops
-    # new units from being dispatched while letting in-flight writes finish,
-    # then propagates as the signal it was so that the exit status still
-    # reads as "signalled" to whatever supervises this process.
-    with cooperative_shutdown() as shutdown:
-        if num_workers <= 1:
-            click.echo("\nRunning serially in the calling process (num_workers <= 1)")
-            for args in flat_iterable:
-                if shutdown.requested:
-                    break
-                partial_apply_transform_to_czyx_and_save(*args)
-            click.echo("Done")
-        elif use_threads:
-            click.echo(f"\nStarting thread pool with {num_workers} threads")
-            with ThreadPoolExecutor(max_workers=num_workers) as p:
-                futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
-                _drain(futures, shutdown)
-            click.echo("Shut down thread pool")
-        else:
-            click.echo(f"\nStarting multiprocess pool with {num_workers} processes")
-            # NOTE: spawn (not fork) — tensorstore runs internal C++ threads
-            # that are not fork-safe, so a forked worker can deadlock or
-            # segfault before our code runs. See google/tensorstore#61.
-            # NOTE: ProcessPoolExecutor (not mp.Pool) so silent worker death
-            # (e.g. cgroup OOM-kill) surfaces as BrokenProcessPool instead
-            # of hanging indefinitely on pool.starmap.
-            context = mp.get_context("spawn")
-            # Workers share the parent's process group and so receive the
-            # same signals; the initializer stops the default disposition
-            # from killing one part-way through a write.
-            with ProcessPoolExecutor(
-                max_workers=num_workers,
-                mp_context=context,
-                initializer=install_worker_handlers,
-            ) as p:
-                futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
-                _drain(futures, shutdown)
-            click.echo("Shut down multiprocess pool")
-        if shutdown.requested:
-            click.echo("Termination requested: finished in-flight writes and stopped dispatching new ones")
-        shutdown.reraise()
-
-
-def _drain(futures: list, shutdown) -> None:
-    """Wait for submitted work, abandoning what has not started on shutdown."""
-    cancelled = False
-    for future in as_completed(futures):
-        if shutdown.requested and not cancelled:
-            for pending in futures:
-                pending.cancel()
-            cancelled = True
-        if future.cancelled():
-            continue
-        future.result()
+    if num_workers <= 1:
+        click.echo("\nRunning serially in the calling process (num_workers <= 1)")
+        for args in flat_iterable:
+            partial_apply_transform_to_czyx_and_save(*args)
+        click.echo("Done")
+    elif use_threads:
+        click.echo(f"\nStarting thread pool with {num_workers} threads")
+        with ThreadPoolExecutor(max_workers=num_workers) as p:
+            futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
+            for fut in as_completed(futures):
+                fut.result()
+        click.echo("Shut down thread pool")
+    else:
+        click.echo(f"\nStarting multiprocess pool with {num_workers} processes")
+        # NOTE: spawn (not fork) — tensorstore runs internal C++ threads
+        # that are not fork-safe, so a forked worker can deadlock or
+        # segfault before our code runs. See google/tensorstore#61.
+        # NOTE: ProcessPoolExecutor (not mp.Pool) so silent worker death
+        # (e.g. cgroup OOM-kill) surfaces as BrokenProcessPool instead
+        # of hanging indefinitely on pool.starmap.
+        context = mp.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=num_workers, mp_context=context) as p:
+            futures = [p.submit(partial_apply_transform_to_czyx_and_save, *args) for args in flat_iterable]
+            for fut in as_completed(futures):
+                fut.result()
+        click.echo("Shut down multiprocess pool")
 
 
 # -- Pure utility functions ------------------------------------------------
