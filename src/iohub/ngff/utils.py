@@ -228,15 +228,17 @@ def create_empty_plate(
             existing = dict(position.zattrs)
             collected: dict[str, Any] = {}
             for source in metadata_sources:
+                # Only the open is guarded: a source that lacks this position
+                # is skipped, but a failure while reading one is a real error.
                 try:
                     src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
                 except FileNotFoundError:
                     continue
-                src_attrs = dict(src_pos.zattrs)
+                with src_pos:
+                    src_attrs = dict(src_pos.zattrs)
                 for k in _selected_metadata_keys(src_attrs, metadata_keys):
                     if k not in existing and k not in collected:
                         collected[k] = src_attrs[k]
-                src_pos.close()
             if collected:
                 position.zattrs.put({**existing, **collected})
         else:
