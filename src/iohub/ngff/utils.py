@@ -97,25 +97,24 @@ def create_empty_plate(
         Data type of the plate. Defaults to np.float32.
     metadata_sources : Path or str or list of Path or str, optional
         Path(s) to one or more source HCS plates from which to copy
-        per-position metadata. When set, any custom (non-OME) zattrs
-        (e.g. provenance keys such as ``biahub-flat_field``) are transferred
-        from matching positions in the source plate(s). Metadata is only
-        transferred for newly created
+        per-position metadata. This and ``metadata_keys`` together define the
+        copy: ``metadata_sources`` is *where* metadata comes from,
+        ``metadata_keys`` is *which* of it is taken.
+        When set, custom (non-OME) zattrs (e.g. provenance keys such as
+        ``biahub-flat_field``) are transferred from matching positions in the
+        source plate(s). Metadata is only transferred for newly created
         positions, and a given zattrs key is only copied if it does not
         already exist on the destination position (so earlier sources take
         precedence over later ones). Coordinate transforms, axis definitions,
         and label references are **not** copied.
         Defaults to None (no metadata copy).
     metadata_keys : iterable of str, optional
-        ``fnmatch`` patterns selecting which zattrs keys ``metadata_sources``
+        ``fnmatch`` patterns narrowing which zattrs keys ``metadata_sources``
         may contribute, e.g. ``{"provenance-*", "acquisition"}``. A key is
-        copied only if it matches at least one pattern. OME-owned keys are
-        excluded either way.
-        Restricting this is worthwhile when a source carries a large
-        instrument-written blob that is meaningless downstream: the copy is
-        proportional to the size of the selected metadata, and the destination
-        pays that cost on every subsequent read of the position.
-        Defaults to None (copy every non-OME key).
+        copied only if it matches at least one pattern; OME-owned keys are
+        excluded either way. This only filters the sources, so on its own it
+        copies nothing — it has no effect unless ``metadata_sources`` is set.
+        Defaults to None (copy every non-OME key the sources provide).
 
     Examples
     --------
