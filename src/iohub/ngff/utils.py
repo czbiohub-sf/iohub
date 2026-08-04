@@ -19,8 +19,11 @@ from numpy.typing import DTypeLike, NDArray
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
 from iohub.ngff._write_units import (
+    PROGRESS_DIRNAME,
     WriteUnit,
+    legacy_progress_dir,
     plan_write_unit,
+    progress_dir_for,
     tracking_available,
     unit_is_complete,
 )
@@ -263,6 +266,24 @@ def _save_transformed(
             write_unit.complete()
 
 
+def _warn_on_legacy_progress(array) -> None:
+    """Point the reader at the new progress location if the old one is present.
+
+    Progress used to be recorded inside the array. Those records are ignored —
+    they have no shard list, so they read as incomplete and the units are simply
+    recomputed — but a leftover directory inside a store is confusing enough to
+    be worth naming.
+    """
+    legacy = legacy_progress_dir(array)
+    if legacy is not None:
+        warnings.warn(
+            f"Ignoring progress records at {legacy}: they predate the move to a "
+            f"{PROGRESS_DIRNAME} directory beside the store and carry no shard list, so the "
+            "units they cover will be recomputed. The directory can be deleted.",
+            stacklevel=3,
+        )
+
+
 def _plan_output_write(
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
@@ -277,6 +298,7 @@ def _plan_output_write(
             output_time_indices,
             output_channel_indices,
             token=resume_token,
+            progress_dir=progress_dir_for(output_position_path),
         )
         if unit is None:
             return None, False
@@ -346,9 +368,10 @@ def apply_transform_to_tczyx_and_save(
         )
         _echo_finished(input_time_indices, input_channel_indices, skipped=False)
     elif unit is not None:
-        # Every timepoint was skipped, so there is nothing to write. Record
-        # the unit as finished anyway: a resumed run would skip it again.
-        unit.complete()
+        # Every timepoint was skipped, so there is nothing to write. Record the
+        # unit as finished anyway — a resumed run would skip it again — but
+        # claiming no shards, since this unit produced none.
+        unit.complete(wrote=False)
     del results
 
 
@@ -504,6 +527,8 @@ def process_single_position(
                 "so every unit will be recomputed. Tracking requires a local Zarr v3 (OME-Zarr v0.5) store.",
                 stacklevel=2,
             )
+        elif resume:
+            _warn_on_legacy_progress(output_dataset.data)
 
     # Process time indices
     if input_time_indices is None:

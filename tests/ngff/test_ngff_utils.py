@@ -1,4 +1,5 @@
 import itertools
+import json
 import os
 import shutil
 import string
@@ -11,12 +12,17 @@ from typing import Literal
 import hypothesis.strategies as st
 import numpy as np
 import pytest
+import xarray as xr
 from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
-from iohub.ngff._write_units import MARKER_DIRNAME, plan_write_unit
+from iohub.ngff._write_units import (
+    LEGACY_MARKER_DIRNAME,
+    plan_write_unit,
+    progress_dir_for,
+)
 from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
@@ -1600,7 +1606,7 @@ def test_resume_without_markers_recomputes_everything(tmp_path):
     )
 
     run()
-    marker_dir = output_store / Path(*position_key) / "0" / MARKER_DIRNAME
+    marker_dir = progress_dir_for(output_store / Path(*position_key))
     assert list(marker_dir.iterdir())
     shutil.rmtree(marker_dir)
 
@@ -1690,3 +1696,138 @@ def test_process_single_position_with_flat_channel_indices(tmp_path):
     with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
         expected = dummy_transform(in_ds["/".join(position_key)].data[:], constant=2)
         np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+# -- Progress records live beside the store, not inside it ------------------
+
+
+def test_progress_records_are_written_beside_the_store(tmp_path):
+    """Nothing iohub owns is written inside the output store.
+
+    Progress used to live in the array directory, which meant a ``cp -r`` of a
+    finished store carried it along and a later resume against the copy skipped
+    everything.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        resume=True,
+    )
+
+    stray = [p for p in output_store.rglob("*") if "iohub" in p.name or "progress" in p.name]
+    assert stray == [], f"iohub wrote inside the store: {stray}"
+
+    expected = tmp_path / ".iohub-progress" / output_store.name / Path(*position_key)
+    assert expected == progress_dir_for(output_store / Path(*position_key))
+    assert sorted(p.name for p in expected.glob("*.done")) != []
+
+
+def test_progress_record_names_the_shards_it_guarantees(tmp_path):
+    """Each record lists the shards that must still exist for it to count."""
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    # One all-zero timepoint, which is skipped rather than written.
+    with open_ome_zarr(input_store, mode="r+") as dataset:
+        dataset["/".join(position_key)].data[0] = 0
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        resume=True,
+    )
+
+    records = {
+        p.name: json.loads(p.read_text()) for p in progress_dir_for(output_store / Path(*position_key)).glob("*.done")
+    }
+    assert len(records) == shape[0]
+    by_shard_count = sorted(len(r["shards"]) for r in records.values())
+    # The all-zero unit claims nothing; the written one names its shard.
+    assert by_shard_count == [0, 1]
+
+
+def test_resume_recomputes_when_the_store_data_was_deleted(tmp_path):
+    """Records outside the store must not survive deletion of the store's data.
+
+    This is the hazard created by moving the records out: ``rm -rf`` on the
+    store no longer removes them, so a resume that trusted them blindly would
+    skip every unit and leave an empty store.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+        resume=True,
+    )
+
+    run()
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+
+    shutil.rmtree(output_store / Path(*position_key) / "0" / "c")
+    run()
+    assert _call_count(call_log) == 2 * first_pass, "resume skipped units whose data was gone"
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+def test_legacy_in_store_records_are_ignored_with_a_warning(tmp_path):
+    """Records from before the move are not trusted, and are called out."""
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    legacy = output_store / Path(*position_key) / "0" / LEGACY_MARKER_DIRNAME
+    legacy.mkdir(parents=True)
+    (legacy / "t0-0_c0-0_deadbeefcafe.done").touch()
+
+    with pytest.warns(UserWarning, match="predate the move"):
+        process_single_position(
+            func=dummy_transform,
+            input_position_path=input_store / Path(*position_key),
+            output_position_path=output_store / Path(*position_key),
+            constant=2,
+            resume=True,
+        )
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = dummy_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+def test_write_xarray_repairs_without_writing_records(tmp_path):
+    """write_xarray gets repair only: no progress records, inside or outside."""
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    _, output_store = _make_stores(tmp_path, shape, position_key)
+    czyx = np.ones(shape[1:], dtype=np.float32)
+    coords = {
+        "t": [0.0],
+        "c": ["c0"],
+        "z": np.arange(shape[2], dtype=float),
+        "y": np.arange(shape[3], dtype=float),
+        "x": np.arange(shape[4], dtype=float),
+    }
+    array = xr.DataArray(czyx[None], dims=("t", "c", "z", "y", "x"), coords=coords)
+
+    with open_ome_zarr(output_store / Path(*position_key), layout="fov", mode="r+") as position:
+        position.write_xarray(array)
+
+    assert [p for p in output_store.rglob("*") if "iohub" in p.name] == []
+    assert progress_dir_for(output_store / Path(*position_key)).exists() is False

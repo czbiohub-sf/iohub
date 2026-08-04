@@ -24,16 +24,30 @@ from __future__ import annotations
 
 import hashlib
 import itertools
+import json
 import math
 import operator
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Directory holding per-unit progress markers, inside the array directory.
-#: Dot-prefixed and nested under the array (not the position group) so that
-#: neither group member listing nor the chunk read path ever sees it.
-MARKER_DIRNAME = ".iohub-write-progress"
+#: Directory holding per-unit progress markers. Written *beside* the store, not
+#: inside it, so that nothing iohub owns ends up in a published data artifact and
+#: a ``cp -r``/``rsync`` of a finished store does not carry progress state that
+#: would make a later resume skip everything. Dot-prefixed so it never matches a
+#: shell glob, and namespaced by store name because one directory can hold
+#: several stores (e.g. a reconstruction output alongside its transfer function).
+#:
+#:     parent/
+#:       my_plate.zarr/                  <- untouched
+#:       .iohub-progress/
+#:         my_plate.zarr/
+#:           A/1/0/t0-0_c0-0_<digest>.done
+PROGRESS_DIRNAME = ".iohub-progress"
+
+#: Pre-existing marker directory from when progress lived inside the array.
+#: Only used to point the reader at the new location.
+LEGACY_MARKER_DIRNAME = ".iohub-write-progress"
 
 #: Errors raised by the zarr-python and zarrs codec pipelines when a stored
 #: chunk or shard cannot be decoded (truncated file, bad checksum, short
@@ -50,7 +64,12 @@ class WriteUnit:
     #: Files this unit owns, paired with the origin element of each, which is
     #: used to probe whether the file decodes.
     shards: tuple[tuple[Path, tuple[int, ...]], ...]
-    marker_dir: Path
+    #: Directory holding this array's chunk/shard files, which the recorded
+    #: shard keys are relative to.
+    array_dir: Path
+    #: Where completion is recorded. None when the caller did not ask for
+    #: tracking (repair only), or when the store root could not be located.
+    marker_dir: Path | None = None
     #: Opaque string mixed into the unit's identity, so that a caller whose
     #: inputs or settings changed does not match the previous run's markers.
     token: str = ""
@@ -65,12 +84,17 @@ class WriteUnit:
         return f"{times}_{channels}_{digest}"
 
     @property
-    def done_marker(self) -> Path:
-        return self.marker_dir / f"{self.name}.done"
+    def tracked(self) -> bool:
+        """Whether completion of this unit is recorded anywhere."""
+        return self.marker_dir is not None
 
     @property
-    def inflight_marker(self) -> Path:
-        return self.marker_dir / f"{self.name}.inflight"
+    def done_marker(self) -> Path | None:
+        return None if self.marker_dir is None else self.marker_dir / f"{self.name}.done"
+
+    @property
+    def inflight_marker(self) -> Path | None:
+        return None if self.marker_dir is None else self.marker_dir / f"{self.name}.inflight"
 
     def begin(self) -> None:
         """Mark this unit in flight and clear the files it owns.
@@ -80,9 +104,10 @@ class WriteUnit:
         first, the in-flight marker is created next, and only then are the
         owned files unlinked.
         """
-        self.marker_dir.mkdir(parents=True, exist_ok=True)
-        self.done_marker.unlink(missing_ok=True)
-        self.inflight_marker.touch()
+        if self.marker_dir is not None:
+            self.marker_dir.mkdir(parents=True, exist_ok=True)
+            self.done_marker.unlink(missing_ok=True)
+            self.inflight_marker.touch()
         self.clear()
 
     def clear(self) -> None:
@@ -94,17 +119,69 @@ class WriteUnit:
         for path, _ in self.shards:
             path.unlink(missing_ok=True)
 
-    def complete(self) -> None:
-        """Record this unit as finished.
+    def complete(self, *, wrote: bool = True) -> None:
+        """Record this unit as finished, and which shards it guarantees.
 
-        ``os.replace`` within one directory is atomic, so the marker is never
-        observed in a half-written state.
+        The recorded keys are what makes the record safe to keep outside the
+        store: a later resume requires every one of them to still be present
+        and decodable, so deleting the store's data does not leave markers
+        claiming work that no longer exists. A unit whose input was all zeros
+        writes no shard and records an empty list, and is still skippable.
+
+        Pass ``wrote=False`` when the unit produced nothing — an all-zero or
+        all-NaN input is skipped rather than written — so the record claims
+        nothing. Recording whatever happened to be on disk would otherwise
+        attribute a leftover file from an earlier run to this unit.
+
+        Written to the in-flight marker and then renamed, which is atomic
+        within one directory, so the record is never read half-written.
         """
+        if self.marker_dir is None:
+            return
         self.marker_dir.mkdir(parents=True, exist_ok=True)
-        if self.inflight_marker.exists():
-            self.inflight_marker.replace(self.done_marker)
-        else:
-            self.done_marker.touch()
+        written = [self._key(path) for path, _ in self.shards if path.exists()] if wrote else []
+        scratch = self.inflight_marker
+        scratch.write_text(json.dumps({"shards": written}))
+        scratch.replace(self.done_marker)
+
+    def _key(self, path: Path) -> str:
+        """Shard path relative to the array directory, e.g. ``c/0/0/0/0/0``."""
+        return path.relative_to(self.array_dir).as_posix()
+
+
+def progress_dir_for(position_path: Path) -> Path | None:
+    """Where to record progress for the position at ``position_path``.
+
+    Returns a directory beside the store — ``<store>/../.iohub-progress/
+    <store name>/<position path within the store>`` — or None if the store root
+    cannot be located, in which case the caller gets repair without resume.
+
+    The store root is found by walking up while the directory is still a Zarr
+    node, which handles an HCS plate (three levels above the position) and a
+    standalone FOV store (the position *is* the store) without assuming a depth.
+    """
+    position_path = Path(position_path).resolve()
+    if not (position_path / "zarr.json").exists():
+        return None
+    root = position_path
+    while (root.parent / "zarr.json").exists():
+        root = root.parent
+        if root.parent == root:  # reached the filesystem root
+            return None
+    relative = position_path.relative_to(root)
+    return root.parent / PROGRESS_DIRNAME / root.name / relative
+
+
+def legacy_progress_dir(array) -> Path | None:
+    """Where progress used to be recorded for ``array``, inside the array.
+
+    None if the array is not on a filesystem, or if no such directory exists.
+    """
+    directory = _array_directory(array)
+    if directory is None:
+        return None
+    legacy = directory / LEGACY_MARKER_DIRNAME
+    return legacy if legacy.is_dir() else None
 
 
 def tracking_available(array) -> bool:
@@ -124,6 +201,7 @@ def plan_write_unit(
     time_indices: int | Sequence[int] | slice,
     channel_indices: int | Sequence[int] | slice,
     token: str = "",
+    progress_dir: Path | None = None,
 ) -> WriteUnit | None:
     """Describe the files a ``(timepoints, channels)`` write owns.
 
@@ -141,6 +219,12 @@ def plan_write_unit(
     whatever determines the output — settings, input revision — so that a run
     with different parameters does not match the markers of the previous one
     and skip work that would now produce different data.
+
+    ``progress_dir`` is where completion is recorded, normally from
+    :func:`progress_dir_for`. Omit it for repair without resume: the shard
+    paths are still computed, so a torn shard is still replaced, but nothing
+    is written outside the store. This is what :meth:`Position.write_xarray`
+    uses, since it has no notion of a resumable unit of work.
     """
     directory = _array_directory(array)
     encoding = _chunk_key_encoding(array)
@@ -176,7 +260,8 @@ def plan_write_unit(
         time_indices=times,
         channel_indices=channels,
         shards=shards,
-        marker_dir=directory / MARKER_DIRNAME,
+        array_dir=directory,
+        marker_dir=progress_dir,
         token=token,
     )
 
@@ -184,25 +269,37 @@ def plan_write_unit(
 def unit_is_complete(unit: WriteUnit, array) -> bool:
     """Whether ``unit`` finished in an earlier run and can be skipped.
 
-    Requires the unit's done marker, and additionally probes each owned file
-    to confirm it still decodes. The probe reads one element, which forces the
-    shard index and its checksum to be validated; that catches a file whose
-    marker was recorded but whose bytes did not all reach disk, for instance
-    if a striped filesystem flushed them out of order during a node crash. It
-    does not verify every inner chunk, so it is a cheap guard rather than a
-    proof of integrity.
+    Requires a done marker, and requires every shard the marker says it wrote
+    to still be present and decodable. Because the record lives outside the
+    store, presence has to be re-checked: deleting the store's data would
+    otherwise leave markers claiming work that no longer exists, and a resume
+    would skip straight past an empty store.
+
+    The probe reads one element per shard, which forces the shard index and its
+    checksum to be validated; that catches a file whose marker was recorded but
+    whose bytes did not all reach disk, for instance if a striped filesystem
+    flushed them out of order during a node crash. It does not verify every
+    inner chunk, so it is a cheap guard rather than a proof of integrity.
+
+    A marker that cannot be parsed — including a zero-byte one written by an
+    older version, which recorded no shard list — counts as incomplete, so the
+    unit is simply recomputed.
     """
-    if not unit.done_marker.exists() or unit.inflight_marker.exists():
+    if not unit.tracked or unit.inflight_marker.exists():
         return False
-    return all(_decodes(array, path, origin) for path, origin in unit.shards)
+    if not unit.done_marker.exists():
+        return False
+    try:
+        recorded = set(json.loads(unit.done_marker.read_text())["shards"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+    return all(_decodes(array, path, origin) for path, origin in unit.shards if unit._key(path) in recorded)
 
 
 def _decodes(array, path: Path, origin: tuple[int, ...]) -> bool:
     """Whether one element can be read out of ``path``."""
     if not path.exists():
-        # An all-fill-value shard is never written, so a missing file is
-        # consistent with a completed unit that had nothing to store.
-        return True
+        return False
     selection = (*origin[:2], *(slice(start, start + 1) for start in origin[2:]))
     try:
         array._impl.read(array.native, selection)
