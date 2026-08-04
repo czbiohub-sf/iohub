@@ -53,7 +53,10 @@ def _selected_metadata_keys(
     candidates = (k for k in source_attrs if k not in _OME_KEYS)
     if metadata_keys is None:
         return list(candidates)
-    patterns = list(metadata_keys)
+    if isinstance(metadata_keys, str):
+        patterns = [metadata_keys]
+    else:
+        patterns = list(metadata_keys)
     return [k for k in candidates if any(fnmatchcase(k, p) for p in patterns)]
 
 
@@ -233,26 +236,21 @@ def create_empty_plate(
             # as-is. A key is only copied if it is not already present on the
             # destination, so earlier sources take precedence over later ones.
             #
-            # Collect across all sources first, then write once. Assigning to
-            # `position.zattrs` serializes the whole group metadata document,
-            # so a per-key write would rewrite (and re-read, for the membership
-            # test) the destination once per copied key -- quadratic in the
-            # metadata size, which is ruinous when a source carries a large
-            # instrument-written blob. `Attributes.update` is the MutableMapping
-            # default and delegates to per-key `__setitem__`, so it is *not* a
-            # single write; `Attributes.put` is, hence the explicit merge.
+            # Collect across all sources first, then write once.
             existing = dict(position.zattrs)
             collected: dict[str, Any] = {}
             for source in metadata_sources:
+                # Only the open is guarded: a source that lacks this position
+                # is skipped, but a failure while reading one is a real error.
                 try:
                     src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
                 except FileNotFoundError:
                     continue
-                src_attrs = dict(src_pos.zattrs)
+                with src_pos:
+                    src_attrs = dict(src_pos.zattrs)
                 for k in _selected_metadata_keys(src_attrs, metadata_keys):
                     if k not in existing and k not in collected:
                         collected[k] = src_attrs[k]
-                src_pos.close()
             if collected:
                 position.zattrs.put({**existing, **collected})
         else:
