@@ -41,7 +41,10 @@ def _selected_metadata_keys(
     candidates = (k for k in source_attrs if k not in _OME_KEYS)
     if metadata_keys is None:
         return list(candidates)
-    patterns = list(metadata_keys)
+    if isinstance(metadata_keys, str):
+        patterns = [metadata_keys]
+    else:
+        patterns = list(metadata_keys)
     return [k for k in candidates if any(fnmatchcase(k, p) for p in patterns)]
 
 
