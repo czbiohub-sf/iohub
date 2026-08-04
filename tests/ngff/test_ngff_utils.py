@@ -866,6 +866,140 @@ def test_create_empty_plate_copy_metadata_earlier_source_wins():
             assert dst_plate["A/1/0"].zattrs["extra_metadata"] == {"origin": "a"}
 
 
+def _plate_with_zattrs(store_path, position_keys, channel_names, shape, zattrs):
+    """Create a plate and stamp ``zattrs`` onto every position."""
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=position_keys,
+        channel_names=channel_names,
+        shape=shape,
+    )
+    with open_ome_zarr(str(store_path), mode="r+") as plate:
+        for _name, pos in plate.positions():
+            for k, v in zattrs.items():
+                pos.zattrs[k] = v
+
+
+def test_create_empty_plate_metadata_keys_filters_by_pattern():
+    """metadata_keys selects which source zattrs are copied, via fnmatch."""
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+    source_zattrs = {
+        "provenance-deskew": {"angle": 30},
+        "provenance-stitch": {"overlap": 0.1},
+        "acquisition": {"scope": "mantis"},
+        "frame_log": list(range(100)),
+    }
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+        _plate_with_zattrs(src_path, position_keys, channel_names, shape, source_zattrs)
+
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            metadata_sources=src_path,
+            metadata_keys={"provenance-*", "acquisition"},
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            dst_zattrs = dict(dst_plate["A/1/0"].zattrs)
+        assert dst_zattrs["provenance-deskew"] == {"angle": 30}
+        assert dst_zattrs["provenance-stitch"] == {"overlap": 0.1}
+        assert dst_zattrs["acquisition"] == {"scope": "mantis"}
+        # Unmatched key is left behind.
+        assert "frame_log" not in dst_zattrs
+
+
+def test_create_empty_plate_metadata_keys_none_copies_everything():
+    """The default (None) keeps the previous copy-every-non-OME-key behaviour."""
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+    source_zattrs = {"alpha": 1, "beta": 2}
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+        _plate_with_zattrs(src_path, position_keys, channel_names, shape, source_zattrs)
+
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            metadata_sources=src_path,
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            dst_zattrs = dict(dst_plate["A/1/0"].zattrs)
+        assert dst_zattrs["alpha"] == 1
+        assert dst_zattrs["beta"] == 2
+
+
+def test_create_empty_plate_metadata_copy_is_one_write(monkeypatch):
+    """The metadata copy must not rewrite the destination once per key.
+
+    Writing per key makes the copy quadratic in the metadata size, which is
+    crippling when a source carries a large instrument-written blob. Rather
+    than pin an exact write count (which would be coupled to unrelated
+    metadata bookkeeping), assert the count does not grow with the number of
+    keys copied.
+    """
+    from zarr.core.attributes import Attributes
+
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    def count_writes(source_zattrs, store_suffix):
+        calls = {"n": 0}
+        real_setitem = Attributes.__setitem__
+        real_put = Attributes.put
+
+        def counting_setitem(self, key, value):
+            calls["n"] += 1
+            return real_setitem(self, key, value)
+
+        def counting_put(self, d):
+            calls["n"] += 1
+            return real_put(self, d)
+
+        with TemporaryDirectory() as temp_dir:
+            src_path = Path(temp_dir) / f"source_{store_suffix}.zarr"
+            dst_path = Path(temp_dir) / f"dest_{store_suffix}.zarr"
+            _plate_with_zattrs(src_path, position_keys, channel_names, shape, source_zattrs)
+
+            # Count only the destination-plate writes.
+            monkeypatch.setattr(Attributes, "__setitem__", counting_setitem)
+            monkeypatch.setattr(Attributes, "put", counting_put)
+            try:
+                create_empty_plate(
+                    store_path=dst_path,
+                    position_keys=position_keys,
+                    channel_names=channel_names,
+                    shape=shape,
+                    metadata_sources=src_path,
+                )
+            finally:
+                monkeypatch.setattr(Attributes, "__setitem__", real_setitem)
+                monkeypatch.setattr(Attributes, "put", real_put)
+
+            with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+                copied = dict(dst_plate["A/1/0"].zattrs)
+            for k in source_zattrs:
+                assert k in copied, f"{k} was not copied"
+        return calls["n"]
+
+    few = count_writes({f"key_{i}": {"i": i} for i in range(2)}, "few")
+    many = count_writes({f"key_{i}": {"i": i} for i in range(16)}, "many")
+    assert few == many, f"metadata writes scale with key count: {few} -> {many}"
+
+
 @given(
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),

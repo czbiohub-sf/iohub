@@ -6,8 +6,9 @@ import multiprocessing as mp
 import os
 import warnings
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from fnmatch import fnmatchcase
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
@@ -39,6 +40,23 @@ _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 _OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
 
 
+def _selected_metadata_keys(
+    source_attrs: Mapping[str, Any],
+    metadata_keys: Iterable[str] | None,
+) -> list[str]:
+    """Names of the source zattrs to copy to a destination position.
+
+    OME-owned keys are always excluded. When ``metadata_keys`` is None every
+    remaining key is selected; otherwise a key is selected only if it matches
+    at least one of the ``fnmatch`` patterns.
+    """
+    candidates = (k for k in source_attrs if k not in _OME_KEYS)
+    if metadata_keys is None:
+        return list(candidates)
+    patterns = list(metadata_keys)
+    return [k for k in candidates if any(fnmatchcase(k, p) for p in patterns)]
+
+
 def create_empty_plate(
     store_path: Path,
     position_keys: list[tuple[str, str, str]],
@@ -50,6 +68,7 @@ def create_empty_plate(
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     metadata_sources: Path | str | list[Path | str] | None = None,
+    metadata_keys: Iterable[str] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -99,6 +118,16 @@ def create_empty_plate(
         precedence over later ones). Coordinate transforms, axis definitions,
         and label references are **not** copied.
         Defaults to None (no metadata copy).
+    metadata_keys : iterable of str, optional
+        ``fnmatch`` patterns selecting which zattrs keys ``metadata_sources``
+        may contribute, e.g. ``{"provenance-*", "acquisition"}``. A key is
+        copied only if it matches at least one pattern. OME-owned keys are
+        excluded either way.
+        Restricting this is worthwhile when a source carries a large
+        instrument-written blob that is meaningless downstream: the copy is
+        proportional to the size of the selected metadata, and the destination
+        pays that cost on every subsequent read of the position.
+        Defaults to None (copy every non-OME key).
 
     Examples
     --------
@@ -139,6 +168,16 @@ def create_empty_plate(
     ...     channel_names=["DAPI"],
     ...     shape=(1, 1, 256, 256, 256),
     ...     metadata_sources=Path("/path/to/input.zarr"),
+    ... )
+
+    Copy only the provenance keys, leaving a bulky instrument blob behind:
+    >>> create_empty_plate(
+    ...     store_path=Path("/path/to/output.zarr"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(1, 1, 256, 256, 256),
+    ...     metadata_sources=Path("/path/to/input.zarr"),
+    ...     metadata_keys={"provenance-*"},
     ... )
 
     Notes
@@ -194,15 +233,29 @@ def create_empty_plate(
             # Only for newly created positions; pre-existing ones are left
             # as-is. A key is only copied if it is not already present on the
             # destination, so earlier sources take precedence over later ones.
+            #
+            # Collect across all sources first, then write once. Assigning to
+            # `position.zattrs` serializes the whole group metadata document,
+            # so a per-key write would rewrite (and re-read, for the membership
+            # test) the destination once per copied key -- quadratic in the
+            # metadata size, which is ruinous when a source carries a large
+            # instrument-written blob. `Attributes.update` is the MutableMapping
+            # default and delegates to per-key `__setitem__`, so it is *not* a
+            # single write; `Attributes.put` is, hence the explicit merge.
+            existing = dict(position.zattrs)
+            collected: dict[str, Any] = {}
             for source in metadata_sources:
                 try:
                     src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
                 except FileNotFoundError:
                     continue
-                for k, v in dict(src_pos.zattrs).items():
-                    if k not in _OME_KEYS and k not in position.zattrs:
-                        position.zattrs[k] = v
+                src_attrs = dict(src_pos.zattrs)
+                for k in _selected_metadata_keys(src_attrs, metadata_keys):
+                    if k not in existing and k not in collected:
+                        collected[k] = src_attrs[k]
                 src_pos.close()
+            if collected:
+                position.zattrs.put({**existing, **collected})
         else:
             position = output_plate[position_key_string]
 
