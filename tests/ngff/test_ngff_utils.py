@@ -936,6 +936,24 @@ def test_create_empty_plate_metadata_keys_none_copies_everything():
         assert dst_zattrs["beta"] == 2
 
 
+def test_create_empty_plate_metadata_keys_without_sources_raises():
+    """metadata_keys filters nothing on its own, so it is rejected alone."""
+    with TemporaryDirectory() as temp_dir:
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        with pytest.raises(ValueError, match="metadata_keys"):
+            create_empty_plate(
+                store_path=dst_path,
+                position_keys=[("A", "1", "0")],
+                channel_names=["DAPI"],
+                shape=(1, 1, 16, 32, 32),
+                metadata_keys={"provenance-*"},
+            )
+
+        # The guard runs before anything is created.
+        assert not dst_path.exists()
+
+
 @given(
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),

@@ -30,13 +30,20 @@ _OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
 
 def _selected_metadata_keys(
     source_attrs: Mapping[str, Any],
-    metadata_keys: Iterable[str] | None,
+    metadata_keys: str | Iterable[str] | None,
 ) -> list[str]:
     """Names of the source zattrs to copy to a destination position.
 
     OME-owned keys are always excluded. When ``metadata_keys`` is None every
     remaining key is selected; otherwise a key is selected only if it matches
     at least one of the ``fnmatch`` patterns.
+
+    Patterns are shell globs rather than regexes: the strings callers actually
+    write, like ``"biahub-*"``, are also valid regexes that mean something
+    else, so reading them as regexes would silently select nothing instead of
+    raising. The iterable already supplies the alternation a regex would add.
+    ``fnmatchcase`` keeps matching case-sensitive on every platform, matching
+    how zattrs keys compare.
     """
     candidates = (k for k in source_attrs if k not in _OME_KEYS)
     if metadata_keys is None:
@@ -59,7 +66,7 @@ def create_empty_plate(
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     metadata_sources: Path | str | list[Path | str] | None = None,
-    metadata_keys: Iterable[str] | None = None,
+    metadata_keys: str | Iterable[str] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -111,13 +118,22 @@ def create_empty_plate(
         precedence over later ones). Coordinate transforms, axis definitions,
         and label references are **not** copied.
         Defaults to None (no metadata copy).
-    metadata_keys : iterable of str, optional
-        ``fnmatch`` patterns narrowing which zattrs keys ``metadata_sources``
-        may contribute, e.g. ``{"provenance-*", "acquisition"}``. A key is
+    metadata_keys : str or iterable of str, optional
+        Case-sensitive shell-glob patterns (``fnmatch``, not regex) narrowing
+        which zattrs keys ``metadata_sources`` may contribute, e.g.
+        ``{"provenance-*", "acquisition"}``. A key is
         copied only if it matches at least one pattern; OME-owned keys are
-        excluded either way. This only filters the sources, so on its own it
-        copies nothing — it has no effect unless ``metadata_sources`` is set.
+        excluded either way. This only filters the sources, so it is
+        meaningless on its own: passing it without ``metadata_sources``
+        raises ``ValueError``.
         Defaults to None (copy every non-OME key the sources provide).
+
+    Raises
+    ------
+    ValueError
+        If ``metadata_keys`` is given without ``metadata_sources``.
+    FileNotFoundError
+        If a ``metadata_sources`` plate root does not exist.
 
     Examples
     --------
@@ -187,6 +203,12 @@ def create_empty_plate(
     # is wrong; missing individual positions within them are still skipped
     # gracefully in the loop below.
     if metadata_sources is None:
+        if metadata_keys is not None:
+            raise ValueError(
+                "metadata_keys filters what metadata_sources contributes, "
+                "so it selects nothing on its own. Pass metadata_sources, "
+                "or drop metadata_keys."
+            )
         metadata_sources = []
     elif isinstance(metadata_sources, (str, Path)):
         metadata_sources = [Path(metadata_sources)]
