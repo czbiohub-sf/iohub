@@ -18,11 +18,7 @@ from numpy.typing import DTypeLike
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
-from iohub.ngff._write_units import (
-    LEGACY_MARKER_DIRNAME,
-    plan_write_unit,
-    progress_dir_for,
-)
+from iohub.ngff._write_units import plan_write_unit, progress_dir_for
 from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
@@ -1785,29 +1781,6 @@ def test_resume_recomputes_when_the_store_data_was_deleted(tmp_path):
 
     with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
         expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
-        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
-
-
-def test_legacy_in_store_records_are_ignored_with_a_warning(tmp_path):
-    """Records from before the move are not trusted, and are called out."""
-    shape = (2, 1, 4, 8, 8)
-    position_key = ("A", "1", "0")
-    input_store, output_store = _make_stores(tmp_path, shape, position_key)
-    legacy = output_store / Path(*position_key) / "0" / LEGACY_MARKER_DIRNAME
-    legacy.mkdir(parents=True)
-    (legacy / "t0-0_c0-0_deadbeefcafe.done").touch()
-
-    with pytest.warns(UserWarning, match="predate the move"):
-        process_single_position(
-            func=dummy_transform,
-            input_position_path=input_store / Path(*position_key),
-            output_position_path=output_store / Path(*position_key),
-            constant=2,
-            resume=True,
-        )
-
-    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
-        expected = dummy_transform(in_ds["/".join(position_key)].data[:], constant=2)
         np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
 
 

@@ -45,10 +45,6 @@ from pathlib import Path
 #:           A/1/0/t0-0_c0-0_<digest>.done
 PROGRESS_DIRNAME = ".iohub-progress"
 
-#: Pre-existing marker directory from when progress lived inside the array.
-#: Only used to point the reader at the new location.
-LEGACY_MARKER_DIRNAME = ".iohub-write-progress"
-
 #: Errors raised by the zarr-python and zarrs codec pipelines when a stored
 #: chunk or shard cannot be decoded (truncated file, bad checksum, short
 #: shard index).
@@ -172,18 +168,6 @@ def progress_dir_for(position_path: Path) -> Path | None:
     return root.parent / PROGRESS_DIRNAME / root.name / relative
 
 
-def legacy_progress_dir(array) -> Path | None:
-    """Where progress used to be recorded for ``array``, inside the array.
-
-    None if the array is not on a filesystem, or if no such directory exists.
-    """
-    directory = _array_directory(array)
-    if directory is None:
-        return None
-    legacy = directory / LEGACY_MARKER_DIRNAME
-    return legacy if legacy.is_dir() else None
-
-
 def tracking_available(array) -> bool:
     """Whether write units can be tracked for ``array`` at all.
 
@@ -281,9 +265,8 @@ def unit_is_complete(unit: WriteUnit, array) -> bool:
     flushed them out of order during a node crash. It does not verify every
     inner chunk, so it is a cheap guard rather than a proof of integrity.
 
-    A marker that cannot be parsed — including a zero-byte one written by an
-    older version, which recorded no shard list — counts as incomplete, so the
-    unit is simply recomputed.
+    A marker that cannot be parsed counts as incomplete, so the unit is simply
+    recomputed.
     """
     if not unit.tracked or unit.inflight_marker.exists():
         return False
