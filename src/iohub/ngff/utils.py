@@ -6,8 +6,9 @@ import multiprocessing as mp
 import os
 import warnings
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from fnmatch import fnmatchcase
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
@@ -27,6 +28,33 @@ _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 _OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
 
 
+def _selected_metadata_keys(
+    source_attrs: Mapping[str, Any],
+    metadata_keys: str | Iterable[str] | None,
+) -> list[str]:
+    """Names of the source zattrs to copy to a destination position.
+
+    OME-owned keys are always excluded. When ``metadata_keys`` is None every
+    remaining key is selected; otherwise a key is selected only if it matches
+    at least one of the ``fnmatch`` patterns.
+
+    Patterns are shell globs rather than regexes: the strings callers actually
+    write, like ``"biahub-*"``, are also valid regexes that mean something
+    else, so reading them as regexes would silently select nothing instead of
+    raising. The iterable already supplies the alternation a regex would add.
+    ``fnmatchcase`` keeps matching case-sensitive on every platform, matching
+    how zattrs keys compare.
+    """
+    candidates = (k for k in source_attrs if k not in _OME_KEYS)
+    if metadata_keys is None:
+        return list(candidates)
+    if isinstance(metadata_keys, str):
+        patterns = [metadata_keys]
+    else:
+        patterns = list(metadata_keys)
+    return [k for k in candidates if any(fnmatchcase(k, p) for p in patterns)]
+
+
 def create_empty_plate(
     store_path: Path,
     position_keys: list[tuple[str, str, str]],
@@ -38,6 +66,7 @@ def create_empty_plate(
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     metadata_sources: Path | str | list[Path | str] | None = None,
+    metadata_keys: str | Iterable[str] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -78,15 +107,33 @@ def create_empty_plate(
         Data type of the plate. Defaults to np.float32.
     metadata_sources : Path or str or list of Path or str, optional
         Path(s) to one or more source HCS plates from which to copy
-        per-position metadata. When set, any custom (non-OME) zattrs
-        (e.g. provenance keys such as ``biahub-flat_field``) are transferred
-        from matching positions in the source plate(s). Metadata is only
-        transferred for newly created
+        per-position metadata. This and ``metadata_keys`` together define the
+        copy: ``metadata_sources`` is *where* metadata comes from,
+        ``metadata_keys`` is *which* of it is taken.
+        When set, custom (non-OME) zattrs (e.g. provenance keys such as
+        ``biahub-flat_field``) are transferred from matching positions in the
+        source plate(s). Metadata is only transferred for newly created
         positions, and a given zattrs key is only copied if it does not
         already exist on the destination position (so earlier sources take
         precedence over later ones). Coordinate transforms, axis definitions,
         and label references are **not** copied.
         Defaults to None (no metadata copy).
+    metadata_keys : str or iterable of str, optional
+        Case-sensitive shell-glob patterns (``fnmatch``, not regex) narrowing
+        which zattrs keys ``metadata_sources`` may contribute, e.g.
+        ``{"provenance-*", "acquisition"}``. A key is
+        copied only if it matches at least one pattern; OME-owned keys are
+        excluded either way. This only filters the sources, so it is
+        meaningless on its own: passing it without ``metadata_sources``
+        raises ``ValueError``.
+        Defaults to None (copy every non-OME key the sources provide).
+
+    Raises
+    ------
+    ValueError
+        If ``metadata_keys`` is given without ``metadata_sources``.
+    FileNotFoundError
+        If a ``metadata_sources`` plate root does not exist.
 
     Examples
     --------
@@ -129,6 +176,16 @@ def create_empty_plate(
     ...     metadata_sources=Path("/path/to/input.zarr"),
     ... )
 
+    Copy only the provenance keys, leaving a bulky instrument blob behind:
+    >>> create_empty_plate(
+    ...     store_path=Path("/path/to/output.zarr"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(1, 1, 256, 256, 256),
+    ...     metadata_sources=Path("/path/to/input.zarr"),
+    ...     metadata_keys={"provenance-*"},
+    ... )
+
     Notes
     -----
     - If `chunks` is not provided, a version-specific default is used (see
@@ -146,6 +203,12 @@ def create_empty_plate(
     # is wrong; missing individual positions within them are still skipped
     # gracefully in the loop below.
     if metadata_sources is None:
+        if metadata_keys is not None:
+            raise ValueError(
+                "metadata_keys filters what metadata_sources contributes, "
+                "so it selects nothing on its own. Pass metadata_sources, "
+                "or drop metadata_keys."
+            )
         metadata_sources = []
     elif isinstance(metadata_sources, (str, Path)):
         metadata_sources = [Path(metadata_sources)]
@@ -182,15 +245,24 @@ def create_empty_plate(
             # Only for newly created positions; pre-existing ones are left
             # as-is. A key is only copied if it is not already present on the
             # destination, so earlier sources take precedence over later ones.
+            #
+            # Collect across all sources first, then write once.
+            existing = dict(position.zattrs)
+            collected: dict[str, Any] = {}
             for source in metadata_sources:
+                # Only the open is guarded: a source that lacks this position
+                # is skipped, but a failure while reading one is a real error.
                 try:
                     src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
                 except FileNotFoundError:
                     continue
-                for k, v in dict(src_pos.zattrs).items():
-                    if k not in _OME_KEYS and k not in position.zattrs:
-                        position.zattrs[k] = v
-                src_pos.close()
+                with src_pos:
+                    src_attrs = dict(src_pos.zattrs)
+                for k in _selected_metadata_keys(src_attrs, metadata_keys):
+                    if k not in existing and k not in collected:
+                        collected[k] = src_attrs[k]
+            if collected:
+                position.zattrs.put({**existing, **collected})
         else:
             position = output_plate[position_key_string]
 

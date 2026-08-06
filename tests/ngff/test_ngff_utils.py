@@ -861,6 +861,99 @@ def test_create_empty_plate_copy_metadata_earlier_source_wins():
             assert dst_plate["A/1/0"].zattrs["extra_metadata"] == {"origin": "a"}
 
 
+def _plate_with_zattrs(store_path, position_keys, channel_names, shape, zattrs):
+    """Create a plate and stamp ``zattrs`` onto every position."""
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=position_keys,
+        channel_names=channel_names,
+        shape=shape,
+    )
+    with open_ome_zarr(str(store_path), mode="r+") as plate:
+        for _name, pos in plate.positions():
+            for k, v in zattrs.items():
+                pos.zattrs[k] = v
+
+
+def test_create_empty_plate_metadata_keys_filters_by_pattern():
+    """metadata_keys selects which source zattrs are copied, via fnmatch."""
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+    source_zattrs = {
+        "provenance-deskew": {"angle": 30},
+        "provenance-stitch": {"overlap": 0.1},
+        "acquisition": {"scope": "mantis"},
+        "frame_log": list(range(100)),
+    }
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+        _plate_with_zattrs(src_path, position_keys, channel_names, shape, source_zattrs)
+
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            metadata_sources=src_path,
+            metadata_keys={"provenance-*", "acquisition"},
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            dst_zattrs = dict(dst_plate["A/1/0"].zattrs)
+        assert dst_zattrs["provenance-deskew"] == {"angle": 30}
+        assert dst_zattrs["provenance-stitch"] == {"overlap": 0.1}
+        assert dst_zattrs["acquisition"] == {"scope": "mantis"}
+        # Unmatched key is left behind.
+        assert "frame_log" not in dst_zattrs
+
+
+def test_create_empty_plate_metadata_keys_none_copies_everything():
+    """The default (None) keeps the previous copy-every-non-OME-key behaviour."""
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+    source_zattrs = {"alpha": 1, "beta": 2}
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+        _plate_with_zattrs(src_path, position_keys, channel_names, shape, source_zattrs)
+
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            metadata_sources=src_path,
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as dst_plate:
+            dst_zattrs = dict(dst_plate["A/1/0"].zattrs)
+        assert dst_zattrs["alpha"] == 1
+        assert dst_zattrs["beta"] == 2
+
+
+def test_create_empty_plate_metadata_keys_without_sources_raises():
+    """metadata_keys filters nothing on its own, so it is rejected alone."""
+    with TemporaryDirectory() as temp_dir:
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        with pytest.raises(ValueError, match="metadata_keys"):
+            create_empty_plate(
+                store_path=dst_path,
+                position_keys=[("A", "1", "0")],
+                channel_names=["DAPI"],
+                shape=(1, 1, 16, 32, 32),
+                metadata_keys={"provenance-*"},
+            )
+
+        # The guard runs before anything is created.
+        assert not dst_path.exists()
+
+
 @given(
     setup=apply_transform_czyx_setup(),
     constant=st.integers(min_value=1, max_value=5),
