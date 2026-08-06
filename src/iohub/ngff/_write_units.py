@@ -120,9 +120,9 @@ class WriteUnit:
 
         The recorded keys are what makes the record safe to keep outside the
         store: a later resume requires every one of them to still be present
-        and decodable, so deleting the store's data does not leave markers
-        claiming work that no longer exists. A unit whose input was all zeros
-        writes no shard and records an empty list, and is still skippable.
+        and decodable, and every shard this unit owns that is *not* named to be
+        absent. So neither deleting the store's data nor leaving an earlier
+        run's file behind can pass as complete.
 
         Pass ``wrote=False`` when the unit produced nothing — an all-zero or
         all-NaN input is skipped rather than written — so the record claims
@@ -253,11 +253,15 @@ def plan_write_unit(
 def unit_is_complete(unit: WriteUnit, array) -> bool:
     """Whether ``unit`` finished in an earlier run and can be skipped.
 
-    Requires a done marker, and requires every shard the marker says it wrote
-    to still be present and decodable. Because the record lives outside the
-    store, presence has to be re-checked: deleting the store's data would
-    otherwise leave markers claiming work that no longer exists, and a resume
-    would skip straight past an empty store.
+    Requires a done marker, and requires the store to still match it exactly:
+    every shard the record names must be present and decodable, and every other
+    shard this unit owns must be absent. Because the record lives outside the
+    store, it cannot be taken on trust — deleting the store's data would
+    otherwise leave records claiming work that no longer exists, and a resume
+    would skip straight past an empty store. Checking the shards the record
+    *omits* matters just as much: a record claiming nothing next to a leftover
+    file from an earlier run describes a store that is not what a fresh run
+    would produce.
 
     The probe reads one element per shard, which forces the shard index and its
     checksum to be validated; that catches a file whose marker was recorded but
@@ -276,7 +280,13 @@ def unit_is_complete(unit: WriteUnit, array) -> bool:
         recorded = set(json.loads(unit.done_marker.read_text())["shards"])
     except (OSError, ValueError, KeyError, TypeError):
         return False
-    return all(_decodes(array, path, origin) for path, origin in unit.shards if unit._key(path) in recorded)
+    for path, origin in unit.shards:
+        if unit._key(path) in recorded:
+            if not _decodes(array, path, origin):
+                return False
+        elif path.exists():
+            return False
+    return True
 
 
 def _decodes(array, path: Path, origin: tuple[int, ...]) -> bool:

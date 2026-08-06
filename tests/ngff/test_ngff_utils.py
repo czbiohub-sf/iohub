@@ -1804,3 +1804,79 @@ def test_write_xarray_repairs_without_writing_records(tmp_path):
 
     assert [p for p in output_store.rglob("*") if "iohub" in p.name] == []
     assert progress_dir_for(output_store / Path(*position_key)).exists() is False
+
+
+def test_rerun_clears_shards_when_every_timepoint_is_skipped(tmp_path):
+    """A unit whose input became all-zero must not keep the old output.
+
+    The writing branch clears the unit's shards unconditionally, so a timepoint
+    skipped *alongside* one that wrote is cleared. Without clearing here too,
+    the same input condition would give a different store depending only on
+    whether a sibling timepoint shared the shard.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    run = partial(
+        process_single_position,
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+    )
+
+    run()
+    with open_ome_zarr(output_store) as out_ds:
+        assert np.any(np.asarray(out_ds["/".join(position_key)].data[0])), "nothing written to t=0"
+
+    # The input for t=0 becomes all zeros, so that unit is skipped entirely.
+    with open_ome_zarr(input_store, mode="r+") as in_ds:
+        in_ds["/".join(position_key)].data[0] = 0
+    run()
+
+    with open_ome_zarr(output_store) as out_ds:
+        data = np.asarray(out_ds["/".join(position_key)].data[:])
+    assert not np.any(data[0]), "stale output kept for a timepoint that is now all-zero"
+    assert np.any(data[1]), "the untouched timepoint was lost"
+
+    records = {
+        p.name: json.loads(p.read_text()) for p in progress_dir_for(output_store / Path(*position_key)).glob("*.done")
+    }
+    empty = [name for name, record in records.items() if record["shards"] == []]
+    assert len(empty) == 1
+    assert empty[0].startswith("t0-0")
+
+
+def test_resume_recomputes_when_an_unclaimed_shard_is_present(tmp_path):
+    """A record must describe the store exactly, including what it omits.
+
+    A record claiming no shards next to a leftover file from an earlier run
+    describes a store that is not what a fresh run would produce, so the unit
+    has to be recomputed rather than skipped.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+        resume=True,
+    )
+
+    run()
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+
+    # Rewrite one record to claim nothing while its shard stays on disk — the
+    # state a store is left in by a version that did not clear on skip.
+    records = sorted(progress_dir_for(output_store / Path(*position_key)).glob("t0-0_*.done"))
+    assert len(records) == 1
+    records[0].write_text(json.dumps({"shards": []}))
+
+    run()
+    assert _call_count(call_log) == first_pass + 1, "resume skipped a unit whose store no longer matches its record"

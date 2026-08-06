@@ -348,9 +348,14 @@ def apply_transform_to_tczyx_and_save(
         )
         _echo_finished(input_time_indices, input_channel_indices, skipped=False)
     elif unit is not None:
-        # Every timepoint was skipped, so there is nothing to write. Record the
-        # unit as finished anyway — a resumed run would skip it again — but
-        # claiming no shards, since this unit produced none.
+        # Every timepoint was skipped, so there is nothing to write. Clear the
+        # unit's shards anyway, then record it as finished claiming none, so a
+        # re-run leaves what a fresh run would: a unit whose input has become
+        # all-zero must not keep serving an earlier run's output. Skipping the
+        # clear would make that outcome depend on whether a *sibling* timepoint
+        # in the same shard happened to produce data, since the writing branch
+        # clears unconditionally.
+        unit.begin()
         unit.complete(wrote=False)
     del results
 
