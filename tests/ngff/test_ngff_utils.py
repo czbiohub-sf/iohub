@@ -1,6 +1,10 @@
 import itertools
+import json
+import os
+import shutil
 import string
 from contextlib import contextmanager
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
@@ -8,11 +12,13 @@ from typing import Literal
 import hypothesis.strategies as st
 import numpy as np
 import pytest
+import xarray as xr
 from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
+from iohub.ngff._write_units import plan_write_unit, progress_dir_for
 from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
@@ -1522,3 +1528,448 @@ def test_apply_transform_to_tczyx_on_multi_channel_shard(tmp_path):
         in_slice = in_ds["/".join(position_key)].data[:1, :2]
         out_slice = out_ds["/".join(position_key)].data[:1, :2]
     np.testing.assert_array_almost_equal(out_slice, dummy_transform(in_slice, constant=2))
+
+
+# -- Interrupted-write repair and resume -----------------------------------
+
+
+def counting_transform(data, constant=2, call_log_dir=None):
+    """Multiply like dummy_transform, recording one file per invocation.
+
+    A file per call rather than a counter so the tally survives being made
+    from worker processes.
+    """
+    if call_log_dir is not None:
+        log = Path(call_log_dir)
+        log.mkdir(parents=True, exist_ok=True)
+        (log / os.urandom(8).hex()).touch()
+    return data * constant
+
+
+def _call_count(call_log_dir: Path) -> int:
+    return len(list(call_log_dir.iterdir())) if call_log_dir.exists() else 0
+
+
+def _shard_files(store_path: Path, position_key: tuple[str, str, str]) -> list[Path]:
+    chunk_root = store_path / Path(*position_key) / "0" / "c"
+    return sorted(p for p in chunk_root.rglob("*") if p.is_file())
+
+
+def _make_stores(tmp_path: Path, shape, position_key, **plate_kwargs):
+    input_store = tmp_path / "input.zarr"
+    output_store = tmp_path / "output.zarr"
+    for store in (input_store, output_store):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[position_key],
+            channel_names=[f"c{c}" for c in range(shape[1])],
+            shape=shape,
+            version="0.5",
+            **plate_kwargs,
+        )
+    populate_store(input_store, [position_key], shape, np.float32)
+    return input_store, output_store
+
+
+def _tear(path: Path) -> None:
+    """Truncate a shard, as a job killed part-way through a write would."""
+    data = path.read_bytes()
+    path.write_bytes(data[: len(data) // 2])
+
+
+#: A geometry matching what reconstruction pipelines produce: inner chunks
+#: that do not divide the data extent, so the shard grid rounds up past the
+#: array bound and no write can cover a whole shard. Every write is then a
+#: read-modify-write, which is what makes a torn shard fatal on retry rather
+#: than merely wasteful. The shard also spans ten timepoints, so one write
+#: unit is a batch of ten.
+_RMW_SHAPE = (23, 1, 17, 20, 20)
+_RMW_PLATE = {"chunks": (1, 1, 16, 16, 16), "shards_ratio": (10, 1, 2, 2, 2)}
+#: Timepoints in the first shard-aligned batch of ``_RMW_SHAPE``.
+_RMW_UNIT_SIZE = 10
+
+
+def test_plan_write_unit_only_claims_fully_covered_shards(tmp_path):
+    """A unit owns a shard only if it writes every in-bounds element of it."""
+    shape = (23, 2, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    _, output_store = _make_stores(
+        tmp_path,
+        shape,
+        position_key,
+        chunks=(1, 1, 4, 8, 8),
+        shards_ratio=(10, 1, 1, 1, 1),
+    )
+    position_path = output_store / Path(*position_key)
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as dataset:
+        array = dataset.data
+        assert array.shards == (10, 1, 4, 8, 8)
+
+        # A whole shard row of timepoints is owned, and maps to one file.
+        unit = plan_write_unit(array, list(range(10)), [0])
+        assert unit is not None
+        assert [path for path, _ in unit.shards] == [position_path / "0" / "c" / "0" / "0" / "0" / "0" / "0"]
+
+        # The ragged final row is owned too: t=20..22 is all of it that exists.
+        assert plan_write_unit(array, [20, 21, 22], [0]) is not None
+
+        # A subset of a shard row is shared with another write, so untracked.
+        assert plan_write_unit(array, [0, 1], [0]) is None
+        assert plan_write_unit(array, [*range(10), 10], [0]) is None
+
+
+def test_write_over_torn_shard_recovers(tmp_path):
+    """A shard left half-written by a killed job is replaced, not read back.
+
+    Without clearing the file first, the write is a read-modify-write which
+    re-reads the damaged shard and fails on its checksum, so every retry of
+    the position fails the same way.
+    """
+    shape = _RMW_SHAPE
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key, **_RMW_PLATE)
+    run = partial(
+        process_single_position,
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+    )
+
+    run()
+    shards = _shard_files(output_store, position_key)
+    assert shards
+    _tear(shards[0])
+
+    run()
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = dummy_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+@pytest.mark.parametrize("num_workers", [1, 2])
+@pytest.mark.parametrize("use_threads", [False, True])
+def test_resume_skips_units_already_written(tmp_path, num_workers, use_threads):
+    shape = (4, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        num_workers=num_workers,
+        use_threads=use_threads,
+        constant=2,
+        call_log_dir=str(call_log),
+    )
+
+    run(resume=True)
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+
+    run(resume=True)
+    assert _call_count(call_log) == first_pass, "resume recomputed units that were already written"
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+def test_resume_without_markers_recomputes_everything(tmp_path):
+    """Resuming a store written by an earlier version recomputes it."""
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+    )
+
+    run()
+    marker_dir = progress_dir_for(output_store / Path(*position_key))
+    assert list(marker_dir.iterdir())
+    shutil.rmtree(marker_dir)
+
+    run(resume=True)
+    assert _call_count(call_log) == 2 * shape[0]
+
+
+def test_resume_recomputes_a_unit_whose_shard_is_torn(tmp_path):
+    """A completion marker is not trusted over an unreadable shard."""
+    shape = _RMW_SHAPE
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key, **_RMW_PLATE)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+    )
+
+    run(resume=True)
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+    _tear(_shard_files(output_store, position_key)[0])
+
+    run(resume=True)
+    # Only the torn unit is recomputed: its whole batch of timepoints, and
+    # nothing from the units that are still intact.
+    expected = first_pass + _RMW_UNIT_SIZE
+    assert _call_count(call_log) == expected, "torn shard was skipped instead of rewritten"
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+@pytest.mark.parametrize(
+    ("time_indices", "channel_indices"),
+    [
+        ([0], [0]),  # list of indices, as process_single_position usually yields
+        ([0], 0),  # scalar channel: a caller passed a flat channel list
+        (0, 0),  # scalar in both dimensions
+        ([0], slice(0, 1)),  # slice, as a caller grouping channels may pass
+    ],
+    ids=["lists", "scalar-channel", "scalar-both", "slice-channel"],
+)
+def test_plan_write_unit_accepts_every_selection_form(tmp_path, time_indices, channel_indices):
+    """Scalar and slice selections are legal and must be planned, not rejected.
+
+    ``process_single_position`` hands a bare int to
+    ``apply_transform_to_tczyx_and_save`` whenever a caller passes a flat list
+    of channel indices instead of a list of channel groups, which is what
+    ``biahub concatenate`` does. Treating that as a sequence raised
+    ``TypeError: 'int' object is not iterable`` and aborted the step.
+    """
+    shape = (4, 3, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    _, output_store = _make_stores(tmp_path, shape, position_key)
+
+    with open_ome_zarr(output_store / Path(*position_key), layout="fov", mode="r") as dataset:
+        unit = plan_write_unit(dataset.data, time_indices, channel_indices)
+
+    assert unit is not None
+    assert unit.time_indices == (0,)
+    assert unit.channel_indices == (0,)
+    assert len(unit.shards) == 1
+
+
+def test_process_single_position_with_flat_channel_indices(tmp_path):
+    """End-to-end with concatenate's calling convention (flat channel list)."""
+    shape = (2, 3, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        input_channel_indices=[0, 1, 2],
+        output_channel_indices=[0, 1, 2],
+        constant=2,
+        resume=True,
+    )
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = dummy_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+# -- Progress records live beside the store, not inside it ------------------
+
+
+def test_progress_records_are_written_beside_the_store(tmp_path):
+    """Nothing iohub owns is written inside the output store.
+
+    Progress used to live in the array directory, which meant a ``cp -r`` of a
+    finished store carried it along and a later resume against the copy skipped
+    everything.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        resume=True,
+    )
+
+    stray = [p for p in output_store.rglob("*") if "iohub" in p.name or "progress" in p.name]
+    assert stray == [], f"iohub wrote inside the store: {stray}"
+
+    expected = tmp_path / ".iohub-progress" / output_store.name / Path(*position_key)
+    assert expected == progress_dir_for(output_store / Path(*position_key))
+    assert sorted(p.name for p in expected.glob("*.done")) != []
+
+
+def test_progress_record_names_the_shards_it_guarantees(tmp_path):
+    """Each record lists the shards that must still exist for it to count."""
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    # One all-zero timepoint, which is skipped rather than written.
+    with open_ome_zarr(input_store, mode="r+") as dataset:
+        dataset["/".join(position_key)].data[0] = 0
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        resume=True,
+    )
+
+    records = {
+        p.name: json.loads(p.read_text()) for p in progress_dir_for(output_store / Path(*position_key)).glob("*.done")
+    }
+    assert len(records) == shape[0]
+    by_shard_count = sorted(len(r["shards"]) for r in records.values())
+    # The all-zero unit claims nothing; the written one names its shard.
+    assert by_shard_count == [0, 1]
+
+
+def test_resume_recomputes_when_the_store_data_was_deleted(tmp_path):
+    """Records outside the store must not survive deletion of the store's data.
+
+    This is the hazard created by moving the records out: ``rm -rf`` on the
+    store no longer removes them, so a resume that trusted them blindly would
+    skip every unit and leave an empty store.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+        resume=True,
+    )
+
+    run()
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+
+    shutil.rmtree(output_store / Path(*position_key) / "0" / "c")
+    run()
+    assert _call_count(call_log) == 2 * first_pass, "resume skipped units whose data was gone"
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
+        np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+def test_write_xarray_repairs_without_writing_records(tmp_path):
+    """write_xarray gets repair only: no progress records, inside or outside."""
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    _, output_store = _make_stores(tmp_path, shape, position_key)
+    czyx = np.ones(shape[1:], dtype=np.float32)
+    coords = {
+        "t": [0.0],
+        "c": ["c0"],
+        "z": np.arange(shape[2], dtype=float),
+        "y": np.arange(shape[3], dtype=float),
+        "x": np.arange(shape[4], dtype=float),
+    }
+    array = xr.DataArray(czyx[None], dims=("t", "c", "z", "y", "x"), coords=coords)
+
+    with open_ome_zarr(output_store / Path(*position_key), layout="fov", mode="r+") as position:
+        position.write_xarray(array)
+
+    assert [p for p in output_store.rglob("*") if "iohub" in p.name] == []
+    assert progress_dir_for(output_store / Path(*position_key)).exists() is False
+
+
+def test_rerun_clears_shards_when_every_timepoint_is_skipped(tmp_path):
+    """A unit whose input became all-zero must not keep the old output.
+
+    The writing branch clears the unit's shards unconditionally, so a timepoint
+    skipped *alongside* one that wrote is cleared. Without clearing here too,
+    the same input condition would give a different store depending only on
+    whether a sibling timepoint shared the shard.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    run = partial(
+        process_single_position,
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+    )
+
+    run()
+    with open_ome_zarr(output_store) as out_ds:
+        assert np.any(np.asarray(out_ds["/".join(position_key)].data[0])), "nothing written to t=0"
+
+    # The input for t=0 becomes all zeros, so that unit is skipped entirely.
+    with open_ome_zarr(input_store, mode="r+") as in_ds:
+        in_ds["/".join(position_key)].data[0] = 0
+    run()
+
+    with open_ome_zarr(output_store) as out_ds:
+        data = np.asarray(out_ds["/".join(position_key)].data[:])
+    assert not np.any(data[0]), "stale output kept for a timepoint that is now all-zero"
+    assert np.any(data[1]), "the untouched timepoint was lost"
+
+    records = {
+        p.name: json.loads(p.read_text()) for p in progress_dir_for(output_store / Path(*position_key)).glob("*.done")
+    }
+    empty = [name for name, record in records.items() if record["shards"] == []]
+    assert len(empty) == 1
+    assert empty[0].startswith("t0-0")
+
+
+def test_resume_recomputes_when_an_unclaimed_shard_is_present(tmp_path):
+    """A record must describe the store exactly, including what it omits.
+
+    A record claiming no shards next to a leftover file from an earlier run
+    describes a store that is not what a fresh run would produce, so the unit
+    has to be recomputed rather than skipped.
+    """
+    shape = (2, 1, 4, 8, 8)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, shape, position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+        resume=True,
+    )
+
+    run()
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+
+    # Rewrite one record to claim nothing while its shard stays on disk — the
+    # state a store is left in by a version that did not clear on skip.
+    records = sorted(progress_dir_for(output_store / Path(*position_key)).glob("t0-0_*.done"))
+    assert len(records) == 1
+    records[0].write_text(json.dumps({"shards": []}))
+
+    run()
+    assert _call_count(call_log) == first_pass + 1, "resume skipped a unit whose store no longer matches its record"

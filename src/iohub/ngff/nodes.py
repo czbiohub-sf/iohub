@@ -34,6 +34,7 @@ from iohub.core.ozx import OzxStore, is_ozx_path, read_ozx_version
 from iohub.core.protocol import ZarrImplementation
 from iohub.core.types import StorePath
 from iohub.core.utils import normalize_path, pad_shape
+from iohub.ngff._write_units import plan_write_unit
 from iohub.ngff.display import channel_display_settings
 from iohub.ngff.models import (
     AcquisitionMeta,
@@ -2156,6 +2157,12 @@ class Position(NGFFNode):
         t_indices = np.round((t_coords - translation[0]) / scale[0]).astype(int)
 
         arr = self[image]
+        # Clear whole shards this write owns before writing them, so a shard
+        # left truncated by a killed job is replaced rather than read back and
+        # rejected. See :mod:`iohub.ngff._write_units`.
+        unit = plan_write_unit(arr, [int(t) for t in t_indices], c_indices)
+        if unit is not None:
+            unit.clear()
         arr.oindex[t_indices, c_indices] = np_data
 
         # Persist DataArray attrs to zarr for round-tripping
