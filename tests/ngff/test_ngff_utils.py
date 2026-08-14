@@ -23,6 +23,7 @@ from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
     _available_cpus,
+    _contiguous_runs,
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
     apply_transform_to_tczyx_and_save,
@@ -1528,6 +1529,113 @@ def test_apply_transform_to_tczyx_on_multi_channel_shard(tmp_path):
         in_slice = in_ds["/".join(position_key)].data[:1, :2]
         out_slice = out_ds["/".join(position_key)].data[:1, :2]
     np.testing.assert_array_almost_equal(out_slice, dummy_transform(in_slice, constant=2))
+
+
+# -- Gapped time selections on T-sharded stores -------------------------------
+#
+# Sharding along T makes ``process_single_position`` batch a shard's worth of
+# timepoints into a single write, and that write can end up addressing
+# non-consecutive timepoints: an all-zero or all-NaN input in the middle of the
+# batch is dropped, or the caller asks for non-consecutive indices outright.
+# A gapped selection is not expressible as a slice, which a sharded write
+# requires, so the write has to be split into runs of consecutive timepoints.
+
+
+@pytest.mark.parametrize(
+    ("indices", "expected"),
+    [
+        ([], []),
+        ([3], [slice(0, 1)]),
+        ([0, 1, 2, 3, 4], [slice(0, 5)]),
+        ([0, 3, 4], [slice(0, 1), slice(1, 3)]),  # the t=1,2-skipped case
+        ([0, 2, 4], [slice(0, 1), slice(1, 2), slice(2, 3)]),
+        ([5, 6, 9], [slice(0, 2), slice(2, 3)]),
+    ],
+)
+def test_contiguous_runs(indices, expected):
+    """``_contiguous_runs`` slices an index list at every gap."""
+    assert _contiguous_runs(indices) == expected
+
+
+def _t_sharded_stores(tmp_path, shape, position_key, shard_t):
+    """Input and output stores whose shards hold ``shard_t`` timepoints each."""
+    input_store = tmp_path / "input.zarr"
+    output_store = tmp_path / "output.zarr"
+    for store in (input_store, output_store):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[position_key],
+            channel_names=[f"c{i}" for i in range(shape[1])],
+            shape=shape,
+            chunks=(1, 1, shape[2], shape[3] // 2, shape[4] // 2),
+            shards_ratio=(shard_t, 1, 1, 2, 2),
+            version="0.5",
+        )
+    return input_store, output_store
+
+
+def test_process_single_position_with_zero_timepoints_inside_a_t_shard(tmp_path):
+    """A dropped timepoint mid-batch must not break the shard-aligned write.
+
+    ``t=1`` and ``t=2`` are all zeros, so they are skipped and the surviving
+    output indices of the ``t=0..4`` batch are ``[0, 3, 4]`` — a gapped
+    selection. Regression test: this used to reach a zarr-python code path that
+    indexed the value buffer with the shard's own coordinates, raising
+    ``IndexError`` or attempting an absurd allocation.
+    """
+    shape = (5, 2, 4, 16, 16)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _t_sharded_stores(tmp_path, shape, position_key, shard_t=5)
+    populate_store(input_store, [position_key], shape, np.float32)
+    with open_ome_zarr(input_store, mode="r+") as in_ds:
+        in_ds["/".join(position_key)].data[1:3] = 0
+
+    assert _open_array(output_store, position_key).shards[0] == 5
+
+    process_single_position(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        input_channel_indices=[[0], [1]],
+        output_channel_indices=[[0], [1]],
+        input_time_indices=list(range(shape[0])),
+        output_time_indices=list(range(shape[0])),
+        constant=2,
+    )
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        in_data = in_ds["/".join(position_key)].data[:]
+        out_data = out_ds["/".join(position_key)].data[:]
+    # Skipped timepoints are left at the fill value; the rest are transformed.
+    expected = dummy_transform(in_data, constant=2)
+    np.testing.assert_array_almost_equal(out_data, expected)
+    assert not out_data[1:3].any()
+
+
+def test_apply_transform_to_tczyx_with_gapped_output_time_indices(tmp_path):
+    """A caller-requested gap within one T shard is written correctly."""
+    shape = (5, 1, 4, 16, 16)
+    position_key = ("A", "1", "0")
+    input_store, output_store = _t_sharded_stores(tmp_path, shape, position_key, shard_t=5)
+    populate_store(input_store, [position_key], shape, np.float32)
+
+    apply_transform_to_tczyx_and_save(
+        func=dummy_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        input_channel_indices=0,
+        output_channel_indices=0,
+        input_time_indices=[0, 2, 4],
+        output_time_indices=[0, 2, 4],
+        constant=2,
+    )
+
+    with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
+        in_data = in_ds["/".join(position_key)].data[:]
+        out_data = out_ds["/".join(position_key)].data[:]
+    written = [0, 2, 4]
+    np.testing.assert_array_almost_equal(out_data[written], dummy_transform(in_data[written], constant=2))
+    assert not out_data[[1, 3]].any()
 
 
 # -- Interrupted-write repair and resume -----------------------------------
