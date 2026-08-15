@@ -3,8 +3,8 @@
 # TODO: remove this in the future (PEP deferred for 3.11, now 3.12?)
 from __future__ import annotations
 
-import logging
 import itertools
+import logging
 import math
 import os
 import shutil
@@ -33,6 +33,7 @@ from iohub.core.config import ImplementationConfig
 from iohub.core.errors import StoreOpenError
 from iohub.core.ozx import OzxStore, is_ozx_path, read_ozx_version
 from iohub.core.protocol import ZarrImplementation
+from iohub.core.sharding import ShardsLike, resolve_shard_shape
 from iohub.core.types import StorePath
 from iohub.core.utils import normalize_path, pad_shape
 from iohub.ngff._write_units import plan_write_unit
@@ -435,28 +436,35 @@ class NGFFNode:
         shape: tuple[int, ...],
         dtype,
         chunks: tuple[int, ...],
-        shards_ratio: tuple[int, ...] | None,
+        shards: ShardsLike = None,
+        shards_ratio: tuple[int, ...] | None = None,
         dimension_names: list[str] | None = None,
     ):
         """Create a zarr array via the active implementation and return the native handle."""
-        if shards_ratio:
-            if len(shards_ratio) != len(shape):
-                raise ValueError(f"Sharding ratio length {len(shards_ratio)} does not match shape length {len(shape)}.")
-            shards = tuple(c * s for c, s in zip(chunks, shards_ratio, strict=False))
-        else:
-            shards = None
-        if shards is not None and self._zarr_format == 2:
+        dimension_names = dimension_names or [ax.name for ax in self.axes[: len(shape)]]
+        shard_shape = resolve_shard_shape(
+            shards,
+            shards_ratio,
+            shape=shape,
+            chunks=chunks,
+            dtype=dtype,
+            dimension_names=dimension_names,
+            # Point the deprecation at the caller of create_zeros rather than
+            # at this internal hop.
+            stacklevel=4,
+        )
+        if shard_shape is not None and self._zarr_format == 2:
             raise ValueError(
-                "Sharding is not supported in Zarr v2 (OME-Zarr v0.4). Remove shards_ratio or use version='0.5'."
+                "Sharding is not supported in Zarr v2 (OME-Zarr v0.4). Remove shards or use version='0.5'."
             )
         if self._zarr_format == 3:
             spec = ArraySpec.create(
                 shape=shape,
                 dtype=dtype,
                 chunks=chunks,
-                shards=shards,
+                shards=shard_shape,
                 fill_value=0,
-                dimension_names=dimension_names or [ax.name for ax in self.axes[: len(shape)]],
+                dimension_names=dimension_names,
             )
             return self._impl.create_array(self._group, name, spec, overwrite=self._overwrite)
         return self._impl.create_array_v2(
@@ -704,11 +712,13 @@ class MultiscaleNode(NGFFNode):
             shape = _scale_dims(prev_shape, axes)
             chunks = _scale_dims(prev_chunks, axes)
 
+            # Downscaling shards and chunks separately can leave the shard off
+            # the chunk grid; create_zeros rounds it back up to whole chunks.
             if prev_shards is not None:
                 prev_shards = _scale_dims(prev_shards, axes)
-                shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards, strict=False))
+                shards = prev_shards
             else:
-                shards_ratio = None
+                shards = None
 
             transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
             for tr in transforms:
@@ -725,7 +735,7 @@ class MultiscaleNode(NGFFNode):
                 shape=shape,
                 dtype=self.data.dtype,
                 chunks=chunks,
-                shards_ratio=shards_ratio,
+                shards=shards,
                 transform=transforms,
             )
 
@@ -1080,6 +1090,7 @@ class PositionLabel(MultiscaleNode):
         level: str,
         data: NDArray,
         chunks: tuple[int, ...] | None = None,
+        shards: ShardsLike = None,
         shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
     ) -> LabelsArray:
@@ -1096,8 +1107,11 @@ class PositionLabel(MultiscaleNode):
             Label data (integer array, TZYX format)
         chunks : tuple[int, ...], optional
             Chunk size, by default None
+        shards : tuple[int, ...] or str, optional
+            Shard geometry, by default None (no sharding). See
+            :meth:`Position.create_zeros` for the accepted forms.
         shards_ratio : tuple[int, ...], optional
-            Sharding ratio for each dimension, by default None.
+            Deprecated per-axis multiplier over ``chunks``. Use ``shards``.
         transform : list[TransformationMeta], optional
             Coordinate transformations for this level, by default None
 
@@ -1116,6 +1130,7 @@ class PositionLabel(MultiscaleNode):
             shape=data.shape,
             dtype=data.dtype,
             chunks=chunks,
+            shards=shards,
             shards_ratio=shards_ratio,
             transform=transform,
         )
@@ -1128,6 +1143,7 @@ class PositionLabel(MultiscaleNode):
         shape: tuple[int, ...],
         dtype: DTypeLike,
         chunks: tuple[int, ...] | None = None,
+        shards: ShardsLike = None,
         shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
     ) -> LabelsArray:
@@ -1143,8 +1159,11 @@ class PositionLabel(MultiscaleNode):
             Integer data type for labels
         chunks : tuple[int, ...], optional
             Chunk size, by default None
+        shards : tuple[int, ...] or str, optional
+            Shard geometry, by default None (no sharding). See
+            :meth:`Position.create_zeros` for the accepted forms.
         shards_ratio : tuple[int, ...], optional
-            Sharding ratio for each dimension, by default None.
+            Deprecated per-axis multiplier over ``chunks``. Use ``shards``.
         transform : list[TransformationMeta], optional
             Coordinate transformations, by default None
 
@@ -1157,7 +1176,7 @@ class PositionLabel(MultiscaleNode):
             raise ValueError(f"Labels must use integer dtype, got {dtype}")
         if not chunks:
             chunks = pad_shape(shape[-3:], target=len(shape))
-        arr_handle = self._create_zarr_array(level, shape, dtype, chunks, shards_ratio)
+        arr_handle = self._create_zarr_array(level, shape, dtype, chunks, shards, shards_ratio)
         lbl_arr = LabelsArray.from_handle(arr_handle, self._impl)
         self._create_label_meta(level, transform=transform)
         return lbl_arr
@@ -1399,6 +1418,7 @@ class Position(MultiscaleNode):
         name: str,
         data: NDArray,
         chunks: tuple[int, ...] | None = None,
+        shards: ShardsLike = None,
         shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
@@ -1414,10 +1434,11 @@ class Position(MultiscaleNode):
         chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
+        shards : tuple[int, ...] or str, optional
+            Shard geometry, by default None (no sharding). See
+            :meth:`create_zeros` for the accepted forms.
         shards_ratio : tuple[int, ...], optional
-            Sharding ratio for each dimension, by default None.
-            Each shard contains the product of the ratios number of chunks.
-            No sharding will be used if not specified.
+            Deprecated per-axis multiplier over ``chunks``. Use ``shards``.
         transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
@@ -1435,6 +1456,7 @@ class Position(MultiscaleNode):
             shape=data.shape,
             dtype=data.dtype,
             chunks=chunks,
+            shards=shards,
             shards_ratio=shards_ratio,
             transform=transform,
             check_shape=check_shape,
@@ -1448,6 +1470,7 @@ class Position(MultiscaleNode):
         shape: tuple[int, ...],
         dtype: DTypeLike,
         chunks: tuple[int, ...] | None = None,
+        shards: ShardsLike = None,
         shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         check_shape: bool = True,
@@ -1471,10 +1494,24 @@ class Position(MultiscaleNode):
         chunks : tuple[int, ...], optional
             Chunk size, by default None.
             ZYX stack size will be used if not specified.
+        shards : tuple[int, ...] or str, optional
+            Shard geometry, by default None (no sharding). Only supported for
+            OME-Zarr v0.5 (Zarr v3). One of:
+
+            - an explicit TCZYX shard shape in array elements, rounded up to
+              whole chunks (``shards=(2, 1, 96, 1792, 1280)``);
+            - a spatial extent, ``"XY"`` for one shard per plane or ``"XYZ"``
+              for one shard per volume;
+            - a target file size such as ``"2GB"`` or ``"512MiB"``: the
+              largest chunk-aligned shard whose nominal (uncompressed) size
+              fits under the target. X grows first, then Y, then Z, then time,
+              so a torn shard costs a spatial region before it costs
+              timepoints. The channel axis is never grown, because writers
+              address single channels.
         shards_ratio : tuple[int, ...], optional
-            Sharding ratio for each dimension, by default None.
-            Each shard contains the product of the ratios number of chunks.
-            No sharding will be used if not specified.
+            Deprecated per-axis multiplier over ``chunks``
+            (``shards = chunks * shards_ratio``), by default None.
+            Use ``shards`` instead; passing both raises ``ValueError``.
         transform : list[TransformationMeta], optional
             List of coordinate transformations, by default None.
             Should be specified for a non-native resolution level.
@@ -1492,7 +1529,7 @@ class Position(MultiscaleNode):
 
         if check_shape:
             self._check_shape(shape)
-        arr_handle = self._create_zarr_array(name, shape, dtype, chunks, shards_ratio)
+        arr_handle = self._create_zarr_array(name, shape, dtype, chunks, shards, shards_ratio)
         img_arr = ImageArray.from_handle(arr_handle, self._impl)
         self._create_image_meta(name, transform=transform)
         return img_arr
@@ -1900,6 +1937,7 @@ class Position(MultiscaleNode):
         colors: dict[int, list[int]] | None = None,
         properties: list[dict[str, Any]] | None = None,
         chunks: tuple[int, ...] | None = None,
+        shards: ShardsLike = None,
         shards_ratio: tuple[int, ...] | None = None,
         pyramid_levels: int = 1,
     ) -> PositionLabel:
@@ -1920,10 +1958,11 @@ class Position(MultiscaleNode):
             Properties for each label value, must include "label-value" field
         chunks : tuple[int, ...], optional
             Chunk size for the zarr arrays
+        shards : tuple[int, ...] or str, optional
+            Shard geometry, by default None (no sharding). See
+            :meth:`create_zeros` for the accepted forms.
         shards_ratio : tuple[int, ...], optional
-            Sharding ratio for each dimension, by default None.
-            Each shard contains the product of the ratios number of chunks.
-            No sharding will be used if not specified.
+            Deprecated per-axis multiplier over ``chunks``. Use ``shards``.
         pyramid_levels : int, optional
             Number of pyramid levels to create, by default 1
 
@@ -2023,7 +2062,7 @@ class Position(MultiscaleNode):
             impl=self._impl,
         )
 
-        label_image.create_label("0", data, chunks=chunks, shards_ratio=shards_ratio)
+        label_image.create_label("0", data, chunks=chunks, shards=shards, shards_ratio=shards_ratio)
 
         if pyramid_levels > 1:
             # Follow the image's pyramid axes when it has one (e.g. YX-only), so
@@ -2040,6 +2079,7 @@ class Position(MultiscaleNode):
         shape: tuple[int, ...],
         dtype: DTypeLike = np.uint32,
         chunks: tuple[int, ...] | None = None,
+        shards: ShardsLike = None,
         shards_ratio: tuple[int, ...] | None = None,
         transform: list[TransformationMeta] | None = None,
         colors: dict[int, list[int]] | None = None,
@@ -2063,8 +2103,12 @@ class Position(MultiscaleNode):
             Integer data type of the label, by default ``np.uint32``
         chunks : tuple[int, ...], optional
             Chunk size, by default None (one ZYX volume per chunk)
+        shards : tuple[int, ...] or str, optional
+            Shard geometry: an explicit TZYX shape, an extent keyword such as
+            ``"XYZ"``, or a size target such as ``"1GB"``; see
+            :func:`iohub.core.sharding.resolve_shards`. By default None (no sharding)
         shards_ratio : tuple[int, ...], optional
-            Sharding ratio for each dimension, by default None (no sharding)
+            Deprecated multiplier over ``chunks``; use ``shards``
         transform : list[TransformationMeta], optional
             Coordinate transformations of level "0", by default None
             (unit scale). Should match the image's TZYX transforms.
@@ -2105,7 +2149,9 @@ class Position(MultiscaleNode):
             overwriting_creation=self._overwrite,
             impl=self._impl,
         )
-        label_image.create_zeros(level, shape, dtype, chunks=chunks, shards_ratio=shards_ratio, transform=transform)
+        label_image.create_zeros(
+            level, shape, dtype, chunks=chunks, shards=shards, shards_ratio=shards_ratio, transform=transform
+        )
 
         self._update_labels_metadata(self.label_names())
 
