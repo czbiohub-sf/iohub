@@ -18,6 +18,7 @@ import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
+from iohub.core.sharding import ShardsLike
 from iohub.ngff import open_ome_zarr
 from iohub.ngff._write_units import (
     WriteUnit,
@@ -68,6 +69,7 @@ def create_empty_plate(
     channel_names: list[str],
     shape: tuple[int, ...],
     chunks: tuple[int, ...] | None = None,
+    shards: ShardsLike = None,
     shards_ratio: tuple[int, ...] | None = None,
     version: Literal["0.4", "0.5"] = "0.5",
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
@@ -99,12 +101,32 @@ def create_empty_plate(
         - "0.4": ``(1, 1, Z, Y, X)`` capped in Z to 500 MB.
         - "0.5": ``(1, 1, 16, 256, 256)`` clamped to ``shape``.
         Defaults to None.
-    shards_ratio : tuple[int, ...], optional
-        TCZYX shards ratio of the plate (shard size = chunks * shards_ratio).
+    shards : tuple[int, ...] or str, optional
+        Shard geometry of the plate. One of:
+
+        - an explicit TCZYX shard shape in array elements, rounded up to whole
+          chunks;
+        - a spatial extent, ``"XY"`` for one shard per plane or ``"XYZ"`` for
+          one shard per ZYX volume;
+        - a target file size such as ``"2GB"`` or ``"512MiB"``, which iohub
+          converts to the largest chunk-aligned shard that fits under it. X
+          grows first, then Y, then Z, then T, so a torn shard costs a spatial
+          region before it costs timepoints, and the channel axis is never
+          grown (channel-sharded stores cannot be written a channel at a
+          time). The target is compared against the nominal (uncompressed)
+          size, so compressed shards land under it.
+
         If None, a version-specific default is used:
+
         - "0.4": no sharding (Zarr v2 does not support it).
-        - "0.5": ratio that yields a shard size of ``(1, 1, Z, Y, X)``.
+        - "0.5": ``"XYZ"``, one shard per ZYX volume.
+
         Defaults to None.
+    shards_ratio : tuple[int, ...], optional
+        Deprecated TCZYX multiplier over ``chunks``
+        (``shards = chunks * shards_ratio``). Use ``shards`` instead, which
+        does not require knowing the chunk shape; passing both raises
+        ``ValueError``. Defaults to None.
     version : Literal["0.4", "0.5"], optional
         OME-Zarr version to use for the plate.
         Defaults to "0.5".
@@ -162,15 +184,26 @@ def create_empty_plate(
     ...     scale=(1, 1, 0.5, 0.5, 0.5),
     ... )
 
-    Create a plate with sharding:
+    Create a plate whose shards hold as much as fits in ~2 GB files:
+    >>> create_empty_plate(
+    ...     store_path=Path("/path/to/store"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(100, 1, 64, 2048, 2048),
+    ...     chunks=(1, 1, 8, 128, 128),
+    ...     scale=(1, 1, 0.5, 0.5, 0.5),
+    ...     shards="2GB",
+    ...     version="0.5",
+    ... )
+
+    Create a plate with one shard per ZYX volume:
     >>> create_empty_plate(
     ...     store_path=Path("/path/to/store"),
     ...     position_keys=[("A", "1", "0")],
     ...     channel_names=["DAPI"],
     ...     shape=(1, 1, 64, 2048, 2048),
     ...     chunks=(1, 1, 8, 128, 128),
-    ...     scale=(1, 1, 0.5, 0.5, 0.5),
-    ...     shards_ratio=(10, 1, 8, 16, 16),
+    ...     shards="XYZ",
     ...     version="0.5",
     ... )
 
@@ -203,8 +236,8 @@ def create_empty_plate(
     if chunks is None:
         chunks = _default_chunks(shape, dtype, version)
 
-    if shards_ratio is None and version == "0.5":
-        shards_ratio = _default_shards_ratio(shape, chunks)
+    if shards is None and shards_ratio is None and version == "0.5":
+        shards = "XYZ"
 
     # Normalize to a list of Paths. Fail loudly if any metadata source root
     # is wrong; missing individual positions within them are still skipped
@@ -243,6 +276,7 @@ def create_empty_plate(
                 name="0",
                 shape=shape,
                 chunks=chunks,
+                shards=shards,
                 shards_ratio=shards_ratio,
                 dtype=dtype,
                 transform=[TransformationMeta(type="scale", scale=scale)],
@@ -773,14 +807,3 @@ def _default_chunks(
         return (1, 1, *chunk_zyx_shape)
     # v0.5: DCA-aligned small chunks, clamped to the array shape.
     return _clamp_chunks_to_shape(shape, (1, 1, *_V05_DEFAULT_ZYX_CHUNKS))
-
-
-def _default_shards_ratio(
-    shape: tuple[int, ...],
-    chunks: tuple[int, ...],
-) -> tuple[int, ...]:
-    """Shards ratio yielding a shard of (1, 1, Z, Y, X)."""
-    ratios = [1, 1]
-    for dim, chunk in zip(shape[-3:], chunks[-3:], strict=False):
-        ratios.append(-(-dim // chunk))
-    return tuple(ratios)

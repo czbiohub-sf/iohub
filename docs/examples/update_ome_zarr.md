@@ -59,7 +59,10 @@ with open_ome_zarr(old_store_path, mode="r", layout="hcs") as old_dataset:
                 "0",
                 data=old_image.numpy(),
                 chunks=(1, 1, 4, 32, 32),
-                shards_ratio=(2, 1, 8, 4, 4),
+                # State the shard size you want and let iohub pick a chunk
+                # multiple that fits: "XYZ" for one shard per volume, or a
+                # target file size such as "2GB".
+                shards="XYZ",
                 transform=old_position.metadata.multiscales[0]
                 .datasets[0]
                 .coordinate_transformations,
@@ -72,7 +75,7 @@ with open_ome_zarr(old_store_path, mode="r", layout="hcs") as old_dataset:
 with open_ome_zarr(new_store_path / "A/1/0", mode="r") as dataset:
     assert dataset.scale == scale
     image = dataset["0"]
-    assert image.shards == (2, 1, 32, 128, 128)
+    assert image.shards == (1, 1, 32, 128, 128)
     assert np.array_equal(image.numpy(), random_image)
 ```
 
