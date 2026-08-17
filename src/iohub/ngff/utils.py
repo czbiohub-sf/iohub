@@ -316,22 +316,55 @@ def _echo_finished(
         click.echo(f"Finished writing t={time_index}, c={channel_index}")
 
 
+def _contiguous_runs(indices: Sequence[int]) -> list[slice]:
+    """Split ``indices`` into maximal runs of consecutive values.
+
+    Returns slices *into* ``indices`` rather than the values themselves, so one
+    call carves up both an index list and the data written at those indices.
+    """
+    runs: list[slice] = []
+    start = 0
+    for position in range(1, len(indices) + 1):
+        if position == len(indices) or indices[position] != indices[position - 1] + 1:
+            runs.append(slice(start, position))
+            start = position
+    return runs
+
+
 def _save_transformed(
-    transformed: NDArray | list[NDArray] | None,
+    transformed: list[NDArray],
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
-    output_time_indices: int | list[int],
+    output_time_indices: list[int],
     write_unit: WriteUnit | None = None,
 ) -> None:
+    """Write the transformed timepoints, one run of consecutive timepoints at a time.
+
+    The write has to be split because a *gapped* time selection is not
+    expressible as a slice, and a sharded write cannot be done without one:
+    the zarrs (Rust) codec pipeline rejects the selection with
+    ``DiscontiguousArrayError`` and falls back to a zarr-python path that
+    mismaps the value buffer onto the shard — indexing it with coordinates from
+    the shard's own space, which raises ``IndexError`` or, on a large array,
+    asks numpy for a preposterous allocation.
+
+    Gaps arise routinely once the output is sharded along T, because
+    :func:`process_single_position` then batches a whole shard's worth of
+    timepoints into one write and
+    :func:`apply_transform_to_tczyx_and_save` drops the ones whose input was
+    all zeros or NaNs from the middle of that batch. They also arise from a
+    caller asking for non-consecutive ``output_time_indices`` outright.
+    """
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
         arr = output_dataset.data
         if write_unit is not None:
             write_unit.begin()
-        arr._impl.write_oindex(
-            arr.native,
-            (output_time_indices, output_channel_indices),
-            transformed,
-        )
+        for run in _contiguous_runs(output_time_indices):
+            arr._impl.write_oindex(
+                arr.native,
+                (output_time_indices[run], output_channel_indices),
+                transformed[run],
+            )
         if write_unit is not None:
             write_unit.complete()
 
