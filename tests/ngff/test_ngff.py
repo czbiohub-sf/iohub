@@ -17,6 +17,7 @@ import numpy as np
 import ome_zarr.io
 import ome_zarr.reader
 import pytest
+import zarr
 import zarr.storage
 from hypothesis import HealthCheck, assume, given, settings
 from ngff_zarr import from_ngff_zarr
@@ -1096,6 +1097,34 @@ def test_open_hcs_create_empty(implementation, version):
             _ = open_ome_zarr("do-not-exist.zarr", layout="hcs", mode="r+")
         with pytest.raises(ValueError, match=r"."):
             dataset = open_ome_zarr(store_path, layout="hcs", mode="r+")
+
+
+def _build_small_hcs_plate(store_path, version) -> None:
+    """Create a 2-well, single-FOV HCS plate for consolidation tests."""
+    with open_ome_zarr(store_path, layout="hcs", mode="a", channel_names=["GFP"], version=version) as dataset:
+        for row, col in (("A", "1"), ("A", "2")):
+            position = dataset.create_position(row, col, "0")
+            position.create_zeros(name="0", shape=(1, 1, 2, 4, 4), dtype=np.uint16)
+
+
+@pytest.mark.parametrize("consolidate_at", ["", "A/1", "A/1/0"], ids=["hcs", "well", "fov"])
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_consolidate_metadata_is_scoped_to_its_node(tmp_path, version, consolidate_at):
+    """Consolidation only touches the node it's called on, never its ancestors."""
+    store_path = tmp_path / "hcs.zarr"
+    _build_small_hcs_plate(store_path, version)
+    with open_ome_zarr(store_path, layout="hcs", mode="r+") as dataset:
+        target = dataset[consolidate_at] if consolidate_at else dataset
+        target.consolidate_metadata()
+
+    zarr_format = 2 if version == "0.4" else 3
+    for path in ("", "A/1", "A/1/0"):
+        group = zarr.open_group(store_path, mode="r", path=path, zarr_format=zarr_format)
+        has_consolidated_metadata = group.metadata.consolidated_metadata is not None
+        assert has_consolidated_metadata == (path == consolidate_at)
+
+    with open_ome_zarr(store_path, layout="hcs", mode="r") as reopened:
+        assert reopened["A/1/0"].channel_names == ["GFP"]
 
 
 @contextmanager
