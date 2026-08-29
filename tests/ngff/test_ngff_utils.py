@@ -1,5 +1,6 @@
 import itertools
 import json
+import math
 import os
 import shutil
 import string
@@ -1364,18 +1365,89 @@ def test_v05_explicit_shards_ratio_is_honored(tmp_path):
     """An explicit shards_ratio overrides the default."""
     shape = (4, 2, 16, 256, 256)
     store = tmp_path / "test.zarr"
-    create_empty_plate(
-        store_path=store,
-        position_keys=[("A", "1", "0")],
-        channel_names=[f"c{i}" for i in range(shape[1])],
-        shape=shape,
-        chunks=(1, 1, 16, 256, 256),
-        shards_ratio=(2, 2, 1, 1, 1),
-        version="0.5",
-    )
+    with pytest.deprecated_call(match="shards_ratio is deprecated"):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[("A", "1", "0")],
+            channel_names=[f"c{i}" for i in range(shape[1])],
+            shape=shape,
+            chunks=(1, 1, 16, 256, 256),
+            shards_ratio=(2, 2, 1, 1, 1),
+            version="0.5",
+        )
     arr = _open_array(store, ("A", "1", "0"))
     assert arr.chunks == (1, 1, 16, 256, 256)
     assert arr.shards == (2, 2, 16, 256, 256)
+
+
+def test_v05_explicit_shard_shape_is_honored(tmp_path):
+    """An explicit TCZYX shard shape overrides the default."""
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=["c0", "c1"],
+        shape=(4, 2, 16, 256, 256),
+        chunks=(1, 1, 16, 256, 256),
+        shards=(2, 1, 16, 256, 256),
+        version="0.5",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    assert arr.shards == (2, 1, 16, 256, 256)
+
+
+def test_v05_shard_size_target_fills_space_before_time(tmp_path):
+    """A byte target is met without the caller knowing the chunk shape.
+
+    The mantis-v2 case from issue #458: one (Z, Y, X) volume is ~440 MB, so a
+    2 GB target buys the volume plus three more timepoints.
+    """
+    store = tmp_path / "test.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[("A", "1", "0")],
+        channel_names=[f"c{i}" for i in range(6)],
+        shape=(5, 6, 86, 1664, 1193),
+        shards="2GB",
+        dtype=np.uint16,
+        version="0.5",
+    )
+    arr = _open_array(store, ("A", "1", "0"))
+    assert arr.chunks == (1, 1, *_V05_DEFAULT_ZYX_CHUNKS)
+    assert arr.shards == (4, 1, 96, 1792, 1280)
+    assert math.prod(arr.shards) * 2 <= 2_000_000_000
+
+
+def test_v05_shard_extent_keyword_matches_the_default(tmp_path):
+    """``shards="XYZ"`` states the default explicitly."""
+    shape = (4, 2, 20, 300, 300)
+    stores = {}
+    for name, shards in (("default", None), ("explicit", "XYZ")):
+        store = tmp_path / f"{name}.zarr"
+        create_empty_plate(
+            store_path=store,
+            position_keys=[("A", "1", "0")],
+            channel_names=["c0", "c1"],
+            shape=shape,
+            shards=shards,
+            version="0.5",
+        )
+        stores[name] = _open_array(store, ("A", "1", "0")).shards
+    assert stores["default"] == stores["explicit"] == (1, 1, 32, 512, 512)
+
+
+def test_v05_shards_and_shards_ratio_conflict(tmp_path):
+    """Asking for both geometries is an error rather than a silent winner."""
+    with pytest.raises(ValueError, match="not both"):
+        create_empty_plate(
+            store_path=tmp_path / "test.zarr",
+            position_keys=[("A", "1", "0")],
+            channel_names=["c0"],
+            shape=(4, 1, 16, 256, 256),
+            shards="2GB",
+            shards_ratio=(2, 1, 1, 1, 1),
+            version="0.5",
+        )
 
 
 def test_v04_default_chunks_cover_full_zyx(tmp_path):
@@ -1435,13 +1507,28 @@ def test_v04_default_has_no_sharding(tmp_path):
 def test_v04_rejects_explicit_shards_ratio(tmp_path):
     """Passing shards_ratio on a v0.4 store raises (Zarr v2 has no sharding)."""
     store = tmp_path / "test.zarr"
-    with pytest.raises(ValueError, match="Sharding is not supported in Zarr v2"):
+    with pytest.deprecated_call(), pytest.raises(ValueError, match="Sharding is not supported in Zarr v2"):
         create_empty_plate(
             store_path=store,
             position_keys=[("A", "1", "0")],
             channel_names=["c0"],
             shape=(2, 1, 8, 64, 64),
             shards_ratio=(1, 1, 1, 1, 1),
+            version="0.4",
+        )
+
+
+@pytest.mark.parametrize("shards", ["2GB", "XYZ", (1, 1, 8, 64, 64)])
+def test_v04_rejects_shards(tmp_path, shards):
+    """Every shards form is rejected on a v0.4 store, not silently ignored."""
+    store = tmp_path / "test.zarr"
+    with pytest.raises(ValueError, match="Sharding is not supported in Zarr v2"):
+        create_empty_plate(
+            store_path=store,
+            position_keys=[("A", "1", "0")],
+            channel_names=["c0"],
+            shape=(2, 1, 8, 64, 64),
+            shards=shards,
             version="0.4",
         )
 
