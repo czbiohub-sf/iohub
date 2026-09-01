@@ -18,30 +18,30 @@
         <link rel="prev" href="../readers/">
       
       
-        <link rel="next" href="../../contributing/">
+        <link rel="next" href="../utils/">
       
       
         
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="zensical-0.0.51">
+      <meta name="generator" content="zensical-0.0.57">
     
     
       
-        <title>Convert TIFF to OME-Zarr - iohub</title>
+        <title>Convert to OME-Zarr - iohub</title>
       
     
     
       
         
       
-      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.62c9b9cc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/modern/main.5da3a30f.min.css">
       
         
           
         
-        <link rel="stylesheet" href="../../assets/stylesheets/modern/palette.dfe2e883.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/modern/palette.812a03bb.min.css">
       
       
 
@@ -85,7 +85,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#convert-tiff-to-ome-zarr" class="md-skip">
+        <a href="#convert-to-ome-zarr" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Convert TIFF to OME-Zarr
+              Convert to OME-Zarr
             
           </span>
         </div>
@@ -669,6 +669,8 @@
       
         
       
+        
+      
     
     
     
@@ -800,7 +802,7 @@
   <span class="md-ellipsis">
     
   
-  Convert TIFF to OME-Zarr
+  Convert to OME-Zarr
 
     
   </span>
@@ -817,7 +819,7 @@
   <span class="md-ellipsis">
     
   
-  Convert TIFF to OME-Zarr
+  Convert to OME-Zarr
 
     
   </span>
@@ -843,10 +845,33 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#supported-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Supported inputs
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Python
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Python">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#iohub.convert.TIFFConverter" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        TIFFConverter
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;TIFFConverter
       </span>
     </span>
   </a>
@@ -858,10 +883,15 @@
   <a href="#iohub.convert.TIFFConverter.__call__" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        __call__
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;__call__
       </span>
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -874,6 +904,33 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../utils/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Utilities
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -953,10 +1010,33 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#supported-inputs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Supported inputs
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#python" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Python
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Python">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
   <a href="#iohub.convert.TIFFConverter" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        TIFFConverter
+        <code class="doc-symbol doc-symbol-toc doc-symbol-class"></code>&nbsp;TIFFConverter
       </span>
     </span>
   </a>
@@ -968,10 +1048,15 @@
   <a href="#iohub.convert.TIFFConverter.__call__" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        __call__
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;__call__
       </span>
     </span>
   </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
         
@@ -1034,6 +1119,8 @@
       
         
       
+        
+      
     
     
     
@@ -1071,168 +1158,129 @@
   
 
 
-<h1 id="convert-tiff-to-ome-zarr">Convert TIFF to OME-Zarr<a class="headerlink" href="#convert-tiff-to-ome-zarr" title="Permanent link">&para;</a></h1>
+<h1 id="convert-to-ome-zarr">Convert to OME-Zarr<a class="headerlink" href="#convert-to-ome-zarr" title="Permanent link">&para;</a></h1>
+<p>Convert Micro-Manager TIFF formats and Nikon ND2 datasets to OME-Zarr.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>There is also a CLI command for conversion.
 See the <a href="../../cli/">CLI Reference</a> or run <code>iohub convert --help</code>.</p>
 </div>
+<h2 id="supported-inputs">Supported inputs<a class="headerlink" href="#supported-inputs" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Micro-Manager OME-TIFF</li>
+<li>Micro-Manager NDTiff</li>
+<li>Nikon ND2</li>
+</ul>
+<h2 id="python">Python<a class="headerlink" href="#python" title="Permanent link">&para;</a></h2>
 
 
 <div class="doc doc-object doc-class">
 
 
 
-<h2 id="iohub.convert.TIFFConverter" class="doc doc-heading">
-            <code>TIFFConverter</code>
+<h3 id="iohub.convert.TIFFConverter" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-class"></code>            <span class="doc doc-object-name doc-class-name">TIFFConverter</span>
 
 
-<a href="#iohub.convert.TIFFConverter" class="headerlink" title="Permanent link">&para;</a></h2>
-
+<a href="#iohub.convert.TIFFConverter" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">TIFFConverter</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">input_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">output_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">grid_layout</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;XY&quot;</span><span class="p">,</span> <span class="s2">&quot;XYZ&quot;</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">hcs_plate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">version</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;0.4&quot;</span><span class="p">,</span> <span class="s2">&quot;0.5&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;0.4&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">implementation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
+</span></code></pre></div>
 
     <div class="doc doc-contents first">
 
 
 
-        <p>Convert Micro-Manager TIFF formats</p>
-<p>(OME-TIFF, ND-TIFF) into HCS OME-Zarr.
-Each FOV will be written to a separate well in the plate layout.</p>
+        <p>Convert supported microscopy datasets to OME-Zarr.</p>
+<p>Supports Micro-Manager TIFF formats (OME-TIFF and NDTiff) and Nikon ND2.
+Each FOV is written to a separate well in the plate layout.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>input_dir</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Input directory path</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>output_dir</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Output zarr directory path</p>
-              </div>
-            </td>
-            <td>
-                <em>required</em>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>grid_layout</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Whether to lay out the positions in a grid-like format
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>input_dir</code></b>
+              (<code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Input directory path</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>output_dir</code></b>
+              (<code><span title="str">str</span> | <span title="pathlib.Path">Path</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Output zarr directory path</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>grid_layout</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Whether to lay out the positions in a grid-like format
 based on how the data was acquired
 (useful for tiled acquisitions), by default False</p>
-              </div>
-            </td>
-            <td>
-                  <code>False</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>chunks</code>
-            </td>
-            <td>
-                  <code><span title="tuple">tuple</span>[<span title="int">int</span>] or <span title="typing.Literal">Literal</span>[&#39;XY&#39;, &#39;XYZ&#39;]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Chunk size of the output Zarr arrays, by default None
-(chunk by XYZ volumes or 500 MB size limit, whichever is smaller)</p>
-              </div>
-            </td>
-            <td>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>chunks</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>] or <span title="typing.Literal">Literal</span>[&#39;XY&#39;, &#39;XYZ&#39;]</code>, default:
                   <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>hcs_plate</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Create NGFF HCS layout based on position names from the
+)
+          –
+          <div class="doc-md-description">
+            <p>Chunk size of the output Zarr arrays, by default None
+(chunk by XYZ volumes or 500 MB size limit, whichever is smaller)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>hcs_plate</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Create NGFF HCS layout based on position names from the
 HCS Site Generator in Micro-Manager (only available for OME-TIFF),
 and is ignored for other formats, by default None
 (attempt to apply to OME-TIFF datasets, disable this with <code>False</code>)</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>version</code>
-            </td>
-            <td>
-                  <code><span title="typing.Literal">Literal</span>[&#39;0.4&#39;, &#39;0.5&#39;]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>OME-NGFF version for the output Zarr store, by default "0.4".
-"0.4" uses Zarr v2 format; "0.5" uses Zarr v3 format.</p>
-              </div>
-            </td>
-            <td>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>version</code></b>
+              (<code><span title="typing.Literal">Literal</span>[&#39;0.4&#39;, &#39;0.5&#39;]</code>, default:
                   <code>&#39;0.4&#39;</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>implementation</code>
-            </td>
-            <td>
-                  <code><span title="str">str</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Zarr backend implementation to use for writing.
+)
+          –
+          <div class="doc-md-description">
+            <p>OME-NGFF version for the output Zarr store, by default "0.4".
+"0.4" uses Zarr v2 format; "0.5" uses Zarr v3 format.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>implementation</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Zarr backend implementation to use for writing.
 None (default) uses zarr-python. Pass "tensorstore"
 to write via TensorStore (requires the optional tensorstore dependency).</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-      </tbody>
-    </table>
+          </div>
+        </li>
+    </ul>
 
 
 <details class="note" open>
@@ -1265,11 +1313,13 @@ and placed under the Zarr array directory
 <div class="doc doc-object doc-function">
 
 
-<h3 id="iohub.convert.TIFFConverter.__call__" class="doc doc-heading">
-            <code class="highlight language-python"><span class="fm">__call__</span><span class="p">()</span></code>
+<h4 id="iohub.convert.TIFFConverter.__call__" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">__call__</span>
 
-<a href="#iohub.convert.TIFFConverter.__call__" class="headerlink" title="Permanent link">&para;</a></h3>
 
+<a href="#iohub.convert.TIFFConverter.__call__" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">__call__</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
 
     <div class="doc doc-contents ">
 
@@ -1350,13 +1400,13 @@ and placed under the Zarr array directory
         
         
           
-          <a href="../../contributing/" class="md-footer__link md-footer__link--next" aria-label="Next: Contributing">
+          <a href="../utils/" class="md-footer__link md-footer__link--next" aria-label="Next: Utilities">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Contributing
+                Utilities
               </div>
             </div>
             <div class="md-footer__button md-icon">
@@ -1416,10 +1466,10 @@ and placed under the Zarr array directory
     
       
       
-      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["announce.dismiss","content.action.view","content.code.annotate","content.code.copy","content.code.select","content.footnote.tooltips","content.tabs.link","content.tooltips","header.autohide","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.instant.progress","navigation.path","navigation.prune","navigation.sections","navigation.top","navigation.tracking","search.highlight","toc.follow"],"search":"../../assets/javascripts/workers/search.b6b7e04f.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"alias":true,"provider":"mike"}}</script>
+      <script id="__config" type="application/json">{"annotate":null,"base":"../..","features":["announce.dismiss","content.action.view","content.code.annotate","content.code.copy","content.code.select","content.footnote.tooltips","content.tabs.link","content.tooltips","header.autohide","navigation.footer","navigation.indexes","navigation.instant","navigation.instant.prefetch","navigation.instant.progress","navigation.path","navigation.prune","navigation.sections","navigation.top","navigation.tracking","search.highlight","toc.follow"],"search":"../../assets/javascripts/workers/search.7d14d953.min.js","tags":null,"translations":{"clipboard.copied":"Copied to clipboard","clipboard.copy":"Copy to clipboard","search.result.more.one":"1 more on this page","search.result.more.other":"# more on this page","search.result.none":"No matching documents","search.result.one":"1 matching document","search.result.other":"# matching documents","search.result.placeholder":"Type to start searching","search.result.term.missing":"Missing","select.version":"Select version"},"version":{"alias":true,"provider":"mike"}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.d7f30b55.min.js"></script>
+      <script src="../../assets/javascripts/bundle.49251538.min.js"></script>
       
     
   </body>

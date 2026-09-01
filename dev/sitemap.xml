@@ -52,6 +52,9 @@
         <loc>https://czbiohub-sf.github.io/iohub/dev/api/converter/</loc>
       </url>
       <url>
+        <loc>https://czbiohub-sf.github.io/iohub/dev/api/utils/</loc>
+      </url>
+      <url>
         <loc>https://czbiohub-sf.github.io/iohub/dev/contributing/</loc>
       </url>
 </urlset>
