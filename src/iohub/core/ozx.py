@@ -149,14 +149,14 @@ def _write_ozx_comment(
 class OzxStore(ZipStore):
     """RFC-9 (Zipped OME-Zarr) store.
 
-    A :class:`zarr.storage.ZipStore` subclass with RFC-9 defaults:
+    A `zarr.storage.ZipStore` subclass with RFC-9 defaults:
     ``ZIP_STORED`` (Zarr codecs handle compression), ``allowZip64=True``
     (regardless of size), and the archive comment written on ``close()``.
 
     The store writes entries in zarr's creation order and leaves
     ``jsonFirst`` unset. For a SHOULD-compliant archive ready for
     HTTP-range publishing, write to a directory store first and run
-    :func:`pack_ozx`.
+    [`pack_ozx`][iohub.core.pack_ozx].
 
     Fork-safe: an ``os.register_at_fork`` hook invalidates the
     inherited ``ZipFile`` fd in child processes, so each child opens
@@ -336,7 +336,7 @@ def unpack_ozx(src: str | Path, dst: str | Path) -> Path:
 
     Walks the archive, dedupes shadow ``zarr.json`` entries (last-wins,
     matching ``ZipFile.read``), and writes each entry as a file under
-    ``dst``. Reverse of :func:`pack_ozx`.
+    ``dst``. Reverse of [`pack_ozx`][iohub.core.pack_ozx].
 
     Parameters
     ----------

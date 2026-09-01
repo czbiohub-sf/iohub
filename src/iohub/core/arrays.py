@@ -28,7 +28,7 @@ class _OIndexProxy:
 class NGFFArray:
     """Base class for NGFF N-dimensional arrays.
 
-    Delegates all I/O to the configured :class:`ZarrImplementation`.
+    Delegates all I/O to the configured `ZarrImplementation`.
     Subclassed by ``ImageArray`` (5D) and ``TiledImageArray`` in ``nodes.py``.
     """
 

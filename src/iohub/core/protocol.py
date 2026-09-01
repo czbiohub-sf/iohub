@@ -123,7 +123,7 @@ class ZarrImplementation[G, A](GroupBackend[G], ArrayBackend[G, A], ArrayIO[A], 
     """Combined Protocol satisfied by any full zarr I/O backend.
 
     A conforming class must implement all methods from
-    :class:`GroupBackend`, :class:`ArrayBackend`, and :class:`ArrayIO`.
+    `GroupBackend`, `ArrayBackend`, and `ArrayIO`.
     Specialise as ``ZarrImplementation[zarr.Group, zarr.Array]`` for
     static type-checker use.
     """

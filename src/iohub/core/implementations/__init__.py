@@ -1,7 +1,7 @@
 """Zarr I/O implementation backends.
 
 Implementations are discovered via the ``iohub.zarr_implementations``
-entry point group. See :mod:`iohub.core.registry` for the discovery mechanism.
+entry point group. See `iohub.core.registry` for the discovery mechanism.
 
 For direct imports::
 

@@ -68,6 +68,7 @@ nav = [
     "api/ngff.md",
     "api/readers.md",
     "api/converter.md",
+    "api/utils.md",
   ] },
   { "Contributing" = "contributing.md" },
 ]
@@ -346,6 +347,15 @@ show_source = false
 show_root_heading = true
 show_root_full_path = false
 members_order = "source"
+separate_signature = true
+line_length = 120
+docstring_section_style = "list"
+show_signature_annotations = true
+annotations_path = "brief"
+modernize_annotations = true
+merge_init_into_class = true
+show_symbol_type_heading = true
+show_symbol_type_toc = true
 
 # ----------------------------------------------------------------------------
 # Markdown extensions configuration

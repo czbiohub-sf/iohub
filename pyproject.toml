@@ -75,10 +75,11 @@ acquire-zarr = [
     "acquire-zarr",
 ]
 doc = [
-    "zensical>=0.0.51",
-    "mkdocstrings-python>=2.0.5",
+    "zensical>=0.0.57",
+    "mkdocstrings-python>=2.0.8",
     "mkdocs-click>=0.9.0",
-    "pymdown-extensions>=11.0.0",
+    "pymdown-extensions>=11.0.2",
+    "ruff>=0.16.5",
     "mike",
 ]
 dev = [

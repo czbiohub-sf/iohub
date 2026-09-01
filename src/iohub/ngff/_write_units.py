@@ -1,6 +1,6 @@
 """Tracking of shard-aligned write units so an interrupted run can resume.
 
-:func:`iohub.ngff.utils.process_single_position` splits its work into units of
+`iohub.ngff.utils.process_single_position` splits its work into units of
 one shard-aligned batch of timepoints for one channel group. Each unit owns a
 set of files on disk outright, which makes two things possible:
 
@@ -174,7 +174,7 @@ def tracking_available(array) -> bool:
     False for a store whose chunk key layout is not modelled here (Zarr v2,
     i.e. OME-Zarr v0.4), one not backed by a filesystem, or one reached
     through an implementation other than zarr-python. Says nothing about
-    whether a *particular* write owns its files; see :func:`plan_write_unit`
+    whether a *particular* write owns its files; see `plan_write_unit`
     for that.
     """
     return _array_directory(array) is not None and _chunk_key_encoding(array) is not None
@@ -197,7 +197,7 @@ def plan_write_unit(
     cover the full in-bounds extent of the files they land in.
 
     Assumes the write spans the entire ZYX extent of the array, which is what
-    :func:`iohub.ngff.utils.apply_transform_to_tczyx_and_save` does.
+    `iohub.ngff.utils.apply_transform_to_tczyx_and_save` does.
 
     ``token`` is mixed into the unit's identity. Pass a fingerprint of
     whatever determines the output — settings, input revision — so that a run
@@ -205,9 +205,9 @@ def plan_write_unit(
     and skip work that would now produce different data.
 
     ``progress_dir`` is where completion is recorded, normally from
-    :func:`progress_dir_for`. Omit it for repair without resume: the shard
+    `progress_dir_for`. Omit it for repair without resume: the shard
     paths are still computed, so a torn shard is still replaced, but nothing
-    is written outside the store. This is what :meth:`Position.write_xarray`
+    is written outside the store. This is what `Position.write_xarray`
     uses, since it has no notion of a resumable unit of work.
     """
     directory = _array_directory(array)

@@ -69,10 +69,10 @@ def _create_grid_from_coordinates(xy_coords: list[tuple[float, float]], rows: in
 
 
 class TIFFConverter:
-    """Convert Micro-Manager TIFF formats
+    """Convert supported microscopy datasets to OME-Zarr.
 
-    (OME-TIFF, ND-TIFF) into HCS OME-Zarr.
-    Each FOV will be written to a separate well in the plate layout.
+    Supports Micro-Manager TIFF formats (OME-TIFF and NDTiff) and Nikon ND2.
+    Each FOV is written to a separate well in the plate layout.
 
     Parameters
     ----------

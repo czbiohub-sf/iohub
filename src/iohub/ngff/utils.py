@@ -349,9 +349,9 @@ def _save_transformed(
     asks numpy for a preposterous allocation.
 
     Gaps arise routinely once the output is sharded along T, because
-    :func:`process_single_position` then batches a whole shard's worth of
-    timepoints into one write and
-    :func:`apply_transform_to_tczyx_and_save` drops the ones whose input was
+    `process_single_position` then batches a whole shard's worth of timepoints
+    into one write and `apply_transform_to_tczyx_and_save` drops the ones whose
+    input was
     all zeros or NaNs from the middle of that batch. They also arise from a
     caller asking for non-consecutive ``output_time_indices`` outright.
     """
@@ -408,7 +408,7 @@ def apply_transform_to_tczyx_and_save(
     Apply a transformation and save the result.
 
     When the write owns its output files outright (see
-    :mod:`iohub.ngff._write_units`) they are cleared before writing rather
+    `iohub.ngff._write_units`) they are cleared before writing rather
     than written over, and completion is recorded in a marker file. Pass
     ``resume=True`` to skip a unit that a previous run already finished.
     """
@@ -577,7 +577,7 @@ def process_single_position(
     resume : bool, optional
         If True, skip shard-aligned ``(time, channel)`` units that a previous
         run already finished, as recorded by the markers described in
-        :mod:`iohub.ngff._write_units`. Intended for retrying a run that was
+        `iohub.ngff._write_units`. Intended for retrying a run that was
         interrupted, for example by Slurm preemption. Leave False when
         re-running with changed inputs or settings,
         since a finished unit is skipped without checking whether it would

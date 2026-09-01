@@ -50,7 +50,7 @@ class ND2FOV(MicroManagerFOV):
 
 
 class ND2Dataset(MicroManagerFOVMapping):
-    """Reader for Nikon ND2 datasets, wrapping :class:`nd2.ND2File`.
+    """Reader for Nikon ND2 datasets, wrapping `nd2.ND2File`.
 
     Each ND2 stage position (``P``) is exposed as a separate FOV. Files
     without a position axis are read as a single FOV. Data are returned in
