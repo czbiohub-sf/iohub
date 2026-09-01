@@ -294,7 +294,11 @@ class NGFFNode:
         raise NotImplementedError
 
     def __delitem__(self, key):
-        """.. Warning: this does NOT clean up metadata!"""
+        """Delete a child without cleaning up metadata.
+
+        !!! warning
+            This does **not** clean up metadata.
+        """
         key = normalize_path(str(key))
         del self._group[key]
 
@@ -759,7 +763,7 @@ class PositionLabel(NGFFNode):
     ) -> LabelsArray:
         """Create a label array at a specific resolution level.
 
-        Parallel to :meth:`Position.create_image` for creating label
+        Parallel to [`Position.create_image`][iohub.ngff.Position.create_image] for creating label
         arrays at specific multiscale resolution levels.
 
         Parameters
@@ -1030,10 +1034,10 @@ class Position(NGFFNode):
 
     @property
     def data(self):
-        """.. warning::
+        """!!! warning
 
             This property does *NOT* aim to retrieve all the arrays.
-            And it may also fail to retrive any data if arrays exist but
+            And it may also fail to retrieve any data if arrays exist but
             are not named conventionally.
 
         Alias for an array named '0' in the position,
@@ -1657,7 +1661,7 @@ class Position(NGFFNode):
             or "*" for the whole FOV
         transform : list[TransformationMeta]
             List of transformations to apply
-            (:py:class:`iohub.ngff_meta.TransformationMeta`)
+            (`TransformationMeta`)
         """
         if image == "*":
             self.metadata.multiscales[0].coordinate_transformations = transform
@@ -2159,7 +2163,7 @@ class Position(NGFFNode):
         arr = self[image]
         # Clear whole shards this write owns before writing them, so a shard
         # left truncated by a killed job is replaced rather than read back and
-        # rejected. See :mod:`iohub.ngff._write_units`.
+        # rejected. See `iohub.ngff._write_units`.
         unit = plan_write_unit(arr, [int(t) for t in t_indices], c_indices)
         if unit is not None:
             unit.clear()
@@ -2177,7 +2181,7 @@ class TiledPosition(Position):
 
     with convenience methods to create and access tiled arrays.
     Other parameters and attributes are the same as
-    :py:class:`iohub.ngff.Position`.
+    [`Position`][iohub.ngff.Position].
     """
 
     _MEMBER_TYPE = TiledImageArray
@@ -2435,8 +2439,9 @@ class Plate(NGFFNode):
 
         by copying images and metadata from a dictionary of positions.
 
-        .. warning: This assumes same channel names and axes across the FOVs
-            and does not check for consistent shape and chunk size.
+        !!! warning
+            This assumes the FOVs have the same channel names and axes, and
+            does not check for consistent shapes or chunk sizes.
 
         Parameters
         ----------
@@ -2444,7 +2449,7 @@ class Plate(NGFFNode):
             Path of the new store
         positions : dict[str, Position]
             Dictionary where keys are destination path names ('row/column/fov')
-            and values are :py:class:`iohub.ngff.Position` objects.
+            and values are [`Position`][iohub.ngff.Position] objects.
 
         Returns
         -------
@@ -2693,7 +2698,8 @@ class Plate(NGFFNode):
     def create_positions(self, positions: list[PositionSpec]) -> list[Position]:
         """Creates multiple position groups in the plate efficiently.
 
-        This is a vectorized version of :py:meth:`create_position` that creates
+        This is a vectorized version of
+        [`create_position`][iohub.ngff.Plate.create_position] that creates
         multiple positions in a single call. Wells are created as needed and
         metadata is written in batches for better performance.
 
@@ -3031,7 +3037,8 @@ class Bioformats2RawSeries(NGFFNode):
     def positions(self) -> Generator[tuple[str, Position]]:
         """Iterate over ``(name, Position)`` pairs of all series.
 
-        Matches :py:meth:`Plate.positions` and :py:meth:`Well.positions` so
+        Matches [`Plate.positions`][iohub.ngff.Plate.positions] and
+        `Well.positions` so
         downstream code can iterate any FOV-bearing node uniformly.
         """
         yield from self.iteritems()
@@ -3240,13 +3247,13 @@ def open_ome_zarr(
     axes : list[AxisMeta], optional
         OME axes metadata, by default None:
 
-        .. code-block:: text
-
-            [AxisMeta(name='T', type='time', unit='second'),
-            AxisMeta(name='C', type='channel', unit=None),
-            AxisMeta(name='Z', type='space', unit='micrometer'),
-            AxisMeta(name='Y', type='space', unit='micrometer'),
-            AxisMeta(name='X', type='space', unit='micrometer')]
+        ```text
+        [AxisMeta(name='T', type='time', unit='second'),
+         AxisMeta(name='C', type='channel', unit=None),
+         AxisMeta(name='Z', type='space', unit='micrometer'),
+         AxisMeta(name='Y', type='space', unit='micrometer'),
+         AxisMeta(name='X', type='space', unit='micrometer')]
+        ```
 
     version : Literal["0.4", "0.5"], optional
         OME-NGFF version, by default "0.5".
@@ -3254,7 +3261,7 @@ def open_ome_zarr(
         Whether to allow overwriting a path that does not contain '.zarr',
         by default False
 
-        .. warning::
+        !!! warning
             This can lead to severe data loss
             if the input path is not checked carefully.
 
@@ -3277,9 +3284,9 @@ def open_ome_zarr(
     -------
     Dataset
         NGFF node object
-        (:py:class:`iohub.ngff.Position`,
-        :py:class:`iohub.ngff.Plate`,
-        or :py:class:`iohub.ngff.TiledPosition`)
+        ([`Position`][iohub.ngff.Position],
+        [`Plate`][iohub.ngff.Plate], or
+        [`TiledPosition`][iohub.ngff.TiledPosition])
     """
     if _is_fslike(store_path):
         store_path = Path(store_path)

@@ -10,4 +10,8 @@
 
 ## Conversion
 
-- [Converter](converter.md) - TIFF to OME-Zarr conversion
+- [Conversion](converter.md) - TIFF and ND2 to OME-Zarr conversion
+
+## Utilities
+
+- [Utilities](utils.md) - Utility functions for creating and processing OME-Zarr data
