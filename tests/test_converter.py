@@ -14,6 +14,7 @@ from iohub.reader import MMStack, NDTiffDataset
 from tests.conftest import (
     mm2gamma_ome_tiffs,
     ndtiff_v2_datasets,
+    ndtiff_v2_ptcz,
     ndtiff_v3_labeled_positions,
 )
 
@@ -230,6 +231,91 @@ def test_converter_ndtiff_v3_position_labels(tmpdir):
             "Pos1",
             "Pos2",
         ]
+
+
+def _store_contents(output: Path) -> dict[str, np.ndarray | dict]:
+    """Pixels and plane metadata of every position, for equality checks between conversions."""
+    contents: dict[str, np.ndarray | dict] = {}
+    with open_ome_zarr(output, mode="r") as result:
+        for name, pos in result.positions():
+            contents[f"{name}/pixels"] = pos["0"][:]
+            metadata_file = output / name / "0" / "image_plane_metadata.json"
+            if metadata_file.exists():
+                contents[f"{name}/metadata"] = json.loads(metadata_file.read_text())
+    return contents
+
+
+def _assert_same_store(reference: Path, candidate: Path) -> None:
+    expected, actual = _store_contents(reference), _store_contents(candidate)
+    assert expected.keys() == actual.keys()
+    for key, value in expected.items():
+        if isinstance(value, np.ndarray):
+            np.testing.assert_array_equal(actual[key], value, err_msg=key)
+        else:
+            assert actual[key] == value, key
+
+
+@pytest.mark.parametrize("dataset", [ndtiff_v2_ptcz, ndtiff_v3_labeled_positions], ids=["v2", "v3"])
+def test_converter_plane_metadata_matches_reader(dataset, tmpdir):
+    """The JSON must hold exactly what the reader reports for every frame, whichever source produced it."""
+    output = Path(tmpdir / "converted.zarr")
+    converter = TIFFConverter(dataset, output)
+    reader = converter.reader
+    expected = {}
+    for zarr_path, (_, fov) in zip(converter.zarr_position_names, reader, strict=True):
+        frames = {}
+        for t in range(converter.t):
+            for c in range(converter.c):
+                c_key = reader.channel_names[c] if reader.str_channel_axis else c
+                for z in range(converter.z):
+                    plane = fov.frame_metadata(t=t, c=c_key, z=z)
+                    if plane is not None:
+                        frames[f"{t}/{c}/{z}"] = plane
+        expected[zarr_path] = frames
+    converter()
+    for zarr_path, frames in expected.items():
+        written = json.loads((output / zarr_path / "0" / "image_plane_metadata.json").read_text())
+        assert written == frames, zarr_path
+        assert list(written) == sorted(frames, key=lambda k: tuple(map(int, k.split("/"))))
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_converter_parallel_matches_serial(version, tmpdir):
+    serial, parallel = Path(tmpdir / "serial.zarr"), Path(tmpdir / "parallel.zarr")
+    TIFFConverter(ndtiff_v3_labeled_positions, serial, version=version, num_workers=1, chunks="XY")()
+    TIFFConverter(ndtiff_v3_labeled_positions, parallel, version=version, num_workers=4, chunks="XY")()
+    _assert_same_store(serial, parallel)
+
+
+def test_converter_staged_matches_single_shot(tmpdir):
+    """init_store / convert(slice) x N / finalize is the contract schedulers fan out over."""
+    single, staged = Path(tmpdir / "single.zarr"), Path(tmpdir / "staged.zarr")
+    TIFFConverter(ndtiff_v2_ptcz, single, chunks="XY")()
+    converter = TIFFConverter(ndtiff_v2_ptcz, staged, chunks="XY")
+    n = len(converter.slabs)
+    assert n > 2
+    converter.init_store()
+    # simulate separate jobs: fresh converter objects per slice
+    for bounds in (slice(0, n // 3), slice(n // 3, 2 * n // 3), slice(2 * n // 3, n)):
+        TIFFConverter(ndtiff_v2_ptcz, staged, chunks="XY").convert(bounds)
+    assert list(staged.glob("*/*/*/0/image_plane_metadata.parts"))
+    TIFFConverter(ndtiff_v2_ptcz, staged, chunks="XY").finalize()
+    assert not list(staged.glob("*/*/*/0/image_plane_metadata.parts"))
+    _assert_same_store(single, staged)
+
+
+def test_converter_ndtiff_falls_back_when_byte_ranges_unavailable(tmpdir, monkeypatch):
+    """A reader that declines byte ranges is converted through its array interface with identical output."""
+    reference, fallback = Path(tmpdir / "reference.zarr"), Path(tmpdir / "fallback.zarr")
+    TIFFConverter(ndtiff_v3_labeled_positions, reference)()
+
+    # Remove the override: the base-class default declines.
+    monkeypatch.delattr(NDTiffDataset, "frame_locations")
+    converter = TIFFConverter(ndtiff_v3_labeled_positions, fallback)
+    with pytest.raises(NotImplementedError):
+        next(converter.reader.frame_locations())
+    converter()
+    _assert_same_store(reference, fallback)
 
 
 class TestGenChunks:
