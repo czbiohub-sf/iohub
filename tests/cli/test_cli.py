@@ -115,6 +115,8 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     cmd = ["convert", "-i", str(dataset), "-o", output_dir]
     if grid_layout:
         cmd.append(grid_layout)
+    else:
+        cmd.extend(["--num-workers", "1"])
     result = runner.invoke(cli, cmd)
     assert result.exit_code == 0, result.output
     assert "Converting" in result.output
@@ -137,6 +139,18 @@ def test_cli_convert_invalid_version(tmpdir):
     output_dir = tmpdir / "converted.zarr"
     cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", "0.3"]
     result = runner.invoke(cli, cmd)
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output
+
+
+def test_cli_convert_invalid_num_workers(tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
+    runner = CliRunner()
+    output_dir = tmpdir / "converted.zarr"
+    result = runner.invoke(
+        cli,
+        ["convert", "-i", str(dataset), "-o", output_dir, "--num-workers", "0"],
+    )
     assert result.exit_code != 0
     assert "Invalid value" in result.output
 
@@ -220,6 +234,8 @@ def test_cli_convert_zarr_to_ozx_and_back(tmpdir):
         ("--chunks", "XY", "unpack"),
         ("-g", None, "unpack"),
         ("--ome-zarr-version", "0.5", "unpack"),
+        ("--num-workers", "1", "pack"),
+        ("--num-workers", "1", "unpack"),
     ],
 )
 def test_cli_convert_rejects_irrelevant_flags(tmpdir, flag, value, route):
