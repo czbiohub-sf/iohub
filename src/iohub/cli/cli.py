@@ -5,7 +5,7 @@ import click
 
 from iohub import __version__, open_ome_zarr
 from iohub.cli.parsing import input_position_dirpaths
-from iohub.convert import TIFFConverter
+from iohub.convert import DEFAULT_NUM_WORKERS, TIFFConverter
 from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
 from iohub.reader import print_info
 from iohub.rename_wells import rename_wells
@@ -90,7 +90,15 @@ def info(files, verbose):
     type=click.Choice(["0.4", "0.5"]),
     help="OME-NGFF version. TIFF default: 0.4. Pack: sniffed from source if omitted.",
 )
-def convert(input, output, grid_layout, chunks, ome_zarr_version):
+@click.option(
+    "--num-workers",
+    "-n",
+    required=False,
+    default=None,
+    type=click.IntRange(min=1),
+    help="(TIFF → Zarr only) Threads copying pixels concurrently. Default 4; NDTiff scales to ~16.",
+)
+def convert(input, output, grid_layout, chunks, ome_zarr_version, num_workers):
     """Convert datasets between supported formats.
 
     Routes by suffix: a TIFF directory plus a ``.zarr`` output runs the
@@ -100,14 +108,14 @@ def convert(input, output, grid_layout, chunks, ome_zarr_version):
     """
     src = pathlib.Path(input)
     dst = pathlib.Path(output)
-    tiff_only = grid_layout or chunks != "XYZ"
+    tiff_only = grid_layout or chunks != "XYZ" or num_workers is not None
 
     if is_ozx_path(dst):
         # Pack: 1:1 file copy preserving source chunks. Re-chunking would
         # mean a full read+rewrite — a different operation, out of scope.
         if tiff_only:
             raise click.BadParameter(
-                "--grid-layout and --chunks apply only to TIFF → Zarr conversion. "
+                "--grid-layout, --chunks and --num-workers apply only to TIFF → Zarr conversion. "
                 "Pack copies chunks 1:1 from the source."
             )
         out = pack_ozx(src, dst, version=ome_zarr_version)
@@ -117,7 +125,7 @@ def convert(input, output, grid_layout, chunks, ome_zarr_version):
         # Unpack: archive structure dictates everything; no flags apply.
         if tiff_only or ome_zarr_version is not None:
             raise click.BadParameter(
-                "--grid-layout, --chunks, and --ome-zarr-version do not apply to .ozx → .zarr unpack."
+                "--grid-layout, --chunks, --num-workers and --ome-zarr-version do not apply to .ozx → .zarr unpack."
             )
         out = unpack_ozx(src, dst)
         click.echo(f"unpacked: {out}")
@@ -129,6 +137,7 @@ def convert(input, output, grid_layout, chunks, ome_zarr_version):
         grid_layout=grid_layout,
         chunks=chunks,
         version=ome_zarr_version or "0.4",
+        num_workers=num_workers or DEFAULT_NUM_WORKERS,
     )()
 
 
