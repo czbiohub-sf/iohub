@@ -37,6 +37,12 @@ from iohub.core.registry import (
     register_implementation,
     set_default_implementation,
 )
+from iohub.core.sharding import (
+    ShardsLike,
+    parse_shard_size,
+    resolve_shard_shape,
+    resolve_shards,
+)
 from iohub.core.specs import ArraySpec
 from iohub.core.types import (
     AccessMode,
@@ -70,6 +76,8 @@ __all__ = [
     "OzxStore",
     "OzxSummary",
     "PathNormalizationError",
+    # Sharding
+    "ShardsLike",
     "StoreOpenError",
     "StorePath",
     "TensorStoreConfig",
@@ -85,8 +93,11 @@ __all__ = [
     "normalize_path",
     "pack_ozx",
     "pad_shape",
+    "parse_shard_size",
     "read_ozx_version",
     "register_implementation",
+    "resolve_shard_shape",
+    "resolve_shards",
     "set_default_implementation",
     "summarize_ozx",
     "unpack_ozx",
