@@ -31,9 +31,7 @@ dtype = np.uint16
 #
 # Store this array by looping through the time points
 if store_path:
-    with open_ome_zarr(
-        store_path, layout="fov", mode="w-", channel_names=["DAPI", "GFP"]
-    ) as dataset:
+    with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI", "GFP"]) as dataset:
         img = dataset.create_zeros(
             name="0",
             shape=shape,

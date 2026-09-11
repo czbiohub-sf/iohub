@@ -24,12 +24,8 @@ print("Zarr store path", store_path)
 
 # %%
 # Create two random sample images
-tczyx_1 = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(1, 3, 3, 32, 32), dtype=np.uint16
-)
-tczyx_2 = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(1, 3, 3, 32, 32), dtype=np.uint16
-)
+tczyx_1 = np.random.randint(0, np.iinfo(np.uint16).max, size=(1, 3, 3, 32, 32), dtype=np.uint16)
+tczyx_2 = np.random.randint(0, np.iinfo(np.uint16).max, size=(1, 3, 3, 32, 32), dtype=np.uint16)
 
 # %%
 # Coordinate Transformations (T,C,Z,Y,X)
@@ -41,9 +37,7 @@ img_scaling = [[1.0, 1.0, 1.0, 0.5, 0.5]]
 # Generate Transformation Metadata
 translation = []
 for shift in coords_shift:
-    translation.append(
-        TransformationMeta(type="translation", translation=shift)
-    )
+    translation.append(TransformationMeta(type="translation", translation=shift))
 scaling = []
 for scale in img_scaling:
     scaling.append(TransformationMeta(type="scale", scale=scale))

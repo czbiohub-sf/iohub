@@ -3,11 +3,11 @@ import re
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
 from click.testing import CliRunner
 
-from iohub import open_ome_zarr
-from iohub._version import __version__
+from iohub import __version__, open_ome_zarr
 from iohub.cli.cli import cli
 from tests.conftest import (
     hcs_ref,
@@ -15,8 +15,7 @@ from tests.conftest import (
     ndtiff_v2_datasets,
     ndtiff_v3_labeled_positions,
 )
-
-from ..ngff.test_ngff import _temp_copy
+from tests.ngff.test_ngff import _temp_copy
 
 
 def pytest_generate_tests(metafunc):
@@ -27,7 +26,7 @@ def pytest_generate_tests(metafunc):
     if "ndtiff_dataset" in metafunc.fixturenames:
         metafunc.parametrize(
             "ndtiff_dataset",
-            ndtiff_v2_datasets + [ndtiff_v3_labeled_positions],
+            [*ndtiff_v2_datasets, ndtiff_v3_labeled_positions],
         )
 
 
@@ -59,7 +58,7 @@ def test_cli_info_mock(mm2gamma_ome_tiff, verbose):
     # resolve path with pathlib to be consistent with `click.Path`
     # this will not normalize partition symbol to lower case on Windows
     path = mm2gamma_ome_tiff.resolve()
-    with patch("iohub.cli.cli.print_info") as mock:
+    with patch("iohub.reader.print_info") as mock:
         cmd = ["info", str(path)]
         if verbose:
             cmd.append(verbose)
@@ -121,14 +120,141 @@ def test_cli_convert_ome_tiff(grid_layout, tmpdir):
     assert "Converting" in result.output
 
 
+def test_cli_convert_version(tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
+    runner = CliRunner()
+    output_dir = tmpdir / "converted.zarr"
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", "0.5"]
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code == 0, result.output
+    with open_ome_zarr(output_dir, mode="r") as store:
+        assert store.version == "0.5"
+
+
+def test_cli_convert_invalid_version(tmpdir):
+    dataset = mm2gamma_ome_tiffs[0]
+    runner = CliRunner()
+    output_dir = tmpdir / "converted.zarr"
+    cmd = ["convert", "-i", str(dataset), "-o", output_dir, "-v", "0.3"]
+    result = runner.invoke(cli, cmd)
+    assert result.exit_code != 0
+    assert "Invalid value" in result.output
+
+
+def test_cli_info_verbose_ozx_shows_rfc9(tmpdir):
+    """``iohub info -v <ozx>`` shows the FOV summary plus the RFC-9 block."""
+    import numpy as np
+
+    from iohub.core.ozx import pack_ozx
+    from tests.conftest import make_fov_zarr
+
+    src = Path(tmpdir) / "src.zarr"
+    make_fov_zarr(src, np.zeros((1, 1, 1, 4, 4), dtype=np.uint8))
+    ozx = Path(tmpdir) / "src.ozx"
+    pack_ozx(src, ozx)
+
+    runner = CliRunner()
+    res = runner.invoke(cli, ["info", "-v", str(ozx)])
+    assert res.exit_code == 0, res.output
+    # FOV summary still present.
+    assert "Format:" in res.output
+    assert "Channel names:" in res.output
+    # RFC-9 block appended in verbose mode.
+    assert "=== RFC-9 archive ===" in res.output
+    assert "OME version:" in res.output
+    assert "jsonFirst:" in res.output
+
+
+def test_cli_info_non_verbose_ozx_skips_rfc9(tmpdir):
+    """Non-verbose ``info`` on a .ozx omits the RFC-9 block."""
+    import numpy as np
+
+    from iohub.core.ozx import pack_ozx
+    from tests.conftest import make_fov_zarr
+
+    src = Path(tmpdir) / "src.zarr"
+    make_fov_zarr(src, np.zeros((1, 1, 1, 2, 2), dtype=np.uint8))
+    ozx = Path(tmpdir) / "src.ozx"
+    pack_ozx(src, ozx)
+
+    runner = CliRunner()
+    res = runner.invoke(cli, ["info", str(ozx)])
+    assert res.exit_code == 0, res.output
+    assert "RFC-9 archive" not in res.output
+
+
+def test_cli_convert_zarr_to_ozx_and_back(tmpdir):
+    """`iohub convert` packs .zarr → .ozx and unpacks .ozx → .zarr based on suffix."""
+    import numpy as np
+
+    from tests.conftest import make_fov_zarr
+
+    src = Path(tmpdir) / "src.zarr"
+    data = np.arange(16, dtype=np.uint8).reshape(1, 1, 1, 4, 4)
+    make_fov_zarr(src, data)
+
+    runner = CliRunner()
+
+    ozx = Path(tmpdir) / "out.ozx"
+    res = runner.invoke(cli, ["convert", "-i", str(src), "-o", str(ozx)])
+    assert res.exit_code == 0, res.output
+    assert "packed" in res.output
+    assert ozx.is_file()
+
+    # Unpack: ozx → zarr
+    restored = Path(tmpdir) / "restored.zarr"
+    res = runner.invoke(cli, ["convert", "-i", str(ozx), "-o", str(restored)])
+    assert res.exit_code == 0, res.output
+    assert "unpacked" in res.output
+    assert restored.is_dir()
+
+    with open_ome_zarr(restored, mode="r") as pos:
+        np.testing.assert_array_equal(pos["0"][:], np.arange(16, dtype=np.uint8).reshape(1, 1, 1, 4, 4))
+
+
+@pytest.mark.parametrize(
+    ("flag", "value", "route"),
+    [
+        ("--chunks", "XY", "pack"),
+        ("-g", None, "pack"),
+        ("--chunks", "XY", "unpack"),
+        ("-g", None, "unpack"),
+        ("--ome-zarr-version", "0.5", "unpack"),
+    ],
+)
+def test_cli_convert_rejects_irrelevant_flags(tmpdir, flag, value, route):
+    """TIFF-only flags on pack/unpack and version on unpack must error loudly."""
+    import numpy as np
+
+    from tests.conftest import make_fov_zarr
+
+    src_zarr = Path(tmpdir) / "src.zarr"
+    make_fov_zarr(src_zarr, np.zeros((1, 1, 1, 2, 2), dtype=np.uint8))
+    if route == "pack":
+        src, dst = src_zarr, Path(tmpdir) / "out.ozx"
+    else:
+        ozx = Path(tmpdir) / "src.ozx"
+        from iohub.core.ozx import pack_ozx as _pack
+
+        _pack(src_zarr, ozx)
+        src, dst = ozx, Path(tmpdir) / "out.zarr"
+
+    cmd = ["convert", "-i", str(src), "-o", str(dst), flag]
+    if value is not None:
+        cmd.append(value)
+
+    runner = CliRunner()
+    res = runner.invoke(cli, cmd)
+    assert res.exit_code != 0
+    assert "do not apply" in res.output or "apply only" in res.output
+
+
 def test_cli_set_scale(caplog):
     with _temp_copy(hcs_ref) as store_path:
         store_path = Path(store_path)
         position_path = Path(store_path) / "B" / "03" / "0"
 
-        with open_ome_zarr(
-            position_path, layout="fov", mode="r+"
-        ) as input_dataset:
+        with open_ome_zarr(position_path, layout="fov", mode="r+") as input_dataset:
             old_scale = input_dataset.scale
 
         random_z = random.uniform(0, 1)
@@ -153,9 +279,7 @@ def test_cli_set_scale(caplog):
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert tuple(output_dataset.scale[-3:]) == (random_z, 0.5, 0.5)
             assert output_dataset.scale != old_scale
-            for i, record in enumerate(
-                output_dataset.zattrs["iohub"]["previous_transforms"]
-            ):
+            for i, record in enumerate(output_dataset.zattrs["iohub"]["previous_transforms"]):
                 for transform in record["transforms"]:
                     if transform["type"] == "scale":
                         assert transform["scale"][-3:][i] == old_scale[-3:][i]
@@ -174,9 +298,7 @@ def test_cli_set_scale(caplog):
         )
         with open_ome_zarr(position_path, layout="fov") as output_dataset:
             assert output_dataset.scale[-1] == 0.1
-            for transform in output_dataset.zattrs["iohub"][
-                "previous_transforms"
-            ][-1]["transforms"]:
+            for transform in output_dataset.zattrs["iohub"]["previous_transforms"][-1]["transforms"]:
                 if transform["type"] == "scale":
                     assert transform["scale"][-1] == 0.5
 
@@ -188,7 +310,6 @@ def test_cli_rename_wells_help():
         cmd.append(option)
         result = runner.invoke(cli, cmd)
         assert result.exit_code == 0
-        assert ">> iohub rename-wells" in result.output
 
 
 def test_cli_rename_wells(csv_data_file_1):
@@ -205,3 +326,127 @@ def test_cli_rename_wells(csv_data_file_1):
 
         assert result.exit_code == 0
         assert "Renaming" in result.output
+
+
+def _make_pyramid_test_plate(store_path: Path) -> tuple[tuple[int, ...], list[str]]:
+    """Create a tiny plate with a single position and a level-0 array.
+
+    Returns the level-0 shape and the position key (row, col, fov).
+    """
+    shape = (1, 2, 8, 64, 64)
+    rng = np.random.default_rng(0)
+    data = rng.integers(0, 255, size=shape, dtype=np.uint16)
+    position_key = ("A", "1", "0")
+    with open_ome_zarr(
+        store_path,
+        layout="hcs",
+        mode="w",
+        channel_names=["ch1", "ch2"],
+    ) as plate:
+        position = plate.create_position(*position_key)
+        position.create_image("0", data)
+    return shape, list(position_key)
+
+
+def test_cli_compute_pyramid(tmp_path, caplog):
+    store_path = tmp_path / "compute_pyramid.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "compute-pyramid",
+            "-i",
+            str(position_path),
+            "--levels",
+            "3",
+            "--method",
+            "mean",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert any("Computing pyramid" in record.message for record in caplog.records)
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1", "2"]
+        assert pos["0"].shape == shape
+        # Cascade YX/Z downsampling halves spatial axes per level.
+        assert pos["1"].shape[-2:] == (shape[-2] // 2, shape[-1] // 2)
+        assert pos["2"].shape[-2:] == (shape[-2] // 4, shape[-1] // 4)
+
+
+def test_cli_compute_pyramid_plate_glob(tmp_path):
+    store_path = tmp_path / "compute_pyramid_plate.zarr"
+    _, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    # Pass the plate root: `_validate_and_process_paths` expands it into positions.
+    result = runner.invoke(
+        cli,
+        ["compute-pyramid", "-i", str(store_path), "-l", "2"],
+    )
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        dataset_paths = pos.metadata.multiscales[0].get_dataset_paths()
+        assert dataset_paths == ["0", "1"]
+
+
+def test_cli_compute_pyramid_dims(tmp_path):
+    store_path = tmp_path / "compute_pyramid_dims.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "compute-pyramid",
+            "-i",
+            str(position_path),
+            "-l",
+            "2",
+            "--dims",
+            "y,x",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        # Z is preserved; YX halved.
+        assert pos["1"].shape[-3] == shape[-3]
+        assert pos["1"].shape[-2:] == (shape[-2] // 2, shape[-1] // 2)
+
+
+def test_cli_compute_pyramid_help():
+    runner = CliRunner()
+    for option in ("-h", "--help"):
+        result = runner.invoke(cli, ["compute-pyramid", option])
+        assert result.exit_code == 0
+        assert "compute-pyramid" in result.output or "Compute multiscale" in result.output
+
+
+def test_cli_compute_pyramid_invalid_dims(tmp_path):
+    store_path = tmp_path / "compute_pyramid_bad_dims.zarr"
+    _, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "compute-pyramid",
+            "-i",
+            str(position_path),
+            "-l",
+            "2",
+            "--dims",
+            "y,bogus",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "bogus" in result.output

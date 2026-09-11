@@ -1,24 +1,24 @@
 [build-system]
-requires = ["setuptools>=77.0.0", "wheel", "setuptools_scm[toml]"]
-build-backend = "setuptools.build_meta"
+build-backend = "hatchling.build"
+requires = ["hatchling", "uv-dynamic-versioning>=0.14.0"]
 
 [project]
 name = "iohub"
 description = "N-dimensional bioimaging data I/O with OME metadata in Python"
 authors = [
-    {name = "CZ Biohub and iohub contributors", email = "iohub@czbiohub.org"},
+    {name = "Biohub and iohub contributors", email = "iohub@czbiohub.org"},
 ]
-license = {text = "BSD 3-Clause License"}
+license = {file = "LICENSE.md"}
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Image Processing",
     "Operating System :: Microsoft :: Windows",
@@ -26,19 +26,23 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
 ]
 dependencies = [
-    "pandas>=1.5.2",
+    "pandas>=2",
     "pydantic>=2.8.2",
     "pydantic_extra_types>=2.9.0",
-    "tifffile>=2025.5.21",
-    "natsort>=7.1.1",
+    "tifffile>=2026.5.2",
+    "natsort>=8.4.0",
     "ndtiff>=2.2.1",
-    "zarr>=3.0.8",
+    "nd2>=0.10.1",
+    "zarr>=3.1.6",
     "rich",
     "tqdm",
-    "pillow>=9.4.0",
+    "pillow>=12.3.0",
     "blosc2",
     "xarray>=2024.1.1",
     "dask[array]",
+    "zarrs>=0.2.3",
+    "typer>=0.27.2",
+    "lazy-loader>=0.4",
 ]
 dynamic = ["version"]
 
@@ -52,46 +56,111 @@ Source = "https://github.com/czbiohub-sf/iohub"
 tensorstore = [
     "tensorstore>=0.1.64",
 ]
-acquire-zarr = [
-    "acquire-zarr",
-]
-dev = [
+
+[project.entry-points."iohub.zarr_implementations"]
+zarr-python = "iohub.core.implementations.zarr_python:ZarrPythonImplementation"
+zarrs-python = "iohub.core.implementations.zarr_python:ZarrsPythonImplementation"
+tensorstore = "iohub.core.implementations.tensorstore:TensorStoreImplementation"
+
+[dependency-groups]
+test = [
     "iohub[tensorstore]",
     "ngff-zarr[validate]",
-    "black",
-    "flake8",
-    "pytest>=5.0.0",
+    "pytest>=9.0.2",
     "pytest-cov",
-    "hypothesis>=6.61.0",
+    "hypothesis>=6.151.0",
     "requests>=2.22.0",
     "wget>=3.2",
     "ome-zarr>=0.12.0",
 ]
+acquire-zarr = [
+    "acquire-zarr",
+]
 doc = [
-    "matplotlib",
-    "numpydoc>=1.1.0",
-    "sphinx>=4.2.0",
-    "pydata-sphinx-theme>=0.15.2",
-    "sphinx-copybutton>=0.4.0",
-    "sphinx-polyversion>=0.2.4",
-    "sphinx-sitemap>=2.5.0",
-    "sphinx-gallery>=0.13.0",
+    "zensical>=0.0.57",
+    "mkdocstrings-python>=2.0.8",
+    "pymdown-extensions>=11.0.2",
+    "ruff>=0.16.5",
+    "mike",
+    "mkdocs-typer2[zensical]>=0.4.1",
+]
+dev = [
+    { include-group = "test" },
+    { include-group = "acquire-zarr" },
+    { include-group = "doc" },
 ]
 
 [project.scripts]
 iohub = "iohub.cli.cli:cli"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["iohub"]
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
-[tool.setuptools_scm]
-version_scheme = "release-branch-semver"
-write_to = "iohub/_version.py"
+[tool.hatch.build.targets.wheel]
+packages = ["src/iohub"]
 
-[tool.black]
-line-length = 79
 
-[tool.isort]
-profile = "black"
-line_length = 79
+[tool.uv.sources]
+mike = { git = "https://github.com/squidfunk/mike.git" }
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
+
+[tool.pytest]
+minversion="9.0"
+strict = true
+testpaths = [ "tests" ]
+addopts = [
+    "-ra",
+    "--import-mode=importlib",
+]
+
+[tool.ruff]
+line-length = 120
+src = [ "src" ]
+extend-include = [ "*.ipynb" ]
+format.quote-style = "double"
+format.indent-style = "space"
+format.docstring-code-format = true
+format.docstring-code-line-length = "dynamic"
+lint.select = [
+    "B",    # flake8-bugbear
+    "BLE",  # flake8-blind-except
+    "C4",   # flake8-comprehensions
+    "D",    # pydocstyle
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "NPY",  # NumPy-specific rules
+    "PERF", # Perflint
+    "PT",   # pytest
+    "PTH",  # pathlib
+    "RUF",  # Ruff-specific rules
+    "TID",  # flake8-tidy-imports
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+lint.ignore = [
+    "B008",  # function calls in argument defaults are fine when result is immutable
+    "D100",  # Missing docstring in public module
+    "D101",  # Missing docstring in public class
+    "D102",  # Missing docstring in public method
+    "D103",  # Missing docstring in public function
+    "D104",  # Missing docstring in public package
+    "D105",  # __magic__ methods are often self-explanatory
+    "D107",  # Missing docstring in __init__
+    "D203",  # no blank line before class docstring (conflicts with D211)
+    "D213",  # docstrings start immediately after opening triple quote (conflicts with D212)
+    "D400",  # first line should end with period (doesn't work with single-line docstrings)
+    "D401",  # first line in imperative mood
+    "E203",  # slice whitespace (handled by formatter)
+    "E501",  # line too long (formatter handles code; long comments are acceptable)
+    "E731",  # lambda assignments are convenient
+]
+lint.per-file-ignores."*/__init__.py" = [ "F401" ]
+lint.per-file-ignores."docs/*" = [ "D", "I", "NPY002", "PTH", "PERF401", "BLE001" ]
+lint.per-file-ignores."tests/*" = [ "D" ]
+lint.pydocstyle.convention = "numpy"

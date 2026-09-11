@@ -40,11 +40,11 @@ class FOV(BaseFOV):
 
     @property
     def t_scale(self) -> float:
-        raise 1.0
+        return 1.0
 
 
 @pytest.mark.parametrize(
-    "axes,missing",
+    ("axes", "missing"),
     [
         (["T", "C", "Z", "Y", "X"], []),
         (["time", "z", "y", "x"], [1]),
@@ -67,7 +67,6 @@ def test_missing_axes(axes: list[str], missing: list[int]) -> None:
 
 
 def test_fov_dict() -> None:
-
     good_collection = FOVDict(
         {
             "488": FOV(["y", "x"]),

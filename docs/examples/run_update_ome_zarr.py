@@ -22,9 +22,7 @@ new_store_path = Path(tmp_dir.name) / "new.zarr"
 
 # %%
 # Create a version 0.4 OME-Zarr dataset
-random_image = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(10, 2, 32, 128, 128), dtype=np.uint16
-)
+random_image = np.random.randint(0, np.iinfo(np.uint16).max, size=(10, 2, 32, 128, 128), dtype=np.uint16)
 scale = [2.0, 3.0, 4.0, 5.0, 6.0]
 
 
@@ -63,9 +61,7 @@ with open_ome_zarr(old_store_path, mode="r", layout="hcs") as old_dataset:
                 data=old_image.numpy(),
                 chunks=(1, 1, 4, 32, 32),
                 shards_ratio=(2, 1, 8, 4, 4),
-                transform=old_position.metadata.multiscales[0]
-                .datasets[0]
-                .coordinate_transformations,
+                transform=old_position.metadata.multiscales[0].datasets[0].coordinate_transformations,
             )
 
 # %%

@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # GitHub Actions only — keeps the SHA pins fresh. No pip/uv ecosystem (too noisy).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

@@ -25,13 +25,9 @@ print("Zarr store path", store_path)
 # %%
 # Write 5D data to a new Zarr store
 
-tczyx = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16
-)
+tczyx = np.random.randint(0, np.iinfo(np.uint16).max, size=(5, 2, 3, 32, 32), dtype=np.uint16)
 
-with open_ome_zarr(
-    store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP"]
-) as dataset:
+with open_ome_zarr(store_path, layout="fov", mode="a", channel_names=["DAPI", "GFP"]) as dataset:
     dataset["img"] = tczyx
 
 # %%
@@ -49,9 +45,7 @@ with open_ome_zarr(store_path, layout="auto", mode="r") as dataset:
 # %%
 # Append a new timepoint to an existing dataset
 
-new_1czyx = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(1, 2, 3, 32, 32), dtype=np.uint16
-)
+new_1czyx = np.random.randint(0, np.iinfo(np.uint16).max, size=(1, 2, 3, 32, 32), dtype=np.uint16)
 
 with open_ome_zarr(store_path, layout="fov", mode="r+") as dataset:
     img = dataset["img"]
@@ -67,9 +61,7 @@ dataset = open_ome_zarr(store_path, mode="r+")
 dataset.print_tree()
 
 # Append a new channel and write a Z-stack
-new_zyx = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(3, 32, 32), dtype=np.uint16
-)
+new_zyx = np.random.randint(0, np.iinfo(np.uint16).max, size=(3, 32, 32), dtype=np.uint16)
 dataset.append_channel("New", resize_arrays=True)
 dataset["img"][0, 2] = new_zyx
 print(dataset.channel_names)
@@ -80,9 +72,7 @@ dataset.rename_channel("New", "Renamed")
 print(dataset.channel_names)
 
 # Write new data to the channel
-new_tzyx = np.random.randint(
-    0, np.iinfo(np.uint16).max, size=(6, 3, 32, 32), dtype=np.uint16
-)
+new_tzyx = np.random.randint(0, np.iinfo(np.uint16).max, size=(6, 3, 32, 32), dtype=np.uint16)
 c_idx = dataset.get_channel_index("Renamed")
 dataset["img"][:, c_idx] = new_tzyx
 

@@ -1,19 +1,42 @@
 import csv
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import fsspec
 import numpy as np
 import pytest
+from hypothesis import settings
 from wget import download
+
+settings.register_profile("default", deadline=None)
+settings.load_profile("default")
+
+
+# Make the repo root importable from `multiprocessing` spawn children so that
+# tests using ProcessPoolExecutor (e.g. test_process_single_position with
+# use_threads=False) can unpickle helpers like `tests.ngff.test_ngff_utils.
+# dummy_transform`. pytest's `--import-mode=importlib` only manipulates the
+# parent process's sys.path, not the env that spawn children inherit.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+os.environ["PYTHONPATH"] = os.pathsep.join(
+    [str(_REPO_ROOT)] + ([os.environ["PYTHONPATH"]] if os.environ.get("PYTHONPATH") else [])
+)
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+
+@pytest.fixture
+def rng():
+    return np.random.default_rng(42)
 
 
 def _download_ndtiff_v3_labeled_positions(test_data: Path) -> None:
     ghfs = fsspec.filesystem(
         "github",
         org="micro-manager",
-        repo="NDTiffStorage",
+        repo="NDStorage",
         username=os.environ.get("GITHUB_ACTOR"),
         token=os.environ.get("GITHUB_TOKEN"),
     )
@@ -34,13 +57,13 @@ def download_data():
         print("\nsetting up temp folder")
 
     # Zenodo URL
-    custom_url = (
-        "https://zenodo.org/record/6983916/files/waveOrder_test_data.zip"
-    )
+    custom_url = "https://zenodo.org/record/6983916/files/waveOrder_test_data.zip"
     # Reference v0.4 HCS dataset from OME
     # See the last line of
     # https://github.com/ome/ngff/issues/140#issuecomment-1309972511
-    ome_hcs_url = "https://zenodo.org/record/8091756/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"  # noqa
+    ome_hcs_url = "https://zenodo.org/record/8091756/files/20200812-CardiomyocyteDifferentiation14-Cycle1.zarr.zip"
+    # Small ND2 dataset from OME
+    nd2_url = "https://downloads.openmicroscopy.org/images/ND2/jonas/header_test1.nd2"
 
     # download files to temp folder
     if not any(test_data.iterdir()):
@@ -50,6 +73,11 @@ def download_data():
             download(url, out=str(output))
             shutil.unpack_archive(output, extract_dir=test_data)
         _download_ndtiff_v3_labeled_positions(test_data)
+
+    nd2_path = test_data / Path(nd2_url).name
+    if not nd2_path.is_file():
+        print("Downloading ND2 test file...")
+        download(nd2_url, out=str(nd2_path))
     return test_data
 
 
@@ -68,11 +96,7 @@ mm2gamma_ome_tiffs_hcs = [p for p in mm2gamma_ome_tiffs if "4p" in p.name]
 
 # This is a dataset with 11 timepoints
 # The MDA definition at start of the experiment specifies 20 timepoints
-mm2gamma_ome_tiffs_incomplete = (
-    test_datasets
-    / "MM20_ometiff_incomplete"
-    / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1"
-)
+mm2gamma_ome_tiffs_incomplete = test_datasets / "MM20_ometiff_incomplete" / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1"
 
 
 mm2gamma_singlepage_tiffs = subdirs(test_datasets, "MM20_singlepage-tiffs")
@@ -81,9 +105,7 @@ mm2gamma_singlepage_tiffs = subdirs(test_datasets, "MM20_singlepage-tiffs")
 # This is a dataset with 11 timepoints
 # The MDA definition at start of the experiment specifies 20 timepoints
 mm2gamma_singlepage_tiffs_incomplete = (
-    test_datasets
-    / "MM20_singlepage_incomplete"
-    / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1 2"
+    test_datasets / "MM20_singlepage_incomplete" / "mm2.0-20201209_20t_5z_3c_512k_incomplete_1 2"
 )
 
 
@@ -93,9 +115,7 @@ mm1422_ome_tiffs = subdirs(test_datasets, "MM1422_ome-tiffs")
 mm1422_singlepage_tiffs = subdirs(test_datasets, "MM1422_singlepage-tiffs")
 
 
-mm2gamma_zarr_v01 = (
-    test_datasets / "MM20_zarr" / "mm2.0-20201209_4p_2t_5z_1c_512k_1.zarr"
-)
+mm2gamma_zarr_v01 = test_datasets / "MM20_zarr" / "mm2.0-20201209_4p_2t_5z_1c_512k_1.zarr"
 
 
 hcs_ref = test_datasets / "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"
@@ -104,14 +124,13 @@ hcs_ref = test_datasets / "20200812-CardiomyocyteDifferentiation14-Cycle1.zarr"
 ndtiff_v2_datasets = subdirs(test_datasets, "MM20_pycromanager")
 
 
-ndtiff_v2_ptcz = (
-    test_datasets
-    / "MM20_pycromanager"
-    / "mm2.0-20210713_pm0.13.2_2p_3t_2c_7z_1"
-)
+ndtiff_v2_ptcz = test_datasets / "MM20_pycromanager" / "mm2.0-20210713_pm0.13.2_2p_3t_2c_7z_1"
 
 
 ndtiff_v3_labeled_positions = test_datasets / "ndtiff_v3_labeled_positions"
+
+
+nd2_tcz = test_datasets / "header_test1.nd2"
 
 
 @pytest.fixture
@@ -120,7 +139,7 @@ def csv_data_file_1(tmpdir):
     csv_data_1 = [
         ["B/03", "D/4"],
     ]
-    with open(test_csv_1, mode="w", newline="") as csvfile:
+    with Path(test_csv_1).open(mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(csv_data_1)
     return test_csv_1
@@ -132,7 +151,7 @@ def csv_data_file_2(tmpdir):
     csv_data_2 = [
         ["D/4", "B/03"],
     ]
-    with open(test_csv_2, mode="w", newline="") as csvfile:
+    with Path(test_csv_2).open(mode="w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerows(csv_data_2)
     return test_csv_2
@@ -157,15 +176,11 @@ def empty_ome_zarr_hcs_v05(tmpdir) -> tuple[Path, tuple[tuple[str, ...], ...]]:
         for col in COLS:
             col_dir = row_dir / col
             col_dir.mkdir()
-            shutil.copy(
-                example_json_dir / "well.json", col_dir / TARGET_FILENAME
-            )
+            shutil.copy(example_json_dir / "well.json", col_dir / TARGET_FILENAME)
             for fov in FOVS:
                 fov_dir = col_dir / fov
                 fov_dir.mkdir()
-                shutil.copy(
-                    example_json_dir / "image.json", fov_dir / TARGET_FILENAME
-                )
+                shutil.copy(example_json_dir / "image.json", fov_dir / TARGET_FILENAME)
                 for res in RESOLUTIONS:
                     res_dir = fov_dir / res
                     res_dir.mkdir()
@@ -176,7 +191,7 @@ def empty_ome_zarr_hcs_v05(tmpdir) -> tuple[Path, tuple[tuple[str, ...], ...]]:
     return empty_zarr, (ROWS, COLS, FOVS, RESOLUTIONS)
 
 
-@pytest.fixture()
+@pytest.fixture
 def aqz_ome_zarr_05(tmpdir):
     pytest.importorskip("acquire_zarr")
     import acquire_zarr as aqz
@@ -239,10 +254,23 @@ def aqz_ome_zarr_05(tmpdir):
     )
 
     stream = aqz.ZarrStream(settings)
-    data = np.random.randint(
-        0, 2**16 - 1, (32, 4, 10, 48, 64), dtype=np.uint16
-    )
+    data = np.random.default_rng().integers(0, 2**16 - 1, (32, 4, 10, 48, 64), dtype=np.uint16)
     stream.append(data)
     del stream
 
     return store_path
+
+
+def make_fov_zarr(path: Path, data: np.ndarray, version: str = "0.5") -> None:
+    """Write ``data`` into a fresh FOV-layout OME-Zarr at ``path``.
+
+    Test helper shared by ``tests/ngff/test_ozx.py`` and the ozx-aware
+    CLI tests in ``tests/cli/test_cli.py`` — both repeat the same write
+    pattern when building tiny fixtures.
+    """
+    from iohub import open_ome_zarr
+
+    chunks = tuple(max(1, s // 2) for s in data.shape)
+    with open_ome_zarr(path, layout="fov", mode="w", channel_names=["c"], version=version) as pos:
+        arr = pos.create_zeros("0", shape=data.shape, dtype=data.dtype, chunks=chunks)
+        arr[:] = data

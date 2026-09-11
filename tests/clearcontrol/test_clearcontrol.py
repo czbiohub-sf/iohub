@@ -21,12 +21,10 @@ def mock_clear_control_dataset_path(tmp_path: Path) -> Path:
 
 def test_blosc_buffer(tmp_path: Path) -> None:
     buffer_path = tmp_path / "buffer.blc"
-    in_array = np.random.randint(0, 5_000, size=(32, 32))
+    in_array = np.random.default_rng().integers(0, 5_000, size=(32, 32))
 
     _array_to_blosc_buffer(in_array, buffer_path)
-    out_array = blosc_buffer_to_array(
-        buffer_path, in_array.shape, in_array.dtype
-    )
+    out_array = blosc_buffer_to_array(buffer_path, in_array.shape, in_array.dtype)
 
     assert np.allclose(in_array, out_array)
 
