@@ -8,8 +8,7 @@ import typer
 from typer.core import TyperGroup
 from typer.main import get_command
 
-# Heavy iohub imports (ngff/convert/reader/...) are deferred into the command
-# bodies so ``-h``/``--version``/completion don't pay for the scientific stack.
+# Import dataset readers inside commands so help and version output stay fast.
 from iohub.cli.parsing import (
     InputPositionDirpaths,
     expand_position_dirpaths,
@@ -59,15 +58,14 @@ def info(
         typer.Option(
             "--verbose",
             "-v",
-            help="Show usage guide to open dataset in Python and full tree for HCS Plates in OME-Zarr",
+            help="Show Python usage examples and the full OME-Zarr plate tree.",
         ),
     ] = False,
 ) -> None:
-    """View metadata for one or more FILES.
+    """Show dataset metadata.
 
-    Supports Micro-Manager TIFF datasets (multi-page OME-TIFF, NDTIFF),
-    OME-Zarr directory stores (v0.4 and v0.5), and RFC-9 zipped
-    OME-Zarr archives (``.ozx``).
+    Accepts Micro-Manager OME-TIFF and NDTIFF datasets, OME-Zarr 0.4 and 0.5
+    directories, and zipped OME-Zarr archives with the .ozx extension.
     """
     from iohub.reader import print_info
 
@@ -85,7 +83,7 @@ def convert(
             "-i",
             exists=True,
             resolve_path=True,
-            help="Input dataset: Micro-Manager TIFF dir, OME-Zarr dir, or RFC-9 .ozx archive.",
+            help="Micro-Manager TIFF directory, OME-Zarr directory, or .ozx archive.",
         ),
     ],
     output: Annotated[
@@ -94,7 +92,7 @@ def convert(
             "--output",
             "-o",
             resolve_path=True,
-            help="Output path. Suffix selects the operation: .zarr (Zarr dir) or .ozx (zipped).",
+            help="Output OME-Zarr directory or .ozx archive.",
         ),
     ],
     grid_layout: Annotated[
@@ -102,7 +100,7 @@ def convert(
         typer.Option(
             "--grid-layout",
             "-g",
-            help="(TIFF → Zarr only) Arrange FOVs in a row/column grid layout.",
+            help="Arrange fields of view in a row/column grid. TIFF conversion only.",
         ),
     ] = False,
     chunks: Annotated[
@@ -110,7 +108,7 @@ def convert(
         typer.Option(
             "--chunks",
             "-c",
-            help="(TIFF → Zarr only) Zarr chunk size: 'XY', 'XYZ', or a tuple. 'XYZ' caps at 500 MB.",
+            help="Chunk shape as 'XY', 'XYZ', or a tuple. 'XYZ' caps chunks at 500 MB. TIFF conversion only.",
         ),
     ] = "XYZ",
     ome_zarr_version: Annotated[
@@ -118,16 +116,17 @@ def convert(
         typer.Option(
             "--ome-zarr-version",
             "-v",
-            help="OME-NGFF version. TIFF default: 0.4. Pack: sniffed from source if omitted.",
+            help="OME-NGFF version. Defaults to 0.4 for TIFF conversion or the source version when packing .ozx.",
         ),
     ] = None,
 ) -> None:
-    """Convert datasets between supported formats.
+    """Convert Micro-Manager TIFF to OME-Zarr, or pack and unpack .ozx archives.
 
-    Routes by suffix: a TIFF directory plus a ``.zarr`` output runs the
-    Micro-Manager TIFF → OME-Zarr converter; a ``.zarr`` source plus a
-    ``.ozx`` output packs an RFC-9 zip archive; a ``.ozx`` source plus
-    a ``.zarr`` output unpacks back to a directory store.
+    An .ozx output packs an OME-Zarr directory without changing its chunks.
+    An .ozx input unpacks to a directory. Other inputs use the TIFF converter.
+
+    --grid-layout and --chunks apply only to TIFF conversion.
+    --ome-zarr-version does not apply when unpacking.
     """
     from iohub.convert import TIFFConverter
     from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
@@ -137,8 +136,7 @@ def convert(
     tiff_only = grid_layout or chunks != "XYZ"
 
     if is_ozx_path(dst):
-        # Pack: 1:1 file copy preserving source chunks. Re-chunking would
-        # mean a full read+rewrite — a different operation, out of scope.
+        # Packing preserves source chunks.
         if tiff_only:
             raise typer.BadParameter(
                 "--grid-layout and --chunks apply only to TIFF → Zarr conversion. "
@@ -148,7 +146,6 @@ def convert(
         typer.echo(f"packed: {out}")
         return
     if is_ozx_path(src):
-        # Unpack: archive structure dictates everything; no flags apply.
         if tiff_only or ome_zarr_version is not None:
             raise typer.BadParameter(
                 "--grid-layout, --chunks, and --ome-zarr-version do not apply to .ozx → .zarr unpack."
@@ -156,7 +153,7 @@ def convert(
         out = unpack_ozx(src, dst)
         typer.echo(f"unpacked: {out}")
         return
-    # Default: TIFF → OME-Zarr (TIFFConverter sniffs the input format).
+    # TIFFConverter detects the TIFF format.
     TIFFConverter(
         input_dir=src,
         output_dir=dst,
@@ -169,22 +166,22 @@ def convert(
 @app.command(name="set-scale")
 def set_scale(
     input_position_dirpaths: InputPositionDirpaths,
-    t_scale: Annotated[float | None, typer.Option("--t-scale", "-t", help="New t scale")] = None,
-    z_scale: Annotated[float | None, typer.Option("--z-scale", "-z", help="New z scale")] = None,
-    y_scale: Annotated[float | None, typer.Option("--y-scale", "-y", help="New y scale")] = None,
-    x_scale: Annotated[float | None, typer.Option("--x-scale", "-x", help="New x scale")] = None,
+    t_scale: Annotated[float | None, typer.Option("--t-scale", "-t", help="New time-axis scale.")] = None,
+    z_scale: Annotated[float | None, typer.Option("--z-scale", "-z", help="New z-axis scale.")] = None,
+    y_scale: Annotated[float | None, typer.Option("--y-scale", "-y", help="New y-axis scale.")] = None,
+    x_scale: Annotated[float | None, typer.Option("--x-scale", "-x", help="New x-axis scale.")] = None,
     image: Annotated[
         str | None,
-        typer.Option("--image", help="Image name to set scale for. Default is '0'"),
+        typer.Option("--image", help="Image to update. Defaults to '0'."),
     ] = None,
 ) -> None:
-    """Update scale metadata in OME-Zarr datasets.
+    """Update axis scale metadata in OME-Zarr positions.
 
-    `iohub set-scale -i input.zarr -t 1.0 -z 1.0 -y 0.5 -x 0.5`
+    Omitted axes keep their current scales. Image data is unchanged.
 
-    Supports setting a single axis at a time:
+    Example:
 
-    `iohub set-scale -i input.zarr/A/1/0 -z 2.0`
+    iohub set-scale -i input.zarr/A/1/0 -z 2.0
     """
     from iohub import open_ome_zarr
 
@@ -233,29 +230,30 @@ def compute_pyramid(
             "--levels",
             "-l",
             min=2,
-            help="Total number of pyramid levels including level 0 (e.g. 4 = level 0 + 3 extra).",
+            help="Total number of levels, including the original level 0.",
         ),
     ],
     method: Annotated[
         PyramidMethod,
-        typer.Option("--method", "-m", help="The Downsampling method."),
+        typer.Option("--method", "-m", help="Downsampling method."),
     ] = PyramidMethod.mean,
     dims: Annotated[
         str | None,
         typer.Option(
             "--dims",
             "-d",
-            help="Comma-separated axes to downsample (e.g. 'y,x' for YX-only). Defaults to 'z,y,x'.",
+            help="Comma-separated axes for a new pyramid, such as 'y,x'. Defaults to 'z,y,x'.",
         ),
     ] = None,
 ) -> None:
-    """Compute multiscale pyramid levels in place for OME-Zarr positions.
+    """Create or recompute an OME-Zarr pyramid in place.
 
-    The level 0 array is preserved; new downsampled levels are appended.
+    Level 0 is unchanged. Existing pyramids must have the requested number
+    of levels. Recomputing overwrites the downsampled levels.
 
-    `iohub compute-pyramid -i input.zarr --levels 4`
+    Example:
 
-    `iohub compute-pyramid -i input.zarr/A/1/0 -l 3 -m median --dims y,x`
+    iohub compute-pyramid -i input.zarr -l 3 -m median --dims y,x
     """
     from iohub import open_ome_zarr
 
@@ -274,7 +272,7 @@ def rename_wells_command(
             "--input",
             "-i",
             exists=True,
-            help="Path to the input Zarr file.",
+            help="OME-Zarr plate directory.",
         ),
     ],
     csvfile: Annotated[
@@ -284,32 +282,31 @@ def rename_wells_command(
             "-c",
             exists=True,
             dir_okay=False,
-            help="Path to the CSV file containing old and new well names.",
+            help="CSV file mapping old well names to new names.",
         ),
     ],
 ) -> None:
-    """Rename wells in an plate.
+    """Rename wells in an OME-Zarr plate.
 
-    ```
+    Use a CSV with two columns, old name then new name, and no header:
+
+        A/1,B/1
+        A/2,B/2
+
+    Example:
+
     iohub rename-wells -i plate.zarr -c names.csv
-    ```
-
-    The CSV file must have two columns with old and new names in the form:
-    ```
-    A / 1, B / 2
-    A / 2, B / 2
-    ```
     """
     from iohub.rename_wells import rename_wells
 
     rename_wells(zarrfile, csvfile)
 
 
-# Entry point (pyproject ``[project.scripts]``); also what the tests invoke.
+# Installed CLI entry point.
 cli = get_command(app)
-assert isinstance(cli, TyperGroup)  # multi-command app -> always a group
-# Typer can't express a greedy option; make ``-i`` eat space-separated paths.
+assert isinstance(cli, TyperGroup)
+# Let position options accept multiple paths after one -i.
 install_eat_all_positions(cli)
 
-# mkdocs-typer2 ``:name: iohub`` resolves this attribute and labels the docs.
+# App name used by mkdocs-typer2 to generate the CLI reference.
 iohub = app

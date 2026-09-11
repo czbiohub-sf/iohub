@@ -41,7 +41,7 @@ dependencies = [
     "xarray>=2024.1.1",
     "dask[array]",
     "zarrs>=0.2.3",
-    "typer>=0.26.7",
+    "typer>=0.27.2",
     "lazy-loader>=0.4",
 ]
 dynamic = ["version"]

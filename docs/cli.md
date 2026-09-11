@@ -1,17 +1,28 @@
-# CLI Reference
+# CLI reference
 
 ## Selecting input positions
 
-Commands that take `-i` / `--input-position-dirpaths` (`set-scale`,
-`compute-pyramid`) accept a single position, a plate root (expanded into all of
-its positions), or a shell glob. A single `-i` can take several space-separated
-paths:
+`set-scale` and `compute-pyramid` accept position paths, plate roots, and glob
+patterns with `-i` or `--input-position-dirpaths`. A plate root selects every
+position in the plate. One `-i` accepts multiple paths, up to the next option.
 
 ```bash
-iohub compute-pyramid -i input.zarr/*/*/* --levels 4       # every position, via glob
-iohub compute-pyramid -i input.zarr --levels 4             # whole plate (same result)
-iohub set-scale -i input.zarr/A/1/0 input.zarr/B/2/0 -z 2  # specific positions
+# All positions in a plate
+iohub compute-pyramid -i input.zarr --levels 4
+
+# Positions matching a glob
+iohub compute-pyramid -i 'input.zarr/A/*/*' --levels 4
+
+# Two specific positions
+iohub set-scale -i input.zarr/A/1/0 input.zarr/B/2/0 -z 2
 ```
+
+iohub expands quoted globs. Your shell expands unquoted ones.
+
+To use these options in another Typer CLI, see
+[Options with multiple values](greedy-cli-options.md).
+
+## Commands
 
 ::: mkdocs-typer2
     :module: iohub.cli.cli

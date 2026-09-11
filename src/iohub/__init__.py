@@ -12,9 +12,8 @@ from importlib.metadata import version
 
 import lazy_loader as lazy
 
-# Lazy submodule/attribute loading (SPEC 1): keeps ``import iohub`` cheap so the
-# heavy stack (xarray/pandas/dask) only loads when its symbols are accessed.
-# Exports are declared in ``__init__.pyi``.
+# Load exports from __init__.pyi on first access so CLI startup does not import
+# xarray, pandas, and dask.
 __getattr__, __dir__, __all__ = lazy.attach_stub(__name__, __file__)
 
 __version__ = version(__name__)

@@ -8,8 +8,8 @@ from zarr.storage import StoreLike
 
 # Zarr format / NGFF version
 type ZarrFormat = Literal[2, 3]
-# Plain alias (not a PEP 695 ``type``) so tools can introspect it as a runtime
-# Literal — e.g. Typer reads it directly to build the CLI's version choices.
+# Typer needs a Literal at runtime to read the version choices.
+# A PEP 695 type alias would wrap it in TypeAliasType.
 NGFFVersion = Literal["0.4", "0.5"]
 
 # Store access mode

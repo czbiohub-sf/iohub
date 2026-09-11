@@ -1,8 +1,4 @@
-"""iohub command-line interface.
-
-The ``OptionEatAll`` building blocks are re-exported here for downstream Typer
-CLIs that want the same greedy ``-i`` behavior.
-"""
+"""iohub command-line interface and reusable Typer options."""
 
 from iohub.cli.parsing import (
     InputPositionDirpaths,
