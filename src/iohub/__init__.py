@@ -10,10 +10,11 @@ import logging
 import os
 from importlib.metadata import version
 
-from iohub.ngff import open_ome_zarr
-from iohub.reader import read_images
+import lazy_loader as lazy
 
-__all__ = ["open_ome_zarr", "read_images"]
+# Load exports from __init__.pyi on first access so CLI startup does not import
+# xarray, pandas, and dask.
+__getattr__, __dir__, __all__ = lazy.attach_stub(__name__, __file__)
 
 __version__ = version(__name__)
 

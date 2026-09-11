@@ -58,7 +58,7 @@ def test_cli_info_mock(mm2gamma_ome_tiff, verbose):
     # resolve path with pathlib to be consistent with `click.Path`
     # this will not normalize partition symbol to lower case on Windows
     path = mm2gamma_ome_tiff.resolve()
-    with patch("iohub.cli.cli.print_info") as mock:
+    with patch("iohub.reader.print_info") as mock:
         cmd = ["info", str(path)]
         if verbose:
             cmd.append(verbose)
