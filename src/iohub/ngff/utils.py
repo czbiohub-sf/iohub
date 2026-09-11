@@ -35,6 +35,33 @@ _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 _OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
 
 
+def _validated_extra_metadata(
+    extra_metadata: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Check a caller-supplied provenance mapping and return it as a plain dict.
+
+    Shared by ``create_empty_plate`` and ``process_single_position`` so the two
+    seats that write ``extra_metadata`` cannot disagree about what is legal.
+    Every entry becomes a TOP-LEVEL zattrs key, so a key the OME-Zarr spec owns
+    would corrupt the position rather than annotate it.
+    """
+    if extra_metadata is None:
+        return {}
+    if not isinstance(extra_metadata, Mapping):
+        raise TypeError(f"extra_metadata must be a mapping, got {type(extra_metadata).__name__}.")
+    non_string_keys = [key for key in extra_metadata if not isinstance(key, str)]
+    if non_string_keys:
+        raise TypeError(f"extra_metadata keys must be strings, got {non_string_keys}.")
+    reserved = _OME_KEYS.intersection(extra_metadata)
+    if reserved:
+        raise ValueError(
+            f"extra_metadata keys {sorted(reserved)} are reserved OME-Zarr "
+            f"keys and cannot be written as top-level zattrs. Use a "
+            f"namespaced key (e.g. '<package>-<step>') instead."
+        )
+    return dict(extra_metadata)
+
+
 def _selected_metadata_keys(
     source_attrs: Mapping[str, Any],
     metadata_keys: str | Iterable[str] | None,
@@ -74,6 +101,7 @@ def create_empty_plate(
     dtype: DTypeLike = np.float32,
     metadata_sources: Path | str | list[Path | str] | None = None,
     metadata_keys: str | Iterable[str] | None = None,
+    extra_metadata: Mapping[str, Any] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -134,6 +162,29 @@ def create_empty_plate(
         meaningless on its own: passing it without ``metadata_sources``
         raises ``ValueError``.
         Defaults to None (copy every non-OME key the sources provide).
+    extra_metadata : Mapping[str, Any], optional
+        The caller's *own* per-position metadata, where ``metadata_sources`` is
+        metadata from elsewhere. Each entry is written as a TOP-LEVEL zattrs key
+        on every position in ``position_keys`` -- the same spelling
+        ``process_single_position`` uses -- so a processing step records its
+        provenance as a sibling of what it inherited, e.g.
+        ``extra_metadata={"biahub-deskew": settings.model_dump()}``.
+
+        Two deliberate differences from ``metadata_sources``:
+
+        - It is written to **every** position named, not only newly created
+          ones. Re-running with a changed configuration must refresh the record;
+          inherited metadata, by contrast, describes the store as it was made.
+        - It **wins** over an inherited key of the same name, since the caller
+          is the authority on its own step. Sources still take precedence over
+          each other in order.
+
+        Writing the record here rather than after the call is what lets a
+        downstream ``create_empty_plate`` inherit it: the source copy reads the
+        upstream store's zattrs at plate-creation time, so a pipeline that
+        scaffolds all of its stores up front would otherwise chain empty
+        provenance. Keys the OME-Zarr spec owns are refused.
+        Defaults to None.
 
     Raises
     ------
@@ -193,6 +244,17 @@ def create_empty_plate(
     ...     metadata_keys={"provenance-*"},
     ... )
 
+    Inherit the input's provenance and record this step's own alongside it:
+    >>> create_empty_plate(
+    ...     store_path=Path("/path/to/output.zarr"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(1, 1, 256, 256, 256),
+    ...     metadata_sources=Path("/path/to/input.zarr"),
+    ...     metadata_keys={"provenance-*"},
+    ...     extra_metadata={"provenance-deskew": {"ls_angle_deg": 30}},
+    ... )
+
     Notes
     -----
     - If `chunks` is not provided, a version-specific default is used (see
@@ -205,6 +267,8 @@ def create_empty_plate(
 
     if shards_ratio is None and version == "0.5":
         shards_ratio = _default_shards_ratio(shape, chunks)
+
+    extra_metadata = _validated_extra_metadata(extra_metadata)
 
     # Normalize to a list of Paths. Fail loudly if any metadata source root
     # is wrong; missing individual positions within them are still skipped
@@ -236,6 +300,7 @@ def create_empty_plate(
     # Create positions
     for position_key in position_keys:
         position_key_string = "/".join(position_key)
+        collected: dict[str, Any] = {}
         # Check if position is already in the store, if not create it
         if position_key_string not in output_plate.zgroup:
             position = output_plate.create_position(*position_key)
@@ -253,9 +318,8 @@ def create_empty_plate(
             # as-is. A key is only copied if it is not already present on the
             # destination, so earlier sources take precedence over later ones.
             #
-            # Collect across all sources first, then write once.
+            # Collect across all sources first, then write once, below.
             existing = dict(position.zattrs)
-            collected: dict[str, Any] = {}
             for source in metadata_sources:
                 # Only the open is guarded: a source that lacks this position
                 # is skipped, but a failure while reading one is a real error.
@@ -268,8 +332,6 @@ def create_empty_plate(
                 for k in _selected_metadata_keys(src_attrs, metadata_keys):
                     if k not in existing and k not in collected:
                         collected[k] = src_attrs[k]
-            if collected:
-                position.zattrs.put({**existing, **collected})
         else:
             position = output_plate[position_key_string]
 
@@ -278,6 +340,15 @@ def create_empty_plate(
             metadata_channel_names = position.channel_names
             if channel_name not in metadata_channel_names:
                 position.append_channel(channel_name, resize_arrays=True)
+
+        # One custom-metadata write per position, and it comes last: both
+        # branches above may have rewritten the OME keys (create_zeros,
+        # append_channel), so the base dict is re-read here rather than reused
+        # from before them. `collected` is empty unless this call created the
+        # position; `extra_metadata` applies either way and wins on a collision,
+        # because the caller is the authority on its own step.
+        if collected or extra_metadata:
+            position.zattrs.put({**dict(position.zattrs), **collected, **extra_metadata})
 
     output_plate.close()
 
@@ -659,20 +730,8 @@ def process_single_position(
     # one shared key. Overwriting a pre-existing key (e.g. metadata copied by
     # create_empty_plate's metadata_sources) warns rather than silently
     # clobbering upstream provenance.
-    extra_metadata = kwargs.pop("extra_metadata", None)
-    if extra_metadata is not None:
-        if not isinstance(extra_metadata, Mapping):
-            raise TypeError(f"extra_metadata must be a mapping, got {type(extra_metadata).__name__}.")
-        non_string_keys = [key for key in extra_metadata if not isinstance(key, str)]
-        if non_string_keys:
-            raise TypeError(f"extra_metadata keys must be strings, got {non_string_keys}.")
-        reserved = _OME_KEYS.intersection(extra_metadata)
-        if reserved:
-            raise ValueError(
-                f"extra_metadata keys {sorted(reserved)} are reserved OME-Zarr "
-                f"keys and cannot be written as top-level zattrs. Use a "
-                f"namespaced key (e.g. '<package>-<step>') instead."
-            )
+    extra_metadata = _validated_extra_metadata(kwargs.pop("extra_metadata", None))
+    if extra_metadata:
         with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
             for key, value in extra_metadata.items():
                 if key in output_dataset.zattrs:

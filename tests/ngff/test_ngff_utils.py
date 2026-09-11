@@ -943,6 +943,159 @@ def test_create_empty_plate_metadata_keys_none_copies_everything():
         assert dst_zattrs["beta"] == 2
 
 
+def test_create_empty_plate_extra_metadata_written_to_every_position():
+    """extra_metadata lands as top-level zattrs on each position named."""
+    position_keys = [("A", "1", "0"), ("A", "1", "1")]
+    record = {"provenance-deskew": {"ls_angle_deg": 30}}
+
+    with TemporaryDirectory() as temp_dir:
+        dst_path = Path(temp_dir) / "dest.zarr"
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=["DAPI"],
+            shape=(1, 1, 16, 32, 32),
+            extra_metadata=record,
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as plate:
+            for _name, pos in plate.positions():
+                attrs = dict(pos.zattrs)
+                # Top-level, not nested under an "extra_metadata" key.
+                assert attrs["provenance-deskew"] == {"ls_angle_deg": 30}
+                assert "extra_metadata" not in attrs
+                # The OME metadata the position needs survives the write.
+                assert pos.channel_names == ["DAPI"]
+                assert pos.data.shape == (1, 1, 16, 32, 32)
+
+
+def test_create_empty_plate_extra_metadata_refreshes_existing_positions():
+    """Unlike metadata_sources, extra_metadata is rewritten on a re-run.
+
+    A step whose configuration changed must be able to correct its own record;
+    inherited metadata describes the store as it was made and is not touched.
+    """
+    position_keys = [("A", "1", "0")]
+    kwargs = {
+        "position_keys": position_keys,
+        "channel_names": ["DAPI"],
+        "shape": (1, 1, 16, 32, 32),
+    }
+
+    with TemporaryDirectory() as temp_dir:
+        dst_path = Path(temp_dir) / "dest.zarr"
+        create_empty_plate(store_path=dst_path, extra_metadata={"provenance-step": {"v": 1}}, **kwargs)
+        create_empty_plate(store_path=dst_path, extra_metadata={"provenance-step": {"v": 2}}, **kwargs)
+
+        with open_ome_zarr(str(dst_path), mode="r") as plate:
+            assert plate["A/1/0"].zattrs["provenance-step"] == {"v": 2}
+
+
+def test_create_empty_plate_extra_metadata_beats_inherited_key():
+    """The caller's own record wins over a source key of the same name.
+
+    Reachable when a store is used as its own downstream target: the source
+    already carries this step's key from an earlier run, and the value that
+    should survive is the one describing THIS call.
+    """
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        create_empty_plate(
+            store_path=src_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+        )
+        with open_ome_zarr(str(src_path), mode="r+") as plate:
+            plate["A/1/0"].zattrs["provenance-step"] = {"origin": "source"}
+            plate["A/1/0"].zattrs["provenance-upstream"] = {"origin": "source"}
+
+        create_empty_plate(
+            store_path=dst_path,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            metadata_sources=src_path,
+            extra_metadata={"provenance-step": {"origin": "caller"}},
+        )
+
+        with open_ome_zarr(str(dst_path), mode="r") as plate:
+            attrs = dict(plate["A/1/0"].zattrs)
+            assert attrs["provenance-step"] == {"origin": "caller"}
+            # Everything else the source contributed is still inherited.
+            assert attrs["provenance-upstream"] == {"origin": "source"}
+
+
+def test_create_empty_plate_extra_metadata_chains_across_stores():
+    """The record is readable by the next create_empty_plate, not just at the end.
+
+    This is the property a pipeline that scaffolds every store up front depends
+    on: each plate is created while the store feeding it is still empty, so a
+    record written only once data existed would never be inherited.
+    """
+    position_keys = [("A", "1", "0")]
+    channel_names = ["DAPI"]
+    shape = (1, 1, 16, 32, 32)
+
+    with TemporaryDirectory() as temp_dir:
+        first = Path(temp_dir) / "first.zarr"
+        second = Path(temp_dir) / "second.zarr"
+
+        create_empty_plate(
+            store_path=first,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            extra_metadata={"provenance-first": {"step": 1}},
+        )
+        create_empty_plate(
+            store_path=second,
+            position_keys=position_keys,
+            channel_names=channel_names,
+            shape=shape,
+            metadata_sources=first,
+            metadata_keys={"provenance-*"},
+            extra_metadata={"provenance-second": {"step": 2}},
+        )
+
+        with open_ome_zarr(str(second), mode="r") as plate:
+            attrs = dict(plate["A/1/0"].zattrs)
+            assert attrs["provenance-first"] == {"step": 1}
+            assert attrs["provenance-second"] == {"step": 2}
+
+
+@pytest.mark.parametrize(
+    ("bad", "exc", "match"),
+    [
+        ([("provenance-x", 1)], TypeError, "must be a mapping"),
+        ({1: "v"}, TypeError, "keys must be strings"),
+        ({"omero": {}}, ValueError, "reserved OME-Zarr"),
+    ],
+)
+def test_create_empty_plate_extra_metadata_refusals(bad, exc, match):
+    """The same refusals process_single_position applies, from the shared helper."""
+    with TemporaryDirectory() as temp_dir:
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        with pytest.raises(exc, match=match):
+            create_empty_plate(
+                store_path=dst_path,
+                position_keys=[("A", "1", "0")],
+                channel_names=["DAPI"],
+                shape=(1, 1, 16, 32, 32),
+                extra_metadata=bad,
+            )
+
+        # The guard runs before anything is created.
+        assert not dst_path.exists()
+
+
 def test_create_empty_plate_metadata_keys_without_sources_raises():
     """metadata_keys filters nothing on its own, so it is rejected alone."""
     with TemporaryDirectory() as temp_dir:
