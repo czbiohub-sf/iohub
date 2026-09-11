@@ -1,0 +1,46 @@
+name: Bug report
+description: Report something that is broken or incorrect
+type: Bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Share whatever you know; incomplete reports are welcome.
+
+        Do not include credentials, personal data, confidential data, or restricted datasets.
+        Report security vulnerabilities privately according to our [security policy](https://github.com/czbiohub-sf/iohub/security/policy).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem, what you expected, and its impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: If known, provide the smallest example that reproduces the problem. Use public or synthetic data.
+      placeholder: |
+        1. Install `iohub==…`
+        2. Run …
+        3. Observe …
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the iohub version, Python version, operating system, and dataset format.
+      placeholder: |
+        iohub version:
+        Python version:
+        Operating system:
+        Dataset format:
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add logs, error messages, or other relevant details. Remove sensitive information first.

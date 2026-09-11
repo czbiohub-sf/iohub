@@ -17,3 +17,8 @@ repos:
       - id: ruff-check
         args: [--fix]
       - id: ruff-format
+# GitHub Actions static analysis
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.26.1
+    hooks:
+      - id: zizmor

@@ -6,8 +6,9 @@ import multiprocessing as mp
 import os
 import warnings
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from fnmatch import fnmatchcase
 from functools import partial
 from pathlib import Path
 from typing import Any, Literal
@@ -18,6 +19,13 @@ from numpy.typing import DTypeLike, NDArray
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import open_ome_zarr
+from iohub.ngff._write_units import (
+    WriteUnit,
+    plan_write_unit,
+    progress_dir_for,
+    tracking_available,
+    unit_is_complete,
+)
 from iohub.ngff.nodes import TransformationMeta
 
 #: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
@@ -25,6 +33,33 @@ _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 
 #: zattrs keys owned by the OME-Zarr spec, excluded when copying custom metadata.
 _OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
+
+
+def _selected_metadata_keys(
+    source_attrs: Mapping[str, Any],
+    metadata_keys: str | Iterable[str] | None,
+) -> list[str]:
+    """Names of the source zattrs to copy to a destination position.
+
+    OME-owned keys are always excluded. When ``metadata_keys`` is None every
+    remaining key is selected; otherwise a key is selected only if it matches
+    at least one of the ``fnmatch`` patterns.
+
+    Patterns are shell globs rather than regexes: the strings callers actually
+    write, like ``"biahub-*"``, are also valid regexes that mean something
+    else, so reading them as regexes would silently select nothing instead of
+    raising. The iterable already supplies the alternation a regex would add.
+    ``fnmatchcase`` keeps matching case-sensitive on every platform, matching
+    how zattrs keys compare.
+    """
+    candidates = (k for k in source_attrs if k not in _OME_KEYS)
+    if metadata_keys is None:
+        return list(candidates)
+    if isinstance(metadata_keys, str):
+        patterns = [metadata_keys]
+    else:
+        patterns = list(metadata_keys)
+    return [k for k in candidates if any(fnmatchcase(k, p) for p in patterns)]
 
 
 def create_empty_plate(
@@ -38,6 +73,7 @@ def create_empty_plate(
     scale: tuple[float, ...] = (1, 1, 1, 1, 1),
     dtype: DTypeLike = np.float32,
     metadata_sources: Path | str | list[Path | str] | None = None,
+    metadata_keys: str | Iterable[str] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -78,15 +114,33 @@ def create_empty_plate(
         Data type of the plate. Defaults to np.float32.
     metadata_sources : Path or str or list of Path or str, optional
         Path(s) to one or more source HCS plates from which to copy
-        per-position metadata. When set, any custom (non-OME) zattrs
-        (e.g. provenance keys such as ``biahub-flat_field``) are transferred
-        from matching positions in the source plate(s). Metadata is only
-        transferred for newly created
+        per-position metadata. This and ``metadata_keys`` together define the
+        copy: ``metadata_sources`` is *where* metadata comes from,
+        ``metadata_keys`` is *which* of it is taken.
+        When set, custom (non-OME) zattrs (e.g. provenance keys such as
+        ``biahub-flat_field``) are transferred from matching positions in the
+        source plate(s). Metadata is only transferred for newly created
         positions, and a given zattrs key is only copied if it does not
         already exist on the destination position (so earlier sources take
         precedence over later ones). Coordinate transforms, axis definitions,
         and label references are **not** copied.
         Defaults to None (no metadata copy).
+    metadata_keys : str or iterable of str, optional
+        Case-sensitive shell-glob patterns (``fnmatch``, not regex) narrowing
+        which zattrs keys ``metadata_sources`` may contribute, e.g.
+        ``{"provenance-*", "acquisition"}``. A key is
+        copied only if it matches at least one pattern; OME-owned keys are
+        excluded either way. This only filters the sources, so it is
+        meaningless on its own: passing it without ``metadata_sources``
+        raises ``ValueError``.
+        Defaults to None (copy every non-OME key the sources provide).
+
+    Raises
+    ------
+    ValueError
+        If ``metadata_keys`` is given without ``metadata_sources``.
+    FileNotFoundError
+        If a ``metadata_sources`` plate root does not exist.
 
     Examples
     --------
@@ -129,6 +183,16 @@ def create_empty_plate(
     ...     metadata_sources=Path("/path/to/input.zarr"),
     ... )
 
+    Copy only the provenance keys, leaving a bulky instrument blob behind:
+    >>> create_empty_plate(
+    ...     store_path=Path("/path/to/output.zarr"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(1, 1, 256, 256, 256),
+    ...     metadata_sources=Path("/path/to/input.zarr"),
+    ...     metadata_keys={"provenance-*"},
+    ... )
+
     Notes
     -----
     - If `chunks` is not provided, a version-specific default is used (see
@@ -146,6 +210,12 @@ def create_empty_plate(
     # is wrong; missing individual positions within them are still skipped
     # gracefully in the loop below.
     if metadata_sources is None:
+        if metadata_keys is not None:
+            raise ValueError(
+                "metadata_keys filters what metadata_sources contributes, "
+                "so it selects nothing on its own. Pass metadata_sources, "
+                "or drop metadata_keys."
+            )
         metadata_sources = []
     elif isinstance(metadata_sources, (str, Path)):
         metadata_sources = [Path(metadata_sources)]
@@ -182,15 +252,24 @@ def create_empty_plate(
             # Only for newly created positions; pre-existing ones are left
             # as-is. A key is only copied if it is not already present on the
             # destination, so earlier sources take precedence over later ones.
+            #
+            # Collect across all sources first, then write once.
+            existing = dict(position.zattrs)
+            collected: dict[str, Any] = {}
             for source in metadata_sources:
+                # Only the open is guarded: a source that lacks this position
+                # is skipped, but a failure while reading one is a real error.
                 try:
                     src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
                 except FileNotFoundError:
                     continue
-                for k, v in dict(src_pos.zattrs).items():
-                    if k not in _OME_KEYS and k not in position.zattrs:
-                        position.zattrs[k] = v
-                src_pos.close()
+                with src_pos:
+                    src_attrs = dict(src_pos.zattrs)
+                for k in _selected_metadata_keys(src_attrs, metadata_keys):
+                    if k not in existing and k not in collected:
+                        collected[k] = src_attrs[k]
+            if collected:
+                position.zattrs.put({**existing, **collected})
         else:
             position = output_plate[position_key_string]
 
@@ -237,19 +316,78 @@ def _echo_finished(
         click.echo(f"Finished writing t={time_index}, c={channel_index}")
 
 
+def _contiguous_runs(indices: Sequence[int]) -> list[slice]:
+    """Split ``indices`` into maximal runs of consecutive values.
+
+    Returns slices *into* ``indices`` rather than the values themselves, so one
+    call carves up both an index list and the data written at those indices.
+    """
+    runs: list[slice] = []
+    start = 0
+    for position in range(1, len(indices) + 1):
+        if position == len(indices) or indices[position] != indices[position - 1] + 1:
+            runs.append(slice(start, position))
+            start = position
+    return runs
+
+
 def _save_transformed(
-    transformed: NDArray | list[NDArray] | None,
+    transformed: list[NDArray],
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
-    output_time_indices: int | list[int],
+    output_time_indices: list[int],
+    write_unit: WriteUnit | None = None,
 ) -> None:
+    """Write the transformed timepoints, one run of consecutive timepoints at a time.
+
+    The write has to be split because a *gapped* time selection is not
+    expressible as a slice, and a sharded write cannot be done without one:
+    the zarrs (Rust) codec pipeline rejects the selection with
+    ``DiscontiguousArrayError`` and falls back to a zarr-python path that
+    mismaps the value buffer onto the shard — indexing it with coordinates from
+    the shard's own space, which raises ``IndexError`` or, on a large array,
+    asks numpy for a preposterous allocation.
+
+    Gaps arise routinely once the output is sharded along T, because
+    `process_single_position` then batches a whole shard's worth of timepoints
+    into one write and `apply_transform_to_tczyx_and_save` drops the ones whose
+    input was
+    all zeros or NaNs from the middle of that batch. They also arise from a
+    caller asking for non-consecutive ``output_time_indices`` outright.
+    """
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
         arr = output_dataset.data
-        arr._impl.write_oindex(
-            arr.native,
-            (output_time_indices, output_channel_indices),
-            transformed,
+        if write_unit is not None:
+            write_unit.begin()
+        for run in _contiguous_runs(output_time_indices):
+            arr._impl.write_oindex(
+                arr.native,
+                (output_time_indices[run], output_channel_indices),
+                transformed[run],
+            )
+        if write_unit is not None:
+            write_unit.complete()
+
+
+def _plan_output_write(
+    output_position_path: Path,
+    output_channel_indices: list[int] | slice,
+    output_time_indices: list[int],
+    resume: bool,
+    resume_token: str,
+) -> tuple[WriteUnit | None, bool]:
+    """Describe the files this write owns, and whether it already finished."""
+    with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
+        unit = plan_write_unit(
+            output_dataset.data,
+            output_time_indices,
+            output_channel_indices,
+            token=resume_token,
+            progress_dir=progress_dir_for(output_position_path),
         )
+        if unit is None:
+            return None, False
+        return unit, bool(resume and unit_is_complete(unit, output_dataset.data))
 
 
 def apply_transform_to_tczyx_and_save(
@@ -260,12 +398,31 @@ def apply_transform_to_tczyx_and_save(
     output_channel_indices: list[int] | slice,
     input_time_indices: list[int] | slice,
     output_time_indices: list[int] | slice,
+    *,
+    resume: bool = False,
+    resume_token: str = "",
     **kwargs,
 ) -> None:
     """Load a TCZYX array from a position store.
 
     Apply a transformation and save the result.
+
+    When the write owns its output files outright (see
+    `iohub.ngff._write_units`) they are cleared before writing rather
+    than written over, and completion is recorded in a marker file. Pass
+    ``resume=True`` to skip a unit that a previous run already finished.
     """
+    unit, already_written = _plan_output_write(
+        output_position_path,
+        output_channel_indices,
+        _slice_to_list(output_time_indices),
+        resume,
+        resume_token,
+    )
+    if already_written:
+        click.echo(f"Skipping t={output_time_indices}, c={output_channel_indices}: already written")
+        return
+
     input_time_indices = _slice_to_list(input_time_indices)
     results = {}
     for i, input_time_index in enumerate(input_time_indices):
@@ -292,8 +449,19 @@ def apply_transform_to_tczyx_and_save(
             output_position_path=output_position_path,
             output_channel_indices=output_channel_indices,
             output_time_indices=output_time_indices,
+            write_unit=unit,
         )
         _echo_finished(input_time_indices, input_channel_indices, skipped=False)
+    elif unit is not None:
+        # Every timepoint was skipped, so there is nothing to write. Clear the
+        # unit's shards anyway, then record it as finished claiming none, so a
+        # re-run leaves what a fresh run would: a unit whose input has become
+        # all-zero must not keep serving an earlier run's output. Skipping the
+        # clear would make that outcome depend on whether a *sibling* timepoint
+        # in the same shard happened to produce data, since the writing branch
+        # clears unconditionally.
+        unit.begin()
+        unit.complete(wrote=False)
     del results
 
 
@@ -357,6 +525,8 @@ def process_single_position(
     output_time_indices: list[int] | None = None,
     num_workers: int = 1,
     use_threads: bool = False,
+    resume: bool = False,
+    resume_token: str = "",
     **kwargs,
 ) -> None:
     """
@@ -404,6 +574,19 @@ def process_single_position(
         If True, parallelize across threads via ``ThreadPoolExecutor``;
         otherwise spawn worker processes via ``ProcessPoolExecutor``.
         Defaults to False.
+    resume : bool, optional
+        If True, skip shard-aligned ``(time, channel)`` units that a previous
+        run already finished, as recorded by the markers described in
+        `iohub.ngff._write_units`. Intended for retrying a run that was
+        interrupted, for example by Slurm preemption. Leave False when
+        re-running with changed inputs or settings,
+        since a finished unit is skipped without checking whether it would
+        now produce different data. Defaults to False.
+    resume_token : str, optional
+        Fingerprint of whatever determines the output, typically the resolved
+        settings of the calling step. Mixed into each unit's identity so that
+        ``resume=True`` after a parameter change recomputes rather than
+        skipping work that would now produce different data. Defaults to "".
     kwargs : dict, optional
         Additional arguments to pass to the function.
         An ``extra_metadata`` kwarg (a dict) can be passed to record per-step
@@ -428,6 +611,12 @@ def process_single_position(
         input_data_shape = input_dataset.data.shape
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
         output_shards = output_dataset.data.shards
+        if resume and not tracking_available(output_dataset.data):
+            warnings.warn(
+                f"resume=True was requested but progress cannot be tracked for {output_position_path}, "
+                "so every unit will be recomputed. Tracking requires a local Zarr v3 (OME-Zarr v0.5) store.",
+                stacklevel=2,
+            )
 
     # Process time indices
     if input_time_indices is None:
@@ -505,6 +694,8 @@ def process_single_position(
         func,
         input_position_path,
         output_position_path,
+        resume=resume,
+        resume_token=resume_token,
         **kwargs,
     )
     num_workers = min(num_workers, len(flat_iterable), _available_cpus())

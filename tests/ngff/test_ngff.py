@@ -34,6 +34,7 @@ from iohub.ngff.nodes import (
     Plate,
     Position,
     TransformationMeta,
+    Well,
     _case_insensitive_local_fs,
     _open_store,
     _scale_dims,
@@ -514,6 +515,25 @@ def test_position_data(channels_and_random_5d, arr_name, version):
     with pytest.raises(KeyError):
         with _temp_ome_zarr(random_5d, channel_names, arr_name, version=version) as dataset:
             _ = dataset.data
+
+
+def test_getitem_returns_existing_empty_group():
+    """`NGFFNode.__getitem__` returns an existing but empty group.
+
+    The container branch used ``if not znode`` on a ``zarr.Group``, which has
+    ``__len__`` but no ``__bool__``, so an empty group's zero member count
+    raised a spurious ``KeyError`` (and every open paid a ``nmembers()``
+    listing). The check must be ``is None``: an existing empty well is returned,
+    while a genuinely missing key still raises.
+    """
+    image = np.zeros((1, 1, 1, 2, 2), dtype=np.uint16)
+    with _temp_ome_zarr_plate(image, ["a"], "0", [("A", "1", "0")], version="0.5") as dataset:
+        dataset.create_well("A", "2")  # existing well, no positions yet
+        node = dataset["A/2"]
+        assert isinstance(node, Well)  # returned and correctly typed
+        assert list(node) == []  # empty but usable
+        with pytest.raises(KeyError):
+            dataset["Z/9"]  # genuinely missing
 
 
 @given(
@@ -1730,6 +1750,74 @@ def test_compute_pyramid(tmp_path, implementation):
         # Changing levels without delete raises error
         with pytest.raises(ValueError, match="delete_pyramid"):
             pos.compute_pyramid(levels=2, method="mean")
+
+
+def test_downsample_block_odd_axis():
+    """downsample_block edge-pads a trailing partial block instead of trimming.
+
+    Regression for a bug in which ``downsample_block`` trimmed the last
+    partial block on an odd-sized axis, producing an output one column
+    shorter than the pyramid level allocated by ``initialize_pyramid``
+    (which uses ceiling division).
+    """
+    from iohub.core.downsample import downsample_block
+
+    data = np.arange(21, dtype=np.float32).reshape(1, 21)  # ramp along X
+    out = downsample_block(data, [1, 2], "mean")
+
+    assert out.shape == (1, 11)
+    assert out[0, 0] == 0.5  # mean(0, 1)
+    assert out[0, 1] == 2.5  # mean(2, 3)
+    # Last bin pools the trailing single column [20] with an edge-pad
+    # copy of itself, so the result is 20.0 rather than missing (old
+    # trim behaviour) or 10.0 (the original "left half only" bug).
+    assert out[0, -1] == 20.0
+
+
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
+def test_compute_pyramid_odd_axis(tmp_path, implementation):
+    """Regression: pyramid mean-pool covers the full extent of an odd source axis.
+
+    The zarr-python backend (and zarrs-python, which subclasses it)
+    previously recomputed a per-region "local factor" from
+    ``src_size // tgt_size`` inside ``downsample_region``. When the source
+    axis was odd (for example X=21 -> target L1 X=11), floor division
+    collapsed the X factor from 2 to 1, so the downsampled block kept its
+    full X resolution and zarr-python truncated the assignment to the
+    leading ``tgt_size`` columns. The second half of the axis was silently
+    discarded. This test puts a strictly increasing ramp along X and asserts
+    that the last L1 column tracks the last L0 column rather than capping at
+    the L0 midpoint.
+
+    tensorstore uses its own native ``ts.downsample`` path (never had the
+    bug), but is parametrized here because it is the primary pyramiding
+    backend and must hold the same odd-axis contract.
+    """
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
+    store_path = tmp_path / "test_pyramid_odd_x.zarr"
+
+    Z, Y, X = 4, 6, 21  # Y even, X odd; only X exposes the bug
+    ramp = np.arange(X, dtype=np.float32).reshape(1, 1, 1, 1, X)
+    data = np.broadcast_to(ramp, (1, 1, Z, Y, X)).copy()
+
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch0"],
+        implementation=implementation,
+    ) as pos:
+        pos.create_image("0", data)
+        pos.compute_pyramid(levels=2, method="mean", dims={"y", "x"})
+        L1 = np.asarray(pos["1"][:])
+
+    assert L1.shape == (1, 1, Z, 3, 11)
+    # First L1 X column averages L0 X=0,1 -> 0.5; last averages the
+    # trailing X=20 with an edge-pad copy of itself -> 20.0. The bug
+    # would put the L0 midpoint (~10) in the last column.
+    assert L1[..., 0].mean() == pytest.approx(0.5)
+    assert L1[..., -1].mean() == pytest.approx(20.0)
 
 
 @pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])

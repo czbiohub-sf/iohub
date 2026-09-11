@@ -8,7 +8,7 @@ description = "N-dimensional bioimaging data I/O with OME metadata in Python"
 authors = [
     {name = "Biohub and iohub contributors", email = "iohub@czbiohub.org"},
 ]
-license = {file = "LICENSE"}
+license = {file = "LICENSE.md"}
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
@@ -29,13 +29,14 @@ dependencies = [
     "pandas>=2",
     "pydantic>=2.8.2",
     "pydantic_extra_types>=2.9.0",
-    "tifffile>=2025.5.21",
+    "tifffile>=2026.5.2",
     "natsort>=8.4.0",
     "ndtiff>=2.2.1",
+    "nd2>=0.10.1",
     "zarr>=3.1.6",
     "rich",
     "tqdm",
-    "pillow>=9.4.0",
+    "pillow>=12.3.0",
     "blosc2",
     "xarray>=2024.1.1",
     "dask[array]",
@@ -76,8 +77,10 @@ acquire-zarr = [
     "acquire-zarr",
 ]
 doc = [
-    "zensical>=0.0.31",
-    "mkdocstrings-python>=2.0.2",
+    "zensical>=0.0.57",
+    "mkdocstrings-python>=2.0.8",
+    "pymdown-extensions>=11.0.2",
+    "ruff>=0.16.5",
     "mike",
     "mkdocs-typer2[zensical]>=0.4.1",
 ]
