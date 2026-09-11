@@ -12,13 +12,13 @@
         <meta name="author" content="Computational Imaging @ Biohub">
       
       
-        <link rel="canonical" href="https://czbiohub-sf.github.io/iohub/dev/cli/">
+        <link rel="canonical" href="https://czbiohub-sf.github.io/iohub/dev/greedy-cli-options/">
       
       
-        <link rel="prev" href="../getting_started/">
+        <link rel="prev" href="../cli/">
       
       
-        <link rel="next" href="../greedy-cli-options/">
+        <link rel="next" href="../examples/">
       
       
         
@@ -29,7 +29,7 @@
     
     
       
-        <title>CLI reference - iohub</title>
+        <title>Options with multiple values - iohub</title>
       
     
     
@@ -85,7 +85,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cli-reference" class="md-skip">
+        <a href="#options-with-multiple-values" class="md-skip">
           Skip to content
         </a>
       
@@ -124,7 +124,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              CLI reference
+              Options with multiple values
             
           </span>
         </div>
@@ -291,6 +291,32 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  CLI reference
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -310,7 +336,7 @@
   <span class="md-ellipsis">
     
   
-  CLI reference
+  Options with multiple values
 
     
   </span>
@@ -327,7 +353,7 @@
   <span class="md-ellipsis">
     
   
-  CLI reference
+  Options with multiple values
 
     
   </span>
@@ -353,10 +379,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#selecting-input-positions" class="md-nav__link">
+  <a href="#reuse-iohubs-position-option" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Selecting input positions
+        Reuse iohub's position option
       </span>
     </span>
   </a>
@@ -364,10 +390,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#commands" class="md-nav__link">
+  <a href="#define-another-option" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Commands
+        Define another option
       </span>
     </span>
   </a>
@@ -378,32 +404,6 @@
   
 </nav>
       
-    </li>
-  
-
-    
-      
-      
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../greedy-cli-options/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    
-  
-  Options with multiple values
-
-    
-  </span>
-  
-  
-
-      </a>
     </li>
   
 
@@ -1000,10 +1000,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#selecting-input-positions" class="md-nav__link">
+  <a href="#reuse-iohubs-position-option" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Selecting input positions
+        Reuse iohub's position option
       </span>
     </span>
   </a>
@@ -1011,10 +1011,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#commands" class="md-nav__link">
+  <a href="#define-another-option" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        Commands
+        Define another option
       </span>
     </span>
   </a>
@@ -1048,339 +1048,84 @@
     
       
     
-    <a href="https://github.com/czbiohub-sf/iohub/raw/master/docs/cli.md" title="View source of this page" class="md-content__button md-icon">
+    <a href="https://github.com/czbiohub-sf/iohub/raw/master/docs/greedy-cli-options.md" title="View source of this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-file-code-2" viewBox="0 0 24 24"><path d="M4 12.15V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-3.35"/><path d="M14 2v5a1 1 0 0 0 1 1h5M5 16l-3 3 3 3M9 22l3-3-3-3"/></svg>
     </a>
   
 
 
-<h1 id="cli-reference">CLI reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h1>
-<h2 id="selecting-input-positions">Selecting input positions<a class="headerlink" href="#selecting-input-positions" title="Permanent link">&para;</a></h2>
-<p><code>set-scale</code> and <code>compute-pyramid</code> accept position paths, plate roots, and glob
-patterns with <code>-i</code> or <code>--input-position-dirpaths</code>. A plate root selects every
-position in the plate. One <code>-i</code> accepts multiple paths, up to the next option.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># All positions in a plate</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>iohub<span class="w"> </span>compute-pyramid<span class="w"> </span>-i<span class="w"> </span>input.zarr<span class="w"> </span>--levels<span class="w"> </span><span class="m">4</span>
+<h1 id="options-with-multiple-values">Options with multiple values<a class="headerlink" href="#options-with-multiple-values" title="Permanent link">&para;</a></h1>
+<p><code>OptionEatAll</code> lets a Typer list option accept several values after one flag.
+It stops at the next option. For example, <code>-i a b c -v</code> passes <code>a</code>, <code>b</code>, and <code>c</code>
+to <code>-i</code> and leaves <code>-v</code> as a separate option.</p>
+<h2 id="reuse-iohubs-position-option">Reuse iohub's position option<a class="headerlink" href="#reuse-iohubs-position-option" title="Permanent link">&para;</a></h2>
+<p>Save this as <code>positions.py</code>. The callback keeps the app a command group even
+when it has only one command.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">import</span><span class="w"> </span><span class="nn">typer</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typer.main</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_command</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Positions matching a glob</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>iohub<span class="w"> </span>compute-pyramid<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;input.zarr/A/*/*&#39;</span><span class="w"> </span>--levels<span class="w"> </span><span class="m">4</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># Two specific positions</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>iohub<span class="w"> </span>set-scale<span class="w"> </span>-i<span class="w"> </span>input.zarr/A/1/0<span class="w"> </span>input.zarr/B/2/0<span class="w"> </span>-z<span class="w"> </span><span class="m">2</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">iohub.cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">InputPositionDirpaths</span><span class="p">,</span> <span class="n">expand_position_dirpaths</span><span class="p">,</span> <span class="n">install_eat_all_positions</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="n">app</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Typer</span><span class="p">()</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="nd">@app</span><span class="o">.</span><span class="n">callback</span><span class="p">()</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">():</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;List OME-Zarr positions.&quot;&quot;&quot;</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="nd">@app</span><span class="o">.</span><span class="n">command</span><span class="p">()</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="k">def</span><span class="w"> </span><span class="nf">process</span><span class="p">(</span><span class="n">input_position_dirpaths</span><span class="p">:</span> <span class="n">InputPositionDirpaths</span><span class="p">):</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="k">for</span> <span class="n">position</span> <span class="ow">in</span> <span class="n">expand_position_dirpaths</span><span class="p">(</span><span class="n">input_position_dirpaths</span><span class="p">):</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="n">typer</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="n">cli</span> <span class="o">=</span> <span class="n">get_command</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="n">install_eat_all_positions</span><span class="p">(</span><span class="n">cli</span><span class="p">)</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">cli</span><span class="p">()</span>
 </span></code></pre></div>
-<p>iohub expands quoted globs. Your shell expands unquoted ones.</p>
-<p>To use these options in another Typer CLI, see
-<a href="../greedy-cli-options/">Options with multiple values</a>.</p>
-<h2 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h2>
-<div class="typer-docs">
-<h1 id="iohub">iohub<a class="headerlink" href="#iohub" title="Permanent link">&para;</a></h1>
-<p>iohub: N-dimensional bioimaging I/O</p>
-<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
-<p><code>iohub [OPTIONS] COMMAND [ARGS]...</code></p>
-<h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">&para;</a></h2>
-<p><em>No arguments available</em></p>
-<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-<th>Required</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>-v, --version</code></td>
-<td>Show the iohub version and exit.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>--install-completion</code></td>
-<td>Install completion for the current shell.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>--show-completion</code></td>
-<td>Show completion for the current shell, to copy it or customize the installation.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-</tbody>
-</table>
-<h2 id="commands_1">Commands<a class="headerlink" href="#commands_1" title="Permanent link">&para;</a></h2>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>info</code></td>
-<td>Show dataset metadata.</td>
-</tr>
-<tr>
-<td><code>convert</code></td>
-<td>Convert Micro-Manager TIFF to OME-Zarr, or...</td>
-</tr>
-<tr>
-<td><code>set-scale</code></td>
-<td>Update axis scale metadata in OME-Zarr...</td>
-</tr>
-<tr>
-<td><code>compute-pyramid</code></td>
-<td>Create or recompute an OME-Zarr pyramid in...</td>
-</tr>
-<tr>
-<td><code>rename-wells</code></td>
-<td>Rename wells in an OME-Zarr plate.</td>
-</tr>
-</tbody>
-</table>
-<h2 id="subcommands">Subcommands<a class="headerlink" href="#subcommands" title="Permanent link">&para;</a></h2>
-<h3 id="info">info<a class="headerlink" href="#info" title="Permanent link">&para;</a></h3>
-<p>Show dataset metadata.</p>
-<p>Accepts Micro-Manager OME-TIFF and NDTIFF datasets, OME-Zarr 0.4 and 0.5
-directories, and zipped OME-Zarr archives with the .ozx extension.</p>
-<h4 id="usage_1">Usage<a class="headerlink" href="#usage_1" title="Permanent link">&para;</a></h4>
-<p><code>iohub info [OPTIONS] {files}...</code></p>
-<h4 id="arguments_1">Arguments<a class="headerlink" href="#arguments_1" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-<th>Required</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>files</code></td>
-<td>One or more datasets to inspect.</td>
-<td>Yes</td>
-</tr>
-</tbody>
-</table>
-<h4 id="options_1">Options<a class="headerlink" href="#options_1" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-<th>Required</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>-v, --verbose</code></td>
-<td>Show Python usage examples and the full OME-Zarr plate tree.</td>
-<td>No</td>
-<td><code>False</code></td>
-</tr>
-</tbody>
-</table>
-<h3 id="convert">convert<a class="headerlink" href="#convert" title="Permanent link">&para;</a></h3>
-<p>Convert Micro-Manager TIFF to OME-Zarr, or pack and unpack .ozx archives.</p>
-<p>An .ozx output packs an OME-Zarr directory without changing its chunks.
-An .ozx input unpacks to a directory. Other inputs use the TIFF converter.</p>
-<p>--grid-layout and --chunks apply only to TIFF conversion.
---ome-zarr-version does not apply when unpacking.</p>
-<h4 id="usage_2">Usage<a class="headerlink" href="#usage_2" title="Permanent link">&para;</a></h4>
-<p><code>iohub convert [OPTIONS]</code></p>
-<h4 id="arguments_2">Arguments<a class="headerlink" href="#arguments_2" title="Permanent link">&para;</a></h4>
-<p><em>No arguments available</em></p>
-<h4 id="options_2">Options<a class="headerlink" href="#options_2" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-<th>Required</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>-i, --input <path></code></td>
-<td>Micro-Manager TIFF directory, OME-Zarr directory, or .ozx archive.</td>
-<td>Yes</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-o, --output <path></code></td>
-<td>Output OME-Zarr directory or .ozx archive.</td>
-<td>Yes</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-g, --grid-layout</code></td>
-<td>Arrange fields of view in a row/column grid. TIFF conversion only.</td>
-<td>No</td>
-<td><code>False</code></td>
-</tr>
-<tr>
-<td><code>-c, --chunks <str></code></td>
-<td>Chunk shape as 'XY', 'XYZ', or a tuple. 'XYZ' caps chunks at 500 MB. TIFF conversion only.</td>
-<td>No</td>
-<td><code>XYZ</code></td>
-</tr>
-<tr>
-<td><code>--ome-zarr-version, -v [0.4|0.5]</code></td>
-<td>OME-NGFF version. Defaults to 0.4 for TIFF conversion or the source version when packing .ozx.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="set-scale">set-scale<a class="headerlink" href="#set-scale" title="Permanent link">&para;</a></h3>
-<p>Update axis scale metadata in OME-Zarr positions.</p>
-<p>Omitted axes keep their current scales. Image data is unchanged.</p>
-<p>Example:</p>
-<p>iohub set-scale -i input.zarr/A/1/0 -z 2.0</p>
-<h4 id="usage_3">Usage<a class="headerlink" href="#usage_3" title="Permanent link">&para;</a></h4>
-<p><code>iohub set-scale [OPTIONS]</code></p>
-<h4 id="arguments_3">Arguments<a class="headerlink" href="#arguments_3" title="Permanent link">&para;</a></h4>
-<p><em>No arguments available</em></p>
-<h4 id="options_3">Options<a class="headerlink" href="#options_3" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-<th>Required</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>-i, --input-position-dirpaths <str></code></td>
-<td>Position paths, plate roots, or globs. A plate root selects all positions. One -i accepts multiple paths, up to the next option.</td>
-<td>Yes</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-t, --t-scale <float></code></td>
-<td>New time-axis scale.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-z, --z-scale <float></code></td>
-<td>New z-axis scale.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-y, --y-scale <float></code></td>
-<td>New y-axis scale.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-x, --x-scale <float></code></td>
-<td>New x-axis scale.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>--image <str></code></td>
-<td>Image to update. Defaults to '0'.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="compute-pyramid">compute-pyramid<a class="headerlink" href="#compute-pyramid" title="Permanent link">&para;</a></h3>
-<p>Create or recompute an OME-Zarr pyramid in place.</p>
-<p>Level 0 is unchanged. Existing pyramids must have the requested number
-of levels. Recomputing overwrites the downsampled levels.</p>
-<p>Example:</p>
-<p>iohub compute-pyramid -i input.zarr -l 3 -m median --dims y,x</p>
-<h4 id="usage_4">Usage<a class="headerlink" href="#usage_4" title="Permanent link">&para;</a></h4>
-<p><code>iohub compute-pyramid [OPTIONS]</code></p>
-<h4 id="arguments_4">Arguments<a class="headerlink" href="#arguments_4" title="Permanent link">&para;</a></h4>
-<p><em>No arguments available</em></p>
-<h4 id="options_4">Options<a class="headerlink" href="#options_4" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-<th>Required</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>-i, --input-position-dirpaths <str></code></td>
-<td>Position paths, plate roots, or globs. A plate root selects all positions. One -i accepts multiple paths, up to the next option.</td>
-<td>Yes</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-l, --levels <int range></code></td>
-<td>Total number of levels, including the original level 0.</td>
-<td>Yes</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>--method, -m [mean|median|mode|min|max|stride]</code></td>
-<td>Downsampling method.</td>
-<td>No</td>
-<td><code>mean</code></td>
-</tr>
-<tr>
-<td><code>-d, --dims <str></code></td>
-<td>Comma-separated axes for a new pyramid, such as 'y,x'. Defaults to 'z,y,x'.</td>
-<td>No</td>
-<td>-</td>
-</tr>
-</tbody>
-</table>
-<h3 id="rename-wells">rename-wells<a class="headerlink" href="#rename-wells" title="Permanent link">&para;</a></h3>
-<p>Rename wells in an OME-Zarr plate.</p>
-<p>Use a CSV with two columns, old name then new name, and no header:</p>
-<div class="language-text highlight"><pre><span></span><code>A/1,B/1
-A/2,B/2
-</code></pre></div>
-<p>Example:</p>
-<p>iohub rename-wells -i plate.zarr -c names.csv</p>
-<h4 id="usage_5">Usage<a class="headerlink" href="#usage_5" title="Permanent link">&para;</a></h4>
-<p><code>iohub rename-wells [OPTIONS]</code></p>
-<h4 id="arguments_5">Arguments<a class="headerlink" href="#arguments_5" title="Permanent link">&para;</a></h4>
-<p><em>No arguments available</em></p>
-<h4 id="options_5">Options<a class="headerlink" href="#options_5" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Name</th>
-<th>Description</th>
-<th>Required</th>
-<th>Default</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>-i, --input <path></code></td>
-<td>OME-Zarr plate directory.</td>
-<td>Yes</td>
-<td>-</td>
-</tr>
-<tr>
-<td><code>-c, --csv <file></code></td>
-<td>CSV file mapping old well names to new names.</td>
-<td>Yes</td>
-<td>-</td>
-</tr>
-</tbody>
-</table>
-</div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python<span class="w"> </span>positions.py<span class="w"> </span>process<span class="w"> </span>-i<span class="w"> </span>input.zarr
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>python<span class="w"> </span>positions.py<span class="w"> </span>process<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;input.zarr/A/*/*&#39;</span>
+</span></code></pre></div>
+<p><code>expand_position_dirpaths</code> expands plate roots and globs, skips file matches,
+and raises <code>typer.BadParameter</code> if no directories match.
+<code>install_eat_all_positions</code> updates the group's immediate commands. It looks
+for the parameter name <code>input_position_dirpaths</code>, so keep that name in your
+command.</p>
+<h2 id="define-another-option">Define another option<a class="headerlink" href="#define-another-option" title="Permanent link">&para;</a></h2>
+<p>Typer does not expose an option-class argument. Apply <code>OptionEatAll</code> after
+<code>get_command</code> builds the command. Use it only with list options.</p>
+<p>Save this single-command example as <code>files.py</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">typer</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typer.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">TyperOption</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typer.main</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_command</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">iohub.cli</span><span class="w"> </span><span class="kn">import</span> <span class="n">OptionEatAll</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">app</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Typer</span><span class="p">()</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="nd">@app</span><span class="o">.</span><span class="n">command</span><span class="p">()</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="n">files</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">typer</span><span class="o">.</span><span class="n">Option</span><span class="p">(</span><span class="s2">&quot;-f&quot;</span><span class="p">,</span> <span class="s2">&quot;--files&quot;</span><span class="p">)]):</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">typer</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="n">files</span><span class="p">)</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">cli</span> <span class="o">=</span> <span class="n">get_command</span><span class="p">(</span><span class="n">app</span><span class="p">)</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="k">for</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">cli</span><span class="o">.</span><span class="n">params</span><span class="p">:</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">param</span><span class="p">,</span> <span class="n">TyperOption</span><span class="p">)</span> <span class="ow">and</span> <span class="n">param</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;files&quot;</span><span class="p">:</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>        <span class="n">param</span><span class="o">.</span><span class="vm">__class__</span> <span class="o">=</span> <span class="n">OptionEatAll</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="n">cli</span><span class="p">()</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>python<span class="w"> </span>files.py<span class="w"> </span>-f<span class="w"> </span>a<span class="w"> </span>b<span class="w"> </span>c
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># [&#39;a&#39;, &#39;b&#39;, &#39;c&#39;]</span>
+</span></code></pre></div>
 
 
 
@@ -1420,7 +1165,7 @@ A/2,B/2
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../getting_started/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Getting Started">
+          <a href="../cli/" class="md-footer__link md-footer__link--prev" aria-label="Previous: CLI reference">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7M19 12H5"/></svg>
@@ -1430,20 +1175,20 @@ A/2,B/2
                 Previous
               </span>
               <div class="md-ellipsis">
-                Getting Started
+                CLI reference
               </div>
             </div>
           </a>
         
         
           
-          <a href="../greedy-cli-options/" class="md-footer__link md-footer__link--next" aria-label="Next: Options with multiple values">
+          <a href="../examples/" class="md-footer__link md-footer__link--next" aria-label="Next: Examples">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                Options with multiple values
+                Examples
               </div>
             </div>
             <div class="md-footer__button md-icon">
