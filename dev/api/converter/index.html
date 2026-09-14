@@ -882,6 +882,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Performance
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scheduling-across-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Scheduling across jobs
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#python" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -904,6 +932,50 @@
   
     <nav class="md-nav" aria-label="TIFFConverter">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.slabs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;slabs
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.init_store" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;init_store
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.convert" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;convert
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.finalize" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;finalize
+      </span>
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#iohub.convert.TIFFConverter.__call__" class="md-nav__link">
@@ -1047,6 +1119,34 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Performance
+      </span>
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Performance">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scheduling-across-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Scheduling across jobs
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#python" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -1069,6 +1169,50 @@
   
     <nav class="md-nav" aria-label="TIFFConverter">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.slabs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;slabs
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.init_store" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;init_store
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.convert" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;convert
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.convert.TIFFConverter.finalize" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;finalize
+      </span>
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#iohub.convert.TIFFConverter.__call__" class="md-nav__link">
@@ -1197,6 +1341,26 @@ See the <a href="../../cli/">CLI Reference</a> or run <code>iohub convert --help
 <li>Micro-Manager NDTiff</li>
 <li>Nikon ND2</li>
 </ul>
+<h2 id="performance">Performance<a class="headerlink" href="#performance" title="Permanent link">&para;</a></h2>
+<p>Pixels are copied by a pool of worker threads (<code>num_workers</code>, default 4). Each
+worker converts one <em>frame slab</em> — a block of whole 2D frames of one FOV, bounded in
+T, C and Z.</p>
+<p>NDTiff v3 datasets are read directly from the byte offsets in <code>NDTiff.index</code>
+(one contiguous read per volume, <code>O_DIRECT</code> where the filesystem allows it, plane
+metadata decoded from the same bytes), so throughput scales with <code>num_workers</code>
+until the storage saturates; on network filesystems 16 workers is a good setting.
+Other formats are read through their reader one slab at a time.</p>
+<h3 id="scheduling-across-jobs">Scheduling across jobs<a class="headerlink" href="#scheduling-across-jobs" title="Permanent link">&para;</a></h3>
+<p>Work items are independent and enumerated deterministically, so a scheduler can
+split a conversion across processes or cluster jobs:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">converter</span> <span class="o">=</span> <span class="n">TIFFConverter</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;0.5&quot;</span><span class="p">)</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">converter</span><span class="o">.</span><span class="n">init_store</span><span class="p">()</span>          <span class="c1"># once</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">converter</span><span class="o">.</span><span class="n">slabs</span><span class="p">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># in each job k of K (fresh TIFFConverter per job):</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">TIFFConverter</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;0.5&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="n">n</span> <span class="o">*</span> <span class="n">k</span> <span class="o">//</span> <span class="n">K</span><span class="p">,</span> <span class="n">n</span> <span class="o">*</span> <span class="p">(</span><span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="n">K</span><span class="p">))</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="c1"># once, after every job finished:</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="n">TIFFConverter</span><span class="p">(</span><span class="n">src</span><span class="p">,</span> <span class="n">dst</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;0.5&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">finalize</span><span class="p">()</span>
+</span></code></pre></div>
 <h2 id="python">Python<a class="headerlink" href="#python" title="Permanent link">&para;</a></h2>
 
 
@@ -1217,7 +1381,8 @@ See the <a href="../../cli/">CLI Reference</a> or run <code>iohub convert --help
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">hcs_plate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">version</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;0.4&quot;</span><span class="p">,</span> <span class="s2">&quot;0.5&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;0.4&quot;</span><span class="p">,</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">implementation</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">num_workers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">DEFAULT_NUM_WORKERS</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1306,6 +1471,19 @@ None (default) uses zarr-python. Pass "tensorstore"
 to write via TensorStore (requires the optional tensorstore dependency).</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>num_workers</code></b>
+              (<code><span title="int">int</span></code>, default:
+                  <code><span title="iohub.convert.DEFAULT_NUM_WORKERS">DEFAULT_NUM_WORKERS</span></code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Threads copying pixels concurrently, by default 4. Each in-flight slab holds
+a few times its size in memory (~150 MB slabs -&gt; ~600 MB per worker).
+NDTiff datasets are read with byte-range I/O and scale with workers; other
+formats are read through their reader serially.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -1314,6 +1492,10 @@ to write via TensorStore (requires the optional tensorstore dependency).</p>
   <p>The image plane metadata for each FOV is aggregated into a JSON file,
 and placed under the Zarr array directory
 (e.g. <code>/row/column/fov/0/image_plane_metadata.json</code>).</p>
+<p>Conversion is a list of independent :class:<code>FrameSlab</code> (blocks of whole frames of
+one FOV). <code>converter()</code> runs everything; schedulers may instead call
+:meth:<code>init_store</code> once, :meth:<code>convert</code> on disjoint slab slices in separate
+processes or jobs, then :meth:<code>finalize</code> once.</p>
 </details>
 
 
@@ -1333,8 +1515,97 @@ and placed under the Zarr array directory
 
 
 
+<div class="doc doc-object doc-attribute">
 
 
+
+<h4 id="iohub.convert.TIFFConverter.slabs" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-attribute"></code>            <span class="doc doc-object-name doc-attribute-name">slabs</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-cached"><code>cached</code></small>
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#iohub.convert.TIFFConverter.slabs" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">slabs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">FrameSlab</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>All slabs, in reader order; deterministic for a given dataset and chunking.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="iohub.convert.TIFFConverter.init_store" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">init_store</span>
+
+
+<a href="#iohub.convert.TIFFConverter.init_store" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">init_store</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Create the OME-Zarr store, positions, empty arrays and root attributes. Run once.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="iohub.convert.TIFFConverter.convert" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">convert</span>
+
+
+<a href="#iohub.convert.TIFFConverter.convert" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">convert</span><span class="p">(</span><span class="n">slabs</span><span class="p">:</span> <span class="nb">slice</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Copy pixels (and plane metadata) for <code>slabs</code> into an existing store.</p>
+<p>With <code>slabs=None</code> every slab is converted and each FOV's plane metadata is
+written when its last slab lands. With a slice, metadata is written as a part
+file for :meth:<code>finalize</code> to merge, so disjoint slices may run in different
+processes or jobs concurrently.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h4 id="iohub.convert.TIFFConverter.finalize" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">finalize</span>
+
+
+<a href="#iohub.convert.TIFFConverter.finalize" class="headerlink" title="Permanent link">&para;</a></h4>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">finalize</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Merge plane metadata parts written by sliced :meth:<code>convert</code> runs. Run once, after all slices.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

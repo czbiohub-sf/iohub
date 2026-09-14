@@ -943,6 +943,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#iohub.mmstack.MMStack.frame_locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;frame_locations
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1076,6 +1087,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#iohub.ndtiff.NDTiffDataset.frame_locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;frame_locations
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1159,6 +1181,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hcs_position_labels
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.nd2.ND2Dataset.frame_locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;frame_locations
       </span>
     </span>
   </a>
@@ -1550,6 +1583,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#iohub.mmstack.MMStack.frame_locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;frame_locations
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1683,6 +1727,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#iohub.ndtiff.NDTiffDataset.frame_locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;frame_locations
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1766,6 +1821,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         <code class="doc-symbol doc-symbol-toc doc-symbol-attribute"></code>&nbsp;hcs_position_labels
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.nd2.ND2Dataset.frame_locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;frame_locations
       </span>
     </span>
   </a>
@@ -2288,6 +2354,40 @@ components in a uniform format.</p>
 
 </div>
 
+<div class="doc doc-object doc-function">
+
+
+<h3 id="iohub.mmstack.MMStack.frame_locations" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">frame_locations</span>
+
+
+<a href="#iohub.mmstack.MMStack.frame_locations" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">frame_locations</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">FrameLocation</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Yield the on-disk location of every stored frame, when the format allows byte-range reads.</p>
+<p>Readers whose frames are contiguous and uncompressed override this so a converter
+can copy pixels without going through the array interface. The default declines.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="NotImplementedError">NotImplementedError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>When this reader (or this particular dataset) has no byte-range representation.</p>
+          </div>
+        </li>
+    </ul>
+
+
+    </div>
+
+</div>
+
 
 
   </div>
@@ -2657,6 +2757,42 @@ components in a uniform format.</p>
 
 </div>
 
+<div class="doc doc-object doc-function">
+
+
+<h3 id="iohub.ndtiff.NDTiffDataset.frame_locations" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">frame_locations</span>
+
+
+<a href="#iohub.ndtiff.NDTiffDataset.frame_locations" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">frame_locations</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">FrameLocation</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Yield the on-disk location of every stored frame, from the already-parsed NDTiff index.</p>
+<p>Enables copying pixels with plain byte-range reads instead of <code>read_image</code>.
+Indices follow the same axis ordering as :attr:<code>xdata</code> (rank within each sorted
+axis); the FOV key is the same string used by :meth:<code>__getitem__</code>.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="NotImplementedError">NotImplementedError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>For datasets older than NDTiff v3, RGB or compressed frames, or frames whose
+shape/dtype differ from the dataset's; callers should fall back to array access.</p>
+          </div>
+        </li>
+    </ul>
+
+
+    </div>
+
+</div>
+
 
 
   </div>
@@ -2890,6 +3026,40 @@ components in a uniform format.</p>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="iohub.nd2.ND2Dataset.frame_locations" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">frame_locations</span>
+
+
+<a href="#iohub.nd2.ND2Dataset.frame_locations" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">frame_locations</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">FrameLocation</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Yield the on-disk location of every stored frame, when the format allows byte-range reads.</p>
+<p>Readers whose frames are contiguous and uncompressed override this so a converter
+can copy pixels without going through the array interface. The default declines.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="NotImplementedError">NotImplementedError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>When this reader (or this particular dataset) has no byte-range representation.</p>
+          </div>
+        </li>
+    </ul>
+
+
+    </div>
+
+</div>
 
 
 

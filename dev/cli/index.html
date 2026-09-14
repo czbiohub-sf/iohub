@@ -1189,7 +1189,7 @@ directories, and zipped OME-Zarr archives with the .ozx extension.</p>
 <p>Convert Micro-Manager TIFF to OME-Zarr, or pack and unpack .ozx archives.</p>
 <p>An .ozx output packs an OME-Zarr directory without changing its chunks.
 An .ozx input unpacks to a directory. Other inputs use the TIFF converter.</p>
-<p>--grid-layout and --chunks apply only to TIFF conversion.
+<p>--grid-layout, --chunks, and --num-workers apply only to TIFF conversion.
 --ome-zarr-version does not apply when unpacking.</p>
 <h4 id="usage_2">Usage<a class="headerlink" href="#usage_2" title="Permanent link">&para;</a></h4>
 <p><code>iohub convert [OPTIONS]</code></p>
@@ -1233,6 +1233,12 @@ An .ozx input unpacks to a directory. Other inputs use the TIFF converter.</p>
 <tr>
 <td><code>--ome-zarr-version, -v [0.4|0.5]</code></td>
 <td>OME-NGFF version. Defaults to 0.4 for TIFF conversion or the source version when packing .ozx.</td>
+<td>No</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>-n, --num-workers <int range></code></td>
+<td>Threads copying pixels concurrently. Defaults to 4; NDTiff scales to about 16. TIFF conversion only.</td>
 <td>No</td>
 <td>-</td>
 </tr>
