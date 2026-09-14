@@ -11,6 +11,7 @@ rules:
         - actions/*
         - astral-sh/*
         - j178/*
+        - pypa/*
         - re-actors/*
         - zizmorcore/*
   # python-version / platform come from the in-workflow matrix, not external input.
