@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import logging
 import warnings
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from json import JSONDecodeError
 from pathlib import Path
-from typing import Literal
+from typing import Literal, override
 
 import numpy as np
 from natsort import natsorted
@@ -14,7 +14,7 @@ from numpy.typing import ArrayLike
 from xarray import DataArray
 from xarray import Dataset as XDataset
 
-from iohub.mm_fov import MicroManagerFOV, MicroManagerFOVMapping
+from iohub.mm_fov import FrameLocation, MicroManagerFOV, MicroManagerFOVMapping
 
 __all__ = ["NDTiffDataset", "NDTiffFOV"]
 _logger = logging.getLogger(__name__)
@@ -326,3 +326,51 @@ class NDTiffDataset(MicroManagerFOVMapping):
                 # acquisition crashed before metadata was written
                 _logger.warning(f"Unable to decode metadata for position {p}, time {t}, channel {c}, z {z}")
         return metadata
+
+    @override
+    def frame_locations(self) -> Iterator[FrameLocation]:
+        """Yield the on-disk location of every stored frame, from the already-parsed NDTiff index.
+
+        Enables copying pixels with plain byte-range reads instead of ``read_image``.
+        Indices follow the same axis ordering as :attr:`xdata` (rank within each sorted
+        axis); the FOV key is the same string used by :meth:`__getitem__`.
+
+        Raises
+        ------
+        NotImplementedError
+            For datasets older than NDTiff v3, RGB or compressed frames, or frames whose
+            shape/dtype differ from the dataset's; callers should fall back to array access.
+        """
+        index = getattr(self.dataset, "index", None)
+        if index is None:
+            raise NotImplementedError("Byte-range frame locations are only available for NDTiff v3 datasets.")
+        axes = self.dataset.axes
+        rank = {axis: {value: i for i, value in enumerate(values)} for axis, values in axes.items()}
+        has_position = "position" in axes
+        default_position = "0" if self._all_position_keys == [None] else str(self._all_position_keys[0])
+        root = Path(self.dataset.path)
+        dtype = np.dtype(self.dtype)
+        # entry.axes_key is unreliable across ndtiff versions; the dict key is frozenset(axes.items())
+        for key, entry in index.items():
+            if key is None or entry.is_data_set_finished_entry():
+                continue
+            if entry.is_rgb() or entry.pixel_compression != entry.UNCOMPRESSED:
+                raise NotImplementedError("RGB or compressed NDTiff frames have no byte-range representation.")
+            if (
+                entry.image_height != self.height
+                or entry.image_width != self.width
+                or entry.get_byte_depth() != dtype.itemsize
+            ):
+                raise NotImplementedError("NDTiff frames with non-uniform shape or bit depth are not supported.")
+            coords = dict(key)
+            yield FrameLocation(
+                position=str(coords["position"]) if has_position else default_position,
+                t=rank["time"][coords["time"]] if "time" in rank else 0,
+                c=rank["channel"][coords["channel"]] if "channel" in rank else 0,
+                z=rank["z"][coords["z"]] if "z" in rank else 0,
+                file=root / entry.filename,
+                pixel_offset=entry.pix_offset,
+                pixel_nbytes=entry.image_width * entry.image_height * entry.get_byte_depth(),
+                metadata_offset=entry.metadata_offset,
+                metadata_length=entry.metadata_length,
+            )
