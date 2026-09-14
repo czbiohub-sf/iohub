@@ -119,27 +119,36 @@ def convert(
             help="OME-NGFF version. Defaults to 0.4 for TIFF conversion or the source version when packing .ozx.",
         ),
     ] = None,
+    num_workers: Annotated[
+        int | None,
+        typer.Option(
+            "--num-workers",
+            "-n",
+            min=1,
+            help="Threads copying pixels concurrently. Defaults to 4; NDTiff scales to about 16. TIFF conversion only.",
+        ),
+    ] = None,
 ) -> None:
     """Convert Micro-Manager TIFF to OME-Zarr, or pack and unpack .ozx archives.
 
     An .ozx output packs an OME-Zarr directory without changing its chunks.
     An .ozx input unpacks to a directory. Other inputs use the TIFF converter.
 
-    --grid-layout and --chunks apply only to TIFF conversion.
+    --grid-layout, --chunks, and --num-workers apply only to TIFF conversion.
     --ome-zarr-version does not apply when unpacking.
     """
-    from iohub.convert import TIFFConverter
+    from iohub.convert import DEFAULT_NUM_WORKERS, TIFFConverter
     from iohub.core.ozx import is_ozx_path, pack_ozx, unpack_ozx
 
     src = pathlib.Path(input)
     dst = pathlib.Path(output)
-    tiff_only = grid_layout or chunks != "XYZ"
+    tiff_only = grid_layout or chunks != "XYZ" or num_workers is not None
 
     if is_ozx_path(dst):
         # Packing preserves source chunks.
         if tiff_only:
             raise typer.BadParameter(
-                "--grid-layout and --chunks apply only to TIFF → Zarr conversion. "
+                "--grid-layout, --chunks, and --num-workers apply only to TIFF → Zarr conversion. "
                 "Pack copies chunks 1:1 from the source."
             )
         out = pack_ozx(src, dst, version=ome_zarr_version)
@@ -148,7 +157,7 @@ def convert(
     if is_ozx_path(src):
         if tiff_only or ome_zarr_version is not None:
             raise typer.BadParameter(
-                "--grid-layout, --chunks, and --ome-zarr-version do not apply to .ozx → .zarr unpack."
+                "--grid-layout, --chunks, --num-workers, and --ome-zarr-version do not apply to .ozx → .zarr unpack."
             )
         out = unpack_ozx(src, dst)
         typer.echo(f"unpacked: {out}")
@@ -160,6 +169,7 @@ def convert(
         grid_layout=grid_layout,
         chunks=chunks,
         version=ome_zarr_version or "0.4",
+        num_workers=num_workers if num_workers is not None else DEFAULT_NUM_WORKERS,
     )()
 
 

@@ -1,12 +1,36 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import overload
 
 from xarray import DataArray
 
 from iohub.fov import BaseFOV, BaseFOVMapping
+
+
+@dataclass(frozen=True, slots=True)
+class FrameLocation:
+    """Where one frame's pixels and JSON metadata live on disk.
+
+    A frame is one 2D camera image. ``position`` is the FOV key as used by
+    ``MicroManagerFOVMapping.__getitem__``; ``t``/``c``/``z`` are the frame's indices
+    within that FOV's TCZYX array.
+    Byte offsets are absolute within ``file``.
+    """
+
+    position: str
+    t: int
+    c: int
+    z: int
+    file: Path
+    pixel_offset: int
+    pixel_nbytes: int
+    metadata_offset: int
+    metadata_length: int
+
 
 # Compile regex pattern once at module level for efficiency
 # See https://chatgpt.com/share/e/68364412-fb4c-8002-8dcf-28127cfee37a
@@ -228,3 +252,16 @@ class MicroManagerFOVMapping(BaseFOVMapping):
     def t_scale(self) -> float:
         """Time scale in seconds."""
         raise NotImplementedError
+
+    def frame_locations(self) -> Iterator[FrameLocation]:
+        """Yield the on-disk location of every stored frame, when the format allows byte-range reads.
+
+        Readers whose frames are contiguous and uncompressed override this so a converter
+        can copy pixels without going through the array interface. The default declines.
+
+        Raises
+        ------
+        NotImplementedError
+            When this reader (or this particular dataset) has no byte-range representation.
+        """
+        raise NotImplementedError(f"{type(self).__name__} does not expose frame byte ranges.")
