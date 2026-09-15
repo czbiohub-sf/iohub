@@ -48,11 +48,23 @@ _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 #:   check does not fire, and without this the source's label reference is
 #:   copied onto a store where it dangles.
 #:
-#: NOT here, and not needed: ``plate``, ``well`` and ``bioformats2raw.layout``
-#: live on the plate root, the well group and the store root respectively, while
-#: everything below reads and writes FOV groups only — so they are never in
-#: scope for the copy.
-_OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
+#: ``plate``, ``well`` and ``bioformats2raw.layout`` are here for the REFUSAL
+#: only. They live on the plate root, the well group and the store root
+#: respectively, while everything below reads and writes FOV groups — so they
+#: are never in scope for the copy and cost nothing there. What they buy is that
+#: ``extra_metadata={"plate": ...}`` is refused rather than silently writing a
+#: stray ``plate`` key onto a position, where it means nothing and misleads
+#: anything scanning position zattrs.
+_OME_KEYS = {
+    "ome",
+    "multiscales",
+    "omero",
+    "labels",
+    "version",
+    "plate",
+    "well",
+    "bioformats2raw.layout",
+}
 
 
 def _validated_extra_metadata(
