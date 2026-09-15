@@ -1084,7 +1084,7 @@ def test_create_empty_plate_extra_metadata_chains_across_stores(version):
 def test_create_empty_plate_does_not_copy_a_labels_reference(version):
     """A source's ``labels`` must not follow its metadata onto a new store.
 
-    This is the one `_OME_KEYS` entry the copy genuinely depends on. The others
+    This is the one `_POSITION_OME_KEYS` entry the copy genuinely depends on. The others
     are double-guarded: a freshly created position already carries
     ``multiscales``/``omero``/``version`` (and in v0.5 all of them sit under
     ``ome``), so the "skip a key the destination already has" rule covers them.
@@ -1123,12 +1123,6 @@ def test_create_empty_plate_does_not_copy_a_labels_reference(version):
         ([("provenance-x", 1)], TypeError, "must be a mapping"),
         ({1: "v"}, TypeError, "keys must be strings"),
         ({"omero": {}}, ValueError, "reserved OME-Zarr"),
-        # Never in scope for the copy — they live on the plate root, the well
-        # group and the store root — but writing one onto a POSITION is a
-        # mistake worth refusing rather than honouring.
-        ({"plate": {}}, ValueError, "reserved OME-Zarr"),
-        ({"well": {}}, ValueError, "reserved OME-Zarr"),
-        ({"bioformats2raw.layout": 3}, ValueError, "reserved OME-Zarr"),
     ],
 )
 def test_create_empty_plate_extra_metadata_refusals(bad, exc, match):

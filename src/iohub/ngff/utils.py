@@ -31,8 +31,8 @@ from iohub.ngff.nodes import TransformationMeta
 #: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
 _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 
-#: zattrs keys owned by the OME-Zarr spec. Excluded when copying custom metadata
-#: between positions, and refused as ``extra_metadata`` keys.
+#: zattrs keys the OME-Zarr spec owns ON A POSITION. Excluded when copying custom
+#: metadata between positions, and refused as ``extra_metadata`` keys.
 #:
 #: The entries do different jobs, and which one applies depends on the version:
 #:
@@ -47,24 +47,7 @@ _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 #:   has no label arrays has no ``labels`` key either, so the "already present"
 #:   check does not fire, and without this the source's label reference is
 #:   copied onto a store where it dangles.
-#:
-#: ``plate``, ``well`` and ``bioformats2raw.layout`` are here for the REFUSAL
-#: only. They live on the plate root, the well group and the store root
-#: respectively, while everything below reads and writes FOV groups — so they
-#: are never in scope for the copy and cost nothing there. What they buy is that
-#: ``extra_metadata={"plate": ...}`` is refused rather than silently writing a
-#: stray ``plate`` key onto a position, where it means nothing and misleads
-#: anything scanning position zattrs.
-_OME_KEYS = {
-    "ome",
-    "multiscales",
-    "omero",
-    "labels",
-    "version",
-    "plate",
-    "well",
-    "bioformats2raw.layout",
-}
+_POSITION_OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
 
 
 def _validated_extra_metadata(
@@ -84,7 +67,7 @@ def _validated_extra_metadata(
     non_string_keys = [key for key in extra_metadata if not isinstance(key, str)]
     if non_string_keys:
         raise TypeError(f"extra_metadata keys must be strings, got {non_string_keys}.")
-    reserved = _OME_KEYS.intersection(extra_metadata)
+    reserved = _POSITION_OME_KEYS.intersection(extra_metadata)
     if reserved:
         raise ValueError(
             f"extra_metadata keys {sorted(reserved)} are reserved OME-Zarr "
@@ -111,7 +94,7 @@ def _selected_metadata_keys(
     ``fnmatchcase`` keeps matching case-sensitive on every platform, matching
     how zattrs keys compare.
     """
-    candidates = (k for k in source_attrs if k not in _OME_KEYS)
+    candidates = (k for k in source_attrs if k not in _POSITION_OME_KEYS)
     if metadata_keys is None:
         return list(candidates)
     if isinstance(metadata_keys, str):
