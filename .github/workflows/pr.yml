@@ -28,10 +28,18 @@ jobs:
           extra-args: ''
 
   tests:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.platform }} py${{ matrix.python-version }}
+    runs-on: ${{ matrix.platform }}
     strategy:
+      fail-fast: false
       matrix:
+        platform: [ubuntu-latest]
         python-version: ["3.12", "3.13", "3.14"]
+        include:
+          - platform: windows-latest
+            python-version: "3.12"
+          - platform: macos-latest
+            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

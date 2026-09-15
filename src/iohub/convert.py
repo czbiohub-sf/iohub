@@ -192,8 +192,12 @@ class _ByteRangeSource(ChunkSource):
 
     @staticmethod
     def _probe_direct(file: Path) -> bool:
+        direct_flag = getattr(os, "O_DIRECT", None)
+        if direct_flag is None:
+            _logger.info("O_DIRECT unavailable on this platform; using buffered reads.")
+            return False
         try:
-            os.close(os.open(file, os.O_RDONLY | os.O_DIRECT))
+            os.close(os.open(file, os.O_RDONLY | direct_flag))
         except OSError as error:
             _logger.info(f"O_DIRECT unavailable for {file.parent} ({error.strerror}); using buffered reads.")
             return False
@@ -712,6 +716,8 @@ class TIFFConverter:
     def _make_source(self) -> ChunkSource:
         """Byte-range reads when the reader offers them for this dataset; its array interface otherwise."""
         try:
+            if not hasattr(os, "preadv"):
+                raise NotImplementedError("os.preadv is unavailable")
             locations = list(self.reader.frame_locations())
         except NotImplementedError as error:
             _logger.info(f"Reading through the {type(self.reader).__name__} array interface: {error}")
