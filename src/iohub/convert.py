@@ -679,7 +679,12 @@ class TIFFConverter:
     def _create_zeros_array(self, row_name: str, col_name: str, pos_name: str, arr_kwargs: dict) -> Position:
         pos = self.writer.create_position(row_name, col_name, pos_name)
         _ = pos.create_zeros(**arr_kwargs)
-        pos.metadata.omero.name = self.pos_names[self._created]
+        # Store original MM position label, set omero.name to HCS FOV name
+        original_mm_label = self.pos_names[self._created]
+        iohub_meta = pos.zattrs.get("iohub", {})
+        iohub_meta["mm_position_label"] = original_mm_label
+        pos.zattrs["iohub"] = iohub_meta
+        pos.metadata.omero.name = pos_name
         self._created += 1
         pos.dump_meta()
 
