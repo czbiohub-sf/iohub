@@ -31,7 +31,27 @@ from iohub.ngff.nodes import TransformationMeta
 #: Default ZYX chunk size for OME-Zarr v0.5 stores: ~2 MB at uint16 / ~4 MB at float32.
 _V05_DEFAULT_ZYX_CHUNKS: tuple[int, int, int] = (16, 256, 256)
 
-#: zattrs keys owned by the OME-Zarr spec, excluded when copying custom metadata.
+#: zattrs keys owned by the OME-Zarr spec. Excluded when copying custom metadata
+#: between positions, and refused as ``extra_metadata`` keys.
+#:
+#: The entries do different jobs, and which one applies depends on the version:
+#:
+#: * ``ome`` covers **v0.5**, where every OME key is nested under it, so this
+#:   single entry protects the whole block at position level.
+#: * ``multiscales``, ``omero`` and ``version`` are top-level in **v0.4**, and
+#:   are what protects them there. They are belt-and-braces for the copy — a
+#:   freshly created position already carries all three, and the copy skips any
+#:   key the destination has — but they are load-bearing for the
+#:   ``extra_metadata`` refusal, which has no such fallback.
+#: * ``labels`` is the one entry the copy genuinely needs. A destination that
+#:   has no label arrays has no ``labels`` key either, so the "already present"
+#:   check does not fire, and without this the source's label reference is
+#:   copied onto a store where it dangles.
+#:
+#: NOT here, and not needed: ``plate``, ``well`` and ``bioformats2raw.layout``
+#: live on the plate root, the well group and the store root respectively, while
+#: everything below reads and writes FOV groups only — so they are never in
+#: scope for the copy.
 _OME_KEYS = {"ome", "multiscales", "omero", "labels", "version"}
 
 

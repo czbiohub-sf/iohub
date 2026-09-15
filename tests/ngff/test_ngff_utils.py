@@ -943,7 +943,8 @@ def test_create_empty_plate_metadata_keys_none_copies_everything():
         assert dst_zattrs["beta"] == 2
 
 
-def test_create_empty_plate_extra_metadata_written_to_every_position():
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_extra_metadata_written_to_every_position(version):
     """extra_metadata lands as top-level zattrs on each position named."""
     position_keys = [("A", "1", "0"), ("A", "1", "1")]
     record = {"provenance-deskew": {"ls_angle_deg": 30}}
@@ -955,6 +956,7 @@ def test_create_empty_plate_extra_metadata_written_to_every_position():
             position_keys=position_keys,
             channel_names=["DAPI"],
             shape=(1, 1, 16, 32, 32),
+            version=version,
             extra_metadata=record,
         )
 
@@ -969,7 +971,8 @@ def test_create_empty_plate_extra_metadata_written_to_every_position():
                 assert pos.data.shape == (1, 1, 16, 32, 32)
 
 
-def test_create_empty_plate_extra_metadata_refreshes_existing_positions():
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_extra_metadata_refreshes_existing_positions(version):
     """Unlike metadata_sources, extra_metadata is rewritten on a re-run.
 
     A step whose configuration changed must be able to correct its own record;
@@ -980,6 +983,7 @@ def test_create_empty_plate_extra_metadata_refreshes_existing_positions():
         "position_keys": position_keys,
         "channel_names": ["DAPI"],
         "shape": (1, 1, 16, 32, 32),
+        "version": version,
     }
 
     with TemporaryDirectory() as temp_dir:
@@ -991,7 +995,8 @@ def test_create_empty_plate_extra_metadata_refreshes_existing_positions():
             assert plate["A/1/0"].zattrs["provenance-step"] == {"v": 2}
 
 
-def test_create_empty_plate_extra_metadata_beats_inherited_key():
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_extra_metadata_beats_inherited_key(version):
     """The caller's own record wins over a source key of the same name.
 
     Reachable when a store is used as its own downstream target: the source
@@ -1011,6 +1016,7 @@ def test_create_empty_plate_extra_metadata_beats_inherited_key():
             position_keys=position_keys,
             channel_names=channel_names,
             shape=shape,
+            version=version,
         )
         with open_ome_zarr(str(src_path), mode="r+") as plate:
             plate["A/1/0"].zattrs["provenance-step"] = {"origin": "source"}
@@ -1021,6 +1027,7 @@ def test_create_empty_plate_extra_metadata_beats_inherited_key():
             position_keys=position_keys,
             channel_names=channel_names,
             shape=shape,
+            version=version,
             metadata_sources=src_path,
             extra_metadata={"provenance-step": {"origin": "caller"}},
         )
@@ -1032,7 +1039,8 @@ def test_create_empty_plate_extra_metadata_beats_inherited_key():
             assert attrs["provenance-upstream"] == {"origin": "source"}
 
 
-def test_create_empty_plate_extra_metadata_chains_across_stores():
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_extra_metadata_chains_across_stores(version):
     """The record is readable by the next create_empty_plate, not just at the end.
 
     This is the property a pipeline that scaffolds every store up front depends
@@ -1052,6 +1060,7 @@ def test_create_empty_plate_extra_metadata_chains_across_stores():
             position_keys=position_keys,
             channel_names=channel_names,
             shape=shape,
+            version=version,
             extra_metadata={"provenance-first": {"step": 1}},
         )
         create_empty_plate(
@@ -1059,6 +1068,7 @@ def test_create_empty_plate_extra_metadata_chains_across_stores():
             position_keys=position_keys,
             channel_names=channel_names,
             shape=shape,
+            version=version,
             metadata_sources=first,
             metadata_keys={"provenance-*"},
             extra_metadata={"provenance-second": {"step": 2}},
@@ -1068,6 +1078,43 @@ def test_create_empty_plate_extra_metadata_chains_across_stores():
             attrs = dict(plate["A/1/0"].zattrs)
             assert attrs["provenance-first"] == {"step": 1}
             assert attrs["provenance-second"] == {"step": 2}
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_does_not_copy_a_labels_reference(version):
+    """A source's ``labels`` must not follow its metadata onto a new store.
+
+    This is the one `_OME_KEYS` entry the copy genuinely depends on. The others
+    are double-guarded: a freshly created position already carries
+    ``multiscales``/``omero``/``version`` (and in v0.5 all of them sit under
+    ``ome``), so the "skip a key the destination already has" rule covers them.
+    A destination with no label arrays has no ``labels`` key at all, that rule
+    does not fire, and the reference would be copied onto a store where it
+    points at nothing.
+    """
+    kwargs = {
+        "position_keys": [("A", "1", "0")],
+        "channel_names": ["DAPI"],
+        "shape": (1, 1, 16, 32, 32),
+        "version": version,
+    }
+
+    with TemporaryDirectory() as temp_dir:
+        src_path = Path(temp_dir) / "source.zarr"
+        dst_path = Path(temp_dir) / "dest.zarr"
+
+        create_empty_plate(store_path=src_path, **kwargs)
+        with open_ome_zarr(str(src_path / "A/1/0"), layout="fov", mode="r+") as pos:
+            pos.zattrs["labels"] = ["nuclei"]
+            pos.zattrs["provenance-upstream"] = {"step": 1}
+
+        create_empty_plate(store_path=dst_path, metadata_sources=src_path, **kwargs)
+
+        with open_ome_zarr(str(dst_path), mode="r") as plate:
+            attrs = dict(plate["A/1/0"].zattrs)
+        assert "labels" not in attrs
+        # …while everything the source legitimately contributes still arrives.
+        assert attrs["provenance-upstream"] == {"step": 1}
 
 
 @pytest.mark.parametrize(
