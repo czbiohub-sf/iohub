@@ -1,0 +1,60 @@
+name: Release
+
+# Publishes iohub to PyPI when a maintainer publishes a GitHub Release.
+# Uses PyPI Trusted Publishing (OIDC) — no API token secret required.
+# One-time setup (PyPI + GitHub admin): see PUBLISHING note in the PR / repo docs.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi   # must match the environment on the PyPI trusted publisher
+      url: https://pypi.org/p/iohub
+    permissions:
+      id-token: write   # OIDC trusted publishing
+      contents: write   # attach built dists to the GitHub Release
+    env:
+      TAG: ${{ github.event.release.tag_name }}   # untrusted input via env, never inline in run:
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0      # full history …
+          fetch-tags: true    # … and tags so uv-dynamic-versioning can resolve the version
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: false   # no caching on a publishing job (cache-poisoning)
+
+      # Build BOTH from the checkout. Plain `uv build` chains sdist -> wheel-from-sdist, and the
+      # unpacked sdist has no .git, so uv-dynamic-versioning would fall back to 0.0.0 for the wheel.
+      # `--sdist --wheel` builds each directly from source. `--no-sources` drops local source
+      # rewrites so deps resolve as normal PyPI packages (matches `pypa/build`).
+      - name: Build sdist and wheel
+        run: uv build --sdist --wheel --no-sources --out-dir dist
+
+      - name: Check distribution metadata
+        run: uvx twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        # attestations default to true on >=1.11 -> PEP 740 provenance, no extra config
+
+      - name: Attach distributions to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"
