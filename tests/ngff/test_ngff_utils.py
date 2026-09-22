@@ -1,8 +1,11 @@
+import errno
 import itertools
 import json
+import math
 import os
 import shutil
 import string
+import struct
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
@@ -17,7 +20,7 @@ from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
-from iohub.ngff import open_ome_zarr
+from iohub.ngff import _write_units, open_ome_zarr
 from iohub.ngff._write_units import plan_write_unit, progress_dir_for
 from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
@@ -1885,6 +1888,40 @@ def _tear(path: Path) -> None:
     path.write_bytes(data[: len(data) // 2])
 
 
+_EMPTY_INDEX_ENTRY = 2**64 - 1
+
+
+def _inner_chunks_per_shard(array) -> int:
+    return math.prod(math.ceil(span / step) for span, step in zip(array.shards, array.chunks, strict=True))
+
+
+def _corrupt_inner_chunk_away_from_origin(path: Path, n_inner_chunks: int) -> None:
+    """Garble one inner chunk, leaving the shard's length and index intact.
+
+    This is what a partially flushed write leaves behind, and what truncation
+    -- see `_tear` -- does not reproduce: the trailing index still checksums
+    and the file is still full length, so nothing is wrong until the damaged
+    chunk itself is decompressed.
+
+    The target is chosen by position in the shard index, which the v3 sharding
+    spec fixes as C order over the inner chunk grid, so entry zero is always
+    the chunk holding the shard's origin -- the one element a default resume
+    probes. Choosing by file offset instead would be unstable, because the
+    codec pipeline assembles inner chunks concurrently and so does not lay
+    them out in grid order.
+    """
+    data = bytearray(path.read_bytes())
+    index = data[-(n_inner_chunks * 16 + 4) : -4]
+    entries = [struct.unpack_from("<QQ", index, i * 16) for i in range(n_inner_chunks)]
+    offset, nbytes = next(
+        (start, size) for start, size in reversed(entries[1:]) if start != _EMPTY_INDEX_ENTRY and size > 0
+    )
+    # 0xff is not a valid blosc header, so the decode fails deterministically
+    # rather than depending on whether random bytes happen to parse.
+    data[offset : offset + nbytes] = b"\xff" * nbytes
+    path.write_bytes(bytes(data))
+
+
 #: A geometry matching what reconstruction pipelines produce: inner chunks
 #: that do not divide the data extent, so the shard grid rounds up past the
 #: array bound and no write can cover a whole shard. Every write is then a
@@ -2040,6 +2077,98 @@ def test_resume_recomputes_a_unit_whose_shard_is_torn(tmp_path):
     with open_ome_zarr(input_store) as in_ds, open_ome_zarr(output_store) as out_ds:
         expected = counting_transform(in_ds["/".join(position_key)].data[:], constant=2)
         np.testing.assert_array_almost_equal(out_ds["/".join(position_key)].data[:], expected)
+
+
+def _rmw_run(tmp_path, call_log_name="calls"):
+    """A tracked, resumable position plus a handle to re-run it."""
+    position_key = ("A", "1", "0")
+    input_store, output_store = _make_stores(tmp_path, _RMW_SHAPE, position_key, **_RMW_PLATE)
+    call_log = tmp_path / call_log_name
+    run = partial(
+        process_single_position,
+        func=counting_transform,
+        input_position_path=input_store / Path(*position_key),
+        output_position_path=output_store / Path(*position_key),
+        constant=2,
+        call_log_dir=str(call_log),
+    )
+    marker_dir = tmp_path / ".iohub-progress" / output_store.name / Path(*position_key)
+    return run, call_log, output_store, position_key, marker_dir
+
+
+def test_complete_syncs_every_shard_before_recording_the_unit(tmp_path, monkeypatch):
+    """No completion marker exists until the data it vouches for is on disk.
+
+    The marker is tens of bytes and the shards are orders of magnitude
+    larger, so left to the page cache the record routinely outlives the data.
+    """
+    run, _, output_store, position_key, marker_dir = _rmw_run(tmp_path)
+
+    synced: list[Path] = []
+    completing: list = []
+    real_fsync_file = _write_units._fsync_file
+    real_complete = _write_units.WriteUnit.complete
+
+    def complete(self, *, wrote=True):
+        completing.append(self)
+        try:
+            return real_complete(self, wrote=wrote)
+        finally:
+            completing.pop()
+
+    def spy(path):
+        unit = completing[-1]
+        assert not unit.done_marker.exists(), "unit recorded before its data was synced"
+        synced.append(Path(path))
+        real_fsync_file(path)
+
+    monkeypatch.setattr(_write_units.WriteUnit, "complete", complete)
+    monkeypatch.setattr(_write_units, "_fsync_file", spy)
+    run(resume=True)
+
+    assert set(synced) == set(_shard_files(output_store, position_key))
+    assert sorted(marker_dir.glob("*.done"))
+
+
+def test_a_shard_that_cannot_be_synced_is_not_recorded_as_done(tmp_path, monkeypatch):
+    """A write-back error fails the unit instead of passing as success.
+
+    Nothing else in the stack surfaces one: zarr and the zarrs pipeline never
+    sync, and Rust's ``File`` drops the result of ``close``. Without this the
+    error is lost and the unit is marked finished over data that never landed.
+    """
+    run, _, _, _, marker_dir = _rmw_run(tmp_path)
+
+    def refuse(path):
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(_write_units, "_fsync_file", refuse)
+    with pytest.raises(OSError, match="Input/output error"):
+        run(resume=True)
+
+    assert not list(marker_dir.glob("*.done")), "unit recorded despite a failed sync"
+    # The in-flight marker left behind is what makes the next resume redo it.
+    assert list(marker_dir.glob("*.inflight"))
+
+
+def test_resume_skips_corruption_away_from_the_shard_origin(tmp_path):
+    """The default probe reads one element, so it cannot see the rest.
+
+    Pinned deliberately: this is the gap that `WriteUnit.complete` closes by
+    syncing before recording, rather than one a resume can detect after the
+    fact. If the default ever becomes a real integrity check, this expectation
+    should change with it.
+    """
+    run, call_log, output_store, position_key, _ = _rmw_run(tmp_path)
+    run(resume=True)
+    first_pass = _call_count(call_log)
+
+    with open_ome_zarr(output_store / Path(*position_key), layout="fov", mode="r") as dataset:
+        n_inner = _inner_chunks_per_shard(dataset.data)
+    _corrupt_inner_chunk_away_from_origin(_shard_files(output_store, position_key)[0], n_inner)
+
+    run(resume=True)
+    assert _call_count(call_log) == first_pass, "default resume unexpectedly re-read the shard"
 
 
 @pytest.mark.parametrize(
