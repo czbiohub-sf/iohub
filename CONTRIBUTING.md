@@ -95,11 +95,11 @@ to [fork](https://github.com/czbiohub-sf/iohub/fork) the repository.
 
 #### Install dependencies
 
-First, create a virtual environment with a supported Python version (3.11-3.13):
+First, create a virtual environment with a supported Python version (3.12-3.14):
 
 ```sh
 cd iohub/
-uv venv -p 3.13  # or 3.11, 3.12
+uv venv -p 3.13  # or 3.12, 3.14
 ```
 
 This makes a virtual environment in the `.venv` where the dependencies for `iohub` will be installed.
@@ -110,7 +110,7 @@ Then sync dependencies:
 uv sync
 ```
 
-> **Note**: `uv sync` installs the [`dev` group by default](https://docs.astral.sh/uv/concepts/projects/sync/#syncing-development-dependencies), which includes all development dependencies. iohub currently supports Python 3.11-3.13—if `uv sync` fails to resolve dependencies, ensure you've created a venv with a supported version as shown above. See [dependency groups](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-groups) for more details.
+> **Note**: `uv sync` installs the [`dev` group by default](https://docs.astral.sh/uv/concepts/projects/sync/#syncing-development-dependencies), which includes all development dependencies. iohub supports Python 3.12-3.14. If `uv sync` fails to resolve dependencies, ensure you've created a venv with a supported version as shown above. See [dependency groups](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-groups) for more details.
 
 #### Dependency groups
 
@@ -158,6 +158,8 @@ Local test runs and coverage check can be invoked by:
 # in the project root directory
 uv run pytest --cov=iohub tests/
 ```
+
+Pull requests run the test suite on Linux, Windows, and macOS with Python 3.12, 3.13, and 3.14.
 
 `iohub` uses [Hypothesis](https://hypothesis.readthedocs.io/en/latest/index.html)
 together with [pytest](https://docs.pytest.org/).
