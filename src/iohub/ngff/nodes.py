@@ -700,13 +700,7 @@ class PositionLabel(NGFFNode):
         overwriting_creation: bool = False,
         impl: ZarrImplementation | None = None,
     ):
-        if axes:
-            self.axes = [ax for ax in axes if ax.type != "channel"]
-        else:
-            self.axes = [
-                TimeAxisMeta(name="t", unit="second"),
-                *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("z", "y", "x")],
-            ]
+        self.axes = [ax for ax in (axes or self._DEFAULT_AXES) if ax.type != "channel"]
 
         super().__init__(
             group=group,
@@ -2116,11 +2110,10 @@ class Position(NGFFNode):
             return data_array.coords[dim].attrs.get("units", default)
 
         self.axes = [
-            TimeAxisMeta(name="t", unit=_coord_unit("t", "second")),
-            ChannelAxisMeta(name="c"),
-            SpaceAxisMeta(name="z", unit=_coord_unit("z", "micrometer")),
-            SpaceAxisMeta(name="y", unit=_coord_unit("y", "micrometer")),
-            SpaceAxisMeta(name="x", unit=_coord_unit("x", "micrometer")),
+            ax
+            if ax.type == "channel"
+            else type(ax).model_validate({**ax.model_dump(), "unit": _coord_unit(ax.name, ax.unit)})
+            for ax in self._DEFAULT_AXES
         ]
 
         transforms = [
