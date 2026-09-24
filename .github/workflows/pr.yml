@@ -1,5 +1,4 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+# Pull requests run the test suite across every supported OS and Python version.
 
 name: PR checks
 
@@ -29,17 +28,14 @@ jobs:
 
   tests:
     name: ${{ matrix.platform }} py${{ matrix.python-version }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-latest]
+        platform: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.12", "3.13", "3.14"]
-        include:
-          - platform: windows-latest
-            python-version: "3.12"
-          - platform: macos-latest
-            python-version: "3.12"
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -58,7 +54,7 @@ jobs:
       - name: Test with pytest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: uv run pytest -v --cov=./ --cov-report=xml
+        run: uv run pytest -v --cov=iohub --cov-report=xml
 
   docs:
     runs-on: ubuntu-latest

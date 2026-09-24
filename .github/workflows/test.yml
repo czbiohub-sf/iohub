@@ -16,7 +16,10 @@ jobs:
   test:
     name: ${{ matrix.platform }} py${{ matrix.python-version }}
     runs-on: ${{ matrix.platform }}
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
+      fail-fast: false
       max-parallel: 2
       matrix:
         platform: [ubuntu-latest, windows-latest, macos-latest]
@@ -38,4 +41,4 @@ jobs:
       - name: Test with pytest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: uv run pytest -v --cov=./iohub --cov-report=xml
+        run: uv run pytest -v --cov=iohub --cov-report=xml
