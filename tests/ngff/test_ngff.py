@@ -438,11 +438,11 @@ def test_create_zeros(ch_shape_dtype, arr_name, version):
             assert (Path(store_path) / arr_name / ".zarray").exists()
         if version == "0.5":
             assert dataset[arr_name].metadata.dimension_names == (
-                "T",
-                "C",
-                "Z",
-                "Y",
-                "X",
+                "t",
+                "c",
+                "z",
+                "y",
+                "x",
             )
         assert not dataset[arr_name][:].any()
         assert dataset[arr_name].shape == shape
@@ -2126,7 +2126,7 @@ def test_bf2raw_open_auto(tmp_path, version):
         assert names == ["0", "1"]
         assert node["0"].channel_names == ["DAPI"]
         assert node.channel_names == ["DAPI"]
-        assert [a.name for a in node.axes] == ["T", "C", "Z", "Y", "X"]
+        assert [a.name for a in node.axes] == ["t", "c", "z", "y", "x"]
         assert node["1"]["0"].shape == (1, 1, 2, 4, 4)
 
 

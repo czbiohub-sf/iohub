@@ -170,9 +170,9 @@ class NGFFNode:
     _MEMBER_TYPE: type[NGFFNode | NGFFArray]
     _impl: ZarrImplementation
     _DEFAULT_AXES: ClassVar[list] = [
-        TimeAxisMeta(name="T", unit="second"),
-        ChannelAxisMeta(name="C"),
-        *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("Z", "Y", "X")],
+        TimeAxisMeta(name="t", unit="second"),
+        ChannelAxisMeta(name="c"),
+        *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("z", "y", "x")],
     ]
 
     def __init__(
@@ -704,8 +704,8 @@ class PositionLabel(NGFFNode):
             self.axes = [ax for ax in axes if ax.type != "channel"]
         else:
             self.axes = [
-                TimeAxisMeta(name="T", unit="second"),
-                *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("Z", "Y", "X")],
+                TimeAxisMeta(name="t", unit="second"),
+                *[SpaceAxisMeta(name=i, unit="micrometer") for i in ("z", "y", "x")],
             ]
 
         super().__init__(
@@ -2116,11 +2116,11 @@ class Position(NGFFNode):
             return data_array.coords[dim].attrs.get("units", default)
 
         self.axes = [
-            TimeAxisMeta(name="T", unit=_coord_unit("t", "second")),
-            ChannelAxisMeta(name="C"),
-            SpaceAxisMeta(name="Z", unit=_coord_unit("z", "micrometer")),
-            SpaceAxisMeta(name="Y", unit=_coord_unit("y", "micrometer")),
-            SpaceAxisMeta(name="X", unit=_coord_unit("x", "micrometer")),
+            TimeAxisMeta(name="t", unit=_coord_unit("t", "second")),
+            ChannelAxisMeta(name="c"),
+            SpaceAxisMeta(name="z", unit=_coord_unit("z", "micrometer")),
+            SpaceAxisMeta(name="y", unit=_coord_unit("y", "micrometer")),
+            SpaceAxisMeta(name="x", unit=_coord_unit("x", "micrometer")),
         ]
 
         transforms = [
