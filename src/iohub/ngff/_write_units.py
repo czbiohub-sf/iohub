@@ -27,6 +27,7 @@ import itertools
 import json
 import math
 import operator
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,45 @@ PROGRESS_DIRNAME = ".iohub-progress"
 #: chunk or shard cannot be decoded (truncated file, bad checksum, short
 #: shard index).
 DECODE_ERRORS = (RuntimeError, ValueError, OSError)
+
+
+def _fsync_file(path: Path) -> None:
+    """Force ``path``'s contents to stable storage.
+
+    ``fsync`` acts on the open file description's underlying file, not on the
+    descriptor's private state, so a read-only handle still flushes whatever
+    dirty pages the codec pipeline left behind, whichever backend wrote them.
+
+    POSIX therefore opens read-only: the barrier cannot modify the shard it is
+    protecting even if this function is ever called by mistake, and it does not
+    need write permission on data it only guards. Windows has no equivalent --
+    its commit path rejects a handle not opened for writing -- so it opens
+    read-write, which is safe there because no other writer holds the file by
+    the time a unit is recorded.
+    """
+    flags = os.O_RDONLY if os.name == "posix" else os.O_RDWR
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_dir(path: Path) -> None:
+    """Force ``path``'s directory entries to stable storage, where supported.
+
+    Makes the rename of a completion marker durable, so a crash cannot lose a
+    record whose data is already safe. Windows cannot open a directory as a
+    file descriptor; there the rename's durability is left to the filesystem,
+    which costs a recomputation at worst and never a wrong skip.
+    """
+    if os.name != "posix":
+        return
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 @dataclass(frozen=True)
@@ -129,16 +169,34 @@ class WriteUnit:
         nothing. Recording whatever happened to be on disk would otherwise
         attribute a leftover file from an earlier run to this unit.
 
+        The shards are synced before the record is written. A write returning
+        says only that the bytes reached the page cache, and nothing else in
+        the stack forces them further: neither iohub, nor zarr, nor the zarrs
+        codec pipeline calls ``fsync``, and Rust's ``File`` discards the result
+        of ``close`` when it drops. Without the barrier below, the record --
+        tens of bytes, committed almost at once -- is systematically more
+        likely to survive a kill than the hundreds of megabytes it vouches
+        for, and a write-back error is dropped rather than raised. Either way
+        the next resume finds a done marker beside data that never landed, and
+        `unit_is_complete` cannot tell: its probe reads one element per shard,
+        so corruption anywhere but the origin reads back clean. Syncing first
+        collapses that window. An interruption before the barrier leaves no
+        record, so the unit is recomputed; an I/O error during it propagates
+        instead of being recorded as success.
+
         Written to the in-flight marker and then renamed, which is atomic
         within one directory, so the record is never read half-written.
         """
         if self.marker_dir is None:
             return
         self.marker_dir.mkdir(parents=True, exist_ok=True)
-        written = [self._key(path) for path, _ in self.shards if path.exists()] if wrote else []
+        present = [path for path, _ in self.shards if path.exists()] if wrote else []
+        for path in present:
+            _fsync_file(path)
         scratch = self.inflight_marker
-        scratch.write_text(json.dumps({"shards": written}))
+        scratch.write_text(json.dumps({"shards": [self._key(path) for path in present]}))
         scratch.replace(self.done_marker)
+        _fsync_dir(self.marker_dir)
 
     def _key(self, path: Path) -> str:
         """Shard path relative to the array directory, e.g. ``c/0/0/0/0/0``."""
@@ -264,10 +322,12 @@ def unit_is_complete(unit: WriteUnit, array) -> bool:
     would produce.
 
     The probe reads one element per shard, which forces the shard index and its
-    checksum to be validated; that catches a file whose marker was recorded but
-    whose bytes did not all reach disk, for instance if a striped filesystem
-    flushed them out of order during a node crash. It does not verify every
-    inner chunk, so it is a cheap guard rather than a proof of integrity.
+    checksum to be validated. That is a cheap guard, not a proof of integrity:
+    it decodes a single inner chunk, so on a shard holding hundreds it inspects
+    well under one percent of the bytes, and corruption anywhere but the origin
+    reads back clean. `WriteUnit.complete` is what keeps that from mattering,
+    by syncing a unit's shards before recording it, so a marker is never
+    written over data that did not land.
 
     A marker that cannot be parsed counts as incomplete, so the unit is simply
     recomputed.

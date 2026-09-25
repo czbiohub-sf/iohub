@@ -451,8 +451,13 @@ def _save_transformed(
                 (output_time_indices[run], output_channel_indices),
                 transformed[run],
             )
-        if write_unit is not None:
-            write_unit.complete()
+    # Recorded only after the store is closed, so the codec pipeline has
+    # released the shards and anything it buffered in user space has reached
+    # the kernel before `WriteUnit.complete` syncs it to disk. Marking the
+    # unit finished inside the block above would leave that buffered tail
+    # outside the barrier, which is the whole point of the barrier.
+    if write_unit is not None:
+        write_unit.complete()
 
 
 def _plan_output_write(
