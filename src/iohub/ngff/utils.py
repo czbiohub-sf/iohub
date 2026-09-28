@@ -312,44 +312,8 @@ def create_empty_plate(
         channel_names=channel_names,
         version=version,
     )
-    # Create positions
-    for position_key in position_keys:
-        position_key_string = "/".join(position_key)
-        collected: dict[str, Any] = {}
-        # Check if position is already in the store, if not create it
-        if position_key_string not in output_plate.zgroup:
-            position = output_plate.create_position(*position_key)
-            _ = position.create_zeros(
-                name="0",
-                shape=shape,
-                chunks=chunks,
-                shards_ratio=shards_ratio,
-                dtype=dtype,
-                transform=[TransformationMeta(type="scale", scale=scale)],
-            )
 
-            # Copy per-position custom (non-OME) zattrs from source plate(s).
-            # Only for newly created positions; pre-existing ones are left
-            # as-is. A key is only copied if it is not already present on the
-            # destination, so earlier sources take precedence over later ones.
-            #
-            # Collect across all sources first, then write once, below.
-            existing = dict(position.zattrs)
-            for source in metadata_sources:
-                # Only the open is guarded: a source that lacks this position
-                # is skipped, but a failure while reading one is a real error.
-                try:
-                    src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
-                except FileNotFoundError:
-                    continue
-                with src_pos:
-                    src_attrs = dict(src_pos.zattrs)
-                for k in _selected_metadata_keys(src_attrs, metadata_keys):
-                    if k not in existing and k not in collected:
-                        collected[k] = src_attrs[k]
-        else:
-            position = output_plate[position_key_string]
-
+    def _finalize_position(position, collected: dict[str, Any]) -> None:
         # Check if channel_names are already in the store, if not append them
         for channel_name in channel_names:
             metadata_channel_names = position.channel_names
@@ -357,13 +321,69 @@ def create_empty_plate(
                 position.append_channel(channel_name, resize_arrays=True)
 
         # One custom-metadata write per position, and it comes last: both
-        # branches above may have rewritten the OME keys (create_zeros,
-        # append_channel), so the base dict is re-read here rather than reused
-        # from before them. `collected` is empty unless this call created the
-        # position; `extra_metadata` applies either way and wins on a collision,
-        # because the caller is the authority on its own step.
+        # create_zeros and append_channel may have rewritten the OME keys, so
+        # the base dict is re-read here rather than reused from before them.
+        # `collected` is empty unless this call created the position;
+        # `extra_metadata` applies either way and wins on a collision, because
+        # the caller is the authority on its own step.
         if collected or extra_metadata:
             position.zattrs.put({**dict(position.zattrs), **collected, **extra_metadata})
+
+    def _init_new_position(position_key_string: str, position) -> None:
+        _ = position.create_zeros(
+            name="0",
+            shape=shape,
+            chunks=chunks,
+            shards_ratio=shards_ratio,
+            dtype=dtype,
+            transform=[TransformationMeta(type="scale", scale=scale)],
+        )
+
+        # Copy per-position custom (non-OME) zattrs from source plate(s).
+        # Only for newly created positions; pre-existing ones are left
+        # as-is. A key is only copied if it is not already present on the
+        # destination, so earlier sources take precedence over later ones.
+        #
+        # Collect across all sources first, then write once.
+        collected: dict[str, Any] = {}
+        existing = dict(position.zattrs)
+        for source in metadata_sources:
+            # Only the open is guarded: a source that lacks this position
+            # is skipped, but a failure while reading one is a real error.
+            try:
+                src_pos = open_ome_zarr(source / position_key_string, layout="fov", mode="r")
+            except FileNotFoundError:
+                continue
+            with src_pos:
+                src_attrs = dict(src_pos.zattrs)
+            for k in _selected_metadata_keys(src_attrs, metadata_keys):
+                if k not in existing and k not in collected:
+                    collected[k] = src_attrs[k]
+        _finalize_position(position, collected)
+
+    def _update_existing_position(position_key_string: str) -> None:
+        _finalize_position(output_plate[position_key_string], {})
+
+    # De-duplicate while keeping order, so a repeated key is created only once.
+    keys = list(dict.fromkeys(tuple(str(part) for part in k) for k in position_keys))
+    key_strings = ["/".join(k) for k in keys]
+
+    # Positions are independent once their well metadata exists, so the
+    # per-position work (array creation, source metadata reads, zattrs writes)
+    # runs on a thread pool. Only well metadata is shared between positions;
+    # `create_positions` writes it once per well rather than once per position,
+    # which keeps creating thousands of FOVs in one well linear instead of
+    # quadratic.
+    with ThreadPoolExecutor(max_workers=max(1, min(32, len(keys)))) as pool:
+        in_store = list(pool.map(output_plate.zgroup.__contains__, key_strings))
+        new = [(k, s) for k, s, e in zip(keys, key_strings, in_store) if not e]
+        old = [s for s, e in zip(key_strings, in_store) if e]
+
+        created = output_plate.create_positions([k for k, _ in new]) if new else []
+        futures = [pool.submit(_init_new_position, s, pos) for (_, s), pos in zip(new, created)]
+        futures += [pool.submit(_update_existing_position, s) for s in old]
+        for future in as_completed(futures):
+            future.result()
 
     output_plate.close()
 
