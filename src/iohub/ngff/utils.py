@@ -361,8 +361,12 @@ def create_empty_plate(
                     collected[k] = src_attrs[k]
         _finalize_position(position, collected)
 
-    def _update_existing_position(position_key_string: str) -> None:
-        _finalize_position(output_plate[position_key_string], {})
+    def _get_position(position_key_string: str):
+        """Open an existing position, or return None if it is not in the store."""
+        try:
+            return output_plate[position_key_string]
+        except KeyError:
+            return None
 
     # De-duplicate while keeping order, so a repeated key is created only once.
     keys = list(dict.fromkeys(tuple(str(part) for part in k) for k in position_keys))
@@ -375,13 +379,12 @@ def create_empty_plate(
     # which keeps creating thousands of FOVs in one well linear instead of
     # quadratic.
     with ThreadPoolExecutor(max_workers=max(1, min(32, len(keys)))) as pool:
-        in_store = list(pool.map(output_plate.zgroup.__contains__, key_strings))
-        new = [(k, s) for k, s, e in zip(keys, key_strings, in_store) if not e]
-        old = [s for s, e in zip(key_strings, in_store) if e]
+        existing = list(pool.map(_get_position, key_strings))
+        new = [(k, s) for k, s, pos in zip(keys, key_strings, existing, strict=True) if pos is None]
 
         created = output_plate.create_positions([k for k, _ in new]) if new else []
-        futures = [pool.submit(_init_new_position, s, pos) for (_, s), pos in zip(new, created)]
-        futures += [pool.submit(_update_existing_position, s) for s in old]
+        futures = [pool.submit(_init_new_position, s, pos) for (_, s), pos in zip(new, created, strict=True)]
+        futures += [pool.submit(_finalize_position, pos, {}) for pos in existing if pos is not None]
         for future in as_completed(futures):
             future.result()
 
