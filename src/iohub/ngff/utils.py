@@ -18,6 +18,7 @@ import numpy as np
 from numpy.typing import DTypeLike, NDArray
 
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
+from iohub.core.utils import normalize_path
 from iohub.ngff import open_ome_zarr
 from iohub.ngff._write_units import (
     WriteUnit,
@@ -368,8 +369,9 @@ def create_empty_plate(
         except KeyError:
             return None
 
-    # De-duplicate while keeping order, so a repeated key is created only once.
-    keys = list(dict.fromkeys(tuple(str(part) for part in k) for k in position_keys))
+    # Normalize, then de-duplicate while keeping order, so keys that resolve
+    # to the same group (e.g. "A" and "A/") are created only once.
+    keys = list(dict.fromkeys(tuple(normalize_path(str(part)) for part in k) for k in position_keys))
     key_strings = ["/".join(k) for k in keys]
 
     # Positions are independent once their well metadata exists, so the

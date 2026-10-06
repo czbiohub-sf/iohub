@@ -579,6 +579,26 @@ def test_create_empty_plate(plate_setup, extra_channels):
                 assert position.data.shape == shape
 
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_deduplicates_equivalent_keys(version):
+    """Keys that normalize to the same path create one position."""
+    position_keys = [("A", "1", "0"), ("A/", "1", "0"), ("A", "1", "0")]
+
+    with TemporaryDirectory() as temp_dir:
+        store_path = Path(temp_dir) / "dup.zarr"
+        create_empty_plate(
+            store_path=store_path,
+            position_keys=position_keys,
+            channel_names=["DAPI"],
+            shape=(1, 1, 2, 4, 4),
+            version=version,
+        )
+
+        with open_ome_zarr(str(store_path), mode="r") as plate:
+            assert [name for name, _ in plate.positions()] == ["A/1/0"]
+            assert [image.path for image in plate["A/1"].metadata.images] == ["0"]
+
+
 def test_create_empty_plate_copy_metadata_from():
     """Test that metadata_sources copies custom zattrs but not labels."""
     position_keys = [("A", "1", "0"), ("A", "1", "1")]
