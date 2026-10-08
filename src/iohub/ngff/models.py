@@ -305,7 +305,8 @@ class ImagesMeta(MetaBase):
     multiscales: list[MultiScaleMeta]
     # transitional, optional
     omero: OMEROMeta | None = None
-    # labels group support
+    # Legacy: older iohub versions wrote the labels list here, on the image.
+    # Kept so those stores still parse; the list now lives in the labels group.
     labels: LabelsMeta | None = None
     version: Literal["0.4", "0.5"] = "0.5"
     model_config = ConfigDict(extra="allow")

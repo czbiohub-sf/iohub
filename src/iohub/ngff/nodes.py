@@ -1971,21 +1971,32 @@ class Position(NGFFNode):
         self,
         labels_list: list[str],
     ):
-        """Update the labels metadata in the position metadata.
+        """Write the labels list to the metadata of the labels group.
+
+        Per the NGFF specification the list of label images belongs to the
+        ``labels`` group (``labels/zarr.json`` under ``ome`` for v0.5,
+        ``labels/.zattrs`` for v0.4), not to the image (position) itself.
 
         Notes
         -----
-        This only updates the labels list at Position level.
-        Individual label metadata (image-label) is written to each label array.
+        Individual label metadata (image-label) is written to each label image.
+        A legacy labels list stored on the position (written by older iohub
+        versions) is still parsed for backward compatibility, but it is removed
+        here so the position and the labels group cannot disagree.
         """
-        labels_meta = LabelsMeta(
-            labels=labels_list,
-            image_label=None,  # Not stored at Position level per NGFF spec
-        )
+        labels_meta = LabelsMeta(labels=labels_list)
+        ome = labels_meta.model_dump(exclude_none=True, by_alias=True)
+        labels_attrs = self._group["labels"].attrs
+        if self.version == "0.4":
+            labels_attrs.update(ome)
+        else:
+            labels_attrs["ome"] = {"version": self.version, **ome}
 
-        self.metadata.labels = labels_meta
-
-        self.dump_meta()
+        if getattr(self, "metadata", None) is not None and self.metadata.labels is not None:
+            self.metadata.labels = None
+            if self.version == "0.4" and "labels" in self.zattrs:
+                del self.zattrs["labels"]
+            self.dump_meta()
 
     def set_contrast_limits(self, channel_name: str, window: WindowDict):
         """Set the contrast limits for a channel.
