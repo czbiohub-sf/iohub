@@ -1980,23 +1980,13 @@ class Position(NGFFNode):
         Notes
         -----
         Individual label metadata (image-label) is written to each label image.
-        A legacy labels list stored on the position (written by older iohub
-        versions) is still parsed for backward compatibility, but it is removed
-        here so the position and the labels group cannot disagree.
         """
-        labels_meta = LabelsMeta(labels=labels_list)
-        ome = labels_meta.model_dump(exclude_none=True, by_alias=True)
+        ome = LabelsMeta(labels=labels_list).model_dump(exclude_none=True, by_alias=True)
         labels_attrs = self._group["labels"].attrs
         if self.version == "0.4":
             labels_attrs.update(ome)
         else:
             labels_attrs["ome"] = {"version": self.version, **ome}
-
-        if getattr(self, "metadata", None) is not None and self.metadata.labels is not None:
-            self.metadata.labels = None
-            if self.version == "0.4" and "labels" in self.zattrs:
-                del self.zattrs["labels"]
-            self.dump_meta()
 
     def set_contrast_limits(self, channel_name: str, window: WindowDict):
         """Set the contrast limits for a channel.
