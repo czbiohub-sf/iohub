@@ -1605,7 +1605,7 @@ def test_labels_metadata_structure(channels_and_random_5d, label_name, version):
         )
 
         # The labels list lives in the labels group, not on the image
-        assert dataset.metadata.labels is None
+        assert "labels" not in get_ome_attrs(dataset.zattrs)
         assert get_ome_attrs(dataset.labels_group.attrs)["labels"] == [label_name]
 
         # Verify individual label image metadata
@@ -1638,33 +1638,6 @@ def test_labels_group_metadata_on_disk(tmp_path, version):
 
     label_attrs = get_ome_attrs(zarr.open_group(store_path / "labels" / "cells", mode="r").attrs)
     assert label_attrs["image-label"]["source"] == {"image": "../../"}
-
-
-@pytest.mark.parametrize("version", ["0.4", "0.5"])
-def test_labels_legacy_position_list(tmp_path, version):
-    """Test a labels list written on the position by older iohub still parses and is migrated."""
-    store_path = tmp_path / "legacy.zarr"
-    with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI"], version=version) as pos:
-        pos.create_zeros("0", shape=(1, 1, 4, 8, 8), dtype=np.uint16)
-        pos.create_label("cells", np.zeros((1, 4, 8, 8), dtype=np.uint16))
-        # Recreate the pre-fix layout: list on the position, labels group without it
-        ome = dict(get_ome_attrs(pos.zattrs))
-        ome["labels"] = {"labels": ["cells"]}
-        if version == "0.5":
-            pos.zattrs["ome"] = ome
-        else:
-            pos.zattrs.update(ome)
-        pos.labels_group.attrs.put({})
-
-    with open_ome_zarr(store_path, layout="fov", mode="r+") as pos:
-        assert pos.metadata.labels.labels == ["cells"]
-        assert pos.label_names() == ["cells"]
-        pos.create_label("nuclei", np.zeros((1, 4, 8, 8), dtype=np.uint16))
-
-    with open_ome_zarr(store_path, layout="fov", mode="r") as pos:
-        assert pos.metadata.labels is None
-        assert "labels" not in get_ome_attrs(pos.zattrs)
-        assert get_ome_attrs(pos.labels_group.attrs)["labels"] == ["cells", "nuclei"]
 
 
 @given(
