@@ -1604,10 +1604,9 @@ def test_labels_metadata_structure(channels_and_random_5d, label_name, version):
             properties=properties,
         )
 
-        # Verify Position metadata structure (NGFF compliant)
-        assert hasattr(dataset.metadata, "labels")
-        assert dataset.metadata.labels.labels == [label_name]
-        assert dataset.metadata.labels.image_label is None
+        # The labels list lives in the labels group, not on the image
+        assert dataset.metadata.labels is None
+        assert get_ome_attrs(dataset.labels_group.attrs)["labels"] == [label_name]
 
         # Verify individual label image metadata
         assert hasattr(label_image.metadata, "multiscales")
@@ -1615,6 +1614,57 @@ def test_labels_metadata_structure(channels_and_random_5d, label_name, version):
         assert len(label_image.metadata.image_label.colors) == 2
         assert len(label_image.metadata.image_label.properties) == 2
         assert label_image.metadata.image_label.source["image"] == "../../"
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_labels_group_metadata_on_disk(tmp_path, version):
+    """Test the labels list is written to the labels group per the NGFF spec."""
+    store_path = tmp_path / "labels.zarr"
+    with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI"], version=version) as pos:
+        pos.create_zeros("0", shape=(1, 1, 4, 8, 8), dtype=np.uint16)
+        pos.create_label("cells", np.zeros((1, 4, 8, 8), dtype=np.uint16))
+        pos.create_label("nuclei", np.zeros((1, 4, 8, 8), dtype=np.uint16))
+
+    if version == "0.5":
+        labels_attrs = json.loads((store_path / "labels" / "zarr.json").read_text())["attributes"]
+        assert labels_attrs == {"ome": {"version": "0.5", "labels": ["cells", "nuclei"]}}
+        position_attrs = json.loads((store_path / "zarr.json").read_text())["attributes"]
+        assert "labels" not in position_attrs["ome"]
+    else:
+        labels_attrs = json.loads((store_path / "labels" / ".zattrs").read_text())
+        assert labels_attrs == {"labels": ["cells", "nuclei"]}
+        position_attrs = json.loads((store_path / ".zattrs").read_text())
+        assert "labels" not in position_attrs
+
+    label_attrs = get_ome_attrs(zarr.open_group(store_path / "labels" / "cells", mode="r").attrs)
+    assert label_attrs["image-label"]["source"] == {"image": "../../"}
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_labels_legacy_position_list(tmp_path, version):
+    """Test a labels list written on the position by older iohub still parses and is migrated."""
+    store_path = tmp_path / "legacy.zarr"
+    with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI"], version=version) as pos:
+        pos.create_zeros("0", shape=(1, 1, 4, 8, 8), dtype=np.uint16)
+        pos.create_label("cells", np.zeros((1, 4, 8, 8), dtype=np.uint16))
+        # Recreate the pre-fix layout: list on the position, labels group without it
+        ome = dict(get_ome_attrs(pos.zattrs))
+        ome["labels"] = {"labels": ["cells"]}
+        if version == "0.5":
+            pos.zattrs["ome"] = ome
+        else:
+            pos.zattrs.update(ome)
+        pos.labels_group.attrs.put({})
+
+    with open_ome_zarr(store_path, layout="fov", mode="r+") as pos:
+        assert pos.metadata.labels.labels == ["cells"]
+        assert pos.label_names() == ["cells"]
+        pos.create_label("nuclei", np.zeros((1, 4, 8, 8), dtype=np.uint16))
+
+    with open_ome_zarr(store_path, layout="fov", mode="r") as pos:
+        assert pos.metadata.labels is None
+        assert "labels" not in get_ome_attrs(pos.zattrs)
+        assert get_ome_attrs(pos.labels_group.attrs)["labels"] == ["cells", "nuclei"]
 
 
 @given(
