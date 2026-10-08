@@ -19,10 +19,10 @@ import xarray as xr
 from hypothesis import assume, given, settings
 from numpy.typing import DTypeLike
 
-from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
+from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES, get_ome_attrs
 from iohub.ngff import _write_units, open_ome_zarr
 from iohub.ngff._write_units import plan_write_unit, progress_dir_for
-from iohub.ngff.models import LabelsMeta
+from iohub.ngff.models import LabelsMeta, TransformationMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
     _available_cpus,
@@ -2430,3 +2430,180 @@ def test_resume_recomputes_when_an_unclaimed_shard_is_present(tmp_path):
 
     run()
     assert _call_count(call_log) == first_pass + 1, "resume skipped a unit whose store no longer matches its record"
+
+
+def _labels_snapshot(store_path: Path) -> dict[str, bytes]:
+    """Bytes of every file under the labels groups of a plate."""
+    return {str(p.relative_to(store_path)): p.read_bytes() for p in store_path.glob("*/*/*/labels/**/*") if p.is_file()}
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_with_labels(tmp_path, version):
+    """label_names scaffolds an empty TZYX label image in every position."""
+    store_path = tmp_path / "labels.zarr"
+    position_keys = [("A", "1", "0"), ("B", "2", "0")]
+    shape = (2, 2, 8, 32, 48)
+    scale = (2.0, 1.0, 0.5, 0.1, 0.1)
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=position_keys,
+        channel_names=["DAPI", "GFP"],
+        shape=shape,
+        scale=scale,
+        version=version,
+        label_names=["nuclei", "cells"],
+    )
+
+    with open_ome_zarr(store_path, mode="r") as plate:
+        for _name, pos in plate.positions():
+            assert pos.data.shape == shape
+            assert pos.label_names() == ["cells", "nuclei"]
+            labels_attrs = dict(pos.labels_group.attrs)
+            if version == "0.5":
+                assert labels_attrs == {"ome": {"version": "0.5", "labels": ["cells", "nuclei"]}}
+            else:
+                assert labels_attrs == {"labels": ["cells", "nuclei"]}
+            for label_name in ("nuclei", "cells"):
+                label = pos.get_label(label_name)
+                assert label.array_keys() == ["0"]
+                arr = label["0"]
+                assert arr.shape == (2, 8, 32, 48)
+                assert arr.dtype == np.uint32
+                # Same layout as the image, minus the channel axis
+                assert arr.chunks == (1, 8, 32, 48)
+                assert arr.shards == (None if version == "0.4" else (1, 8, 32, 48))
+                assert not arr.numpy().any()
+                multiscale = label.metadata.multiscales[0]
+                assert [ax.name for ax in multiscale.axes] == ["t", "z", "y", "x"]
+                (transform,) = multiscale.datasets[0].coordinate_transformations
+                assert transform.type == "scale"
+                assert transform.scale == [2.0, 0.5, 0.1, 0.1]
+                assert label.metadata.image_label.source == {"image": "../../"}
+
+    segmentation = np.arange(2 * 8 * 32 * 48, dtype=np.uint32).reshape(2, 8, 32, 48)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.get_label("nuclei")["0"][...] = segmentation
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        np.testing.assert_array_equal(pos.get_label("nuclei")["0"].numpy(), segmentation)
+        assert not pos.get_label("cells")["0"].numpy().any()
+
+
+def test_create_empty_plate_labels_explicit_layout(tmp_path):
+    """label_dtype, label_chunks and label_shards_ratio are honored."""
+    store_path = tmp_path / "labels.zarr"
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0")],
+        channel_names=["DAPI"],
+        shape=(2, 1, 8, 32, 48),
+        version="0.5",
+        label_names=["nuclei"],
+        label_dtype=np.uint16,
+        label_chunks=(1, 4, 16, 16),
+        label_shards_ratio=(2, 2, 2, 3),
+    )
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        arr = pos.get_label("nuclei")["0"]
+        assert arr.shape == (2, 8, 32, 48)
+        assert arr.dtype == np.uint16
+        assert arr.chunks == (1, 4, 16, 16)
+        assert arr.shards == (2, 8, 32, 48)
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_appends_labels_to_existing_plate(tmp_path, version):
+    """Missing labels are added to an existing plate; images and existing labels are untouched."""
+    store_path = tmp_path / "existing.zarr"
+    channel_names = ["DAPI", "GFP"]
+    shape = (1, 2, 4, 16, 16)
+    kwargs = {"channel_names": channel_names, "shape": shape, "version": version}
+    create_empty_plate(store_path=store_path, position_keys=[("A", "1", "0"), ("A", "1", "1")], **kwargs)
+
+    image = np.random.default_rng(0).random(shape, dtype=np.float32)
+    existing_label = np.ones((1, 4, 16, 16), dtype=np.uint16)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos["0"][...] = image
+        pos.create_label("nuclei", existing_label)
+        # A translated image: the new label must follow its transforms
+        pos.set_transform(
+            "0",
+            [
+                TransformationMeta(type="scale", scale=[1.0, 1.0, 2.0, 0.5, 0.5]),
+                TransformationMeta(type="translation", translation=[0.0, 0.0, 10.0, 20.0, 30.0]),
+            ],
+        )
+
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0"), ("A", "1", "1"), ("A", "2", "0")],
+        extra_metadata={"provenance-segment": {"model": "cyto3"}},
+        label_names=["nuclei", "cells"],
+        **kwargs,
+    )
+
+    with open_ome_zarr(store_path, mode="r") as plate:
+        assert sorted(name for name, _ in plate.positions()) == ["A/1/0", "A/1/1", "A/2/0"]
+        for _name, pos in plate.positions():
+            assert pos.channel_names == channel_names
+            assert pos.label_names() == ["cells", "nuclei"]
+            assert get_ome_attrs(pos.labels_group.attrs)["labels"] == ["cells", "nuclei"]
+            assert pos.zattrs["provenance-segment"] == {"model": "cyto3"}
+
+        pos = plate["A/1/0"]
+        np.testing.assert_array_equal(pos["0"].numpy(), image)
+        nuclei = pos.get_label("nuclei")
+        assert nuclei["0"].dtype == np.uint16
+        np.testing.assert_array_equal(nuclei["0"].numpy(), existing_label)
+        cells = pos.get_label("cells")
+        assert cells["0"].shape == (1, 4, 16, 16)
+        assert not cells["0"].numpy().any()
+        scale, translation = cells.metadata.multiscales[0].datasets[0].coordinate_transformations
+        assert scale.scale == [1.0, 2.0, 0.5, 0.5]
+        assert translation.translation == [0.0, 10.0, 20.0, 30.0]
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_labels_second_call_is_noop(tmp_path, version):
+    """Re-running with the same labels rewrites nothing under labels/."""
+    store_path = tmp_path / "labels.zarr"
+    kwargs = {
+        "position_keys": [("A", "1", "0"), ("A", "1", "1")],
+        "channel_names": ["DAPI"],
+        "shape": (1, 1, 4, 16, 16),
+        "version": version,
+        "label_names": ["nuclei"],
+    }
+    create_empty_plate(store_path=store_path, **kwargs)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.get_label("nuclei")["0"][...] = 7
+
+    before = _labels_snapshot(store_path)
+    assert before
+    create_empty_plate(store_path=store_path, **kwargs)
+    assert _labels_snapshot(store_path) == before
+
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        assert (pos.get_label("nuclei")["0"].numpy() == 7).all()
+
+
+@pytest.mark.parametrize(
+    ("bad", "match"),
+    [
+        ({"label_dtype": np.float32}, "label_dtype must be an integer type"),
+        ({"label_chunks": (1, 1, 4, 16, 16)}, r"label_chunks must be TZYX"),
+        ({"label_shards_ratio": (1, 1, 1, 1, 1)}, r"label_shards_ratio must be TZYX"),
+    ],
+)
+def test_create_empty_plate_label_argument_refusals(tmp_path, bad, match):
+    """Invalid label arguments fail before anything is written."""
+    store_path = tmp_path / "labels.zarr"
+    with pytest.raises(ValueError, match=match):
+        create_empty_plate(
+            store_path=store_path,
+            position_keys=[("A", "1", "0")],
+            channel_names=["DAPI"],
+            shape=(1, 1, 4, 16, 16),
+            label_names=["nuclei"],
+            **bad,
+        )
+    assert not store_path.exists()
