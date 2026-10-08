@@ -2508,6 +2508,45 @@ def test_create_empty_plate_labels_explicit_layout(tmp_path):
         assert arr.shards == (2, 8, 32, 48)
 
 
+def test_create_empty_plate_label_shards_follow_label_chunks(tmp_path):
+    """Default label shards are sized for the label chunks, not the image's."""
+    store_path = tmp_path / "labels.zarr"
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0")],
+        channel_names=["DAPI"],
+        shape=(2, 1, 8, 32, 48),
+        version="0.5",
+        label_names=["nuclei"],
+        label_chunks=(1, 4, 16, 16),
+    )
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        arr = pos.get_label("nuclei")["0"]
+        assert arr.chunks == (1, 4, 16, 16)
+        assert arr.shards == (1, 8, 32, 48)
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_labels_ignore_explicit_image_layout(tmp_path, version):
+    """Explicit image chunks and shards are not inherited by default labels."""
+    store_path = tmp_path / "labels.zarr"
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0")],
+        channel_names=["DAPI"],
+        shape=(2, 1, 8, 32, 48),
+        chunks=(1, 1, 2, 8, 8),
+        shards_ratio=(1, 1, 2, 2, 2) if version == "0.5" else None,
+        version=version,
+        label_names=["nuclei"],
+    )
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        assert pos["0"].chunks == (1, 1, 2, 8, 8)
+        arr = pos.get_label("nuclei")["0"]
+        assert arr.chunks == (1, 8, 32, 48)
+        assert arr.shards == (None if version == "0.4" else (1, 8, 32, 48))
+
+
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_create_empty_plate_appends_labels_to_existing_plate(tmp_path, version):
     """Missing labels are added to an existing plate; images and existing labels are untouched."""

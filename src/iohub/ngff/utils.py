@@ -220,14 +220,16 @@ def create_empty_plate(
     label_dtype : DTypeLike, optional
         Integer data type of the label images. Defaults to np.uint32.
     label_chunks : tuple[int, ...], optional
-        TZYX chunk size of the label images. If None, the image chunks
-        (``chunks`` or its default) without the channel axis are used; for
-        "0.4" the Z chunk is further capped to 500 MB at ``label_dtype``.
-        Defaults to None.
+        TZYX chunk size of the label images. If None, the version-specific
+        default the image uses when ``chunks`` is None, computed at
+        ``label_dtype`` and without the channel axis (for "0.4" the Z chunk is
+        capped to 500 MB at ``label_dtype``). Explicit image ``chunks`` are not
+        inherited. Defaults to None.
     label_shards_ratio : tuple[int, ...], optional
-        TZYX shards ratio of the label images. If None, the image shards
-        ratio (``shards_ratio`` or its default) without the channel axis is
-        used, i.e. no sharding for "0.4". Defaults to None.
+        TZYX shards ratio of the label images. If None, for "0.5" the ratio
+        that makes one shard span a time chunk's whole ZYX volume of the label
+        chunks; no sharding for "0.4". Explicit image ``shards_ratio`` is not
+        inherited. Defaults to None.
 
     Raises
     ------
@@ -331,20 +333,16 @@ def create_empty_plate(
     if label_names:
         if not np.issubdtype(label_dtype, np.integer):
             raise ValueError(f"label_dtype must be an integer type, got {np.dtype(label_dtype)}.")
-        if label_chunks is None:
-            label_chunks = _drop_channel_axis(chunks)
-            if version == "0.4":
-                label_chunks = (
-                    label_chunks[0],
-                    *_limit_zyx_chunk_size(
-                        shape, np.dtype(label_dtype).itemsize, V04_MAX_CHUNK_SIZE_BYTES, chunks=chunks
-                    ),
-                )
-        if label_shards_ratio is None and shards_ratio is not None:
-            label_shards_ratio = _drop_channel_axis(shards_ratio)
         for arg_name, value in (("label_chunks", label_chunks), ("label_shards_ratio", label_shards_ratio)):
             if value is not None and len(value) != 4:
                 raise ValueError(f"{arg_name} must be TZYX (4 values), got {value}.")
+        # Same defaults as the image, computed at the label dtype. The shards
+        # follow the label chunks, not the image's ratio, which was sized for
+        # the image chunks.
+        if label_chunks is None:
+            label_chunks = _drop_channel_axis(_default_chunks(shape, label_dtype, version))
+        if label_shards_ratio is None and version == "0.5":
+            label_shards_ratio = _drop_channel_axis(_default_shards_ratio(shape, label_chunks))
 
     # Normalize to a list of Paths. Fail loudly if any metadata source root
     # is wrong; missing individual positions within them are still skipped
