@@ -118,6 +118,10 @@ def create_empty_plate(
     metadata_sources: Path | str | list[Path | str] | None = None,
     metadata_keys: str | Iterable[str] | None = None,
     extra_metadata: Mapping[str, Any] | None = None,
+    label_names: list[str] | None = None,
+    label_dtype: DTypeLike = np.uint32,
+    label_chunks: tuple[int, ...] | None = None,
+    label_shards_ratio: tuple[int, ...] | None = None,
 ) -> None:
     """
     Create a new HCS Plate in OME-Zarr format if the plate does not exist.
@@ -201,11 +205,37 @@ def create_empty_plate(
         scaffolds all of its stores up front would otherwise chain empty
         provenance. Keys the OME-Zarr spec owns are refused.
         Defaults to None.
+    label_names : list[str], optional
+        Names of empty label images to create in every position in
+        ``position_keys``, at ``<fov>/labels/<name>/`` with a single level
+        "0". Level "0" is TZYX: the position's image shape and scale (and
+        translation, if any) without the channel axis. For a newly created
+        position that is ``shape``/``scale`` minus the channel axis; for an
+        existing position it is read from the image at "0", so the label
+        always matches the image it annotates. Labels that already exist are
+        left untouched, so calling this again is a no-op. No data is written
+        (fill value 0); fill a label later with
+        ``position.get_label(name)["0"][...] = data``.
+        Defaults to None (no labels).
+    label_dtype : DTypeLike, optional
+        Integer data type of the label images. Defaults to np.uint32.
+    label_chunks : tuple[int, ...], optional
+        TZYX chunk size of the label images. If None, the image chunks
+        (``chunks`` or its default) without the channel axis are used; for
+        "0.4" the Z chunk is further capped to 500 MB at ``label_dtype``.
+        Defaults to None.
+    label_shards_ratio : tuple[int, ...], optional
+        TZYX shards ratio of the label images. If None, the image shards
+        ratio (``shards_ratio`` or its default) without the channel axis is
+        used, i.e. no sharding for "0.4". Defaults to None.
 
     Raises
     ------
     ValueError
         If ``metadata_keys`` is given without ``metadata_sources``.
+    ValueError
+        If ``label_dtype`` is not an integer type, or ``label_chunks`` or
+        ``label_shards_ratio`` is not TZYX (4 values).
     FileNotFoundError
         If a ``metadata_sources`` plate root does not exist.
 
@@ -271,6 +301,17 @@ def create_empty_plate(
     ...     extra_metadata={"provenance-deskew": {"ls_angle_deg": 30}},
     ... )
 
+    Scaffold an empty segmentation label next to the images:
+    >>> create_empty_plate(
+    ...     store_path=Path("/path/to/output.zarr"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     channel_names=["DAPI"],
+    ...     shape=(1, 1, 256, 256, 256),
+    ...     label_names=["nuclei"],
+    ... )
+    >>> with open_ome_zarr("/path/to/output.zarr/A/1/0", mode="r+") as position:
+    ...     position.get_label("nuclei")["0"][0] = segmentation  # ZYX
+
     Notes
     -----
     - If `chunks` is not provided, a version-specific default is used (see
@@ -285,6 +326,25 @@ def create_empty_plate(
         shards_ratio = _default_shards_ratio(shape, chunks)
 
     extra_metadata = _validated_extra_metadata(extra_metadata)
+
+    label_names = list(dict.fromkeys(label_names or []))
+    if label_names:
+        if not np.issubdtype(label_dtype, np.integer):
+            raise ValueError(f"label_dtype must be an integer type, got {np.dtype(label_dtype)}.")
+        if label_chunks is None:
+            label_chunks = _drop_channel_axis(chunks)
+            if version == "0.4":
+                label_chunks = (
+                    label_chunks[0],
+                    *_limit_zyx_chunk_size(
+                        shape, np.dtype(label_dtype).itemsize, V04_MAX_CHUNK_SIZE_BYTES, chunks=chunks
+                    ),
+                )
+        if label_shards_ratio is None and shards_ratio is not None:
+            label_shards_ratio = _drop_channel_axis(shards_ratio)
+        for arg_name, value in (("label_chunks", label_chunks), ("label_shards_ratio", label_shards_ratio)):
+            if value is not None and len(value) != 4:
+                raise ValueError(f"{arg_name} must be TZYX (4 values), got {value}.")
 
     # Normalize to a list of Paths. Fail loudly if any metadata source root
     # is wrong; missing individual positions within them are still skipped
@@ -329,6 +389,37 @@ def create_empty_plate(
         # the caller is the authority on its own step.
         if collected or extra_metadata:
             position.zattrs.put({**dict(position.zattrs), **collected, **extra_metadata})
+
+        _create_missing_labels(position)
+
+    def _create_missing_labels(position) -> None:
+        # Existing labels are never touched, which also makes a repeated
+        # call a no-op. The shape and transforms come from the position's
+        # own image so a label added to an existing plate matches it.
+        missing = [name for name in label_names if name not in position.label_names()]
+        if not missing:
+            return
+        channel_index = position._get_channel_axis()
+        image_shape = position["0"].shape
+        label_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
+        image_dataset = next(d for d in position.metadata.multiscales[0].datasets if d.path == "0")
+        label_transform = []
+        for transform in image_dataset.coordinate_transformations:
+            transform = transform.model_copy(deep=True)
+            for field in ("scale", "translation"):
+                values = getattr(transform, field)
+                if values is not None:
+                    setattr(transform, field, [v for i, v in enumerate(values) if i != channel_index])
+            label_transform.append(transform)
+        for name in missing:
+            position.create_label_zeros(
+                name,
+                shape=label_shape,
+                dtype=label_dtype,
+                chunks=label_chunks,
+                shards_ratio=label_shards_ratio,
+                transform=label_transform,
+            )
 
     def _init_new_position(position_key_string: str, position) -> None:
         _ = position.create_zeros(
@@ -910,6 +1001,11 @@ def _default_chunks(
         return (1, 1, *chunk_zyx_shape)
     # v0.5: DCA-aligned small chunks, clamped to the array shape.
     return _clamp_chunks_to_shape(shape, (1, 1, *_V05_DEFAULT_ZYX_CHUNKS))
+
+
+def _drop_channel_axis(values: tuple[int, ...]) -> tuple[int, ...]:
+    """TZYX version of a TCZYX tuple."""
+    return (values[0], *values[2:])
 
 
 def _default_shards_ratio(

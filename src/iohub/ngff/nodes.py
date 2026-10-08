@@ -1967,6 +1967,78 @@ class Position(NGFFNode):
 
         return label_image
 
+    def create_label_zeros(
+        self,
+        name: str,
+        shape: tuple[int, ...],
+        dtype: DTypeLike = np.uint32,
+        chunks: tuple[int, ...] | None = None,
+        shards_ratio: tuple[int, ...] | None = None,
+        transform: list[TransformationMeta] | None = None,
+        colors: dict[int, list[int]] | None = None,
+        properties: list[dict[str, Any]] | None = None,
+    ) -> PositionLabel:
+        """Create a new zero-filled multiscale label image in this position.
+
+        Parallel to [`create_zeros`][iohub.ngff.Position.create_zeros] for
+        images: only the array metadata is written, so the label can be
+        filled later (e.g. chunk by chunk from several processes) with
+        ``position.get_label(name)["0"][...] = data``.
+
+        Parameters
+        ----------
+        name : str
+            Name for the new label image
+        shape : tuple[int, ...]
+            Shape of the full-resolution level "0" (TZYX, no channel dimension)
+        dtype : DTypeLike, optional
+            Integer data type of the label, by default ``np.uint32``
+        chunks : tuple[int, ...], optional
+            Chunk size, by default None (one ZYX volume per chunk)
+        shards_ratio : tuple[int, ...], optional
+            Sharding ratio for each dimension, by default None (no sharding)
+        transform : list[TransformationMeta], optional
+            Coordinate transformations of level "0", by default None
+            (unit scale). Should match the image's TZYX transforms.
+        colors : dict[int, list[int]], optional
+            Color mapping for label values {label_value: [r, g, b, a]}
+        properties : list[dict[str, Any]], optional
+            Properties for each label value, must include "label-value" field
+
+        Returns
+        -------
+        PositionLabel
+            The created (empty) multiscale label image
+
+        Raises
+        ------
+        ValueError
+            If the dtype is not an integer type or the shape is not TZYX
+        """
+        if not np.issubdtype(dtype, np.integer):
+            raise ValueError(f"Labels must use integer dtype, got {dtype}.")
+        expected_dims = len(self.label_axes)
+        if len(shape) != expected_dims:
+            raise ValueError(f"Label shape must be {expected_dims}D (TZYX), got {len(shape)}D shape: {shape}")
+
+        labels_group = self.create_labels_group()
+        label_group = labels_group.create_group(name, overwrite=self._overwrite)
+        label_image = PositionLabel(
+            group=label_group,
+            parse_meta=False,
+            axes=self.label_axes,
+            version=self.version,
+            colors=colors,
+            properties=properties,
+            overwriting_creation=self._overwrite,
+            impl=self._impl,
+        )
+        label_image.create_zeros("0", shape, dtype, chunks=chunks, shards_ratio=shards_ratio, transform=transform)
+
+        self._update_labels_metadata(self.label_names())
+
+        return label_image
+
     def _update_labels_metadata(
         self,
         labels_list: list[str],
