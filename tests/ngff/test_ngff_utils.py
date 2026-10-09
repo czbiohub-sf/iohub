@@ -2547,6 +2547,28 @@ def test_create_empty_plate_labels_ignore_explicit_image_layout(tmp_path, versio
         assert arr.shards == (None if version == "0.4" else (1, 8, 32, 48))
 
 
+def test_create_empty_plate_label_defaults_follow_each_position_shape(tmp_path):
+    """Omitted label layouts are computed from each position's own image shape."""
+    store_path = tmp_path / "labels.zarr"
+    kwargs = {"store_path": store_path, "channel_names": ["DAPI"], "version": "0.5"}
+    # An earlier call created A/1/0 with another shape than the labelling call's.
+    create_empty_plate(position_keys=[("A", "1", "0")], shape=(2, 1, 8, 32, 48), **kwargs)
+    create_empty_plate(
+        position_keys=[("A", "1", "0"), ("A", "1", "1")],
+        shape=(2, 1, 40, 512, 300),
+        label_names=["nuclei"],
+        **kwargs,
+    )
+    with open_ome_zarr(store_path, mode="r") as plate:
+        old, new = plate["A/1/0"].get_label("nuclei")["0"], plate["A/1/1"].get_label("nuclei")["0"]
+        assert old.shape == (2, 8, 32, 48)
+        assert old.chunks == (1, 8, 32, 48)
+        assert old.shards == (1, 8, 32, 48)
+        assert new.shape == (2, 40, 512, 300)
+        assert new.chunks == (1, 16, 256, 256)
+        assert new.shards == (1, 48, 512, 512)
+
+
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_create_empty_plate_appends_labels_to_existing_plate(tmp_path, version):
     """Missing labels are added to an existing plate; images and existing labels are untouched."""
