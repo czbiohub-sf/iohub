@@ -400,9 +400,8 @@ def create_empty_plate(
         channel_index = position._get_channel_axis()
         image_shape = position["0"].shape
         label_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
-        image_dataset = next(d for d in position.metadata.multiscales[0].datasets if d.path == "0")
         label_transform = []
-        for transform in image_dataset.coordinate_transformations:
+        for transform in position._get_all_transforms("0"):
             transform = transform.model_copy(deep=True)
             for field in ("scale", "translation"):
                 values = getattr(transform, field)
