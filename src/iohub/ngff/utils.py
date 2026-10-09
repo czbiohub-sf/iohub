@@ -337,6 +337,8 @@ def create_empty_plate(
         for arg_name, value in (("label_chunks", label_chunks), ("label_shards_ratio", label_shards_ratio)):
             if value is not None and len(value) != 4:
                 raise ValueError(f"{arg_name} must be TZYX (4 values), got {value}.")
+        if version == "0.4" and label_shards_ratio is not None:
+            raise ValueError("label_shards_ratio is not supported for OME-Zarr v0.4.")
 
     # Normalize to a list of Paths. Fail loudly if any metadata source root
     # is wrong; missing individual positions within them are still skipped
