@@ -305,8 +305,6 @@ class ImagesMeta(MetaBase):
     multiscales: list[MultiScaleMeta]
     # transitional, optional
     omero: OMEROMeta | None = None
-    # labels group support
-    labels: LabelsMeta | None = None
     version: Literal["0.4", "0.5"] = "0.5"
     model_config = ConfigDict(extra="allow")
 

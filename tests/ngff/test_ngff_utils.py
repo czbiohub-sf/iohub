@@ -22,7 +22,6 @@ from numpy.typing import DTypeLike
 from iohub.core.compat import V04_MAX_CHUNK_SIZE_BYTES
 from iohub.ngff import _write_units, open_ome_zarr
 from iohub.ngff._write_units import plan_write_unit, progress_dir_for
-from iohub.ngff.models import LabelsMeta
 from iohub.ngff.utils import (
     _V05_DEFAULT_ZYX_CHUNKS,
     _available_cpus,
@@ -627,9 +626,8 @@ def test_create_empty_plate_copy_metadata_from():
             for _name, pos in plate.positions():
                 for k, v in custom_zattrs.items():
                     pos.zattrs[k] = v
-                # Write a label reference into the source OME metadata
-                pos.metadata.labels = LabelsMeta(labels=["nuclei"])
-                pos.dump_meta()
+                # Write a dangling label reference into the source OME metadata
+                pos.zattrs["ome"] = {**pos.zattrs["ome"], "labels": ["nuclei"]}
 
         # Create dest plate with different channel names but metadata_sources
         dst_channels = ["Phase", "Fluorescence"]
@@ -660,8 +658,7 @@ def test_create_empty_plate_copy_metadata_from():
                 assert dst_pos.channel_names == dst_channels
 
                 # Label references should NOT be copied (no backing arrays)
-                dst_labels = getattr(dst_pos.metadata, "labels", None)
-                assert dst_labels is None or dst_labels == []
+                assert "labels" not in dst_pos.zattrs["ome"]
 
 
 def test_create_empty_plate_copy_metadata_subset_positions():
