@@ -1977,6 +1977,7 @@ class Position(NGFFNode):
         transform: list[TransformationMeta] | None = None,
         colors: dict[int, list[int]] | None = None,
         properties: list[dict[str, Any]] | None = None,
+        level: str = "0",
     ) -> PositionLabel:
         """Create a new zero-filled multiscale label image in this position.
 
@@ -1990,7 +1991,7 @@ class Position(NGFFNode):
         name : str
             Name for the new label image
         shape : tuple[int, ...]
-            Shape of the full-resolution level "0" (TZYX, no channel dimension)
+            Shape of the first level (TZYX, no channel dimension)
         dtype : DTypeLike, optional
             Integer data type of the label, by default ``np.uint32``
         chunks : tuple[int, ...], optional
@@ -2004,6 +2005,10 @@ class Position(NGFFNode):
             Color mapping for label values {label_value: [r, g, b, a]}
         properties : list[dict[str, Any]], optional
             Properties for each label value, must include "label-value" field
+        level : str, optional
+            Path of the first level, by default "0". Further levels can be
+            added on the returned label with
+            [`create_zeros`][iohub.ngff.PositionLabel.create_zeros].
 
         Returns
         -------
@@ -2033,7 +2038,7 @@ class Position(NGFFNode):
             overwriting_creation=self._overwrite,
             impl=self._impl,
         )
-        label_image.create_zeros("0", shape, dtype, chunks=chunks, shards_ratio=shards_ratio, transform=transform)
+        label_image.create_zeros(level, shape, dtype, chunks=chunks, shards_ratio=shards_ratio, transform=transform)
 
         self._update_labels_metadata(self.label_names())
 

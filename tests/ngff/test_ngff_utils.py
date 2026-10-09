@@ -2664,12 +2664,104 @@ def test_create_empty_plate_labels_second_call_is_noop(tmp_path, version):
         assert (pos.get_label("nuclei")["0"].numpy() == 7).all()
 
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_labels_mirror_image_pyramid(tmp_path, version):
+    """A label added to a pyramidal image gets one level per image level, each matching it."""
+    store_path = tmp_path / "pyramid.zarr"
+    shape = (2, 1, 8, 32, 48)
+    kwargs = {"store_path": store_path, "channel_names": ["DAPI"], "shape": shape, "version": version}
+    create_empty_plate(position_keys=[("A", "1", "0")], scale=(1.0, 1.0, 2.0, 0.5, 0.5), **kwargs)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.initialize_pyramid(3)
+        assert pos.array_keys() == ["0", "1", "2"]
+
+    create_empty_plate(position_keys=[("A", "1", "0")], label_names=["nuclei"], **kwargs)
+
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        label = pos.get_label("nuclei")
+        assert label.array_keys() == ["0", "1", "2"]
+        image_datasets = pos.metadata.multiscales[0].datasets
+        label_datasets = label.metadata.multiscales[0].datasets
+        assert [d.path for d in label_datasets] == [d.path for d in image_datasets]
+        for image_dataset, label_dataset in zip(image_datasets, label_datasets, strict=True):
+            image_arr, label_arr = pos[image_dataset.path], label[label_dataset.path]
+            t, _c, *zyx = image_arr.shape
+            assert label_arr.shape == (t, *zyx)
+            assert label_arr.dtype == np.uint32
+            # Default layout computed from this level's own shape
+            assert label_arr.chunks == (1, *zyx)
+            assert label_arr.shards == (None if version == "0.4" else (1, *zyx))
+            (image_scale,) = image_dataset.coordinate_transformations
+            (label_scale,) = label_dataset.coordinate_transformations
+            assert label_scale.scale == [image_scale.scale[0], *image_scale.scale[2:]]
+        assert label["2"].shape == (2, 2, 8, 12)
+        assert label_datasets[2].coordinate_transformations[0].scale == [1.0, 8.0, 2.0, 2.0]
+
+
+def test_create_empty_plate_labels_pyramid_clamps_explicit_chunks(tmp_path):
+    """Explicit label chunks are clamped to the shape of each pyramid level."""
+    store_path = tmp_path / "pyramid.zarr"
+    kwargs = {"store_path": store_path, "channel_names": ["DAPI"], "shape": (1, 1, 8, 32, 48), "version": "0.5"}
+    create_empty_plate(position_keys=[("A", "1", "0")], **kwargs)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.initialize_pyramid(3)
+    create_empty_plate(
+        position_keys=[("A", "1", "0")],
+        label_names=["nuclei"],
+        label_chunks=(1, 4, 16, 16),
+        **kwargs,
+    )
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        label = pos.get_label("nuclei")
+        assert label["0"].chunks == (1, 4, 16, 16)
+        assert label["0"].shards == (1, 8, 32, 48)
+        assert label["1"].chunks == (1, 4, 16, 16)
+        assert label["1"].shards == (1, 4, 16, 32)
+        assert label["2"].shape == (1, 2, 8, 12)
+        assert label["2"].chunks == (1, 2, 8, 12)
+        assert label["2"].shards == (1, 2, 8, 12)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"label_dtype": np.uint16},
+        {"label_chunks": (1, 4, 16, 16)},
+        {"label_shards_ratio": (1, 1, 1, 1)},
+        {"label_chunks": (1, 4, 16, 16), "label_shards_ratio": (1, 1, 1, 1)},
+    ],
+)
+def test_create_empty_plate_label_layout_requires_label_names(tmp_path, bad):
+    """Label layout arguments without label_names are refused rather than ignored."""
+    store_path = tmp_path / "labels.zarr"
+    with pytest.raises(ValueError, match="select nothing on their own"):
+        create_empty_plate(
+            store_path=store_path,
+            position_keys=[("A", "1", "0")],
+            channel_names=["DAPI"],
+            shape=(1, 1, 4, 16, 16),
+            **bad,
+        )
+    assert not store_path.exists()
+    # The default dtype on its own is not a request for labels
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0")],
+        channel_names=["DAPI"],
+        shape=(1, 1, 4, 16, 16),
+        label_dtype=np.uint32,
+    )
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        assert pos.label_names() == []
+
+
 @pytest.mark.parametrize(
     ("bad", "match"),
     [
         ({"label_dtype": np.float32}, "label_dtype must be an integer type"),
         ({"label_chunks": (1, 1, 4, 16, 16)}, r"label_chunks must be TZYX"),
         ({"label_shards_ratio": (1, 1, 1, 1, 1)}, r"label_shards_ratio must be TZYX"),
+        ({"label_shards_ratio": (1, 1, 1, 1), "version": "0.4"}, "not supported for OME-Zarr v0.4"),
     ],
 )
 def test_create_empty_plate_label_argument_refusals(tmp_path, bad, match):
