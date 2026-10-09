@@ -2569,6 +2569,25 @@ def test_create_empty_plate_label_defaults_follow_each_position_shape(tmp_path):
         assert new.shards == (1, 48, 512, 512)
 
 
+def test_create_empty_plate_labels_refuse_path_backed_transforms(tmp_path):
+    """A label cannot inherit a transform stored at a path, so it is refused."""
+    store_path = tmp_path / "labels.zarr"
+    kwargs = {"store_path": store_path, "channel_names": ["DAPI"], "shape": (1, 1, 4, 16, 16)}
+    create_empty_plate(position_keys=[("A", "1", "0")], **kwargs)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.set_transform(
+            "0",
+            [
+                TransformationMeta(type="scale", scale=[1.0, 1.0, 1.0, 1.0, 1.0]),
+                TransformationMeta(type="translation", path="transforms/translation"),
+            ],
+        )
+    with pytest.raises(ValueError, match="path-backed coordinate transformations"):
+        create_empty_plate(position_keys=[("A", "1", "0")], label_names=["nuclei"], **kwargs)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        assert pos.label_names() == []
+
+
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_create_empty_plate_appends_labels_to_existing_plate(tmp_path, version):
     """Missing labels are added to an existing plate; images and existing labels are untouched."""

@@ -393,11 +393,22 @@ def create_empty_plate(
         missing = [name for name in label_names if name not in position.label_names()]
         if not missing:
             return
+        transforms = position._get_all_transforms("0")
+        # A transform stored at `path` cannot have its channel component
+        # removed, and a relative path would no longer resolve from
+        # labels/<name>. iohub never writes these, so refuse rather than copy
+        # a transform that does not describe the label.
+        if any(transform.path is not None for transform in transforms):
+            raise ValueError(
+                f"Cannot add labels to position '{position.zgroup.path}': its image uses "
+                "path-backed coordinate transformations, which cannot be adapted to "
+                "the label's TZYX axes."
+            )
         channel_index = position._get_channel_axis()
         image_shape = position["0"].shape
         label_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
         label_transform = []
-        for transform in position._get_all_transforms("0"):
+        for transform in transforms:
             transform = transform.model_copy(deep=True)
             for field in ("scale", "translation"):
                 values = getattr(transform, field)
