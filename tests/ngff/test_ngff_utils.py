@@ -2665,6 +2665,29 @@ def test_create_empty_plate_labels_second_call_is_noop(tmp_path, version):
 
 
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_plate_labels_keep_transform_scopes(tmp_path, version):
+    """Multiscale-level image transforms land on the label's multiscale, not its datasets."""
+    store_path = tmp_path / "scopes.zarr"
+    kwargs = {"store_path": store_path, "channel_names": ["DAPI"], "shape": (1, 1, 4, 16, 16), "version": version}
+    create_empty_plate(position_keys=[("A", "1", "0")], **kwargs)
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.set_transform("0", [TransformationMeta(type="scale", scale=[1.0, 1.0, 2.0, 0.5, 0.5])])
+        # A FOV-wide translation in physical units, applied after the dataset scale
+        pos.set_transform("*", [TransformationMeta(type="translation", translation=[0.0, 0.0, 10.0, 20.0, 30.0])])
+
+    create_empty_plate(position_keys=[("A", "1", "0")], label_names=["nuclei"], **kwargs)
+
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        label_multiscale = pos.get_label("nuclei").metadata.multiscales[0]
+        (dataset_scale,) = label_multiscale.datasets[0].coordinate_transformations
+        assert dataset_scale.type == "scale"
+        assert dataset_scale.scale == [1.0, 2.0, 0.5, 0.5]
+        (fov_translation,) = label_multiscale.coordinate_transformations
+        assert fov_translation.type == "translation"
+        assert fov_translation.translation == [0.0, 10.0, 20.0, 30.0]
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_create_empty_plate_labels_mirror_image_pyramid(tmp_path, version):
     """A label added to a pyramidal image gets one level per image level, each matching it."""
     store_path = tmp_path / "pyramid.zarr"

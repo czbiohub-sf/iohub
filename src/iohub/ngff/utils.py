@@ -415,9 +415,10 @@ def create_empty_plate(
         if not missing:
             return
         channel_index = position._get_channel_axis()
-        levels = []
-        for dataset in position.metadata.multiscales[0].datasets:
-            transforms = position._get_all_transforms(dataset.path)
+
+        def _label_transforms(transforms: list[TransformationMeta] | None) -> list[TransformationMeta] | None:
+            if transforms is None:
+                return None
             # A transform stored at `path` cannot have its channel component
             # removed, and a relative path would no longer resolve from
             # labels/<name>. iohub never writes these, so refuse rather than
@@ -428,14 +429,25 @@ def create_empty_plate(
                     "path-backed coordinate transformations, which cannot be adapted to "
                     "the label's TZYX axes."
                 )
-            label_transform = []
+            stripped = []
             for transform in transforms:
                 transform = transform.model_copy(deep=True)
                 for field in ("scale", "translation"):
                     values = getattr(transform, field)
                     if values is not None:
                         setattr(transform, field, [v for i, v in enumerate(values) if i != channel_index])
-                label_transform.append(transform)
+                stripped.append(transform)
+            return stripped
+
+        # The two transform scopes are kept apart: dataset transforms apply
+        # first and multiscale-level ones after them, so flattening them
+        # into the label's dataset transforms would reorder non-commuting
+        # operations (a dataset scale and a multiscale translation).
+        multiscale = position.metadata.multiscales[0]
+        multiscale_transforms = _label_transforms(multiscale.coordinate_transformations)
+        levels = []
+        for dataset in multiscale.datasets:
+            label_transform = _label_transforms(dataset.coordinate_transformations)
             image_shape = position[dataset.path].shape
             label_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
             # Omitted layouts get the image defaults, computed per position
@@ -472,6 +484,9 @@ def create_empty_plate(
                         shards_ratio=shards_ratio_tzyx,
                         transform=label_transform,
                     )
+            if multiscale_transforms:
+                label.metadata.multiscales[0].coordinate_transformations = multiscale_transforms
+                label.dump_meta()
 
     def _init_new_position(position_key_string: str, position) -> None:
         _ = position.create_zeros(
