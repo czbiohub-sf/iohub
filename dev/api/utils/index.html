@@ -1197,7 +1197,11 @@
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">metadata_sources</span><span class="p">:</span> <span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="n">Path</span> <span class="o">|</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">metadata_keys</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Iterable</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">extra_metadata</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">label_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">label_dtype</span><span class="p">:</span> <span class="n">DTypeLike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">label_chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">label_shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -1370,6 +1374,64 @@ provenance. Keys the OME-Zarr spec owns are refused.
 Defaults to None.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>label_names</code></b>
+              (<code><span title="list">list</span>[<span title="str">str</span>]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Names of empty label images to create in every position in
+<code>position_keys</code>, at <code>&lt;fov&gt;/labels/&lt;name&gt;/</code>. Each label mirrors
+the position's image pyramid: one TZYX level per image level, with
+the same path, the image's shape and scale (and translation, if any)
+without the channel axis. For a newly created position that is
+<code>shape</code>/<code>scale</code> minus the channel axis; for an existing position
+it is read from the image, so the label always matches the image it
+annotates. Labels that already exist are left untouched, so calling
+this again is a no-op. No data is written (fill value 0); fill a
+label later with <code>position.get_label(name)["0"][...] = data</code>.
+Defaults to None (no labels).</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>label_dtype</code></b>
+              (<code><span title="numpy.typing.DTypeLike">DTypeLike</span></code>, default:
+                  <code><span title="numpy.uint32">uint32</span></code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Integer data type of the label images. Defaults to np.uint32.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>label_chunks</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>TZYX chunk size of the label images, clamped to the shape of each
+level. If None, the version-specific default the image uses when
+<code>chunks</code> is None, computed for each position and level from the
+image shape, at <code>label_dtype</code> and without the channel axis (for
+"0.4" the Z chunk is capped to 500 MB at <code>label_dtype</code>). Explicit
+image <code>chunks</code> are not inherited. Defaults to None.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>label_shards_ratio</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>TZYX shards ratio of the label images. If None, for "0.5" the ratio
+that makes one shard span a time chunk's whole ZYX volume of each
+level of each position's label; no sharding for "0.4". Explicit image
+<code>shards_ratio</code> is not inherited. Defaults to None.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -1380,6 +1442,24 @@ Defaults to None.</p>
             –
           <div class="doc-md-description">
             <p>If <code>metadata_keys</code> is given without <code>metadata_sources</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If <code>label_dtype</code> is not an integer type, or <code>label_chunks</code> or
+<code>label_shards_ratio</code> is not TZYX (4 values), or
+<code>label_shards_ratio</code> is given for version "0.4".</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If <code>label_dtype</code>, <code>label_chunks</code> or <code>label_shards_ratio</code> is
+given without <code>label_names</code>: they describe labels, so on their
+own they select nothing.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -1452,6 +1532,17 @@ Defaults to None.</p>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">... </span>    <span class="n">metadata_keys</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;provenance-*&quot;</span><span class="p">},</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">... </span>    <span class="n">extra_metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;provenance-deskew&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;ls_angle_deg&quot;</span><span class="p">:</span> <span class="mi">30</span><span class="p">}},</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">... </span><span class="p">)</span>
+</span></code></pre></div>
+    <p>Scaffold an empty segmentation label next to the images:</p>
+    <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">create_empty_plate</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">... </span>    <span class="n">store_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/path/to/output.zarr&quot;</span><span class="p">),</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">... </span>    <span class="n">position_keys</span><span class="o">=</span><span class="p">[(</span><span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)],</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">... </span>    <span class="n">channel_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;DAPI&quot;</span><span class="p">],</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">... </span>    <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">... </span>    <span class="n">label_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;nuclei&quot;</span><span class="p">],</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">... </span><span class="p">)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">open_ome_zarr</span><span class="p">(</span><span class="s2">&quot;/path/to/output.zarr/A/1/0&quot;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">position</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">... </span>    <span class="n">position</span><span class="o">.</span><span class="n">get_label</span><span class="p">(</span><span class="s2">&quot;nuclei&quot;</span><span class="p">)[</span><span class="s2">&quot;0&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">segmentation</span>  <span class="c1"># ZYX</span>
 </span></code></pre></div>
 
 

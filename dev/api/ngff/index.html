@@ -1506,6 +1506,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#iohub.ngff.Position.create_label_zeros" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;create_label_zeros
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#iohub.ngff.Position.set_contrast_limits" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -2011,6 +2022,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;create_label
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.ngff.TiledPosition.create_label_zeros" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;create_label_zeros
       </span>
     </span>
   </a>
@@ -3305,6 +3327,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#iohub.ngff.Position.create_label_zeros" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;create_label_zeros
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#iohub.ngff.Position.set_contrast_limits" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -3810,6 +3843,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;create_label
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.ngff.TiledPosition.create_label_zeros" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;create_label_zeros
       </span>
     </span>
   </a>
@@ -6978,6 +7022,158 @@ and <code>int64</code> are supported.</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="iohub.ngff.Position.create_label_zeros" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">create_label_zeros</span>
+
+
+<a href="#iohub.ngff.Position.create_label_zeros" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">create_label_zeros</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Create a new zero-filled multiscale label image in this position.</p>
+<p>Parallel to <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-method&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;create_zeros&lt;/span&gt;" href="./#iohub.ngff.Position.create_zeros"><code>create_zeros</code></a> for
+images: only the array metadata is written, so the label can be
+filled later (e.g. chunk by chunk from several processes) with
+<code>position.get_label(name)["0"][...] = data</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>name</code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Name for the new label image</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shape</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Shape of the first level (TZYX, no channel dimension)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>dtype</code></b>
+              (<code><span title="numpy.typing.DTypeLike">DTypeLike</span></code>, default:
+                  <code><span title="numpy.uint32">uint32</span></code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Integer data type of the label, by default <code>np.uint32</code></p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>chunks</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Chunk size, by default None (one ZYX volume per chunk)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards_ratio</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Sharding ratio for each dimension, by default None (no sharding)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>transform</code></b>
+              (<code><span title="list">list</span>[<span title="iohub.ngff.models.TransformationMeta">TransformationMeta</span>]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Coordinate transformations of level "0", by default None
+(unit scale). Should match the image's TZYX transforms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>colors</code></b>
+              (<code><span title="dict">dict</span>[<span title="int">int</span>, <span title="list">list</span>[<span title="int">int</span>]]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Color mapping for label values {label_value: [r, g, b, a]}</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>properties</code></b>
+              (<code><span title="list">list</span>[<span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Properties for each label value, must include "label-value" field</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>level</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>&#39;0&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Path of the first level, by default "0". Further levels can be
+added on the returned label with
+[<code>create_zeros</code>][iohub.ngff.PositionLabel.create_zeros].</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="iohub.ngff.nodes.PositionLabel">PositionLabel</span></code>
+          –
+          <div class="doc-md-description">
+            <p>The created (empty) multiscale label image</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If the dtype is not an integer type or the shape is not TZYX</p>
+          </div>
+        </li>
+    </ul>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="iohub.ngff.Position.set_contrast_limits" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">set_contrast_limits</span>
 
@@ -8957,6 +9153,158 @@ No sharding will be used if not specified.</p>
 <code>uint8</code>, <code>int8</code>, <code>uint16</code>, <code>int16</code>, <code>uint32</code>, <code>int32</code>, <code>uint64</code>,
 and <code>int64</code> are supported.</p>
 </details>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="iohub.ngff.TiledPosition.create_label_zeros" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">create_label_zeros</span>
+
+
+<a href="#iohub.ngff.TiledPosition.create_label_zeros" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">create_label_zeros</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Create a new zero-filled multiscale label image in this position.</p>
+<p>Parallel to <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-method&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-function-name&quot;&gt;create_zeros&lt;/span&gt;" href="./#iohub.ngff.Position.create_zeros"><code>create_zeros</code></a> for
+images: only the array metadata is written, so the label can be
+filled later (e.g. chunk by chunk from several processes) with
+<code>position.get_label(name)["0"][...] = data</code>.</p>
+
+
+<p><span class="doc-section-title">Parameters:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+            <b><code>name</code></b>
+              (<code><span title="str">str</span></code>)
+          –
+          <div class="doc-md-description">
+            <p>Name for the new label image</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shape</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>)
+          –
+          <div class="doc-md-description">
+            <p>Shape of the first level (TZYX, no channel dimension)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>dtype</code></b>
+              (<code><span title="numpy.typing.DTypeLike">DTypeLike</span></code>, default:
+                  <code><span title="numpy.uint32">uint32</span></code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Integer data type of the label, by default <code>np.uint32</code></p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>chunks</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Chunk size, by default None (one ZYX volume per chunk)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards_ratio</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Sharding ratio for each dimension, by default None (no sharding)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>transform</code></b>
+              (<code><span title="list">list</span>[<span title="iohub.ngff.models.TransformationMeta">TransformationMeta</span>]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Coordinate transformations of level "0", by default None
+(unit scale). Should match the image's TZYX transforms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>colors</code></b>
+              (<code><span title="dict">dict</span>[<span title="int">int</span>, <span title="list">list</span>[<span title="int">int</span>]]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Color mapping for label values {label_value: [r, g, b, a]}</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>properties</code></b>
+              (<code><span title="list">list</span>[<span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]]</code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Properties for each label value, must include "label-value" field</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>level</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>&#39;0&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Path of the first level, by default "0". Further levels can be
+added on the returned label with
+[<code>create_zeros</code>][iohub.ngff.PositionLabel.create_zeros].</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Returns:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="iohub.ngff.nodes.PositionLabel">PositionLabel</span></code>
+          –
+          <div class="doc-md-description">
+            <p>The created (empty) multiscale label image</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If the dtype is not an integer type or the shape is not TZYX</p>
+          </div>
+        </li>
+    </ul>
+
 
     </div>
 
