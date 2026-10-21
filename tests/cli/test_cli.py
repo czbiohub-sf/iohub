@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 from iohub import __version__, open_ome_zarr
 from iohub.cli.cli import cli
+from iohub.ngff.models import TransformationMeta
 from tests.conftest import (
     hcs_ref,
     mm2gamma_ome_tiffs,
@@ -455,6 +456,31 @@ def test_cli_compute_pyramid_rebuilds_mismatched_label_levels(tmp_path, caplog):
         assert pos.label_matches_pyramid(label)
         assert label["1"].shape == (shape[0], shape[2], shape[3] // 2, shape[4] // 2)
         assert label["1"][:].max() == 1
+
+
+def test_cli_compute_pyramid_mixed_axis_image_without_labels_recomputes(tmp_path):
+    """A pyramid no single `dims` describes is still recomputed when there are no labels."""
+    store_path = tmp_path / "compute_pyramid_mixed_no_labels.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        pos.create_zeros(
+            "1",
+            shape=(shape[0], shape[1], shape[2], shape[3] // 2, shape[4] // 2),
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 1.0, 2.0, 2.0])],
+        )
+        pos.create_zeros(
+            "2",
+            shape=(shape[0], shape[1], shape[2] // 2, shape[3] // 4, shape[4] // 4),
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 2.0, 4.0, 4.0])],
+        )
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "3"])
+    assert result.exit_code == 0, result.output
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        assert pos["2"][:].mean() > 0
 
 
 def test_cli_compute_pyramid_rejects_mean_for_labels(tmp_path):

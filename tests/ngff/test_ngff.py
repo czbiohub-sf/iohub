@@ -1937,6 +1937,16 @@ def test_pyramid_dims_rejects_a_schedule_that_varies_by_level(tmp_path):
         )
         with pytest.raises(ValueError, match="different axes at different levels"):
             pos.pyramid_dims()
+        # A 4x step between levels cannot be reproduced either.
+        pos.delete_pyramid()
+        pos.create_zeros(
+            "1",
+            shape=(1, 1, 8, 16, 16),
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 1.0, 4.0, 4.0])],
+        )
+        with pytest.raises(ValueError, match="only factors of 1 or 2"):
+            pos.pyramid_dims()
         # A consistent schedule is fine.
         pos.delete_pyramid()
         pos.initialize_pyramid(levels=3, dims={"y", "x"})
@@ -1955,6 +1965,21 @@ def test_label_matches_pyramid(tmp_path):
         label.delete_pyramid()
         label.initialize_pyramid(levels=2, dims=pos.pyramid_dims())
         assert pos.label_matches_pyramid(label)
+
+
+def test_label_matches_pyramid_without_channel_axis(tmp_path):
+    """An image without a channel axis compares every axis with the label's."""
+    from iohub.ngff.models import SpaceAxisMeta, TimeAxisMeta
+
+    axes = [TimeAxisMeta(name="t", unit="second"), *[SpaceAxisMeta(name=n, unit="micrometer") for n in "zyx"]]
+    with open_ome_zarr(tmp_path / "no_channel.zarr", layout="fov", mode="a", axes=axes, channel_names=[]) as pos:
+        pos.create_zeros("0", shape=(1, 8, 64, 64), dtype=np.uint16, check_shape=False)
+        pos.compute_pyramid(levels=2, dims={"y", "x"})
+        label = pos.create_label_zeros("cells", shape=(1, 8, 64, 64), dtype=np.uint32)
+        assert not pos.label_matches_pyramid(label)  # one level vs two
+        label.compute_pyramid(levels=2, dims=pos.pyramid_dims())
+        assert pos.label_matches_pyramid(label)
+        assert label["1"].shape == (1, 8, 32, 32)
 
 
 def test_create_label_pyramid_levels(tmp_path):

@@ -292,10 +292,15 @@ def compute_pyramid(
         _logger.info(f"Computing pyramid for {input_position_dirpath}")
         with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
             dataset.compute_pyramid(levels=levels, method=method.value, dims=parsed_dims)
+            labels = list(dataset.labels())
+            if not labels:
+                continue
             # `dims` is ignored for an existing image pyramid, so the labels take
-            # the axes that pyramid actually downsamples, not the request.
+            # the axes that pyramid actually downsamples, not the request. Only
+            # inferred when there are labels: an image pyramid that no single
+            # `dims` describes is still fine to recompute on its own.
             label_dims = dataset.pyramid_dims()
-            for name, label in dataset.labels():
+            for name, label in labels:
                 # A label scaffolded earlier (other dims, or before the image had
                 # a pyramid) can hold the right number of levels with the wrong
                 # geometry; compute_pyramid would fill them as they are. Rebuild

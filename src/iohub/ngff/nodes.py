@@ -820,17 +820,23 @@ class MultiscaleNode(NGFFNode):
         ------
         ValueError
             If the levels do not all downsample the same axes (e.g. YX at level
-            1 and ZYX at level 2), a schedule ``initialize_pyramid`` cannot
-            reproduce.
+            1 and ZYX at level 2), or scale by a factor other than 2 between
+            levels, schedules ``initialize_pyramid`` cannot reproduce.
         """
         paths = self.metadata.multiscales[0].get_dataset_paths()
         if len(paths) < 2:
             return None
         scales = [self.get_effective_scale(path) for path in paths]
-        transitions = [
-            frozenset(name for name, s0, s1 in zip(self.axis_names, prev, curr, strict=True) if round(s1 / s0) == 2)
-            for prev, curr in itertools.pairwise(scales)
-        ]
+        transitions = []
+        for prev, curr in itertools.pairwise(scales):
+            ratios = {name: s1 / s0 for name, s0, s1 in zip(self.axis_names, prev, curr, strict=True)}
+            unsupported = {name: r for name, r in ratios.items() if not (math.isclose(r, 1) or math.isclose(r, 2))}
+            if unsupported:
+                raise ValueError(
+                    f"The pyramid scales by {unsupported} between consecutive levels; only factors of 1 "
+                    "or 2 can be reproduced by `initialize_pyramid`."
+                )
+            transitions.append(frozenset(name for name, r in ratios.items() if math.isclose(r, 2)))
         if len(set(transitions)) > 1:
             raise ValueError(
                 "The pyramid downsamples different axes at different levels "
@@ -1805,7 +1811,8 @@ class Position(MultiscaleNode):
         image_paths = self.metadata.multiscales[0].get_dataset_paths()
         if label.metadata.multiscales[0].get_dataset_paths() != image_paths:
             return False
-        channel_index = self._get_channel_axis()
+        # None for an image without a channel axis: the label then has every axis.
+        channel_index = self._find_axis("channel")
         for path in image_paths:
             image_shape = self[path].shape
             expected_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
