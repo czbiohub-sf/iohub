@@ -296,6 +296,16 @@ def compute_pyramid(
             # the axes that pyramid actually downsamples, not the request.
             label_dims = dataset.pyramid_dims()
             for name, label in dataset.labels():
+                # A label scaffolded earlier (other dims, or before the image had
+                # a pyramid) can hold the right number of levels with the wrong
+                # geometry; compute_pyramid would fill them as they are. Rebuild
+                # them from level 0 instead, so the label matches the image.
+                if len(label.array_keys()) > 1 and not dataset.label_matches_pyramid(label):
+                    _logger.warning(
+                        f"Label {name!r} of {input_position_dirpath} has levels that do not match the "
+                        "image pyramid; rebuilding them."
+                    )
+                    label.delete_pyramid()
                 _logger.info(f"Computing pyramid for label {name!r} of {input_position_dirpath}")
                 label.compute_pyramid(levels=levels, method=label_method.value, dims=label_dims)
 

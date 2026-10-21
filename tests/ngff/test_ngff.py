@@ -1919,6 +1919,44 @@ def test_pyramid_dims_and_label_levels_follow_existing_image_pyramid(tmp_path):
         assert second["2"].shape == (1, 8, 16, 16)
 
 
+def test_pyramid_dims_rejects_a_schedule_that_varies_by_level(tmp_path):
+    """YX at level 1 and ZYX at level 2 cannot be described by one `dims` set."""
+    with open_ome_zarr(tmp_path / "mixed.zarr", layout="fov", mode="a", channel_names=["ch1"]) as pos:
+        pos.create_zeros("0", shape=(1, 1, 8, 64, 64), dtype=np.uint16)
+        pos.create_zeros(
+            "1",
+            shape=(1, 1, 8, 32, 32),
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 1.0, 2.0, 2.0])],
+        )
+        pos.create_zeros(
+            "2",
+            shape=(1, 1, 4, 16, 16),
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 2.0, 4.0, 4.0])],
+        )
+        with pytest.raises(ValueError, match="different axes at different levels"):
+            pos.pyramid_dims()
+        # A consistent schedule is fine.
+        pos.delete_pyramid()
+        pos.initialize_pyramid(levels=3, dims={"y", "x"})
+        assert pos.pyramid_dims() == {"x", "y"}
+
+
+def test_label_matches_pyramid(tmp_path):
+    """Shape and scale of every level are compared, minus the channel axis."""
+    pos, _, _ = _label_pyramid_fixture(tmp_path / "label_match.zarr")
+    with pos:
+        label = pos.get_label("cells")
+        assert pos.label_matches_pyramid(label)  # one level each
+        label.initialize_pyramid(levels=2)  # ZYX ...
+        pos.initialize_pyramid(levels=2, dims={"y", "x"})  # ... but the image is YX-only
+        assert not pos.label_matches_pyramid(label)
+        label.delete_pyramid()
+        label.initialize_pyramid(levels=2, dims=pos.pyramid_dims())
+        assert pos.label_matches_pyramid(label)
+
+
 def test_create_label_pyramid_levels(tmp_path):
     """create_label(pyramid_levels=) still scaffolds the coarser levels."""
     with open_ome_zarr(tmp_path / "label_levels.zarr", layout="fov", mode="a", channel_names=["ch1"]) as pos:

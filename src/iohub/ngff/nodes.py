@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import itertools
 import math
 import os
 import shutil
@@ -810,17 +811,32 @@ class MultiscaleNode(NGFFNode):
     def pyramid_dims(self) -> set[str] | None:
         """Axis names the existing pyramid downsamples, or None without a pyramid.
 
-        Read from the scale transforms of levels "0" and "1": an axis whose
-        scale doubles between them is downsampled. Use it to give a label image
-        the same levels as the image it annotates, e.g.
+        Read from the scale transforms: an axis whose scale doubles from one
+        level to the next is downsampled. Use it to give a label image the same
+        levels as the image it annotates, e.g.
         ``label.compute_pyramid(levels, dims=position.pyramid_dims())``.
+
+        Raises
+        ------
+        ValueError
+            If the levels do not all downsample the same axes (e.g. YX at level
+            1 and ZYX at level 2), a schedule ``initialize_pyramid`` cannot
+            reproduce.
         """
         paths = self.metadata.multiscales[0].get_dataset_paths()
         if len(paths) < 2:
             return None
-        base = self.get_effective_scale(paths[0])
-        first = self.get_effective_scale(paths[1])
-        return {name for name, s0, s1 in zip(self.axis_names, base, first, strict=True) if round(s1 / s0) == 2}
+        scales = [self.get_effective_scale(path) for path in paths]
+        transitions = [
+            frozenset(name for name, s0, s1 in zip(self.axis_names, prev, curr, strict=True) if round(s1 / s0) == 2)
+            for prev, curr in itertools.pairwise(scales)
+        ]
+        if len(set(transitions)) > 1:
+            raise ValueError(
+                "The pyramid downsamples different axes at different levels "
+                f"({[sorted(t) for t in transitions]}), which a single `dims` set cannot describe."
+            )
+        return set(transitions[0])
 
     def delete_pyramid(self) -> None:
         """Delete all dataset pyramid levels except the base (level 0) array.
@@ -1778,6 +1794,27 @@ class Position(MultiscaleNode):
     def has_labels(self) -> bool:
         """Check if this position has any labels."""
         return "labels" in self._group and len(self._impl.group_keys(self.labels_group)) > 0
+
+    def label_matches_pyramid(self, label: PositionLabel) -> bool:
+        """Whether ``label`` has the image's levels: same paths, shapes and scales minus the channel axis.
+
+        A label scaffolded before the image's pyramid existed, or with other
+        ``dims``, may carry the right number of levels with the wrong geometry;
+        ``iohub compute-pyramid`` uses this to rebuild such levels.
+        """
+        image_paths = self.metadata.multiscales[0].get_dataset_paths()
+        if label.metadata.multiscales[0].get_dataset_paths() != image_paths:
+            return False
+        channel_index = self._get_channel_axis()
+        for path in image_paths:
+            image_shape = self[path].shape
+            expected_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
+            if label[path].shape != expected_shape:
+                return False
+            image_scale = [s for i, s in enumerate(self.get_effective_scale(path)) if i != channel_index]
+            if not np.allclose(label.get_effective_scale(path), image_scale):
+                return False
+        return True
 
     def create_labels_group(self):
         """Create the labels subgroup if it doesn't exist."""

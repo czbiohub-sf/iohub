@@ -436,6 +436,27 @@ def test_cli_compute_pyramid_labels_follow_existing_image_pyramid(tmp_path):
         assert label.get_effective_scale("1") == pos.get_effective_scale("1")[:1] + pos.get_effective_scale("1")[2:]
 
 
+def test_cli_compute_pyramid_rebuilds_mismatched_label_levels(tmp_path, caplog):
+    """A label scaffolded with ZYX levels is rebuilt to match a YX-only image pyramid."""
+    store_path = tmp_path / "compute_pyramid_label_rebuild.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        # Label pyramid first (default z,y,x), image pyramid not yet there.
+        pos.create_label("cells", np.ones((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32), pyramid_levels=2)
+        assert pos.get_label("cells")["1"].shape[1] == shape[2] // 2
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2", "--dims", "y,x"])
+    assert result.exit_code == 0, result.output
+    assert any("rebuilding" in record.message for record in caplog.records)
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        label = pos.get_label("cells")
+        assert pos.label_matches_pyramid(label)
+        assert label["1"].shape == (shape[0], shape[2], shape[3] // 2, shape[4] // 2)
+        assert label["1"][:].max() == 1
+
+
 def test_cli_compute_pyramid_rejects_mean_for_labels(tmp_path):
     store_path = tmp_path / "compute_pyramid_bad_label_method.zarr"
     _, position_key = _make_pyramid_test_plate(store_path)
