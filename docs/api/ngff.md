@@ -12,6 +12,10 @@
 
 ::: iohub.ngff.Position
 
+::: iohub.ngff.nodes.PositionLabel
+
+::: iohub.ngff.nodes.MultiscaleNode
+
 ::: iohub.ngff.TiledPosition
 
 ::: iohub.ngff.Plate

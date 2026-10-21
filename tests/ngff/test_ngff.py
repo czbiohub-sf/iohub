@@ -1775,6 +1775,144 @@ def test_compute_pyramid(tmp_path, implementation):
             pos.compute_pyramid(levels=2, method="mean")
 
 
+def _label_pyramid_fixture(store_path, implementation="zarrs-python", z_size=8):
+    """A FOV with a (1, 2, Z, 64, 64) image and a (1, Z, 64, 64) label "cells".
+
+    The image has an anisotropic scale and chunks/shards of its own so the
+    label can be checked for inheriting its level-0 transform.
+    """
+    rng = np.random.default_rng(0)
+    image = rng.integers(0, 255, size=(1, 2, z_size, 64, 64), dtype=np.uint16)
+    # A few blobs with ids 1..4 on a zero background, so coarser levels have
+    # both foreground and background to pool.
+    label = np.zeros((1, z_size, 64, 64), dtype=np.uint32)
+    label[0, :, 4:20, 4:20] = 1
+    label[0, :, 30:60, 10:30] = 2
+    label[0, :, 2:10, 40:62] = 3
+    label[0, :, 40:44, 40:44] = 4
+    pos = open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="a",
+        channel_names=["ch1", "ch2"],
+        implementation=implementation,
+    )
+    pos.create_image(
+        "0",
+        image,
+        transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 2.0, 0.5, 0.5])],
+    )
+    pos.create_label_zeros(
+        "cells",
+        shape=label.shape,
+        dtype=label.dtype,
+        chunks=(1, z_size, 32, 32),
+        shards_ratio=(1, 1, 2, 2),
+        transform=[TransformationMeta(type="scale", scale=[1.0, 2.0, 0.5, 0.5])],
+    )["0"][...] = label
+    return pos, image, label
+
+
+def test_label_initialize_pyramid_matches_image_levels(tmp_path):
+    """Label levels get the image's shapes, scales and halved chunks/shards."""
+    pos, _, _ = _label_pyramid_fixture(tmp_path / "label_init.zarr")
+    with pos:
+        pos.initialize_pyramid(levels=3)
+        label = pos.get_label("cells")
+        label.initialize_pyramid(levels=3)
+
+        assert label.array_keys() == ["0", "1", "2"]
+        assert label.metadata.multiscales[0].get_dataset_paths() == ["0", "1", "2"]
+        for level in range(3):
+            image_level = pos[str(level)]
+            label_level = label[str(level)]
+            # Image TCZYX minus C == label TZYX, level by level.
+            assert label_level.shape == image_level.shape[:1] + image_level.shape[2:]
+            image_scale = pos.get_effective_scale(str(level))
+            assert label.get_effective_scale(str(level)) == image_scale[:1] + image_scale[2:]
+        # The level-0 scale is inherited, not reset to unit scale.
+        assert label.get_effective_scale("1") == [1.0, 4.0, 1.0, 1.0]
+        assert label["1"].chunks == (1, 4, 16, 16)
+        assert label["1"].shards == (1, 4, 32, 32)
+        assert label["2"].chunks == (1, 2, 8, 8)
+
+
+@pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
+@pytest.mark.parametrize("method", ["max", "stride", "mode"])
+def test_label_compute_pyramid_keeps_label_ids(tmp_path, implementation, method):
+    """Label pyramids are filled, and no level invents a label id."""
+    if implementation == "tensorstore":
+        pytest.importorskip("tensorstore")
+    pos, _, label_data = _label_pyramid_fixture(tmp_path / f"label_{method}.zarr", implementation)
+    with pos:
+        pos.compute_pyramid(levels=3, method="mean")
+        label = pos.get_label("cells")
+        label.compute_pyramid(levels=3, method=method)
+
+        level0_ids = set(np.unique(label_data))
+        for level in ("1", "2"):
+            data = label[level][:]
+            assert data.dtype == np.uint32
+            assert data.max() > 0
+            assert set(np.unique(data)) <= level0_ids
+        # The big blobs survive two rounds of pooling.
+        assert {1, 2, 3} <= set(np.unique(label["2"][:]))
+        if method == "max":
+            # A max filter never shrinks an object: its coarse footprint covers
+            # the fine one.
+            coarse = np.repeat(np.repeat(np.repeat(label["1"][:], 2, 1), 2, 2), 2, 3)
+            assert np.all(coarse[label_data > 0] > 0)
+
+        # Recomputing an existing pyramid is allowed; a different level count is not.
+        label.compute_pyramid(method=method)
+        with pytest.raises(ValueError, match="delete_pyramid"):
+            label.compute_pyramid(levels=2, method=method)
+        label.delete_pyramid()
+        assert label.array_keys() == ["0"]
+        assert label.metadata.multiscales[0].get_dataset_paths() == ["0"]
+
+
+def test_label_compute_pyramid_yx_only(tmp_path):
+    """A Z=1 label pyramid over y,x keeps Z's size and scale at every level."""
+    pos, _, _ = _label_pyramid_fixture(tmp_path / "label_yx.zarr", z_size=1)
+    with pos:
+        label = pos.get_label("cells")
+        label.compute_pyramid(levels=3, method="max", dims={"y", "x"})
+        assert label["1"].shape == (1, 1, 32, 32)
+        assert label["2"].shape == (1, 1, 16, 16)
+        assert label.get_effective_scale("2") == [1.0, 2.0, 2.0, 2.0]
+        with pytest.raises(ValueError, match="not in dataset axes"):
+            label.initialize_pyramid(levels=2, dims={"c"})
+
+
+def test_create_label_pyramid_levels(tmp_path):
+    """create_label(pyramid_levels=) still scaffolds the coarser levels."""
+    with open_ome_zarr(tmp_path / "label_levels.zarr", layout="fov", mode="a", channel_names=["ch1"]) as pos:
+        pos.create_image("0", np.zeros((1, 1, 4, 16, 16), dtype=np.uint16))
+        label = pos.create_label("cells", np.zeros((1, 4, 16, 16), dtype=np.uint16), pyramid_levels=2)
+        assert label.array_keys() == ["0", "1"]
+        assert label["1"].shape == (1, 2, 8, 8)
+        assert label.get_effective_scale("1") == [1.0, 2.0, 2.0, 2.0]
+
+
+def test_downsample_block_mode_shape():
+    """``mode`` pools every window and returns the ceiling-division shape.
+
+    Regression: the pooled shape was divided by the factors a second time,
+    so a (4, 32, 32) block came back as (2, 16, 16) and could not be written
+    into the level allocated for it.
+    """
+    from iohub.core.downsample import downsample_block
+
+    data = np.zeros((1, 4, 32, 32), dtype=np.uint32)
+    data[..., :16, :16] = 5
+    out = downsample_block(data, [1, 2, 2, 2], "mode")
+    assert out.shape == (1, 2, 16, 16)
+    assert out.dtype == np.uint32
+    assert set(np.unique(out)) == {0, 5}
+    assert np.all(out[..., :8, :8] == 5)
+
+
 def test_downsample_block_odd_axis():
     """downsample_block edge-pads a trailing partial block instead of trimming.
 

@@ -255,11 +255,21 @@ def compute_pyramid(
             help="Comma-separated axes for a new pyramid, such as 'y,x'. Defaults to 'z,y,x'.",
         ),
     ] = None,
+    label_method: Annotated[
+        PyramidMethod,
+        typer.Option(
+            "--label-method",
+            help="Downsampling method for the position's label images (labels/<name>).",
+        ),
+    ] = PyramidMethod.max,
 ) -> None:
     """Create or recompute an OME-Zarr pyramid in place.
 
     Level 0 is unchanged. Existing pyramids must have the requested number
-    of levels. Recomputing overwrites the downsampled levels.
+    of levels. Recomputing overwrites the downsampled levels. Every label
+    image under labels/ gets the same levels, downsampled with
+    --label-method: a method that never invents values (max, stride, mode),
+    so the label ids of level 0 are the only ones at the coarser levels.
 
     Example:
 
@@ -272,6 +282,9 @@ def compute_pyramid(
         _logger.info(f"Computing pyramid for {input_position_dirpath}")
         with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
             dataset.compute_pyramid(levels=levels, method=method.value, dims=parsed_dims)
+            for name, label in dataset.labels():
+                _logger.info(f"Computing pyramid for label {name!r} of {input_position_dirpath}")
+                label.compute_pyramid(levels=levels, method=label_method.value, dims=parsed_dims)
 
 
 @app.command(name="rename-wells")

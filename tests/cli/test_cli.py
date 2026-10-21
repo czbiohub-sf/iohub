@@ -394,6 +394,30 @@ def test_cli_compute_pyramid(tmp_path, caplog):
         assert pos["2"].shape[-2:] == (shape[-2] // 4, shape[-1] // 4)
 
 
+def test_cli_compute_pyramid_labels(tmp_path):
+    """Label images get the same levels as the image, with --label-method."""
+    store_path = tmp_path / "compute_pyramid_labels.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    label = np.zeros((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32)
+    label[..., : shape[3] // 2, : shape[4] // 2] = 7
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        pos.create_label("cells", label)
+
+    result = CliRunner().invoke(
+        cli,
+        ["compute-pyramid", "-i", str(position_path), "-l", "3", "--label-method", "stride"],
+    )
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        label_image = pos.get_label("cells")
+        assert label_image.metadata.multiscales[0].get_dataset_paths() == ["0", "1", "2"]
+        for level in ("0", "1", "2"):
+            assert label_image[level].shape == pos[level].shape[:1] + pos[level].shape[2:]
+        assert set(np.unique(label_image["2"][:])) == {0, 7}
+
+
 def test_cli_compute_pyramid_plate_glob(tmp_path):
     store_path = tmp_path / "compute_pyramid_plate.zarr"
     _, position_key = _make_pyramid_test_plate(store_path)

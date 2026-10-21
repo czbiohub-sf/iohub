@@ -646,12 +646,273 @@ class LabelsArray(NGFFArray):
         """Width (X dimension) of the labels array."""
         return self._get_dim(3)
 
-    def downscale(self):
-        """Labels downscaling is not supported."""
-        raise NotImplementedError("Downscaling is not implemented for labels arrays.")
+
+class MultiscaleNode(NGFFNode):
+    """A group holding one multiscale image: the pyramid levels and their transforms.
+
+    Shared by [`Position`][iohub.ngff.Position] (TCZYX images) and
+    [`PositionLabel`][iohub.ngff.PositionLabel] (TZYX label images): both are
+    `ome.multiscales` groups whose level "0" is the full-resolution array and
+    whose further levels are 2x downsampled per level. The pyramid methods here
+    only need ``metadata.multiscales[0]``, ``data``, ``create_zeros`` and
+    item access, which both subclasses provide.
+    """
+
+    def initialize_pyramid(
+        self,
+        levels: int,
+        dims: set[str] | None = None,
+    ) -> None:
+        """
+        Initializes the pyramid arrays with a down scaling of 2 per level.
+
+        Decimals shapes are rounded up to ceiling.
+        Scales metadata are also updated.
+
+        Parameters
+        ----------
+        levels : int
+            Number of pyramid levels. If 1, nothing happens.
+        dims : set[str] | None, optional
+            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
+            Must be a subset of the dataset's axis names.
+            Defaults to ``{"z", "y", "x"}``, must be lowercase.
+        """
+        if dims is None:
+            dims = {"z", "y", "x"}
+
+        axis_names = self.axis_names
+        for name in dims:
+            if name not in axis_names:
+                raise ValueError(f"Axis '{name}' not in dataset axes {axis_names}.")
+
+        axes = {i for i, name in enumerate(axis_names) if name in dims}
+
+        prev_shape = self.data.shape
+        prev_chunks = self.data.chunks
+        prev_shards = self.data.shards
+
+        for level in range(1, levels):
+            factor = 2**level  # cumulative scale for metadata
+
+            shape = _scale_dims(prev_shape, axes)
+            chunks = _scale_dims(prev_chunks, axes)
+
+            if prev_shards is not None:
+                prev_shards = _scale_dims(prev_shards, axes)
+                shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards, strict=False))
+            else:
+                shards_ratio = None
+
+            transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
+            for tr in transforms:
+                if tr.type == "scale":
+                    for i, name in enumerate(axis_names):
+                        if name in dims:
+                            tr.scale[i] *= factor
+
+            prev_shape = shape
+            prev_chunks = chunks
+
+            self.create_zeros(
+                str(level),
+                shape=shape,
+                dtype=self.data.dtype,
+                chunks=chunks,
+                shards_ratio=shards_ratio,
+                transform=transforms,
+            )
+
+    def compute_pyramid(
+        self,
+        levels: int | None = None,
+        method: str = "mean",
+        dims: set[str] | None = None,
+    ) -> None:
+        """Compute pyramid by downsampling from source level.
+
+        Creates pyramid structure if none exists. Uses cascade downsampling
+        where each level is derived from the previous level to prevent
+        aliasing artifacts and chunk boundary issues.
+
+        Parameters
+        ----------
+        levels : int, optional
+            Number of pyramid levels. If None, uses existing pyramid structure.
+        method : str, optional
+            Downsampling method: "mean", "median", "mode", "min", "max",
+            "stride". By default "mean".
+        dims : set[str] | None, optional
+            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
+            Forwarded to ``initialize_pyramid`` when creating the pyramid
+            structure. Defaults to ``{"z", "y", "x"}``.
+
+        Raises
+        ------
+        ValueError
+            If level 0 array doesn't exist, pyramid structure is invalid,
+            or if a pyramid already exists with a different number of levels.
+
+        Examples
+        --------
+        >>> # Create and compute pyramid with 4 levels
+        >>> pos.compute_pyramid(levels=4, method="mean")
+
+        >>> # Recompute existing pyramid structure
+        >>> pos.compute_pyramid(method="median")
+
+        >>> # Change pyramid levels (must delete first)
+        >>> pos.delete_pyramid()
+        >>> pos.compute_pyramid(levels=3, method="mean")
+        """
+        num_arrays = len(self.array_keys())
+
+        if num_arrays == 0:
+            raise ValueError("No level 0 array exists. Create base array before computing pyramid.")
+
+        if levels is None:
+            if num_arrays == 1:
+                raise ValueError(
+                    "Pyramid structure doesn't exist and levels=None. Specify 'levels' parameter to create pyramid."
+                )
+            levels = num_arrays
+
+        if num_arrays == 1:
+            self.initialize_pyramid(levels=levels, dims=dims)
+        elif num_arrays != levels:
+            raise ValueError(
+                f"Pyramid structure exists with {num_arrays} levels but "
+                f"{levels} requested. Call delete_pyramid() first to remove "
+                "existing pyramid."
+            )
+
+        # Compute pyramid data via cascade downsampling
+        for level in range(1, levels):
+            previous_level_array = self[str(level - 1)]
+            current_level_array = self[str(level)]
+
+            current_scale = self.get_effective_scale(str(level))
+            previous_scale = self.get_effective_scale(str(level - 1))
+
+            downsample_factors = [round(current_scale[i] / previous_scale[i]) for i in range(len(current_scale))]
+
+            previous_level_array.downsample_into(
+                current_level_array,
+                downsample_factors,
+                method=method,
+            )
+
+    def delete_pyramid(self) -> None:
+        """Delete all dataset pyramid levels except the base (level 0) array.
+
+        Use this before calling compute_pyramid() with different levels
+        on a position that already has a pyramid structure.
+
+        This method removes both the zarr arrays and updates the OME-NGFF
+        multiscales metadata to reflect the deletion.
+        """
+        _multiscale = self.metadata.multiscales[0]
+
+        for dataset in _multiscale.datasets[1:]:
+            del self[dataset.path]
+
+        _multiscale.datasets = _multiscale.datasets[:1]
+        self.dump_meta()
+
+    @property
+    def scale(self) -> list[float]:
+        """
+        Helper function for scale transform metadata of
+
+        highest resolution scale.
+        """
+        return self.get_effective_scale(self.metadata.multiscales[0].datasets[0].path)
+
+    @property
+    def axis_names(self) -> list[str]:
+        """
+        Helper function for axis names of the highest resolution scale.
+
+        Returns lowercase axis names.
+        """
+        return [axis.name.lower() for axis in self.metadata.multiscales[0].axes]
+
+    def get_axis_index(self, axis_name: str) -> int:
+        """
+        Get the index of a given axis.
+
+        Parameters
+        ----------
+        name : str
+            Name of the axis. Case insensitive.
+
+        Returns
+        -------
+        int
+            Index of the axis.
+        """
+        return self.axis_names.index(axis_name.lower())
+
+    def _get_all_transforms(self, image: str | Literal["*"]) -> list[TransformationMeta]:
+        """Get all transforms metadata
+
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[TransformationMeta]
+            All transforms applicable to this image or FOV.
+        """
+        transforms: list[TransformationMeta] = (
+            list(self.metadata.multiscales[0].coordinate_transformations)
+            if self.metadata.multiscales[0].coordinate_transformations is not None
+            else []
+        )
+        if image != "*" and image in self:
+            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
+                if dataset_meta.path == image:
+                    transforms.extend(self.metadata.multiscales[0].datasets[i].coordinate_transformations)
+        elif image != "*":
+            raise ValueError(f"Key {image} not recognized.")
+        return transforms
+
+    def get_effective_scale(
+        self,
+        image: str | Literal["*"],
+    ) -> list[float]:
+        """Get the effective coordinate scale metadata
+
+        for one image array or the whole FOV.
+
+        Parameters
+        ----------
+        image : str | Literal["*"]
+            Name of one image array (e.g. "0") to query,
+            or "*" for the whole FOV
+
+        Returns
+        -------
+        list[float]
+            A list of floats representing the total scale
+            for the image or FOV for each axis.
+        """
+        transforms = self._get_all_transforms(image)
+
+        full_scale = np.ones(len(self.axes), dtype=float)
+        for transform in transforms:
+            if transform.type == "scale":
+                full_scale *= np.array(transform.scale)
+
+        return [float(x) for x in full_scale]
 
 
-class PositionLabel(NGFFNode):
+class PositionLabel(MultiscaleNode):
     """Multiscale label image group containing LabelsArray pyramid levels.
 
     This class manages label images according to NGFF specification where
@@ -834,38 +1095,6 @@ class PositionLabel(NGFFNode):
         self._create_label_meta(level, transform=transform)
         return lbl_arr
 
-    def initialize_pyramid(self, levels: int, source_level: str = "0") -> None:
-        """Initialize multiscale pyramid for label image.
-
-        Parameters
-        ----------
-        levels : int
-            Total number of pyramid levels
-        source_level : str, optional
-            Source level to downscale from, by default "0"
-        """
-        if source_level not in self:
-            raise KeyError(f"Source level '{source_level}' not found")
-
-        source_array = self[source_level]
-        for level in range(1, levels):
-            factor = 2**level
-            downscaled_shape = source_array.shape[:-3] + tuple(math.ceil(s / factor) for s in source_array.shape[-3:])
-            downscaled_chunks = pad_shape(
-                tuple(math.ceil(c / factor) for c in source_array.chunks[-3:]),
-                target=len(downscaled_shape),
-            )
-            transforms = [
-                TransformationMeta(type="scale", scale=[1.0] * (len(source_array.shape) - 3) + [float(factor)] * 3)
-            ]
-            self.create_zeros(
-                level=str(level),
-                shape=downscaled_shape,
-                dtype=source_array.dtype,
-                chunks=downscaled_chunks,
-                transform=transforms,
-            )
-
     def _create_label_meta(
         self,
         level: str,
@@ -944,7 +1173,7 @@ class PositionLabel(NGFFNode):
         )
 
 
-class Position(NGFFNode):
+class Position(MultiscaleNode):
     """The Zarr group level directly containing multiscale image arrays.
 
     Parameters
@@ -1356,259 +1585,6 @@ class Position(NGFFNode):
         ortho_sel = [slice(None)] * len(img.shape)
         ortho_sel[ch_ax] = ch_idx
         img.oindex[tuple(ortho_sel)] = data
-
-    def initialize_pyramid(
-        self,
-        levels: int,
-        dims: set[str] | None = None,
-    ) -> None:
-        """
-        Initializes the pyramid arrays with a down scaling of 2 per level.
-
-        Decimals shapes are rounded up to ceiling.
-        Scales metadata are also updated.
-
-        Parameters
-        ----------
-        levels : int
-            Number of pyramid levels. If 1, nothing happens.
-        dims : set[str] | None, optional
-            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
-            Must be a subset of the dataset's axis names.
-            Defaults to ``{"z", "y", "x"}``, must be lowercase.
-        """
-        if dims is None:
-            dims = {"z", "y", "x"}
-
-        axis_names = self.axis_names
-        for name in dims:
-            if name not in axis_names:
-                raise ValueError(f"Axis '{name}' not in dataset axes {axis_names}.")
-
-        axes = {i for i, name in enumerate(axis_names) if name in dims}
-
-        prev_shape = self.data.shape
-        prev_chunks = self.data.chunks
-        prev_shards = self.data.shards
-
-        for level in range(1, levels):
-            factor = 2**level  # cumulative scale for metadata
-
-            shape = _scale_dims(prev_shape, axes)
-            chunks = _scale_dims(prev_chunks, axes)
-
-            if prev_shards is not None:
-                prev_shards = _scale_dims(prev_shards, axes)
-                shards_ratio = tuple(s // c for c, s in zip(chunks, prev_shards, strict=False))
-            else:
-                shards_ratio = None
-
-            transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
-            for tr in transforms:
-                if tr.type == "scale":
-                    for i, name in enumerate(axis_names):
-                        if name in dims:
-                            tr.scale[i] *= factor
-
-            prev_shape = shape
-            prev_chunks = chunks
-
-            self.create_zeros(
-                name=str(level),
-                shape=shape,
-                dtype=self.data.dtype,
-                chunks=chunks,
-                shards_ratio=shards_ratio,
-                transform=transforms,
-            )
-
-    def compute_pyramid(
-        self,
-        levels: int | None = None,
-        method: str = "mean",
-        dims: set[str] | None = None,
-    ) -> None:
-        """Compute pyramid by downsampling from source level.
-
-        Creates pyramid structure if none exists. Uses cascade downsampling
-        where each level is derived from the previous level to prevent
-        aliasing artifacts and chunk boundary issues.
-
-        Parameters
-        ----------
-        levels : int, optional
-            Number of pyramid levels. If None, uses existing pyramid structure.
-        method : str, optional
-            Downsampling method: "mean", "median", "mode", "min", "max",
-            "stride". By default "mean".
-        dims : set[str] | None, optional
-            Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
-            Forwarded to ``initialize_pyramid`` when creating the pyramid
-            structure. Defaults to ``{"z", "y", "x"}``.
-
-        Raises
-        ------
-        ValueError
-            If level 0 array doesn't exist, pyramid structure is invalid,
-            or if a pyramid already exists with a different number of levels.
-
-        Examples
-        --------
-        >>> # Create and compute pyramid with 4 levels
-        >>> pos.compute_pyramid(levels=4, method="mean")
-
-        >>> # Recompute existing pyramid structure
-        >>> pos.compute_pyramid(method="median")
-
-        >>> # Change pyramid levels (must delete first)
-        >>> pos.delete_pyramid()
-        >>> pos.compute_pyramid(levels=3, method="mean")
-        """
-        num_arrays = len(self.array_keys())
-
-        if num_arrays == 0:
-            raise ValueError("No level 0 array exists. Create base array before computing pyramid.")
-
-        if levels is None:
-            if num_arrays == 1:
-                raise ValueError(
-                    "Pyramid structure doesn't exist and levels=None. Specify 'levels' parameter to create pyramid."
-                )
-            levels = num_arrays
-
-        if num_arrays == 1:
-            self.initialize_pyramid(levels=levels, dims=dims)
-        elif num_arrays != levels:
-            raise ValueError(
-                f"Pyramid structure exists with {num_arrays} levels but "
-                f"{levels} requested. Call delete_pyramid() first to remove "
-                "existing pyramid."
-            )
-
-        # Compute pyramid data via cascade downsampling
-        for level in range(1, levels):
-            previous_level_array = self[str(level - 1)]
-            current_level_array = self[str(level)]
-
-            current_scale = self.get_effective_scale(str(level))
-            previous_scale = self.get_effective_scale(str(level - 1))
-
-            downsample_factors = [round(current_scale[i] / previous_scale[i]) for i in range(len(current_scale))]
-
-            previous_level_array.downsample_into(
-                current_level_array,
-                downsample_factors,
-                method=method,
-            )
-
-    def delete_pyramid(self) -> None:
-        """Delete all dataset pyramid levels except the base (level 0) array.
-
-        Use this before calling compute_pyramid() with different levels
-        on a position that already has a pyramid structure.
-
-        This method removes both the zarr arrays and updates the OME-NGFF
-        multiscales metadata to reflect the deletion.
-        """
-        _multiscale = self.metadata.multiscales[0]
-
-        for dataset in _multiscale.datasets[1:]:
-            del self[dataset.path]
-
-        _multiscale.datasets = _multiscale.datasets[:1]
-        self.dump_meta()
-
-    @property
-    def scale(self) -> list[float]:
-        """
-        Helper function for scale transform metadata of
-
-        highest resolution scale.
-        """
-        return self.get_effective_scale(self.metadata.multiscales[0].datasets[0].path)
-
-    @property
-    def axis_names(self) -> list[str]:
-        """
-        Helper function for axis names of the highest resolution scale.
-
-        Returns lowercase axis names.
-        """
-        return [axis.name.lower() for axis in self.metadata.multiscales[0].axes]
-
-    def get_axis_index(self, axis_name: str) -> int:
-        """
-        Get the index of a given axis.
-
-        Parameters
-        ----------
-        name : str
-            Name of the axis. Case insensitive.
-
-        Returns
-        -------
-        int
-            Index of the axis.
-        """
-        return self.axis_names.index(axis_name.lower())
-
-    def _get_all_transforms(self, image: str | Literal["*"]) -> list[TransformationMeta]:
-        """Get all transforms metadata
-
-        for one image array or the whole FOV.
-
-        Parameters
-        ----------
-        image : str | Literal["*"]
-            Name of one image array (e.g. "0") to query,
-            or "*" for the whole FOV
-
-        Returns
-        -------
-        list[TransformationMeta]
-            All transforms applicable to this image or FOV.
-        """
-        transforms: list[TransformationMeta] = (
-            list(self.metadata.multiscales[0].coordinate_transformations)
-            if self.metadata.multiscales[0].coordinate_transformations is not None
-            else []
-        )
-        if image != "*" and image in self:
-            for i, dataset_meta in enumerate(self.metadata.multiscales[0].datasets):
-                if dataset_meta.path == image:
-                    transforms.extend(self.metadata.multiscales[0].datasets[i].coordinate_transformations)
-        elif image != "*":
-            raise ValueError(f"Key {image} not recognized.")
-        return transforms
-
-    def get_effective_scale(
-        self,
-        image: str | Literal["*"],
-    ) -> list[float]:
-        """Get the effective coordinate scale metadata
-
-        for one image array or the whole FOV.
-
-        Parameters
-        ----------
-        image : str | Literal["*"]
-            Name of one image array (e.g. "0") to query,
-            or "*" for the whole FOV
-
-        Returns
-        -------
-        list[float]
-            A list of floats representing the total scale
-            for the image or FOV for each axis.
-        """
-        transforms = self._get_all_transforms(image)
-
-        full_scale = np.ones(len(self.axes), dtype=float)
-        for transform in transforms:
-            if transform.type == "scale":
-                full_scale *= np.array(transform.scale)
-
-        return [float(x) for x in full_scale]
 
     def get_effective_translation(
         self,
