@@ -665,7 +665,7 @@ class MultiscaleNode(NGFFNode):
     """A group holding one multiscale image: the pyramid levels and their transforms.
 
     Shared by [`Position`][iohub.ngff.Position] (TCZYX images) and
-    [`PositionLabel`][iohub.ngff.PositionLabel] (TZYX label images): both are
+    [`PositionLabel`][iohub.ngff.nodes.PositionLabel] (TZYX label images): both are
     `ome.multiscales` groups whose level "0" is the full-resolution array and
     whose further levels are 2x downsampled per level. The pyramid methods here
     only need ``metadata.multiscales[0]``, ``data``, ``create_zeros`` and
@@ -909,7 +909,7 @@ class MultiscaleNode(NGFFNode):
 
         Parameters
         ----------
-        name : str
+        axis_name : str
             Name of the axis. Case insensitive.
 
         Returns
@@ -2134,7 +2134,7 @@ class Position(MultiscaleNode):
         level : str, optional
             Path of the first level, by default "0". Further levels can be
             added on the returned label with
-            [`create_zeros`][iohub.ngff.PositionLabel.create_zeros].
+            [`create_zeros`][iohub.ngff.nodes.PositionLabel.create_zeros].
 
         Returns
         -------
