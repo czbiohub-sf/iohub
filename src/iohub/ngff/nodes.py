@@ -676,12 +676,20 @@ class MultiscaleNode(NGFFNode):
         self,
         levels: int,
         dims: set[str] | None = None,
+        shards: ShardsLike = None,
     ) -> None:
         """
         Initializes the pyramid arrays with a down scaling of 2 per level.
 
         Decimals shapes are rounded up to ceiling.
         Scales metadata are also updated.
+
+        Chunks halve along the downsampled axes at every level and are clamped
+        to the level's shape, so they stay small for visualization. Shards are
+        sized per level from ``shards``: by default the coarser levels keep the
+        nominal (uncompressed) byte size of the level-0 shard, which the sizer
+        fills spatially first and then along time, so shard files stay about
+        the same size down the pyramid instead of shrinking eightfold per level.
 
         Parameters
         ----------
@@ -691,6 +699,12 @@ class MultiscaleNode(NGFFNode):
             Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
             Must be a subset of the dataset's axis names.
             Defaults to ``{"z", "y", "x"}``, must be lowercase.
+        shards : tuple[int, ...] or str, optional
+            Shard geometry of every downsampled level, in the forms
+            :func:`iohub.core.sharding.resolve_shards` accepts (an explicit
+            shape, ``"XY"``/``"XYZ"``, or a size target such as ``"1GB"``).
+            Defaults to None: a size target equal to the level-0 shard's
+            nominal byte size when level 0 is sharded, else no sharding.
         """
         if dims is None:
             dims = {"z", "y", "x"}
@@ -704,21 +718,17 @@ class MultiscaleNode(NGFFNode):
 
         prev_shape = self.data.shape
         prev_chunks = self.data.chunks
-        prev_shards = self.data.shards
+        if shards is None and self.data.shards is not None:
+            # Keep the level-0 shard's byte size down the pyramid: a size
+            # target the sizer fills spatially first, then along time.
+            shards = str(math.prod(self.data.shards) * np.dtype(self.data.dtype).itemsize)
 
         for level in range(1, levels):
             factor = 2**level  # cumulative scale for metadata
 
             shape = _scale_dims(prev_shape, axes)
-            chunks = _scale_dims(prev_chunks, axes)
-
-            # Downscaling shards and chunks separately can leave the shard off
-            # the chunk grid; create_zeros rounds it back up to whole chunks.
-            if prev_shards is not None:
-                prev_shards = _scale_dims(prev_shards, axes)
-                shards = prev_shards
-            else:
-                shards = None
+            # Halved with the shape, and never larger than the level itself.
+            chunks = tuple(min(c, s) for c, s in zip(_scale_dims(prev_chunks, axes), shape, strict=True))
 
             transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
             for tr in transforms:
@@ -744,6 +754,7 @@ class MultiscaleNode(NGFFNode):
         levels: int | None = None,
         method: str = "mean",
         dims: set[str] | None = None,
+        shards: ShardsLike = None,
     ) -> None:
         """Compute pyramid by downsampling from source level.
 
@@ -762,6 +773,10 @@ class MultiscaleNode(NGFFNode):
             Axis names to downsample (e.g. ``{"y", "x"}`` for YX-only).
             Forwarded to ``initialize_pyramid`` when creating the pyramid
             structure. Defaults to ``{"z", "y", "x"}``.
+        shards : tuple[int, ...] or str, optional
+            Shard geometry of the new levels, forwarded to ``initialize_pyramid``
+            when creating the pyramid structure. Defaults to None: the
+            level-0 shard's byte size as a size target.
 
         Raises
         ------
@@ -794,7 +809,7 @@ class MultiscaleNode(NGFFNode):
             levels = num_arrays
 
         if num_arrays == 1:
-            self.initialize_pyramid(levels=levels, dims=dims)
+            self.initialize_pyramid(levels=levels, dims=dims, shards=shards)
         elif num_arrays != levels:
             raise ValueError(
                 f"Pyramid structure exists with {num_arrays} levels but "
@@ -1065,6 +1080,7 @@ class PositionLabel(MultiscaleNode):
         levels: int | None = None,
         method: str = "max",
         dims: set[str] | None = None,
+        shards: ShardsLike = None,
     ) -> None:
         """Compute the label pyramid with a method that never invents a label id.
 
@@ -1083,7 +1099,7 @@ class PositionLabel(MultiscaleNode):
                 f"Label pyramids need a method that keeps existing values, one of {LABEL_PYRAMID_METHODS}; "
                 f"got {method!r}."
             )
-        super().compute_pyramid(levels=levels, method=method, dims=dims)
+        super().compute_pyramid(levels=levels, method=method, dims=dims, shards=shards)
 
     def create_label(
         self,

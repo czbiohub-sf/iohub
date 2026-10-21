@@ -1992,6 +1992,63 @@ def test_create_label_pyramid_levels(tmp_path):
         assert label.get_effective_scale("1") == [1.0, 2.0, 2.0, 2.0]
 
 
+def test_initialize_pyramid_keeps_level0_shard_bytes(tmp_path):
+    """Coarser levels halve and clamp the chunks, and keep the level-0 shard's byte size."""
+    with open_ome_zarr(tmp_path / "pyr_shards.zarr", layout="fov", mode="a", channel_names=["a", "b"]) as pos:
+        pos.create_zeros(
+            "0",
+            shape=(40, 2, 8, 64, 64),
+            dtype=np.uint16,
+            chunks=(1, 1, 8, 16, 16),
+            shards=(4, 1, 8, 64, 64),  # 256 KiB nominal
+        )
+        pos.initialize_pyramid(levels=3)
+
+        assert pos["1"].shape == (40, 2, 4, 32, 32)
+        assert pos["1"].chunks == (1, 1, 4, 8, 8)
+        # The whole level is 8 KiB per timepoint per channel: the 256 KiB budget
+        # buys all of space and then 32 timepoints. C is never grown.
+        assert pos["1"].shards == (32, 1, 4, 32, 32)
+        assert pos["2"].shape == (40, 2, 2, 16, 16)
+        assert pos["2"].chunks == (1, 1, 2, 4, 4)
+        # 1 KiB per timepoint: every timepoint fits, so the shard is the array per channel.
+        assert pos["2"].shards == (40, 1, 2, 16, 16)
+        for level in ("1", "2"):
+            nbytes = np.prod(pos[level].shards) * 2
+            assert nbytes <= 4 * 8 * 64 * 64 * 2
+
+
+def test_initialize_pyramid_clamps_chunks_and_takes_explicit_shards(tmp_path):
+    """A chunk larger than the level is clamped; `shards` is applied to every level as given."""
+    with open_ome_zarr(tmp_path / "pyr_clamp.zarr", layout="fov", mode="a", channel_names=["a"]) as pos:
+        pos.create_zeros("0", shape=(2, 1, 3, 16, 16), dtype=np.uint16, chunks=(1, 1, 8, 16, 16))
+        assert pos["0"].shards is None
+        pos.initialize_pyramid(levels=3, shards="XYZ")
+        assert pos["1"].shape == (2, 1, 2, 8, 8)
+        assert pos["1"].chunks == (1, 1, 2, 8, 8)  # z chunk 4 -> clamped to the level's 2
+        assert pos["1"].shards == (1, 1, 2, 8, 8)
+        assert pos["2"].shape == (2, 1, 1, 4, 4)
+        assert pos["2"].chunks == (1, 1, 1, 4, 4)
+
+        # Unsharded level 0 and no request: the levels stay unsharded.
+        pos.delete_pyramid()
+        pos.initialize_pyramid(levels=2)
+        assert pos["1"].shards is None
+
+
+def test_label_pyramid_keeps_level0_shard_bytes(tmp_path):
+    """Label levels grow their time axis (named, so recognised as time) to keep the shard bytes."""
+    with open_ome_zarr(tmp_path / "pyr_label_shards.zarr", layout="fov", mode="a", channel_names=["a"]) as pos:
+        pos.create_zeros("0", shape=(32, 1, 1, 64, 64), dtype=np.uint16)
+        label = pos.create_label_zeros(
+            "cells", shape=(32, 1, 64, 64), dtype=np.uint32, chunks=(8, 1, 32, 32), shards=(8, 1, 64, 64)
+        )
+        label.compute_pyramid(levels=2, dims={"y", "x"})
+        assert label["1"].chunks == (8, 1, 16, 16)
+        # 128 KiB budget over a 4 KiB-per-timepoint level: all 32 timepoints fit.
+        assert label["1"].shards == (32, 1, 32, 32)
+
+
 def test_downsample_block_mode_shape():
     """``mode`` pools every window and returns the ceiling-division shape.
 
