@@ -30,6 +30,7 @@ from iohub.ngff.utils import (
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
     apply_transform_to_tczyx_and_save,
+    create_empty_labels,
     create_empty_plate,
     process_single_position,
 )
@@ -2800,6 +2801,83 @@ def test_create_empty_plate_label_argument_refusals(tmp_path, bad, match):
             **bad,
         )
     assert not store_path.exists()
+
+
+# -- Label images in an existing plate -------------------------------------
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_labels_in_existing_positions(tmp_path, version):
+    """Labels take each position's own geometry; metadata goes on the label group."""
+    store_path = tmp_path / "plate.zarr"
+    shape = (3, 2, 4, 16, 16)
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0"), ("A", "1", "1")],
+        channel_names=["DAPI", "GFP"],
+        shape=shape,
+        version=version,
+        scale=(1, 1, 2.0, 0.5, 0.5),
+    )
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.create_label("nuclei", np.ones((3, 4, 16, 16), dtype=np.uint16))
+
+    kwargs = {"label_chunks": (2, 1, 8, 8)}
+    if version == "0.5":
+        kwargs["label_shards_ratio"] = (1, 4, 2, 2)
+    create_empty_labels(
+        store_path,
+        [("A", "1", "0"), ("A", "1", "1")],
+        ["nuclei", "cells"],
+        label_metadata={"provenance-segment": {"model": "cpsam_v2"}},
+        **kwargs,
+    )
+
+    with open_ome_zarr(store_path, mode="r") as plate:
+        for _name, pos in plate.positions():
+            assert pos.channel_names == ["DAPI", "GFP"]  # the image is untouched
+            assert pos.label_names() == ["cells", "nuclei"]
+            cells = pos.get_label("cells")
+            assert cells["0"].shape == (3, 4, 16, 16)
+            assert cells["0"].dtype == np.uint32
+            assert cells["0"].chunks == (2, 1, 8, 8)
+            if version == "0.5":
+                assert cells["0"].shards == (2, 4, 16, 16)
+            (scale,) = cells.metadata.multiscales[0].datasets[0].coordinate_transformations
+            assert scale.scale == [1.0, 2.0, 0.5, 0.5]
+            for name in ("cells", "nuclei"):
+                assert pos.get_label(name).zattrs["provenance-segment"] == {"model": "cpsam_v2"}
+        # The existing label kept its data and dtype.
+        nuclei = plate["A/1/0"].get_label("nuclei")
+        assert nuclei["0"].dtype == np.uint16
+        assert nuclei["0"][:].all()
+
+    # A second call is a no-op for the arrays and refreshes the metadata.
+    create_empty_labels(store_path, [("A", "1", "1")], ["cells"], label_metadata={"provenance-segment": {"model": "x"}})
+    with open_ome_zarr(store_path / "A/1/1", layout="fov", mode="r") as pos:
+        assert pos.get_label("cells").zattrs["provenance-segment"] == {"model": "x"}
+        assert get_ome_attrs(pos.labels_group.attrs)["labels"] == ["cells", "nuclei"]
+
+
+def test_create_empty_labels_refusals(tmp_path):
+    store_path = tmp_path / "plate.zarr"
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0")],
+        channel_names=["DAPI"],
+        shape=(1, 1, 4, 8, 8),
+        version="0.4",
+    )
+    with pytest.raises(FileNotFoundError, match="B/1/0 does not exist"):
+        create_empty_labels(store_path, [("B", "1", "0")], ["nuclei"])
+    with pytest.raises(ValueError, match="not supported for OME-Zarr v0"):
+        create_empty_labels(store_path, [("A", "1", "0")], ["nuclei"], label_shards_ratio=(1, 1, 1, 1))
+    with pytest.raises(ValueError, match="reserved"):
+        create_empty_labels(store_path, [("A", "1", "0")], ["nuclei"], label_metadata={"image-label": {}})
+    with pytest.raises(ValueError, match="at least one"):
+        create_empty_labels(store_path, [("A", "1", "0")], [])
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        assert pos.label_names() == []
 
 
 # -- Writing into a label image --------------------------------------------
