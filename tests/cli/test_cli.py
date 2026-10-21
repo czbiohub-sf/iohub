@@ -494,6 +494,19 @@ def test_cli_compute_pyramid_rejects_mean_for_labels(tmp_path):
         assert pos.array_keys() == ["0"]  # rejected before any store was touched
 
 
+def test_cli_compute_pyramid_resume(tmp_path):
+    store_path = tmp_path / "compute_pyramid_resume.zarr"
+    _, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    args = ["compute-pyramid", "-i", str(position_path), "-l", "2", "--resume"]
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    markers = list((tmp_path / ".iohub-progress" / store_path.name).rglob("*.done"))
+    assert markers
+    before = {m: m.stat().st_mtime_ns for m in markers}
+    assert CliRunner().invoke(cli, args).exit_code == 0
+    assert {m: m.stat().st_mtime_ns for m in markers} == before  # nothing re-recorded
+
+
 def test_cli_compute_pyramid_plate_glob(tmp_path):
     store_path = tmp_path / "compute_pyramid_plate.zarr"
     _, position_key = _make_pyramid_test_plate(store_path)

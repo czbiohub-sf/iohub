@@ -271,6 +271,16 @@ def compute_pyramid(
             help="Downsampling method for the position's label images (labels/<name>).",
         ),
     ] = LabelPyramidMethod.max,
+    resume: Annotated[
+        bool,
+        typer.Option(
+            "--resume",
+            help=(
+                "Skip the pyramid regions an earlier run of this command (same levels, methods "
+                "and dims) already finished; for retrying an interrupted run."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Create or recompute an OME-Zarr pyramid in place.
 
@@ -288,10 +298,15 @@ def compute_pyramid(
     from iohub import open_ome_zarr
 
     parsed_dims = _parse_dims(dims)
+    # What determines the result: a run with other arguments must not skip
+    # regions this one recorded.
+    token = f"compute-pyramid:{levels}:{method.value}:{label_method.value}:{sorted(parsed_dims or [])}"
     for input_position_dirpath in expand_position_dirpaths(input_position_dirpaths):
         _logger.info(f"Computing pyramid for {input_position_dirpath}")
         with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
-            dataset.compute_pyramid(levels=levels, method=method.value, dims=parsed_dims)
+            dataset.compute_pyramid(
+                levels=levels, method=method.value, dims=parsed_dims, resume=resume, resume_token=token
+            )
             labels = list(dataset.labels())
             if not labels:
                 continue
@@ -312,7 +327,9 @@ def compute_pyramid(
                     )
                     label.delete_pyramid()
                 _logger.info(f"Computing pyramid for label {name!r} of {input_position_dirpath}")
-                label.compute_pyramid(levels=levels, method=label_method.value, dims=label_dims)
+                label.compute_pyramid(
+                    levels=levels, method=label_method.value, dims=label_dims, resume=resume, resume_token=token
+                )
 
 
 @app.command(name="rename-wells")

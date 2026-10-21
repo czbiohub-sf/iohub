@@ -109,10 +109,19 @@ class WriteUnit:
     #: Opaque string mixed into the unit's identity, so that a caller whose
     #: inputs or settings changed does not match the previous run's markers.
     token: str = ""
+    #: For a unit planned from an N-D region (`plan_region_unit`): the
+    #: ``(start, stop)`` of every axis. None for a ``(timepoints, channels)``
+    #: unit, whose identity is the two index tuples.
+    region: tuple[tuple[int, int], ...] | None = None
 
     @property
     def name(self) -> str:
         """Stable identifier for this unit, reproducible across processes."""
+        if self.region is not None:
+            payload = repr((self.region, self.token)).encode()
+            digest = hashlib.sha256(payload).hexdigest()[:12]
+            extent = "_".join(f"{start}-{stop}" for start, stop in self.region)
+            return f"r{extent}_{digest}"
         payload = repr((self.time_indices, self.channel_indices, self.token)).encode()
         digest = hashlib.sha256(payload).hexdigest()[:12]
         times = f"t{self.time_indices[0]}-{self.time_indices[-1]}"
@@ -142,7 +151,14 @@ class WriteUnit:
         """
         if self.marker_dir is not None:
             self.marker_dir.mkdir(parents=True, exist_ok=True)
-            self.done_marker.unlink(missing_ok=True)
+            # Every record of this unit goes, whatever token wrote it: the files
+            # are about to hold this run's data, so an earlier run's record of
+            # the same files must not let a later resume under *its* token skip
+            # them. The name is `<extent>_<digest>`; the extent identifies the
+            # unit, the digest its token.
+            stem = self.name.rsplit("_", 1)[0]
+            for stale in self.marker_dir.glob(f"{stem}_*.done"):
+                stale.unlink(missing_ok=True)
             self.inflight_marker.touch()
         self.clear()
 
@@ -305,6 +321,59 @@ def plan_write_unit(
         array_dir=directory,
         marker_dir=progress_dir,
         token=token,
+    )
+
+
+def plan_region_unit(
+    array,
+    region: tuple[slice, ...],
+    token: str = "",
+    progress_dir: Path | None = None,
+) -> WriteUnit | None:
+    """Describe the files an N-D ``region`` write owns.
+
+    The region form of `plan_write_unit`, for writes that are not
+    ``(timepoints, channels)`` by the whole spatial extent: a pyramid level
+    is written one shard-aligned region at a time (see
+    ``ZarrImplementation.iter_work_regions``), and each such region owns
+    exactly the files it covers. Returns None when ownership cannot be
+    established -- an untracked store (see `tracking_available`), or a region
+    that only partly covers one of its files.
+
+    ``token`` and ``progress_dir`` are as for `plan_write_unit`.
+    """
+    directory = _array_directory(array)
+    encoding = _chunk_key_encoding(array)
+    if directory is None or encoding is None:
+        return None
+    shape = tuple(array.shape)
+    grid = tuple(array.shards or array.chunks)
+    if len(grid) != len(shape) or len(region) != len(shape):
+        return None
+    bounds = tuple(axis.indices(extent)[:2] for axis, extent in zip(region, shape, strict=True))
+    cells_per_axis = []
+    for (start, stop), step, extent in zip(bounds, grid, shape, strict=True):
+        if stop <= start:
+            return None
+        cells = _covered_cells(tuple(range(start, stop)), step, extent)
+        if cells is None:
+            return None
+        cells_per_axis.append(cells)
+    shards = tuple(
+        (
+            directory / encoding.encode_chunk_key(cell),
+            tuple(index * step for index, step in zip(cell, grid, strict=True)),
+        )
+        for cell in itertools.product(*cells_per_axis)
+    )
+    return WriteUnit(
+        time_indices=tuple(range(*bounds[0])),
+        channel_indices=tuple(range(*bounds[1])) if len(bounds) > 1 else (0,),
+        shards=shards,
+        array_dir=directory,
+        marker_dir=progress_dir,
+        token=token,
+        region=bounds,
     )
 
 

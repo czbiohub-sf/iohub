@@ -2049,6 +2049,86 @@ def test_label_pyramid_keeps_level0_shard_bytes(tmp_path):
         assert label["1"].shards == (32, 1, 32, 32)
 
 
+def _count_downsample_calls(monkeypatch, pos):
+    calls = []
+    original = pos._impl.downsample_region
+
+    def counting(source, target, region, factors, method="mean"):
+        calls.append(region)
+        return original(source, target, region, factors, method)
+
+    monkeypatch.setattr(pos._impl, "downsample_region", counting)
+    return calls
+
+
+def test_compute_pyramid_resume_skips_finished_regions(tmp_path, monkeypatch):
+    """Regions are recorded beside the store; resume skips them, a new token or a torn shard does not."""
+    store = tmp_path / "resume.zarr"
+    rng = np.random.default_rng(0)
+    data = rng.integers(1, 255, size=(8, 1, 4, 64, 64), dtype=np.uint16)
+    with open_ome_zarr(store, layout="fov", mode="a", channel_names=["a"]) as pos:
+        pos.create_image("0", data, chunks=(1, 1, 4, 16, 16), shards=(2, 1, 4, 32, 32))
+        calls = _count_downsample_calls(monkeypatch, pos)
+        pos.compute_pyramid(levels=3, resume=True, resume_token="run-1")
+        first = len(calls)
+        assert first > 1
+        level1 = pos["1"][:]
+        markers = sorted((tmp_path / ".iohub-progress" / "resume.zarr").rglob("*.done"))
+        assert len(markers) == first
+        assert {m.parent.name for m in markers} == {"1", "2"}
+
+        # Same token: nothing is recomputed.
+        calls.clear()
+        pos.compute_pyramid(resume=True, resume_token="run-1")
+        assert calls == []
+        np.testing.assert_array_equal(pos["1"][:], level1)
+
+        # A torn shard (file gone) is recomputed, and only it.
+        shard = next(p for p in (store / "1").rglob("*") if p.is_file() and p.name != "zarr.json")
+        shard.unlink()
+        pos.compute_pyramid(resume=True, resume_token="run-1")
+        assert len(calls) == 1
+        np.testing.assert_array_equal(pos["1"][:], level1)
+
+        # A different token recomputes everything and retires the old records,
+        # so the old token cannot skip past data it did not produce.
+        calls.clear()
+        pos.compute_pyramid(resume=True, resume_token="run-2")
+        assert len(calls) == first
+        assert len(list((tmp_path / ".iohub-progress" / "resume.zarr").rglob("*.done"))) == first
+        calls.clear()
+        pos.compute_pyramid(resume=True, resume_token="run-1")
+        assert len(calls) == first
+        # resume=False recomputes regardless.
+        calls.clear()
+        pos.compute_pyramid(resume=False, resume_token="run-1")
+        assert len(calls) == first
+
+
+def test_compute_pyramid_resume_covers_labels_and_untracked_backends(tmp_path, monkeypatch):
+    pytest.importorskip("tensorstore")
+    store = tmp_path / "resume_labels.zarr"
+    with open_ome_zarr(store, layout="fov", mode="a", channel_names=["a"]) as pos:
+        pos.create_zeros("0", shape=(4, 1, 1, 32, 32), dtype=np.uint16, chunks=(1, 1, 1, 16, 16))
+        label = pos.create_label_zeros("cells", shape=(4, 1, 32, 32), dtype=np.uint32, chunks=(2, 1, 16, 16))
+        label["0"][:, :, :16, :16] = 3
+        label.compute_pyramid(levels=2, resume=True, resume_token="t")
+        assert set(np.unique(label["1"][:])) == {0, 3}
+        calls = _count_downsample_calls(monkeypatch, label)
+        label.compute_pyramid(resume=True, resume_token="t")
+        assert calls == []
+        assert (tmp_path / ".iohub-progress" / "resume_labels.zarr" / "labels" / "cells" / "1").is_dir()
+
+    # tensorstore handles are not tracked: no markers, every call recomputes, no error.
+    store2 = tmp_path / "resume_ts.zarr"
+    with open_ome_zarr(store2, layout="fov", mode="a", channel_names=["a"], implementation="tensorstore") as pos:
+        pos.create_image("0", np.ones((2, 1, 4, 32, 32), dtype=np.uint16))
+        pos.compute_pyramid(levels=2, resume=True, resume_token="t")
+        pos.compute_pyramid(resume=True, resume_token="t")
+        assert pos["1"][:].max() == 1
+    assert not (tmp_path / ".iohub-progress" / "resume_ts.zarr").exists()
+
+
 def test_downsample_block_mode_shape():
     """``mode`` pools every window and returns the ceiling-division shape.
 
