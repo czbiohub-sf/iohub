@@ -123,6 +123,7 @@ def create_empty_plate(
     label_names: list[str] | None = None,
     label_dtype: DTypeLike = np.uint32,
     label_chunks: tuple[int, ...] | None = None,
+    label_shards: ShardsLike = None,
     label_shards_ratio: tuple[int, ...] | None = None,
 ) -> None:
     """
@@ -248,11 +249,15 @@ def create_empty_plate(
         image shape, at ``label_dtype`` and without the channel axis (for
         "0.4" the Z chunk is capped to 500 MB at ``label_dtype``). Explicit
         image ``chunks`` are not inherited. Defaults to None.
+    label_shards : tuple[int, ...] or str, optional
+        Shard geometry of the label images, in the forms ``shards`` takes
+        (an explicit TZYX shape in elements, ``"XY"``/``"XYZ"``, or a size
+        target), resolved per level of each position's label. If None, for
+        "0.5" one shard per ZYX volume (``"XYZ"``); no sharding for "0.4".
+        The image's ``shards`` are not inherited. Defaults to None.
     label_shards_ratio : tuple[int, ...], optional
-        TZYX shards ratio of the label images. If None, for "0.5" the ratio
-        that makes one shard span a time chunk's whole ZYX volume of each
-        level of each position's label; no sharding for "0.4". Explicit image
-        ``shards_ratio`` is not inherited. Defaults to None.
+        Deprecated TZYX multiplier over ``label_chunks``; use
+        ``label_shards``. Passing both raises ``ValueError``. Defaults to None.
 
     Raises
     ------
@@ -260,12 +265,12 @@ def create_empty_plate(
         If ``metadata_keys`` is given without ``metadata_sources``.
     ValueError
         If ``label_dtype`` is not an integer type, or ``label_chunks`` or
-        ``label_shards_ratio`` is not TZYX (4 values), or
-        ``label_shards_ratio`` is given for version "0.4".
+        ``label_shards_ratio`` is not TZYX (4 values), or ``label_shards``
+        / ``label_shards_ratio`` is given for version "0.4", or both are given.
     ValueError
-        If ``label_dtype``, ``label_chunks`` or ``label_shards_ratio`` is
-        given without ``label_names``: they describe labels, so on their
-        own they select nothing.
+        If ``label_dtype``, ``label_chunks``, ``label_shards`` or
+        ``label_shards_ratio`` is given without ``label_names``: they
+        describe labels, so on their own they select nothing.
     FileNotFoundError
         If a ``metadata_sources`` plate root does not exist.
 
@@ -375,14 +380,17 @@ def create_empty_plate(
         for arg_name, value in (("label_chunks", label_chunks), ("label_shards_ratio", label_shards_ratio)):
             if value is not None and len(value) != 4:
                 raise ValueError(f"{arg_name} must be TZYX (4 values), got {value}.")
-        if version == "0.4" and label_shards_ratio is not None:
-            raise ValueError("label_shards_ratio is not supported for OME-Zarr v0.4.")
+        if version == "0.4" and (label_shards is not None or label_shards_ratio is not None):
+            raise ValueError("label_shards / label_shards_ratio are not supported for OME-Zarr v0.4.")
+        if label_shards is not None and label_shards_ratio is not None:
+            raise ValueError("Pass either label_shards or the deprecated label_shards_ratio, not both.")
     else:
         given = [
             arg_name
             for arg_name, value, default in (
                 ("label_dtype", np.dtype(label_dtype), np.dtype(np.uint32)),
                 ("label_chunks", label_chunks, None),
+                ("label_shards", label_shards, None),
                 ("label_shards_ratio", label_shards_ratio, None),
             )
             if value != default
@@ -491,9 +499,12 @@ def create_empty_plate(
                 chunks_tzyx = _drop_channel_axis(_default_chunks(image_shape, label_dtype, position.version))
             else:
                 chunks_tzyx = _clamp_chunks_to_shape(label_shape, label_chunks)
-            # Labels take the same form as the image: one shard per ZYX volume by
-            # default on v0.5, or the caller's (deprecated) ratio.
-            shards_tzyx = "XYZ" if label_shards_ratio is None and position.version == "0.5" else None
+            # The caller's label_shards, else one shard per ZYX volume on v0.5
+            # (unless the deprecated ratio was given), else unsharded.
+            if label_shards is not None:
+                shards_tzyx = label_shards
+            else:
+                shards_tzyx = "XYZ" if label_shards_ratio is None and position.version == "0.5" else None
             levels.append((dataset.path, label_shape, chunks_tzyx, shards_tzyx, label_shards_ratio, label_transform))
         for name in missing:
             label = None

@@ -2572,6 +2572,37 @@ def test_create_empty_plate_with_labels(tmp_path, version):
         assert not pos.get_label("cells")["0"].numpy().any()
 
 
+def test_create_empty_plate_label_shards_forms(tmp_path):
+    """label_shards takes the explicit, extent and size forms, per level of the label."""
+    store = tmp_path / "label_shards.zarr"
+    create_empty_plate(
+        store,
+        position_keys=[("A", "1", "0")],
+        channel_names=["a"],
+        shape=(8, 1, 4, 64, 64),
+        chunks=(1, 1, 4, 16, 16),
+        version="0.5",
+        label_names=["explicit"],
+        label_chunks=(2, 1, 16, 16),
+        label_shards=(2, 1, 40, 40),  # rounded up to whole chunks
+    )
+    create_empty_plate(
+        store,
+        position_keys=[("A", "1", "0")],
+        channel_names=["a"],
+        shape=(8, 1, 4, 64, 64),
+        chunks=(1, 1, 4, 16, 16),
+        version="0.5",
+        label_names=["bytes"],
+        label_chunks=(2, 1, 16, 16),
+        label_shards="64KiB",  # 2 KiB chunks: X, then Y fill (32 KiB), then Z grows to 2 of 4
+    )
+    with open_ome_zarr(store / "A" / "1" / "0", mode="r") as pos:
+        assert pos.get_label("explicit")["0"].shards == (2, 1, 48, 48)
+        assert pos.get_label("bytes")["0"].shards == (2, 2, 64, 64)
+        assert pos.get_label("explicit")["0"].chunks == (2, 1, 16, 16)
+
+
 def test_create_empty_plate_labels_explicit_layout(tmp_path):
     """label_dtype, label_chunks and label_shards_ratio are honored."""
     store_path = tmp_path / "labels.zarr"
@@ -2871,6 +2902,8 @@ def test_create_empty_plate_label_layout_requires_label_names(tmp_path, bad):
         ({"label_chunks": (1, 1, 4, 16, 16)}, r"label_chunks must be TZYX"),
         ({"label_shards_ratio": (1, 1, 1, 1, 1)}, r"label_shards_ratio must be TZYX"),
         ({"label_shards_ratio": (1, 1, 1, 1), "version": "0.4"}, "not supported for OME-Zarr v0.4"),
+        ({"label_shards": "XYZ", "version": "0.4"}, "not supported for OME-Zarr v0.4"),
+        ({"label_shards": "XYZ", "label_shards_ratio": (1, 1, 1, 1)}, "not both"),
     ],
 )
 def test_create_empty_plate_label_argument_refusals(tmp_path, bad, match):
