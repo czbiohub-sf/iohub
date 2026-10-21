@@ -600,12 +600,31 @@ def _contiguous_runs(indices: Sequence[int]) -> list[slice]:
     return runs
 
 
+def _output_array(output_dataset, output_label: str | None):
+    """The array a write targets: the position's image, or one of its label images.
+
+    A label image is TZYX (no channel axis), so a label write spans the whole
+    second axis; `plan_write_unit` and the writes below pass ``slice(None)``
+    where the image write passes its channel indices.
+    """
+    if output_label is None:
+        return output_dataset.data
+    if output_label not in output_dataset.label_names():
+        raise ValueError(
+            f"Label image {output_label!r} does not exist in the output position "
+            f"(labels: {output_dataset.label_names()}); create it first, e.g. with "
+            "create_empty_plate(label_names=[...])."
+        )
+    return output_dataset.get_label(output_label)["0"]
+
+
 def _save_transformed(
     transformed: list[NDArray],
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
     output_time_indices: list[int],
     write_unit: WriteUnit | None = None,
+    output_label: str | None = None,
 ) -> None:
     """Write the transformed timepoints, one run of consecutive timepoints at a time.
 
@@ -623,17 +642,30 @@ def _save_transformed(
     input was
     all zeros or NaNs from the middle of that batch. They also arise from a
     caller asking for non-consecutive ``output_time_indices`` outright.
+
+    With ``output_label`` the target is the TZYX label image of that name:
+    each transformed timepoint must then have exactly one channel, which is
+    dropped on the way in.
     """
+    if output_label is not None:
+        channels = {np.shape(czyx)[0] for czyx in transformed}
+        if channels != {1}:
+            raise ValueError(
+                f"Writing into label image {output_label!r} needs func to return one channel "
+                f"per timepoint, got {sorted(channels)} channels."
+            )
+        transformed = [np.asarray(czyx)[0] for czyx in transformed]
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
-        arr = output_dataset.data
+        arr = _output_array(output_dataset, output_label)
         if write_unit is not None:
             write_unit.begin()
         for run in _contiguous_runs(output_time_indices):
-            arr._impl.write_oindex(
-                arr.native,
-                (output_time_indices[run], output_channel_indices),
-                transformed[run],
+            selection = (
+                (output_time_indices[run],)
+                if output_label is not None
+                else (output_time_indices[run], output_channel_indices)
             )
+            arr._impl.write_oindex(arr.native, selection, transformed[run])
     # Recorded only after the store is closed, so the codec pipeline has
     # released the shards and anything it buffered in user space has reached
     # the kernel before `WriteUnit.complete` syncs it to disk. Marking the
@@ -649,19 +681,25 @@ def _plan_output_write(
     output_time_indices: list[int],
     resume: bool,
     resume_token: str,
+    output_label: str | None = None,
 ) -> tuple[WriteUnit | None, bool]:
     """Describe the files this write owns, and whether it already finished."""
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
+        array = _output_array(output_dataset, output_label)
+        progress_dir = progress_dir_for(output_position_path)
+        if output_label is not None and progress_dir is not None:
+            # Markers of a label image live beside the image's, under the label's name.
+            progress_dir = progress_dir / "labels" / output_label
         unit = plan_write_unit(
-            output_dataset.data,
+            array,
             output_time_indices,
-            output_channel_indices,
+            slice(None) if output_label is not None else output_channel_indices,
             token=resume_token,
-            progress_dir=progress_dir_for(output_position_path),
+            progress_dir=progress_dir,
         )
         if unit is None:
             return None, False
-        return unit, bool(resume and unit_is_complete(unit, output_dataset.data))
+        return unit, bool(resume and unit_is_complete(unit, array))
 
 
 def apply_transform_to_tczyx_and_save(
@@ -675,6 +713,7 @@ def apply_transform_to_tczyx_and_save(
     *,
     resume: bool = False,
     resume_token: str = "",
+    output_label: str | None = None,
     **kwargs,
 ) -> None:
     """Load a TCZYX array from a position store.
@@ -685,6 +724,8 @@ def apply_transform_to_tczyx_and_save(
     `iohub.ngff._write_units`) they are cleared before writing rather
     than written over, and completion is recorded in a marker file. Pass
     ``resume=True`` to skip a unit that a previous run already finished.
+    With ``output_label`` the result goes into that label image of the output
+    position instead of its image (see `process_single_position`).
     """
     unit, already_written = _plan_output_write(
         output_position_path,
@@ -692,6 +733,7 @@ def apply_transform_to_tczyx_and_save(
         _slice_to_list(output_time_indices),
         resume,
         resume_token,
+        output_label=output_label,
     )
     if already_written:
         click.echo(f"Skipping t={output_time_indices}, c={output_channel_indices}: already written")
@@ -724,6 +766,7 @@ def apply_transform_to_tczyx_and_save(
             output_channel_indices=output_channel_indices,
             output_time_indices=output_time_indices,
             write_unit=unit,
+            output_label=output_label,
         )
         _echo_finished(input_time_indices, input_channel_indices, skipped=False)
     elif unit is not None:
@@ -801,6 +844,7 @@ def process_single_position(
     use_threads: bool = False,
     resume: bool = False,
     resume_token: str = "",
+    output_label: str | None = None,
     **kwargs,
 ) -> None:
     """
@@ -819,7 +863,17 @@ def process_single_position(
         (e.g., input_store_path.zarr/A/1/0).
     output_position_path : Path
         The path to the output OME-Zarr position store
-        (e.g., output_store_path.zarr/A/1/0).
+        (e.g., output_store_path.zarr/A/1/0). May be the input position
+        when writing into one of its label images (``output_label``).
+    output_label : str, optional
+        Write into the label image ``labels/<output_label>`` of the output
+        position (created beforehand, e.g. by ``create_empty_plate``'s
+        ``label_names``) instead of its image. A label image is TZYX, so
+        ``func`` must return one channel per timepoint and
+        ``input_channel_indices`` must hold a single channel group;
+        ``output_channel_indices`` is ignored. Resume and repair work as for
+        the image, with the markers kept under the label's name.
+        Defaults to None, the image.
     input_time_indices : list[int], optional
         If not provided, all timepoints will be processed.
     output_time_indices : list[int], optional
@@ -879,13 +933,16 @@ def process_single_position(
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
     click.echo(f"Output data path:\t{output_position_path}")
+    if output_label is not None:
+        click.echo(f"Output label image:\t{output_label}")
 
     # Get data shape and shard info
     with open_ome_zarr(input_position_path, layout="fov", mode="r") as input_dataset:
         input_data_shape = input_dataset.data.shape
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
-        output_shards = output_dataset.data.shards
-        if resume and not tracking_available(output_dataset.data):
+        output_array = _output_array(output_dataset, output_label)
+        output_shards = output_array.shards
+        if resume and not tracking_available(output_array):
             warnings.warn(
                 f"resume=True was requested but progress cannot be tracked for {output_position_path}, "
                 "so every unit will be recomputed. Tracking requires a local Zarr v3 (OME-Zarr v0.5) store.",
@@ -914,9 +971,17 @@ def process_single_position(
         input_channel_indices = [[c] for c in range(input_data_shape[1])]
         output_channel_indices = input_channel_indices
     assert type(input_channel_indices) is list, "input_channel_indices must be a list"
-    if output_channel_indices is None:
+    if output_label is not None:
+        # One label image takes one result per timepoint, whatever channels feed it.
+        if len(input_channel_indices) != 1:
+            raise ValueError(
+                f"output_label={output_label!r} takes a single input channel group, "
+                f"got {len(input_channel_indices)}: {input_channel_indices}."
+            )
+        output_channel_indices = [slice(None)]
+    elif output_channel_indices is None:
         output_channel_indices = input_channel_indices
-    if output_shards is not None and output_shards[1] != 1:
+    if output_label is None and output_shards is not None and output_shards[1] != 1:
         raise ValueError("Sharding along the channel dimension is not supported.")
 
     # Check for invalid times
@@ -958,6 +1023,7 @@ def process_single_position(
         output_position_path,
         resume=resume,
         resume_token=resume_token,
+        output_label=output_label,
         **kwargs,
     )
     num_workers = min(num_workers, len(flat_iterable), _available_cpus())
