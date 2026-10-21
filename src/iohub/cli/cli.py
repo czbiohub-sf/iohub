@@ -268,7 +268,7 @@ def compute_pyramid(
         LabelPyramidMethod,
         typer.Option(
             "--label-method",
-            help="Downsampling method for the position's label images (labels/<name>).",
+            help="Downsampling method for the position's label images, labels/NAME.",
         ),
     ] = LabelPyramidMethod.max,
 ) -> None:
