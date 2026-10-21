@@ -418,6 +418,35 @@ def test_cli_compute_pyramid_labels(tmp_path):
         assert set(np.unique(label_image["2"][:])) == {0, 7}
 
 
+def test_cli_compute_pyramid_labels_follow_existing_image_pyramid(tmp_path):
+    """Without --dims, a new label pyramid takes the axes of the image's existing one."""
+    store_path = tmp_path / "compute_pyramid_labels_follow.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        pos.compute_pyramid(levels=2, method="mean", dims={"y", "x"})
+        pos.create_label("cells", np.ones((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32))
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2"])
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        label = pos.get_label("cells")
+        assert label["1"].shape[1] == pos["1"].shape[2] == shape[2]  # Z untouched, like the image
+        assert label.get_effective_scale("1") == pos.get_effective_scale("1")[:1] + pos.get_effective_scale("1")[2:]
+
+
+def test_cli_compute_pyramid_rejects_mean_for_labels(tmp_path):
+    store_path = tmp_path / "compute_pyramid_bad_label_method.zarr"
+    _, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2", "--label-method", "mean"])
+    assert result.exit_code != 0
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        assert pos.array_keys() == ["0"]  # rejected before any store was touched
+
+
 def test_cli_compute_pyramid_plate_glob(tmp_path):
     store_path = tmp_path / "compute_pyramid_plate.zarr"
     _, position_key = _make_pyramid_test_plate(store_path)

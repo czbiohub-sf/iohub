@@ -154,6 +154,11 @@ def _scale_integers(values: tuple[int, ...], factor: int) -> tuple[int, ...]:
     return tuple(math.ceil(v / factor) for v in values)
 
 
+# Downsampling methods that only ever pick a value present in the window, so no
+# level of a label pyramid holds a label id that level 0 does not.
+LABEL_PYRAMID_METHODS = ("max", "min", "stride", "mode")
+
+
 def _scale_dims(values: tuple[int, ...], axes: set[int]) -> tuple[int, ...]:
     """Halve values at the given indices, rounding up (ceiling division)."""
     return tuple(math.ceil(v / 2) if i in axes else v for i, v in enumerate(values))
@@ -802,6 +807,21 @@ class MultiscaleNode(NGFFNode):
                 method=method,
             )
 
+    def pyramid_dims(self) -> set[str] | None:
+        """Axis names the existing pyramid downsamples, or None without a pyramid.
+
+        Read from the scale transforms of levels "0" and "1": an axis whose
+        scale doubles between them is downsampled. Use it to give a label image
+        the same levels as the image it annotates, e.g.
+        ``label.compute_pyramid(levels, dims=position.pyramid_dims())``.
+        """
+        paths = self.metadata.multiscales[0].get_dataset_paths()
+        if len(paths) < 2:
+            return None
+        base = self.get_effective_scale(paths[0])
+        first = self.get_effective_scale(paths[1])
+        return {name for name, s0, s1 in zip(self.axis_names, base, first, strict=True) if round(s1 / s0) == 2}
+
     def delete_pyramid(self) -> None:
         """Delete all dataset pyramid levels except the base (level 0) array.
 
@@ -1007,6 +1027,31 @@ class PositionLabel(MultiscaleNode):
         except (FileNotFoundError, KeyError) as err:
             raise KeyError(key) from err
         return LabelsArray.from_handle(handle, self._impl)
+
+    def compute_pyramid(
+        self,
+        levels: int | None = None,
+        method: str = "max",
+        dims: set[str] | None = None,
+    ) -> None:
+        """Compute the label pyramid with a method that never invents a label id.
+
+        Same as [`MultiscaleNode.compute_pyramid`][iohub.ngff.nodes.MultiscaleNode.compute_pyramid],
+        but ``method`` defaults to ``"max"`` and must be one of
+        ``LABEL_PYRAMID_METHODS`` (``max``, ``min``, ``stride``, ``mode``), which
+        pick a value present in the window: ``mean`` and ``median`` would turn a
+        window of 0s and 8s into a 4 that exists nowhere at level 0.
+
+        Pass ``dims=position.pyramid_dims()`` to match an image pyramid that
+        already exists (``Position.create_label`` and the ``iohub
+        compute-pyramid`` command do).
+        """
+        if method not in LABEL_PYRAMID_METHODS:
+            raise ValueError(
+                f"Label pyramids need a method that keeps existing values, one of {LABEL_PYRAMID_METHODS}; "
+                f"got {method!r}."
+            )
+        super().compute_pyramid(levels=levels, method=method, dims=dims)
 
     def create_label(
         self,
@@ -1937,7 +1982,9 @@ class Position(MultiscaleNode):
         label_image.create_label("0", data, chunks=chunks, shards_ratio=shards_ratio)
 
         if pyramid_levels > 1:
-            label_image.initialize_pyramid(pyramid_levels)
+            # Follow the image's pyramid axes when it has one (e.g. YX-only), so
+            # the label levels match the image levels they annotate.
+            label_image.initialize_pyramid(pyramid_levels, dims=self.pyramid_dims())
 
         self._update_labels_metadata(self.label_names())
 

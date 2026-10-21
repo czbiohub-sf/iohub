@@ -1885,6 +1885,40 @@ def test_label_compute_pyramid_yx_only(tmp_path):
             label.initialize_pyramid(levels=2, dims={"c"})
 
 
+def test_label_compute_pyramid_default_and_refused_methods(tmp_path):
+    """Omitting ``method`` pools labels with max; mean/median are refused up front."""
+    pos, _, label_data = _label_pyramid_fixture(tmp_path / "label_default.zarr")
+    with pos:
+        label = pos.get_label("cells")
+        for bad in ("mean", "median"):
+            with pytest.raises(ValueError, match="keeps existing values"):
+                label.compute_pyramid(levels=2, method=bad)
+        assert label.array_keys() == ["0"]  # refused before anything was created
+        label.compute_pyramid(levels=2)
+        assert set(np.unique(label["1"][:])) <= set(np.unique(label_data))
+        assert label["1"][:].max() == label_data.max()
+
+
+def test_pyramid_dims_and_label_levels_follow_existing_image_pyramid(tmp_path):
+    """A label added to an image with a YX-only pyramid gets YX-only levels too."""
+    pos, _, _ = _label_pyramid_fixture(tmp_path / "label_follow.zarr")
+    with pos:
+        assert pos.pyramid_dims() is None
+        pos.compute_pyramid(levels=3, method="mean", dims={"y", "x"})
+        assert pos.pyramid_dims() == {"x", "y"}
+
+        label = pos.get_label("cells")
+        label.compute_pyramid(levels=3, dims=pos.pyramid_dims())
+        assert label.pyramid_dims() == {"x", "y"}
+        for level in ("1", "2"):
+            assert label[level].shape[1] == pos[level].shape[2] == 8
+            assert label.get_effective_scale(level)[1] == pos.get_effective_scale(level)[2] == 2.0
+
+        # create_label(pyramid_levels=) follows the image too.
+        second = pos.create_label("nuclei", np.zeros((1, 8, 64, 64), dtype=np.uint32), pyramid_levels=3)
+        assert second["2"].shape == (1, 8, 16, 16)
+
+
 def test_create_label_pyramid_levels(tmp_path):
     """create_label(pyramid_levels=) still scaffolds the coarser levels."""
     with open_ome_zarr(tmp_path / "label_levels.zarr", layout="fov", mode="a", channel_names=["ch1"]) as pos:
