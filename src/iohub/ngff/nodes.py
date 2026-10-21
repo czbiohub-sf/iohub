@@ -684,9 +684,9 @@ class MultiscaleNode(NGFFNode):
         Decimals shapes are rounded up to ceiling.
         Scales metadata are also updated.
 
-        Chunks halve along the downsampled axes at every level and are clamped
-        to the level's shape, so they stay small for visualization. Shards are
-        sized per level from ``shards``: by default the coarser levels keep the
+        Every level keeps the level-0 chunk shape, clamped to the level's shape,
+        so a viewer reads the same-sized tiles at every zoom. Shards are sized
+        per level from ``shards``: by default the coarser levels keep the
         nominal (uncompressed) byte size of the level-0 shard, which the sizer
         fills spatially first and then along time, so shard files stay about
         the same size down the pyramid instead of shrinking eightfold per level.
@@ -717,7 +717,7 @@ class MultiscaleNode(NGFFNode):
         axes = {i for i, name in enumerate(axis_names) if name in dims}
 
         prev_shape = self.data.shape
-        prev_chunks = self.data.chunks
+        base_chunks = self.data.chunks
         if shards is None and self.data.shards is not None:
             # Keep the level-0 shard's byte size down the pyramid: a size
             # target the sizer fills spatially first, then along time.
@@ -727,8 +727,8 @@ class MultiscaleNode(NGFFNode):
             factor = 2**level  # cumulative scale for metadata
 
             shape = _scale_dims(prev_shape, axes)
-            # Halved with the shape, and never larger than the level itself.
-            chunks = tuple(min(c, s) for c, s in zip(_scale_dims(prev_chunks, axes), shape, strict=True))
+            # The level-0 chunk shape, never larger than the level itself.
+            chunks = tuple(min(c, s) for c, s in zip(base_chunks, shape, strict=True))
 
             transforms = deepcopy(self.metadata.multiscales[0].datasets[0].coordinate_transformations)
             for tr in transforms:
@@ -738,7 +738,6 @@ class MultiscaleNode(NGFFNode):
                             tr.scale[i] *= factor
 
             prev_shape = shape
-            prev_chunks = chunks
 
             self.create_zeros(
                 str(level),

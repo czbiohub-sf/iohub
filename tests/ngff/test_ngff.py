@@ -1832,9 +1832,9 @@ def test_label_initialize_pyramid_matches_image_levels(tmp_path):
             assert label.get_effective_scale(str(level)) == image_scale[:1] + image_scale[2:]
         # The level-0 scale is inherited, not reset to unit scale.
         assert label.get_effective_scale("1") == [1.0, 4.0, 1.0, 1.0]
-        assert label["1"].chunks == (1, 4, 16, 16)
-        assert label["1"].shards == (1, 4, 32, 32)
-        assert label["2"].chunks == (1, 2, 8, 8)
+        assert label["1"].chunks == (1, 4, 32, 32)  # level-0 chunks (1, 8, 32, 32), Z clamped
+        assert label["1"].shards == (1, 4, 32, 32)  # the whole 16 KiB level fits the 128 KiB target
+        assert label["2"].chunks == (1, 2, 16, 16)
 
 
 @pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
@@ -1993,7 +1993,7 @@ def test_create_label_pyramid_levels(tmp_path):
 
 
 def test_initialize_pyramid_keeps_level0_shard_bytes(tmp_path):
-    """Coarser levels halve and clamp the chunks, and keep the level-0 shard's byte size."""
+    """Coarser levels keep the level-0 chunks (clamped) and the level-0 shard's byte size."""
     with open_ome_zarr(tmp_path / "pyr_shards.zarr", layout="fov", mode="a", channel_names=["a", "b"]) as pos:
         pos.create_zeros(
             "0",
@@ -2005,12 +2005,12 @@ def test_initialize_pyramid_keeps_level0_shard_bytes(tmp_path):
         pos.initialize_pyramid(levels=3)
 
         assert pos["1"].shape == (40, 2, 4, 32, 32)
-        assert pos["1"].chunks == (1, 1, 4, 8, 8)
+        assert pos["1"].chunks == (1, 1, 4, 16, 16)  # level-0 chunks, Z clamped to the level
         # The whole level is 8 KiB per timepoint per channel: the 256 KiB budget
         # buys all of space and then 32 timepoints. C is never grown.
         assert pos["1"].shards == (32, 1, 4, 32, 32)
         assert pos["2"].shape == (40, 2, 2, 16, 16)
-        assert pos["2"].chunks == (1, 1, 2, 4, 4)
+        assert pos["2"].chunks == (1, 1, 2, 16, 16)
         # 1 KiB per timepoint: every timepoint fits, so the shard is the array per channel.
         assert pos["2"].shards == (40, 1, 2, 16, 16)
         for level in ("1", "2"):
@@ -2044,7 +2044,7 @@ def test_label_pyramid_keeps_level0_shard_bytes(tmp_path):
             "cells", shape=(32, 1, 64, 64), dtype=np.uint32, chunks=(8, 1, 32, 32), shards=(8, 1, 64, 64)
         )
         label.compute_pyramid(levels=2, dims={"y", "x"})
-        assert label["1"].chunks == (8, 1, 16, 16)
+        assert label["1"].chunks == (8, 1, 32, 32)  # level-0 chunks, clamped to the level
         # 128 KiB budget over a 4 KiB-per-timepoint level: all 32 timepoints fit.
         assert label["1"].shards == (32, 1, 32, 32)
 
