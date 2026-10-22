@@ -2148,6 +2148,22 @@ def test_complete_syncs_every_shard_before_recording_the_unit(tmp_path, monkeypa
     assert sorted(marker_dir.glob("*.done"))
 
 
+def test_sync_leaves_a_trailing_ctrl_z_in_place(tmp_path):
+    """The barrier must not change a byte of the shard it syncs.
+
+    On Windows a text-mode read-write open strips a trailing Ctrl-Z, and a
+    shard ends in the crc32c of its index, so one shard in 256 used to lose
+    its last byte and fail to decode on the next read.
+    """
+    shard = tmp_path / "shard"
+    payload = b"\x00\x01\x02\x1a"
+    shard.write_bytes(payload)
+
+    _write_units._fsync_file(shard)
+
+    assert shard.read_bytes() == payload
+
+
 def test_a_shard_that_cannot_be_synced_is_not_recorded_as_done(tmp_path, monkeypatch):
     """A write-back error fails the unit instead of passing as success.
 
