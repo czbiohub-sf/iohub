@@ -1,5 +1,6 @@
 import csv
 import os
+import random
 import shutil
 import sys
 from pathlib import Path
@@ -25,6 +26,18 @@ os.environ["PYTHONPATH"] = os.pathsep.join(
 )
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+# Seed for tests that run on a random sample of the datasets, so each run
+# covers a different slice of them. Drawn once per session and exported, so
+# pytest-xdist workers, which inherit the controller's environment, collect
+# the same sample; xdist aborts if workers collect different tests. Set
+# IOHUB_TEST_SEED to replay the sample a failing run reported in its header.
+os.environ.setdefault("IOHUB_TEST_SEED", str(random.randrange(2**32)))
+TEST_SEED = int(os.environ["IOHUB_TEST_SEED"])
+
+
+def pytest_report_header(config):
+    return f"IOHUB_TEST_SEED={TEST_SEED}"
 
 
 @pytest.fixture

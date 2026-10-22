@@ -38,7 +38,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --group test
 
+      # tests/conftest.py downloads these on first import and skips files that
+      # are already present; it holds the URLs, so its hash keys the cache.
+      - name: Cache test data
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .pytest_temp/test_data
+          key: test-data-${{ runner.os }}-${{ hashFiles('tests/conftest.py') }}
+
       - name: Test with pytest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: uv run pytest -v --cov=iohub --cov-report=xml
+        run: uv run pytest -v -n logical --cov=iohub --cov-report=xml
