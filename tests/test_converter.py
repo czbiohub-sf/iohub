@@ -13,6 +13,7 @@ from iohub.convert import TIFFConverter, _clamp_chunks_to_shape
 from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
 from tests.conftest import (
+    TEST_SEED,
     mm2gamma_ome_tiffs,
     mm2gamma_ome_tiffs_hcs,
     ndtiff_v2_datasets,
@@ -21,10 +22,11 @@ from tests.conftest import (
 )
 
 # A full OME-TIFF conversion per dataset per option was the bulk of CI time,
-# so the end-to-end converter tests run on a sample instead. The sample is
-# drawn once with a fixed seed from the sorted names, so every platform and
-# every run tests the same datasets; change the seed to rotate it.
-_SAMPLE = random.Random(20261021)
+# so the end-to-end converter tests run on a random sample instead, a
+# different one each run so that, over many runs, every dataset is covered.
+# Drawn from the sorted names with the session seed, which the report header
+# prints; rerun with IOHUB_TEST_SEED set to it to replay a failing sample.
+_SAMPLE = random.Random(TEST_SEED)
 _CONVERT_OME_TIFFS = _SAMPLE.sample(sorted(mm2gamma_ome_tiffs, key=lambda p: p.name), 5)
 # Drawn from the multi-position datasets so that ``grid_layout`` has
 # positions to lay out.
@@ -111,8 +113,10 @@ def test_converter_ometiff(ome_tiff, tmpdir):
 
 @pytest.mark.parametrize("chunks", _CHUNK_OPTIONS)
 @pytest.mark.parametrize("grid_layout", [True, False])
-def test_converter_ometiff_chunks(grid_layout, chunks, tmpdir):
-    _convert_ometiff_and_check(_CHUNKS_OME_TIFF, tmpdir, grid_layout=grid_layout, chunks=chunks)
+# A single value, parametrized only so the dataset appears in the test ID.
+@pytest.mark.parametrize("ome_tiff", [_CHUNKS_OME_TIFF], ids=lambda p: p.name)
+def test_converter_ometiff_chunks(ome_tiff, grid_layout, chunks, tmpdir):
+    _convert_ometiff_and_check(ome_tiff, tmpdir, grid_layout=grid_layout, chunks=chunks)
 
 
 def _convert_ometiff_and_check(
