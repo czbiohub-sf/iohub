@@ -1,5 +1,6 @@
 import json
 import logging
+import random
 from pathlib import Path
 from typing import Literal
 
@@ -13,10 +14,21 @@ from iohub.ngff import Position, open_ome_zarr
 from iohub.reader import MMStack, NDTiffDataset
 from tests.conftest import (
     mm2gamma_ome_tiffs,
+    mm2gamma_ome_tiffs_hcs,
     ndtiff_v2_datasets,
     ndtiff_v2_ptcz,
     ndtiff_v3_labeled_positions,
 )
+
+# A full OME-TIFF conversion per dataset per option was the bulk of CI time,
+# so the end-to-end converter tests run on a sample instead. The sample is
+# drawn once with a fixed seed from the sorted names, so every platform and
+# every run tests the same datasets; change the seed to rotate it.
+_SAMPLE = random.Random(20261021)
+_CONVERT_OME_TIFFS = _SAMPLE.sample(sorted(mm2gamma_ome_tiffs, key=lambda p: p.name), 5)
+# Drawn from the multi-position datasets so that ``grid_layout`` has
+# positions to lay out.
+_CHUNKS_OME_TIFF = _SAMPLE.choice(sorted(mm2gamma_ome_tiffs_hcs, key=lambda p: p.name))
 
 
 def pytest_generate_tests(metafunc):
@@ -27,10 +39,9 @@ def pytest_generate_tests(metafunc):
             "ndtiff_datasets",
             [*ndtiff_v2_datasets, ndtiff_v3_labeled_positions],
         )
-    if "grid_layout" in metafunc.fixturenames:
-        metafunc.parametrize("grid_layout", [True, False])
-    if "chunks" in metafunc.fixturenames:
-        metafunc.parametrize("chunks", ["XY", "XYZ", (1, 1, 3, 256, 256), None])
+
+
+_CHUNK_OPTIONS = ["XY", "XYZ", (1, 1, 3, 256, 256), None]
 
 
 def _check_scale_transform(
@@ -93,12 +104,28 @@ def test_converter_inputs(mm2gamma_ome_tiff, tmpdir):
         _ = TIFFConverter(mm2gamma_ome_tiff, output)
 
 
-def test_converter_ometiff(mm2gamma_ome_tiff, grid_layout, chunks, tmpdir):
+@pytest.mark.parametrize("ome_tiff", _CONVERT_OME_TIFFS, ids=lambda p: p.name)
+def test_converter_ometiff(ome_tiff, tmpdir):
+    _convert_ometiff_and_check(ome_tiff, tmpdir, grid_layout=False, chunks=None)
+
+
+@pytest.mark.parametrize("chunks", _CHUNK_OPTIONS)
+@pytest.mark.parametrize("grid_layout", [True, False])
+def test_converter_ometiff_chunks(grid_layout, chunks, tmpdir):
+    _convert_ometiff_and_check(_CHUNKS_OME_TIFF, tmpdir, grid_layout=grid_layout, chunks=chunks)
+
+
+def _convert_ometiff_and_check(
+    ome_tiff: Path,
+    tmpdir,
+    grid_layout: bool,
+    chunks: Literal["XY", "XYZ"] | tuple[int] | None,
+) -> None:
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     output = tmpdir / "converted.zarr"
-    converter = TIFFConverter(mm2gamma_ome_tiff, output, grid_layout=grid_layout, chunks=chunks)
+    converter = TIFFConverter(ome_tiff, output, grid_layout=grid_layout, chunks=chunks)
     assert isinstance(converter.reader, MMStack)
-    with TiffFile(next(mm2gamma_ome_tiff.glob("*.tif*"))) as tf:
+    with TiffFile(next(ome_tiff.glob("*.tif*"))) as tf:
         raw_array = tf.asarray()
         assert converter.summary_metadata == tf.micromanager_metadata["Summary"]
     assert np.prod([d for d in converter.dim if d > 0]) == np.prod(raw_array.shape)
@@ -205,6 +232,8 @@ def test_converter_ometiff_hcs_numerical(example_ome_tiff, tmpdir):
                 assert segment.isdigit()
 
 
+@pytest.mark.parametrize("chunks", _CHUNK_OPTIONS)
+@pytest.mark.parametrize("grid_layout", [True, False])
 def test_converter_ndtiff(ndtiff_datasets: Path, grid_layout, chunks, tmpdir):
     logging.getLogger("tifffile").setLevel(logging.ERROR)
     output = tmpdir / "converted.zarr"
