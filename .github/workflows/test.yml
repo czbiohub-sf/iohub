@@ -49,4 +49,4 @@ jobs:
       - name: Test with pytest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: uv run pytest -v -n auto --cov=iohub --cov-report=xml
+        run: uv run pytest -v -n logical --cov=iohub --cov-report=xml
