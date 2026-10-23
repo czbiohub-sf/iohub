@@ -1907,11 +1907,11 @@ def test_label_compute_pyramid_yx_only(tmp_path):
     with pos:
         label = pos.get_label("cells")
         label.compute_pyramid(levels=3, method="max", dims={"y", "x"})
-        assert label["1"].shape == (1, 1, 32, 32)
-        assert label["2"].shape == (1, 1, 16, 16)
-        assert label.get_effective_scale("2") == [1.0, 2.0, 2.0, 2.0]
+        assert label["1"].shape == (1, 1, 1, 32, 32)
+        assert label["2"].shape == (1, 1, 1, 16, 16)
+        assert label.get_effective_scale("2") == [1.0, 1.0, 2.0, 2.0, 2.0]
         with pytest.raises(ValueError, match="not in dataset axes"):
-            label.initialize_pyramid(levels=2, dims={"c"})
+            label.initialize_pyramid(levels=2, dims={"q"})
 
 
 def test_label_compute_pyramid_default_and_refused_methods(tmp_path):
@@ -1940,12 +1940,12 @@ def test_pyramid_dims_and_label_levels_follow_existing_image_pyramid(tmp_path):
         label.compute_pyramid(levels=3, dims=pos.pyramid_dims())
         assert label.pyramid_dims() == {"x", "y"}
         for level in ("1", "2"):
-            assert label[level].shape[1] == pos[level].shape[2] == 8
-            assert label.get_effective_scale(level)[1] == pos.get_effective_scale(level)[2] == 2.0
+            assert label[level].shape[2] == pos[level].shape[2] == 8
+            assert label.get_effective_scale(level)[2] == pos.get_effective_scale(level)[2] == 2.0
 
         # create_label(pyramid_levels=) follows the image too.
-        second = pos.create_label("nuclei", np.zeros((1, 8, 64, 64), dtype=np.uint32), pyramid_levels=3)
-        assert second["2"].shape == (1, 8, 16, 16)
+        second = pos.create_label("nuclei", np.zeros((1, 1, 8, 64, 64), dtype=np.uint32), pyramid_levels=3)
+        assert second["2"].shape == (1, 1, 8, 16, 16)
 
 
 def test_pyramid_dims_rejects_a_schedule_that_varies_by_level(tmp_path):
@@ -1983,7 +1983,7 @@ def test_pyramid_dims_rejects_a_schedule_that_varies_by_level(tmp_path):
 
 
 def test_label_matches_pyramid(tmp_path):
-    """Shape and scale of every level are compared, minus the channel axis."""
+    """Shape (with one channel) and scale of every level are compared."""
     pos, _, _ = _label_pyramid_fixture(tmp_path / "label_match.zarr")
     with pos:
         label = pos.get_label("cells")
@@ -2015,10 +2015,10 @@ def test_create_label_pyramid_levels(tmp_path):
     """create_label(pyramid_levels=) still scaffolds the coarser levels."""
     with open_ome_zarr(tmp_path / "label_levels.zarr", layout="fov", mode="a", channel_names=["ch1"]) as pos:
         pos.create_image("0", np.zeros((1, 1, 4, 16, 16), dtype=np.uint16))
-        label = pos.create_label("cells", np.zeros((1, 4, 16, 16), dtype=np.uint16), pyramid_levels=2)
+        label = pos.create_label("cells", np.zeros((1, 1, 4, 16, 16), dtype=np.uint16), pyramid_levels=2)
         assert label.array_keys() == ["0", "1"]
-        assert label["1"].shape == (1, 2, 8, 8)
-        assert label.get_effective_scale("1") == [1.0, 2.0, 2.0, 2.0]
+        assert label["1"].shape == (1, 1, 2, 8, 8)
+        assert label.get_effective_scale("1") == [1.0, 1.0, 2.0, 2.0, 2.0]
 
 
 def test_initialize_pyramid_keeps_level0_shard_bytes(tmp_path):
@@ -2070,12 +2070,12 @@ def test_label_pyramid_keeps_level0_shard_bytes(tmp_path):
     with open_ome_zarr(tmp_path / "pyr_label_shards.zarr", layout="fov", mode="a", channel_names=["a"]) as pos:
         pos.create_zeros("0", shape=(32, 1, 1, 64, 64), dtype=np.uint16)
         label = pos.create_label_zeros(
-            "cells", shape=(32, 1, 64, 64), dtype=np.uint32, chunks=(8, 1, 32, 32), shards=(8, 1, 64, 64)
+            "cells", shape=(32, 1, 1, 64, 64), dtype=np.uint32, chunks=(8, 1, 1, 32, 32), shards=(8, 1, 1, 64, 64)
         )
         label.compute_pyramid(levels=2, dims={"y", "x"})
-        assert label["1"].chunks == (8, 1, 32, 32)  # level-0 chunks, clamped to the level
+        assert label["1"].chunks == (8, 1, 1, 32, 32)  # level-0 chunks, clamped to the level
         # 128 KiB budget over a 4 KiB-per-timepoint level: all 32 timepoints fit.
-        assert label["1"].shards == (32, 1, 32, 32)
+        assert label["1"].shards == (32, 1, 1, 32, 32)
 
 
 def _count_downsample_calls(monkeypatch, pos):
@@ -2139,8 +2139,8 @@ def test_compute_pyramid_resume_covers_labels_and_untracked_backends(tmp_path, m
     store = tmp_path / "resume_labels.zarr"
     with open_ome_zarr(store, layout="fov", mode="a", channel_names=["a"]) as pos:
         pos.create_zeros("0", shape=(4, 1, 1, 32, 32), dtype=np.uint16, chunks=(1, 1, 1, 16, 16))
-        label = pos.create_label_zeros("cells", shape=(4, 1, 32, 32), dtype=np.uint32, chunks=(2, 1, 16, 16))
-        label["0"][:, :, :16, :16] = 3
+        label = pos.create_label_zeros("cells", shape=(4, 1, 1, 32, 32), dtype=np.uint32, chunks=(2, 1, 1, 16, 16))
+        label["0"][:, :, :, :16, :16] = 3
         label.compute_pyramid(levels=2, resume=True, resume_token="t")
         assert set(np.unique(label["1"][:])) == {0, 3}
         calls = _count_downsample_calls(monkeypatch, label)
