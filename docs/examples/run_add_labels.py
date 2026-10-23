@@ -86,9 +86,9 @@ with open_ome_zarr(dataset_path, layout="fov", mode="r+") as position:
     print("3. Adding annotation labels...")
 
     # Create annotation points (single level)
-    annotations = np.zeros((1, 1, 1024, 1024), dtype=np.uint8)
-    annotations[0, 0, 200, 200] = 1  # Point of interest
-    annotations[0, 0, 800, 800] = 2  # Another point
+    annotations = np.zeros((1, 1, 1, 1024, 1024), dtype=np.uint8)  # (T, 1, Z, Y, X)
+    annotations[0, 0, 0, 200, 200] = 1  # Point of interest
+    annotations[0, 0, 0, 800, 800] = 2  # Another point
 
     annotations_label = position.create_label(
         name="annotations",

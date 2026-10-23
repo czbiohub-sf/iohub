@@ -653,30 +653,46 @@ class LabelsArray(NGFFArray):
     _SUPPORTED_DIMS = "TCZYX"
     _N_DIMS = 5
 
+    def _label_dim(self, name: str) -> int:
+        """Size of axis ``name``, by the array's own axes when known.
+
+        Labels written before they kept the channel axis are TZYX, and a label of
+        an image without a channel axis has none either; padding such a 4D array
+        to TCZYX would read T as C. The stored dimension names decide when they
+        are present; otherwise a 4D label is read as TZYX, a 5D one as TCZYX.
+        """
+        names = self._dim_names
+        if not names:
+            names = tuple(self._SUPPORTED_DIMS.lower()) if self.ndim == 5 else ("t", "z", "y", "x")
+            names = names[-self.ndim :] if self.ndim < len(names) else names
+        if name in names:
+            return self.shape[names.index(name)]
+        return 1
+
     @property
     def frames(self):
         """Number of time frames in the labels array."""
-        return self._get_dim(0)
+        return self._label_dim("t")
 
     @property
     def channels(self):
         """Number of channels in the labels array (1)."""
-        return self._get_dim(1)
+        return self._label_dim("c")
 
     @property
     def slices(self):
         """Number of Z slices in the labels array."""
-        return self._get_dim(2)
+        return self._label_dim("z")
 
     @property
     def height(self):
         """Height (Y dimension) of the labels array."""
-        return self._get_dim(3)
+        return self._label_dim("y")
 
     @property
     def width(self):
         """Width (X dimension) of the labels array."""
-        return self._get_dim(4)
+        return self._label_dim("x")
 
 
 class MultiscaleNode(NGFFNode):
@@ -1127,12 +1143,19 @@ class PositionLabel(MultiscaleNode):
         self._properties = properties
 
     def _parse_meta(self):
-        """Parse multiscales and image-label metadata."""
+        """Parse multiscales and image-label metadata.
+
+        The label's own stored axes replace the ones the caller passed (the
+        image's, for a new label): a label written before labels kept the
+        channel axis is TZYX, and its scales and dimension lookups must follow
+        its four axes rather than the image's five.
+        """
         try:
             attrs = dict(self.maybe_wrapped_ome_attrs)
             if "version" not in attrs:
                 attrs["version"] = self.version
             self.metadata = LabelImageMeta.model_validate(attrs)
+            self.axes = list(self.metadata.multiscales[0].axes)
         except ValidationError as e:
             _logger.warning(str(e))
             self._warn_invalid_meta()
@@ -1156,7 +1179,7 @@ class PositionLabel(MultiscaleNode):
             handle = self._impl.open_array(self._group, key)
         except (FileNotFoundError, KeyError) as err:
             raise KeyError(key) from err
-        return LabelsArray.from_handle(handle, self._impl)
+        return LabelsArray.from_handle(handle, self._impl, dim_names=tuple(ax.name for ax in self.axes))
 
     def compute_pyramid(
         self,
@@ -1287,7 +1310,7 @@ class PositionLabel(MultiscaleNode):
         if not chunks:
             chunks = pad_shape(shape[-3:], target=len(shape))
         arr_handle = self._create_zarr_array(level, shape, dtype, chunks, shards, shards_ratio)
-        lbl_arr = LabelsArray.from_handle(arr_handle, self._impl)
+        lbl_arr = LabelsArray.from_handle(arr_handle, self._impl, dim_names=tuple(ax.name for ax in self.axes))
         self._create_label_meta(level, transform=transform)
         return lbl_arr
 

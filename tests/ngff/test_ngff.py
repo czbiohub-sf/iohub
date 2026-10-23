@@ -1646,6 +1646,37 @@ def test_labels_have_the_image_axes_and_one_channel(tmp_path, version):
 
 
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_legacy_tzyx_label_reads_with_its_own_axes(tmp_path, version):
+    """A label written as TZYX (before labels kept the channel axis) still reads correctly."""
+    from iohub.ngff.nodes import PositionLabel
+
+    store_path = tmp_path / "legacy.zarr"
+    with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI"], version=version) as pos:
+        pos.create_zeros("0", shape=(3, 1, 4, 8, 8), dtype=np.uint16)
+        # What an earlier iohub wrote: the image's axes minus the channel.
+        legacy_axes = [ax for ax in pos.axes if ax.type != "channel"]
+        legacy = PositionLabel(
+            pos.create_labels_group().create_group("old"),
+            parse_meta=False,
+            axes=legacy_axes,
+            version=version,
+            impl=pos._impl,
+        )
+        legacy.create_zeros(
+            "0", (3, 4, 8, 8), np.uint16, transform=[TransformationMeta(type="scale", scale=[1.0, 2.0, 0.5, 0.5])]
+        )
+        pos._update_labels_metadata(pos.label_names())
+
+    with open_ome_zarr(store_path, layout="fov", mode="r") as pos:
+        old = pos.get_label("old")
+        assert [ax.name for ax in old.axes] == ["t", "z", "y", "x"]
+        assert old.get_effective_scale("0") == [1.0, 2.0, 0.5, 0.5]
+        arr = old["0"]
+        assert (arr.frames, arr.channels, arr.slices, arr.height, arr.width) == (3, 1, 4, 8, 8)
+        assert not pos.label_matches_pyramid(old)  # (3, 4, 8, 8) is not the (3, 1, 4, 8, 8) a new label has
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_labels_group_metadata_on_disk(tmp_path, version):
     """Test the labels list is written to the labels group per the NGFF spec."""
     store_path = tmp_path / "labels.zarr"
