@@ -46,7 +46,7 @@ def _discover() -> None:
         for ep in entry_points(group="iohub.zarr_implementations"):
             try:
                 _IMPLEMENTATIONS[ep.name] = ep.load()
-            except Exception as err:  # noqa: BLE001 — plugin loading may fail in many ways
+            except Exception as err:
                 _logger.warning(
                     f"Failed to load plugin implementation {ep.name!r}. This plugin will be unavailable. Error: {err}",
                     exc_info=True,

@@ -36,7 +36,14 @@ from iohub.core.protocol import ZarrImplementation
 from iohub.core.sharding import ShardsLike, resolve_shard_shape
 from iohub.core.types import StorePath
 from iohub.core.utils import normalize_path, pad_shape
-from iohub.ngff._write_units import plan_write_unit
+from iohub.ngff._write_units import (
+    _array_directory,
+    plan_region_unit,
+    plan_write_unit,
+    progress_dir_for,
+    tracking_available,
+    unit_is_complete,
+)
 from iohub.ngff.display import channel_display_settings
 from iohub.ngff.models import (
     AcquisitionMeta,
@@ -754,12 +761,23 @@ class MultiscaleNode(NGFFNode):
         method: str = "mean",
         dims: set[str] | None = None,
         shards: ShardsLike = None,
+        resume: bool = False,
+        resume_token: str = "",
     ) -> None:
         """Compute pyramid by downsampling from source level.
 
         Creates pyramid structure if none exists. Uses cascade downsampling
         where each level is derived from the previous level to prevent
         aliasing artifacts and chunk boundary issues.
+
+        Each level is written one shard-aligned region at a time, and on a
+        store that can be tracked (zarr-python backend, Zarr v3, local
+        filesystem) every region is a resumable unit, like the writes of
+        `iohub.ngff.utils.process_single_position`: its files are cleared
+        before it is written, so a shard torn by an interruption is replaced
+        rather than merged into, and a marker beside the store records it
+        once its shards are synced. With ``resume=True`` the regions a
+        previous run recorded under the same ``resume_token`` are skipped.
 
         Parameters
         ----------
@@ -776,6 +794,14 @@ class MultiscaleNode(NGFFNode):
             Shard geometry of the new levels, forwarded to ``initialize_pyramid``
             when creating the pyramid structure. Defaults to None: the
             level-0 shard's byte size as a size target.
+        resume : bool, optional
+            Skip the regions an earlier run finished (recorded under
+            ``resume_token``) instead of recomputing every level. By default
+            False: everything is recomputed, markers are still written.
+        resume_token : str, optional
+            Fingerprint of what determines the pyramid (method, levels, the
+            source data's revision), mixed into the markers' identity so a
+            changed request recomputes rather than skips.
 
         Raises
         ------
@@ -816,7 +842,8 @@ class MultiscaleNode(NGFFNode):
                 "existing pyramid."
             )
 
-        # Compute pyramid data via cascade downsampling
+        # Compute pyramid data via cascade downsampling, one shard-aligned
+        # region of the target level at a time.
         for level in range(1, levels):
             previous_level_array = self[str(level - 1)]
             current_level_array = self[str(level)]
@@ -826,11 +853,25 @@ class MultiscaleNode(NGFFNode):
 
             downsample_factors = [round(current_scale[i] / previous_scale[i]) for i in range(len(current_scale))]
 
-            previous_level_array.downsample_into(
-                current_level_array,
-                downsample_factors,
-                method=method,
-            )
+            progress_dir = None
+            if tracking_available(current_level_array):
+                array_dir = _array_directory(current_level_array)
+                progress_dir = progress_dir_for(array_dir) if array_dir is not None else None
+            for region in self._impl.iter_work_regions(current_level_array.native):
+                unit = plan_region_unit(current_level_array, region, token=resume_token, progress_dir=progress_dir)
+                if unit is not None:
+                    if resume and unit_is_complete(unit, current_level_array):
+                        continue
+                    unit.begin()
+                self._impl.downsample_region(
+                    previous_level_array.native,
+                    current_level_array.native,
+                    region,
+                    downsample_factors,
+                    method,
+                )
+                if unit is not None:
+                    unit.complete()
 
     def pyramid_dims(self) -> set[str] | None:
         """Axis names the existing pyramid downsamples, or None without a pyramid.
@@ -1080,6 +1121,8 @@ class PositionLabel(MultiscaleNode):
         method: str = "max",
         dims: set[str] | None = None,
         shards: ShardsLike = None,
+        resume: bool = False,
+        resume_token: str = "",
     ) -> None:
         """Compute the label pyramid with a method that never invents a label id.
 
@@ -1098,7 +1141,9 @@ class PositionLabel(MultiscaleNode):
                 f"Label pyramids need a method that keeps existing values, one of {LABEL_PYRAMID_METHODS}; "
                 f"got {method!r}."
             )
-        super().compute_pyramid(levels=levels, method=method, dims=dims, shards=shards)
+        super().compute_pyramid(
+            levels=levels, method=method, dims=dims, shards=shards, resume=resume, resume_token=resume_token
+        )
 
     def create_label(
         self,
