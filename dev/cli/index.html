@@ -1305,7 +1305,11 @@ An .ozx input unpacks to a directory. Other inputs use the TIFF converter.</p>
 <h3 id="compute-pyramid">compute-pyramid<a class="headerlink" href="#compute-pyramid" title="Permanent link">&para;</a></h3>
 <p>Create or recompute an OME-Zarr pyramid in place.</p>
 <p>Level 0 is unchanged. Existing pyramids must have the requested number
-of levels. Recomputing overwrites the downsampled levels.</p>
+of levels. Recomputing overwrites the downsampled levels. Every label
+image under labels/ gets the image's levels, along the axes the image
+pyramid downsamples (--dims for a new one, the existing one's otherwise),
+with --label-method: a reducer that never invents values, so the label
+ids of level 0 are the only ones at the coarser levels.</p>
 <p>Example:</p>
 <p>iohub compute-pyramid -i input.zarr -l 3 -m median --dims y,x</p>
 <h4 id="usage_4">Usage<a class="headerlink" href="#usage_4" title="Permanent link">&para;</a></h4>
@@ -1346,6 +1350,12 @@ of levels. Recomputing overwrites the downsampled levels.</p>
 <td>Comma-separated axes for a new pyramid, such as 'y,x'. Defaults to 'z,y,x'.</td>
 <td>No</td>
 <td>-</td>
+</tr>
+<tr>
+<td><code>--label-method [mode|min|max|stride]</code></td>
+<td>Downsampling method for the position's label images, labels/NAME.</td>
+<td>No</td>
+<td><code>max</code></td>
 </tr>
 </tbody>
 </table>

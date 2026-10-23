@@ -638,6 +638,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#label-images-get-the-same-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Label images get the same levels
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#clean-up" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -1013,6 +1024,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#label-images-get-the-same-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Label images get the same levels
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#clean-up" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -1154,8 +1176,23 @@
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>        <span class="n">scale</span> <span class="o">=</span> <span class="n">position</span><span class="o">.</span><span class="n">get_effective_scale</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">level</span><span class="p">))</span>
 </span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  Level </span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">level_array</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, scale=</span><span class="si">{</span><span class="n">scale</span><span class="p">[</span><span class="o">-</span><span class="mi">3</span><span class="p">:]</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </span></code></pre></div>
+<h2 id="label-images-get-the-same-levels">Label images get the same levels<a class="headerlink" href="#label-images-get-the-same-levels" title="Permanent link">&para;</a></h2>
+<p>A label image under <code>labels/</code> is a multiscale group too, and the viewer
+expects it to have the image's levels. <code>PositionLabel.compute_pyramid</code> takes
+the same arguments; pick a method that never invents label ids (<code>max</code>,
+<code>stride</code> or <code>mode</code>), not <code>mean</code>.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">with</span> <span class="n">open_ome_zarr</span><span class="p">(</span><span class="n">store_path</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">position</span><span class="p">:</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">labels</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">)</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">labels</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">64</span><span class="p">:</span><span class="mi">128</span><span class="p">,</span> <span class="mi">64</span><span class="p">:</span><span class="mi">128</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">label_image</span> <span class="o">=</span> <span class="n">position</span><span class="o">.</span><span class="n">create_label</span><span class="p">(</span><span class="s2">&quot;cells&quot;</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">label_image</span><span class="o">.</span><span class="n">compute_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">method</span><span class="o">=</span><span class="s2">&quot;max&quot;</span><span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">for</span> <span class="n">level</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;  cells level </span><span class="si">{</span><span class="n">level</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">label_image</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">level</span><span class="p">)]</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>The <code>iohub compute-pyramid</code> command does both: <code>--method</code> for the image and
+<code>--label-method</code> (default <code>max</code>) for every label image of the position.</p>
 <h2 id="clean-up">Clean up<a class="headerlink" href="#clean-up" title="Permanent link">&para;</a></h2>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">tmp_dir</span><span class="o">.</span><span class="n">cleanup</span><span class="p">()</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">tmp_dir</span><span class="o">.</span><span class="n">cleanup</span><span class="p">()</span>
 </span></code></pre></div>
 
 
