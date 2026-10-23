@@ -60,8 +60,13 @@ def downsample_block(data: NDArray, factors: list[int], method: str) -> NDArray:
     elif method == "mode":
         from scipy import stats
 
-        orig_shape = tuple(s // f for s, f in zip(data.shape[::2], factors, strict=False))
-        flat = data.reshape(*orig_shape, -1)
+        # After the reshape above the even axes hold the pooled shape and the
+        # odd ones the pooling windows. Move the window axes to the end before
+        # flattening them, so each output element sees its own window rather
+        # than a memory-order mix of neighbours.
+        pooled_axes = tuple(range(0, data.ndim, 2))
+        windows = np.transpose(data, pooled_axes + reduce_axes)
+        flat = windows.reshape(*windows.shape[: len(pooled_axes)], -1)
         return stats.mode(flat, axis=-1, keepdims=False).mode.astype(data.dtype)
     else:
         raise ValueError(f"Unknown downsample method: {method!r}")

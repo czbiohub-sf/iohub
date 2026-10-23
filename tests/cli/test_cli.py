@@ -9,6 +9,7 @@ from click.testing import CliRunner
 
 from iohub import __version__, open_ome_zarr
 from iohub.cli.cli import cli
+from iohub.ngff.models import TransformationMeta
 from tests.conftest import (
     hcs_ref,
     mm2gamma_ome_tiffs,
@@ -392,6 +393,105 @@ def test_cli_compute_pyramid(tmp_path, caplog):
         # Cascade YX/Z downsampling halves spatial axes per level.
         assert pos["1"].shape[-2:] == (shape[-2] // 2, shape[-1] // 2)
         assert pos["2"].shape[-2:] == (shape[-2] // 4, shape[-1] // 4)
+
+
+def test_cli_compute_pyramid_labels(tmp_path):
+    """Label images get the same levels as the image, with --label-method."""
+    store_path = tmp_path / "compute_pyramid_labels.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    label = np.zeros((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32)
+    label[..., : shape[3] // 2, : shape[4] // 2] = 7
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        pos.create_label("cells", label)
+
+    result = CliRunner().invoke(
+        cli,
+        ["compute-pyramid", "-i", str(position_path), "-l", "3", "--label-method", "stride"],
+    )
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        label_image = pos.get_label("cells")
+        assert label_image.metadata.multiscales[0].get_dataset_paths() == ["0", "1", "2"]
+        for level in ("0", "1", "2"):
+            assert label_image[level].shape == pos[level].shape[:1] + pos[level].shape[2:]
+        assert set(np.unique(label_image["2"][:])) == {0, 7}
+
+
+def test_cli_compute_pyramid_labels_follow_existing_image_pyramid(tmp_path):
+    """Without --dims, a new label pyramid takes the axes of the image's existing one."""
+    store_path = tmp_path / "compute_pyramid_labels_follow.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        pos.compute_pyramid(levels=2, method="mean", dims={"y", "x"})
+        pos.create_label("cells", np.ones((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32))
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2"])
+    assert result.exit_code == 0, result.output
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        label = pos.get_label("cells")
+        assert label["1"].shape[1] == pos["1"].shape[2] == shape[2]  # Z untouched, like the image
+        assert label.get_effective_scale("1") == pos.get_effective_scale("1")[:1] + pos.get_effective_scale("1")[2:]
+
+
+def test_cli_compute_pyramid_rebuilds_mismatched_label_levels(tmp_path, caplog):
+    """A label scaffolded with ZYX levels is rebuilt to match a YX-only image pyramid."""
+    store_path = tmp_path / "compute_pyramid_label_rebuild.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        # Label pyramid first (default z,y,x), image pyramid not yet there.
+        pos.create_label("cells", np.ones((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32), pyramid_levels=2)
+        assert pos.get_label("cells")["1"].shape[1] == shape[2] // 2
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2", "--dims", "y,x"])
+    assert result.exit_code == 0, result.output
+    assert any("rebuilding" in record.message for record in caplog.records)
+
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        label = pos.get_label("cells")
+        assert pos.label_matches_pyramid(label)
+        assert label["1"].shape == (shape[0], shape[2], shape[3] // 2, shape[4] // 2)
+        assert label["1"][:].max() == 1
+
+
+def test_cli_compute_pyramid_mixed_axis_image_without_labels_recomputes(tmp_path):
+    """A pyramid no single `dims` describes is still recomputed when there are no labels."""
+    store_path = tmp_path / "compute_pyramid_mixed_no_labels.zarr"
+    shape, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+    with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
+        pos.create_zeros(
+            "1",
+            shape=(shape[0], shape[1], shape[2], shape[3] // 2, shape[4] // 2),
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 1.0, 2.0, 2.0])],
+        )
+        pos.create_zeros(
+            "2",
+            shape=(shape[0], shape[1], shape[2] // 2, shape[3] // 4, shape[4] // 4),
+            dtype=np.uint16,
+            transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 2.0, 4.0, 4.0])],
+        )
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "3"])
+    assert result.exit_code == 0, result.output
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        assert pos["2"][:].mean() > 0
+
+
+def test_cli_compute_pyramid_rejects_mean_for_labels(tmp_path):
+    store_path = tmp_path / "compute_pyramid_bad_label_method.zarr"
+    _, position_key = _make_pyramid_test_plate(store_path)
+    position_path = store_path.joinpath(*position_key)
+
+    result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2", "--label-method", "mean"])
+    assert result.exit_code != 0
+    with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
+        assert pos.array_keys() == ["0"]  # rejected before any store was touched
 
 
 def test_cli_compute_pyramid_plate_glob(tmp_path):

@@ -214,6 +214,15 @@ class PyramidMethod(StrEnum):
     stride = "stride"
 
 
+class LabelPyramidMethod(StrEnum):
+    """Reducers that pick a value present in the window, so no label id is invented."""
+
+    mode = "mode"
+    min = "min"
+    max = "max"
+    stride = "stride"
+
+
 _PYRAMID_DIM_CHOICES = ("t", "z", "y", "x")
 
 
@@ -255,11 +264,22 @@ def compute_pyramid(
             help="Comma-separated axes for a new pyramid, such as 'y,x'. Defaults to 'z,y,x'.",
         ),
     ] = None,
+    label_method: Annotated[
+        LabelPyramidMethod,
+        typer.Option(
+            "--label-method",
+            help="Downsampling method for the position's label images, labels/NAME.",
+        ),
+    ] = LabelPyramidMethod.max,
 ) -> None:
     """Create or recompute an OME-Zarr pyramid in place.
 
     Level 0 is unchanged. Existing pyramids must have the requested number
-    of levels. Recomputing overwrites the downsampled levels.
+    of levels. Recomputing overwrites the downsampled levels. Every label
+    image under labels/ gets the image's levels, along the axes the image
+    pyramid downsamples (--dims for a new one, the existing one's otherwise),
+    with --label-method: a reducer that never invents values, so the label
+    ids of level 0 are the only ones at the coarser levels.
 
     Example:
 
@@ -272,6 +292,27 @@ def compute_pyramid(
         _logger.info(f"Computing pyramid for {input_position_dirpath}")
         with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
             dataset.compute_pyramid(levels=levels, method=method.value, dims=parsed_dims)
+            labels = list(dataset.labels())
+            if not labels:
+                continue
+            # `dims` is ignored for an existing image pyramid, so the labels take
+            # the axes that pyramid actually downsamples, not the request. Only
+            # inferred when there are labels: an image pyramid that no single
+            # `dims` describes is still fine to recompute on its own.
+            label_dims = dataset.pyramid_dims()
+            for name, label in labels:
+                # A label scaffolded earlier (other dims, or before the image had
+                # a pyramid) can hold the right number of levels with the wrong
+                # geometry; compute_pyramid would fill them as they are. Rebuild
+                # them from level 0 instead, so the label matches the image.
+                if len(label.array_keys()) > 1 and not dataset.label_matches_pyramid(label):
+                    _logger.warning(
+                        f"Label {name!r} of {input_position_dirpath} has levels that do not match the "
+                        "image pyramid; rebuilding them."
+                    )
+                    label.delete_pyramid()
+                _logger.info(f"Computing pyramid for label {name!r} of {input_position_dirpath}")
+                label.compute_pyramid(levels=levels, method=label_method.value, dims=label_dims)
 
 
 @app.command(name="rename-wells")
