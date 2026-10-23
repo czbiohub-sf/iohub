@@ -2540,7 +2540,7 @@ def _labels_snapshot(store_path: Path) -> dict[str, bytes]:
 
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_create_empty_plate_with_labels(tmp_path, version):
-    """label_names scaffolds an empty TZYX label image in every position."""
+    """label_names scaffolds an empty (T, 1, Z, Y, X) label image in every position."""
     store_path = tmp_path / "labels.zarr"
     position_keys = [("A", "1", "0"), ("B", "2", "0")]
     shape = (2, 2, 8, 32, 48)
@@ -2568,20 +2568,20 @@ def test_create_empty_plate_with_labels(tmp_path, version):
                 label = pos.get_label(label_name)
                 assert label.array_keys() == ["0"]
                 arr = label["0"]
-                assert arr.shape == (2, 8, 32, 48)
+                assert arr.shape == (2, 1, 8, 32, 48)
                 assert arr.dtype == np.uint32
-                # Same layout as the image, minus the channel axis
-                assert arr.chunks == (1, 8, 32, 48)
-                assert arr.shards == (None if version == "0.4" else (1, 8, 32, 48))
+                # Same layout as the image, with one channel
+                assert arr.chunks == (1, 1, 8, 32, 48)
+                assert arr.shards == (None if version == "0.4" else (1, 1, 8, 32, 48))
                 assert not arr.numpy().any()
                 multiscale = label.metadata.multiscales[0]
-                assert [ax.name for ax in multiscale.axes] == ["t", "z", "y", "x"]
+                assert [ax.name for ax in multiscale.axes] == ["t", "c", "z", "y", "x"]
                 (transform,) = multiscale.datasets[0].coordinate_transformations
                 assert transform.type == "scale"
-                assert transform.scale == [2.0, 0.5, 0.1, 0.1]
+                assert transform.scale == [2.0, 1.0, 0.5, 0.1, 0.1]
                 assert label.metadata.image_label.source == {"image": "../../"}
 
-    segmentation = np.arange(2 * 8 * 32 * 48, dtype=np.uint32).reshape(2, 8, 32, 48)
+    segmentation = np.arange(2 * 8 * 32 * 48, dtype=np.uint32).reshape(2, 1, 8, 32, 48)
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
         pos.get_label("nuclei")["0"][...] = segmentation
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
@@ -2600,8 +2600,8 @@ def test_create_empty_plate_label_shards_forms(tmp_path):
         chunks=(1, 1, 4, 16, 16),
         version="0.5",
         label_names=["explicit"],
-        label_chunks=(2, 1, 16, 16),
-        label_shards=(2, 1, 40, 40),  # rounded up to whole chunks
+        label_chunks=(2, 1, 1, 16, 16),
+        label_shards=(2, 1, 1, 40, 40),  # rounded up to whole chunks
     )
     create_empty_plate(
         store,
@@ -2611,13 +2611,13 @@ def test_create_empty_plate_label_shards_forms(tmp_path):
         chunks=(1, 1, 4, 16, 16),
         version="0.5",
         label_names=["bytes"],
-        label_chunks=(2, 1, 16, 16),
+        label_chunks=(2, 1, 1, 16, 16),
         label_shards="64KiB",  # 2 KiB chunks: X, then Y fill (32 KiB), then Z grows to 2 of 4
     )
     with open_ome_zarr(store / "A" / "1" / "0", mode="r") as pos:
-        assert pos.get_label("explicit")["0"].shards == (2, 1, 48, 48)
-        assert pos.get_label("bytes")["0"].shards == (2, 2, 64, 64)
-        assert pos.get_label("explicit")["0"].chunks == (2, 1, 16, 16)
+        assert pos.get_label("explicit")["0"].shards == (2, 1, 1, 48, 48)
+        assert pos.get_label("bytes")["0"].shards == (2, 1, 2, 64, 64)
+        assert pos.get_label("explicit")["0"].chunks == (2, 1, 1, 16, 16)
 
 
 def test_create_empty_plate_labels_explicit_layout(tmp_path):
@@ -2631,15 +2631,15 @@ def test_create_empty_plate_labels_explicit_layout(tmp_path):
         version="0.5",
         label_names=["nuclei"],
         label_dtype=np.uint16,
-        label_chunks=(1, 4, 16, 16),
-        label_shards_ratio=(2, 2, 2, 3),
+        label_chunks=(1, 1, 4, 16, 16),
+        label_shards_ratio=(2, 1, 2, 2, 3),
     )
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
         arr = pos.get_label("nuclei")["0"]
-        assert arr.shape == (2, 8, 32, 48)
+        assert arr.shape == (2, 1, 8, 32, 48)
         assert arr.dtype == np.uint16
-        assert arr.chunks == (1, 4, 16, 16)
-        assert arr.shards == (2, 8, 32, 48)
+        assert arr.chunks == (1, 1, 4, 16, 16)
+        assert arr.shards == (2, 1, 8, 32, 48)
 
 
 def test_create_empty_plate_label_shards_follow_label_chunks(tmp_path):
@@ -2652,12 +2652,12 @@ def test_create_empty_plate_label_shards_follow_label_chunks(tmp_path):
         shape=(2, 1, 8, 32, 48),
         version="0.5",
         label_names=["nuclei"],
-        label_chunks=(1, 4, 16, 16),
+        label_chunks=(1, 1, 4, 16, 16),
     )
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
         arr = pos.get_label("nuclei")["0"]
-        assert arr.chunks == (1, 4, 16, 16)
-        assert arr.shards == (1, 8, 32, 48)
+        assert arr.chunks == (1, 1, 4, 16, 16)
+        assert arr.shards == (1, 1, 8, 32, 48)
 
 
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
@@ -2677,8 +2677,8 @@ def test_create_empty_plate_labels_ignore_explicit_image_layout(tmp_path, versio
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
         assert pos["0"].chunks == (1, 1, 2, 8, 8)
         arr = pos.get_label("nuclei")["0"]
-        assert arr.chunks == (1, 8, 32, 48)
-        assert arr.shards == (None if version == "0.4" else (1, 8, 32, 48))
+        assert arr.chunks == (1, 1, 8, 32, 48)
+        assert arr.shards == (None if version == "0.4" else (1, 1, 8, 32, 48))
 
 
 def test_create_empty_plate_label_defaults_follow_each_position_shape(tmp_path):
@@ -2695,12 +2695,12 @@ def test_create_empty_plate_label_defaults_follow_each_position_shape(tmp_path):
     )
     with open_ome_zarr(store_path, mode="r") as plate:
         old, new = plate["A/1/0"].get_label("nuclei")["0"], plate["A/1/1"].get_label("nuclei")["0"]
-        assert old.shape == (2, 8, 32, 48)
-        assert old.chunks == (1, 8, 32, 48)
-        assert old.shards == (1, 8, 32, 48)
-        assert new.shape == (2, 40, 512, 300)
-        assert new.chunks == (1, 16, 256, 256)
-        assert new.shards == (1, 48, 512, 512)
+        assert old.shape == (2, 1, 8, 32, 48)
+        assert old.chunks == (1, 1, 8, 32, 48)
+        assert old.shards == (1, 1, 8, 32, 48)
+        assert new.shape == (2, 1, 40, 512, 300)
+        assert new.chunks == (1, 1, 16, 256, 256)
+        assert new.shards == (1, 1, 48, 512, 512)
 
 
 def test_create_empty_plate_labels_refuse_path_backed_transforms(tmp_path):
@@ -2732,7 +2732,7 @@ def test_create_empty_plate_appends_labels_to_existing_plate(tmp_path, version):
     create_empty_plate(store_path=store_path, position_keys=[("A", "1", "0"), ("A", "1", "1")], **kwargs)
 
     image = np.random.default_rng(0).random(shape, dtype=np.float32)
-    existing_label = np.ones((1, 4, 16, 16), dtype=np.uint16)
+    existing_label = np.ones((1, 1, 4, 16, 16), dtype=np.uint16)
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
         pos["0"][...] = image
         pos.create_label("nuclei", existing_label)
@@ -2767,11 +2767,11 @@ def test_create_empty_plate_appends_labels_to_existing_plate(tmp_path, version):
         assert nuclei["0"].dtype == np.uint16
         np.testing.assert_array_equal(nuclei["0"].numpy(), existing_label)
         cells = pos.get_label("cells")
-        assert cells["0"].shape == (1, 4, 16, 16)
+        assert cells["0"].shape == (1, 1, 4, 16, 16)
         assert not cells["0"].numpy().any()
         scale, translation = cells.metadata.multiscales[0].datasets[0].coordinate_transformations
-        assert scale.scale == [1.0, 2.0, 0.5, 0.5]
-        assert translation.translation == [0.0, 10.0, 20.0, 30.0]
+        assert scale.scale == [1.0, 1.0, 2.0, 0.5, 0.5]
+        assert translation.translation == [0.0, 0.0, 10.0, 20.0, 30.0]
 
 
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
@@ -2815,10 +2815,10 @@ def test_create_empty_plate_labels_keep_transform_scopes(tmp_path, version):
         label_multiscale = pos.get_label("nuclei").metadata.multiscales[0]
         (dataset_scale,) = label_multiscale.datasets[0].coordinate_transformations
         assert dataset_scale.type == "scale"
-        assert dataset_scale.scale == [1.0, 2.0, 0.5, 0.5]
+        assert dataset_scale.scale == [1.0, 1.0, 2.0, 0.5, 0.5]
         (fov_translation,) = label_multiscale.coordinate_transformations
         assert fov_translation.type == "translation"
-        assert fov_translation.translation == [0.0, 10.0, 20.0, 30.0]
+        assert fov_translation.translation == [0.0, 0.0, 10.0, 20.0, 30.0]
 
 
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
@@ -2843,16 +2843,16 @@ def test_create_empty_plate_labels_mirror_image_pyramid(tmp_path, version):
         for image_dataset, label_dataset in zip(image_datasets, label_datasets, strict=True):
             image_arr, label_arr = pos[image_dataset.path], label[label_dataset.path]
             t, _c, *zyx = image_arr.shape
-            assert label_arr.shape == (t, *zyx)
+            assert label_arr.shape == (t, 1, *zyx)
             assert label_arr.dtype == np.uint32
             # Default layout computed from this level's own shape
-            assert label_arr.chunks == (1, *zyx)
-            assert label_arr.shards == (None if version == "0.4" else (1, *zyx))
+            assert label_arr.chunks == (1, 1, *zyx)
+            assert label_arr.shards == (None if version == "0.4" else (1, 1, *zyx))
             (image_scale,) = image_dataset.coordinate_transformations
             (label_scale,) = label_dataset.coordinate_transformations
-            assert label_scale.scale == [image_scale.scale[0], *image_scale.scale[2:]]
-        assert label["2"].shape == (2, 2, 8, 12)
-        assert label_datasets[2].coordinate_transformations[0].scale == [1.0, 8.0, 2.0, 2.0]
+            assert label_scale.scale == image_scale.scale
+        assert label["2"].shape == (2, 1, 2, 8, 12)
+        assert label_datasets[2].coordinate_transformations[0].scale == [1.0, 1.0, 8.0, 2.0, 2.0]
 
 
 def test_create_empty_plate_labels_pyramid_clamps_explicit_chunks(tmp_path):
@@ -2865,27 +2865,27 @@ def test_create_empty_plate_labels_pyramid_clamps_explicit_chunks(tmp_path):
     create_empty_plate(
         position_keys=[("A", "1", "0")],
         label_names=["nuclei"],
-        label_chunks=(1, 4, 16, 16),
+        label_chunks=(1, 1, 4, 16, 16),
         **kwargs,
     )
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
         label = pos.get_label("nuclei")
-        assert label["0"].chunks == (1, 4, 16, 16)
-        assert label["0"].shards == (1, 8, 32, 48)
-        assert label["1"].chunks == (1, 4, 16, 16)
-        assert label["1"].shards == (1, 4, 16, 32)
-        assert label["2"].shape == (1, 2, 8, 12)
-        assert label["2"].chunks == (1, 2, 8, 12)
-        assert label["2"].shards == (1, 2, 8, 12)
+        assert label["0"].chunks == (1, 1, 4, 16, 16)
+        assert label["0"].shards == (1, 1, 8, 32, 48)
+        assert label["1"].chunks == (1, 1, 4, 16, 16)
+        assert label["1"].shards == (1, 1, 4, 16, 32)
+        assert label["2"].shape == (1, 1, 2, 8, 12)
+        assert label["2"].chunks == (1, 1, 2, 8, 12)
+        assert label["2"].shards == (1, 1, 2, 8, 12)
 
 
 @pytest.mark.parametrize(
     "bad",
     [
         {"label_dtype": np.uint16},
-        {"label_chunks": (1, 4, 16, 16)},
-        {"label_shards_ratio": (1, 1, 1, 1)},
-        {"label_chunks": (1, 4, 16, 16), "label_shards_ratio": (1, 1, 1, 1)},
+        {"label_chunks": (1, 1, 4, 16, 16)},
+        {"label_shards_ratio": (1, 1, 1, 1, 1)},
+        {"label_chunks": (1, 1, 4, 16, 16), "label_shards_ratio": (1, 1, 1, 1, 1)},
     ],
 )
 def test_create_empty_plate_label_layout_requires_label_names(tmp_path, bad):
@@ -2916,11 +2916,13 @@ def test_create_empty_plate_label_layout_requires_label_names(tmp_path, bad):
     ("bad", "match"),
     [
         ({"label_dtype": np.float32}, "label_dtype must be an integer type"),
-        ({"label_chunks": (1, 1, 4, 16, 16)}, r"label_chunks must be TZYX"),
-        ({"label_shards_ratio": (1, 1, 1, 1, 1)}, r"label_shards_ratio must be TZYX"),
-        ({"label_shards_ratio": (1, 1, 1, 1), "version": "0.4"}, "not supported for OME-Zarr v0.4"),
+        ({"label_chunks": (1, 4, 16, 16)}, r"label_chunks must be TCZYX"),
+        ({"label_chunks": (1, 2, 4, 16, 16)}, "label_chunks must have 1 on the channel axis"),
+        ({"label_shards_ratio": (1, 1, 1, 1)}, r"label_shards_ratio must be TCZYX"),
+        ({"label_shards_ratio": (1, 2, 1, 1, 1)}, "label_shards_ratio must have 1 on the channel axis"),
+        ({"label_shards_ratio": (1, 1, 1, 1, 1), "version": "0.4"}, "not supported for OME-Zarr v0.4"),
         ({"label_shards": "XYZ", "version": "0.4"}, "not supported for OME-Zarr v0.4"),
-        ({"label_shards": "XYZ", "label_shards_ratio": (1, 1, 1, 1)}, "not both"),
+        ({"label_shards": "XYZ", "label_shards_ratio": (1, 1, 1, 1, 1)}, "not both"),
     ],
 )
 def test_create_empty_plate_label_argument_refusals(tmp_path, bad, match):
@@ -2955,11 +2957,11 @@ def test_create_empty_labels_in_existing_positions(tmp_path, version):
         scale=(1, 1, 2.0, 0.5, 0.5),
     )
     with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
-        pos.create_label("nuclei", np.ones((3, 4, 16, 16), dtype=np.uint16))
+        pos.create_label("nuclei", np.ones((3, 1, 4, 16, 16), dtype=np.uint16))
 
-    kwargs = {"label_chunks": (2, 1, 8, 8)}
+    kwargs = {"label_chunks": (2, 1, 1, 8, 8)}
     if version == "0.5":
-        kwargs["label_shards_ratio"] = (1, 4, 2, 2)
+        kwargs["label_shards_ratio"] = (1, 1, 4, 2, 2)
     create_empty_labels(
         store_path,
         [("A", "1", "0"), ("A", "1", "1")],
@@ -2973,13 +2975,13 @@ def test_create_empty_labels_in_existing_positions(tmp_path, version):
             assert pos.channel_names == ["DAPI", "GFP"]  # the image is untouched
             assert pos.label_names() == ["cells", "nuclei"]
             cells = pos.get_label("cells")
-            assert cells["0"].shape == (3, 4, 16, 16)
+            assert cells["0"].shape == (3, 1, 4, 16, 16)
             assert cells["0"].dtype == np.uint32
-            assert cells["0"].chunks == (2, 1, 8, 8)
+            assert cells["0"].chunks == (2, 1, 1, 8, 8)
             if version == "0.5":
-                assert cells["0"].shards == (2, 4, 16, 16)
+                assert cells["0"].shards == (2, 1, 4, 16, 16)
             (scale,) = cells.metadata.multiscales[0].datasets[0].coordinate_transformations
-            assert scale.scale == [1.0, 2.0, 0.5, 0.5]
+            assert scale.scale == [1.0, 1.0, 2.0, 0.5, 0.5]
             for name in ("cells", "nuclei"):
                 assert pos.get_label(name).zattrs["provenance-segment"] == {"model": "cpsam_v2"}
         # The existing label kept its data and dtype.
@@ -3006,7 +3008,7 @@ def test_create_empty_labels_refusals(tmp_path):
     with pytest.raises(FileNotFoundError, match="B/1/0 does not exist"):
         create_empty_labels(store_path, [("B", "1", "0")], ["nuclei"])
     with pytest.raises(ValueError, match="not supported for OME-Zarr v0"):
-        create_empty_labels(store_path, [("A", "1", "0")], ["nuclei"], label_shards_ratio=(1, 1, 1, 1))
+        create_empty_labels(store_path, [("A", "1", "0")], ["nuclei"], label_shards_ratio=(1, 1, 1, 1, 1))
     with pytest.raises(ValueError, match="reserved"):
         create_empty_labels(store_path, [("A", "1", "0")], ["nuclei"], label_metadata={"image-label": {}})
     with pytest.raises(ValueError, match="at least one"):
@@ -3070,10 +3072,10 @@ def test_process_single_position_writes_a_label_image_of_the_input(tmp_path, num
     with open_ome_zarr(position_path, layout="fov") as position:
         image = position.data[:]
         labels = position.get_label("nuclei")["0"][:]
-        assert labels.shape == (shape[0], *shape[2:])
-        np.testing.assert_array_equal(labels, np.rint(image[:, 1] * 3).astype(np.uint32))
+        assert labels.shape == (shape[0], 1, *shape[2:])
+        np.testing.assert_array_equal(labels[:, 0], np.rint(image[:, 1] * 3).astype(np.uint32))
         # The image itself is untouched by the label write.
-        assert not np.array_equal(image[:, 0], labels)
+        assert not np.array_equal(image[:, 0], labels[:, 0])
     marker_dir = progress_dir_for(position_path) / "labels" / "nuclei"
     assert list(marker_dir.glob("*.done"))
 

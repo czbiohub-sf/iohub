@@ -161,7 +161,7 @@ def test_size_target_without_names_assumes_tczyx():
 
 
 def test_size_target_on_a_named_tzyx_array_grows_time_last():
-    """Label arrays are TZYX: axis 1 is Z, and only the named T grows last."""
+    """A 4D array named TZYX: axis 1 is Z, and only the named T grows last."""
     shards = resolve_shards(
         "2GB",
         shape=(5, 86, 1664, 1193),

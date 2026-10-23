@@ -400,7 +400,7 @@ def test_cli_compute_pyramid_labels(tmp_path):
     store_path = tmp_path / "compute_pyramid_labels.zarr"
     shape, position_key = _make_pyramid_test_plate(store_path)
     position_path = store_path.joinpath(*position_key)
-    label = np.zeros((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32)
+    label = np.zeros((shape[0], 1, shape[2], shape[3], shape[4]), dtype=np.uint32)
     label[..., : shape[3] // 2, : shape[4] // 2] = 7
     with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
         pos.create_label("cells", label)
@@ -415,7 +415,7 @@ def test_cli_compute_pyramid_labels(tmp_path):
         label_image = pos.get_label("cells")
         assert label_image.metadata.multiscales[0].get_dataset_paths() == ["0", "1", "2"]
         for level in ("0", "1", "2"):
-            assert label_image[level].shape == pos[level].shape[:1] + pos[level].shape[2:]
+            assert label_image[level].shape == pos.label_shape(level)
         assert set(np.unique(label_image["2"][:])) == {0, 7}
 
 
@@ -426,15 +426,15 @@ def test_cli_compute_pyramid_labels_follow_existing_image_pyramid(tmp_path):
     position_path = store_path.joinpath(*position_key)
     with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
         pos.compute_pyramid(levels=2, method="mean", dims={"y", "x"})
-        pos.create_label("cells", np.ones((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32))
+        pos.create_label("cells", np.ones((shape[0], 1, shape[2], shape[3], shape[4]), dtype=np.uint32))
 
     result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2"])
     assert result.exit_code == 0, result.output
 
     with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
         label = pos.get_label("cells")
-        assert label["1"].shape[1] == pos["1"].shape[2] == shape[2]  # Z untouched, like the image
-        assert label.get_effective_scale("1") == pos.get_effective_scale("1")[:1] + pos.get_effective_scale("1")[2:]
+        assert label["1"].shape[2] == pos["1"].shape[2] == shape[2]  # Z untouched, like the image
+        assert label.get_effective_scale("1") == pos.get_effective_scale("1")
 
 
 def test_cli_compute_pyramid_rebuilds_mismatched_label_levels(tmp_path, caplog):
@@ -444,8 +444,10 @@ def test_cli_compute_pyramid_rebuilds_mismatched_label_levels(tmp_path, caplog):
     position_path = store_path.joinpath(*position_key)
     with open_ome_zarr(position_path, layout="fov", mode="r+") as pos:
         # Label pyramid first (default z,y,x), image pyramid not yet there.
-        pos.create_label("cells", np.ones((shape[0], shape[2], shape[3], shape[4]), dtype=np.uint32), pyramid_levels=2)
-        assert pos.get_label("cells")["1"].shape[1] == shape[2] // 2
+        pos.create_label(
+            "cells", np.ones((shape[0], 1, shape[2], shape[3], shape[4]), dtype=np.uint32), pyramid_levels=2
+        )
+        assert pos.get_label("cells")["1"].shape[2] == shape[2] // 2
 
     result = CliRunner().invoke(cli, ["compute-pyramid", "-i", str(position_path), "-l", "2", "--dims", "y,x"])
     assert result.exit_code == 0, result.output
@@ -454,7 +456,7 @@ def test_cli_compute_pyramid_rebuilds_mismatched_label_levels(tmp_path, caplog):
     with open_ome_zarr(position_path, layout="fov", mode="r") as pos:
         label = pos.get_label("cells")
         assert pos.label_matches_pyramid(label)
-        assert label["1"].shape == (shape[0], shape[2], shape[3] // 2, shape[4] // 2)
+        assert label["1"].shape == (shape[0], 1, shape[2], shape[3] // 2, shape[4] // 2)
         assert label["1"][:].max() == 1
 
 
