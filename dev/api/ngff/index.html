@@ -7028,7 +7028,7 @@ Usually a position/fov node for NGFF-HCS if True.</p>
 
 
 <a href="#iohub.ngff.Position.initialize_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -7036,6 +7036,12 @@ Usually a position/fov node for NGFF-HCS if True.</p>
         <p>Initializes the pyramid arrays with a down scaling of 2 per level.</p>
 <p>Decimals shapes are rounded up to ceiling.
 Scales metadata are also updated.</p>
+<p>Every level keeps the level-0 chunk shape, clamped to the level's shape,
+so a viewer reads the same-sized tiles at every zoom. Shards are sized
+per level from <code>shards</code>: by default the coarser levels keep the
+nominal (uncompressed) byte size of the level-0 shard, which the sizer
+fills spatially first and then along time, so shard files stay about
+the same size down the pyramid instead of shrinking eightfold per level.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7060,6 +7066,20 @@ Must be a subset of the dataset's axis names.
 Defaults to <code>{"z", "y", "x"}</code>, must be lowercase.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry of every downsampled level, in the forms
+:func:<code>iohub.core.sharding.resolve_shards</code> accepts (an explicit
+shape, <code>"XY"</code>/<code>"XYZ"</code>, or a size target such as <code>"1GB"</code>).
+Defaults to None: a size target equal to the level-0 shard's
+nominal byte size when level 0 is sharded, else no sharding.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -7075,7 +7095,9 @@ Defaults to <code>{"z", "y", "x"}</code>, must be lowercase.</p>
 
 
 <a href="#iohub.ngff.Position.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -7119,6 +7141,18 @@ aliasing artifacts and chunk boundary issues.</p>
             <p>Axis names to downsample (e.g. <code>{"y", "x"}</code> for YX-only).
 Forwarded to <code>initialize_pyramid</code> when creating the pyramid
 structure. Defaults to <code>{"z", "y", "x"}</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry of the new levels, forwarded to <code>initialize_pyramid</code>
+when creating the pyramid structure. Defaults to None: the
+level-0 shard's byte size as a size target.</p>
           </div>
         </li>
     </ul>
@@ -7441,10 +7475,11 @@ Integer key is converted to string (name).</p>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -7482,15 +7517,24 @@ ZYX stack size will be used if not specified.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). See
+:meth:<code>create_zeros</code> for the accepted forms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.
-Each shard contains the product of the ratios number of chunks.
-No sharding will be used if not specified.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>. Use <code>shards</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -7547,10 +7591,11 @@ by default True</p>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -7601,15 +7646,38 @@ ZYX stack size will be used if not specified.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). Only supported for
+OME-Zarr v0.5 (Zarr v3). One of:</p>
+<ul>
+<li>an explicit TCZYX shard shape in array elements, rounded up to
+  whole chunks (<code>shards=(2, 1, 96, 1792, 1280)</code>);</li>
+<li>a spatial extent, <code>"XY"</code> for one shard per plane or <code>"XYZ"</code>
+  for one shard per volume;</li>
+<li>a target file size such as <code>"2GB"</code> or <code>"512MiB"</code>: the
+  largest chunk-aligned shard whose nominal (uncompressed) size
+  fits under the target. X grows first, then Y, then Z, then time,
+  so a torn shard costs a spatial region before it costs
+  timepoints. The channel axis is never grown, because writers
+  address single channels.</li>
+</ul>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.
-Each shard contains the product of the ratios number of chunks.
-No sharding will be used if not specified.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>
+(<code>shards = chunks * shards_ratio</code>), by default None.
+Use <code>shards</code> instead; passing both raises <code>ValueError</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8120,9 +8188,10 @@ or "*" for the whole FOV</p>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">pyramid_levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">pyramid_levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -8181,15 +8250,24 @@ Values should be integers 0-255</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). See
+:meth:<code>create_zeros</code> for the accepted forms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.
-Each shard contains the product of the ratios number of chunks.
-No sharding will be used if not specified.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>. Use <code>shards</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8305,12 +8383,13 @@ and <code>int64</code> are supported.</p>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -8361,13 +8440,25 @@ filled later (e.g. chunk by chunk from several processes) with
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry: an explicit TZYX shape, an extent keyword such as
+<code>"XYZ"</code>, or a size target such as <code>"1GB"</code>; see
+:func:<code>iohub.core.sharding.resolve_shards</code>. By default None (no sharding)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None (no sharding)</p>
+            <p>Deprecated multiplier over <code>chunks</code>; use <code>shards</code></p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8980,7 +9071,9 @@ same number of scale levels as the original image.</p>
 
 
 <a href="#iohub.ngff.nodes.PositionLabel.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;max&#39;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;max&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -9012,9 +9105,10 @@ compute-pyramid</code> command do).</p>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">level</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelsArray</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelsArray</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -9053,13 +9147,24 @@ arrays at specific multiscale resolution levels.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). See
+:meth:<code>Position.create_zeros</code> for the accepted forms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>. Use <code>shards</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -9104,9 +9209,10 @@ arrays at specific multiscale resolution levels.</p>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelsArray</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LabelsArray</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -9151,13 +9257,24 @@ arrays at specific multiscale resolution levels.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). See
+:meth:<code>Position.create_zeros</code> for the accepted forms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>. Use <code>shards</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -9451,7 +9568,7 @@ Usually a position/fov node for NGFF-HCS if True.</p>
 
 
 <a href="#iohub.ngff.nodes.PositionLabel.initialize_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -9459,6 +9576,12 @@ Usually a position/fov node for NGFF-HCS if True.</p>
         <p>Initializes the pyramid arrays with a down scaling of 2 per level.</p>
 <p>Decimals shapes are rounded up to ceiling.
 Scales metadata are also updated.</p>
+<p>Every level keeps the level-0 chunk shape, clamped to the level's shape,
+so a viewer reads the same-sized tiles at every zoom. Shards are sized
+per level from <code>shards</code>: by default the coarser levels keep the
+nominal (uncompressed) byte size of the level-0 shard, which the sizer
+fills spatially first and then along time, so shard files stay about
+the same size down the pyramid instead of shrinking eightfold per level.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -9481,6 +9604,20 @@ Scales metadata are also updated.</p>
             <p>Axis names to downsample (e.g. <code>{"y", "x"}</code> for YX-only).
 Must be a subset of the dataset's axis names.
 Defaults to <code>{"z", "y", "x"}</code>, must be lowercase.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry of every downsampled level, in the forms
+:func:<code>iohub.core.sharding.resolve_shards</code> accepts (an explicit
+shape, <code>"XY"</code>/<code>"XYZ"</code>, or a size target such as <code>"1GB"</code>).
+Defaults to None: a size target equal to the level-0 shard's
+nominal byte size when level 0 is sharded, else no sharding.</p>
           </div>
         </li>
     </ul>
@@ -9913,7 +10050,7 @@ item access, which both subclasses provide.</p>
 
 
 <a href="#iohub.ngff.nodes.MultiscaleNode.initialize_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -9921,6 +10058,12 @@ item access, which both subclasses provide.</p>
         <p>Initializes the pyramid arrays with a down scaling of 2 per level.</p>
 <p>Decimals shapes are rounded up to ceiling.
 Scales metadata are also updated.</p>
+<p>Every level keeps the level-0 chunk shape, clamped to the level's shape,
+so a viewer reads the same-sized tiles at every zoom. Shards are sized
+per level from <code>shards</code>: by default the coarser levels keep the
+nominal (uncompressed) byte size of the level-0 shard, which the sizer
+fills spatially first and then along time, so shard files stay about
+the same size down the pyramid instead of shrinking eightfold per level.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -9945,6 +10088,20 @@ Must be a subset of the dataset's axis names.
 Defaults to <code>{"z", "y", "x"}</code>, must be lowercase.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry of every downsampled level, in the forms
+:func:<code>iohub.core.sharding.resolve_shards</code> accepts (an explicit
+shape, <code>"XY"</code>/<code>"XYZ"</code>, or a size target such as <code>"1GB"</code>).
+Defaults to None: a size target equal to the level-0 shard's
+nominal byte size when level 0 is sharded, else no sharding.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -9960,7 +10117,9 @@ Defaults to <code>{"z", "y", "x"}</code>, must be lowercase.</p>
 
 
 <a href="#iohub.ngff.nodes.MultiscaleNode.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -10004,6 +10163,18 @@ aliasing artifacts and chunk boundary issues.</p>
             <p>Axis names to downsample (e.g. <code>{"y", "x"}</code> for YX-only).
 Forwarded to <code>initialize_pyramid</code> when creating the pyramid
 structure. Defaults to <code>{"z", "y", "x"}</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry of the new levels, forwarded to <code>initialize_pyramid</code>
+when creating the pyramid structure. Defaults to None: the
+level-0 shard's byte size as a size target.</p>
           </div>
         </li>
     </ul>
@@ -11208,7 +11379,7 @@ Usually a position/fov node for NGFF-HCS if True.</p>
 
 
 <a href="#iohub.ngff.TiledPosition.initialize_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">initialize_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -11216,6 +11387,12 @@ Usually a position/fov node for NGFF-HCS if True.</p>
         <p>Initializes the pyramid arrays with a down scaling of 2 per level.</p>
 <p>Decimals shapes are rounded up to ceiling.
 Scales metadata are also updated.</p>
+<p>Every level keeps the level-0 chunk shape, clamped to the level's shape,
+so a viewer reads the same-sized tiles at every zoom. Shards are sized
+per level from <code>shards</code>: by default the coarser levels keep the
+nominal (uncompressed) byte size of the level-0 shard, which the sizer
+fills spatially first and then along time, so shard files stay about
+the same size down the pyramid instead of shrinking eightfold per level.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -11240,6 +11417,20 @@ Must be a subset of the dataset's axis names.
 Defaults to <code>{"z", "y", "x"}</code>, must be lowercase.</p>
           </div>
         </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry of every downsampled level, in the forms
+:func:<code>iohub.core.sharding.resolve_shards</code> accepts (an explicit
+shape, <code>"XY"</code>/<code>"XYZ"</code>, or a size target such as <code>"1GB"</code>).
+Defaults to None: a size target equal to the level-0 shard's
+nominal byte size when level 0 is sharded, else no sharding.</p>
+          </div>
+        </li>
     </ul>
 
 
@@ -11255,7 +11446,9 @@ Defaults to <code>{"z", "y", "x"}</code>, must be lowercase.</p>
 
 
 <a href="#iohub.ngff.TiledPosition.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span><span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mean&#39;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -11299,6 +11492,18 @@ aliasing artifacts and chunk boundary issues.</p>
             <p>Axis names to downsample (e.g. <code>{"y", "x"}</code> for YX-only).
 Forwarded to <code>initialize_pyramid</code> when creating the pyramid
 structure. Defaults to <code>{"z", "y", "x"}</code>.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry of the new levels, forwarded to <code>initialize_pyramid</code>
+when creating the pyramid structure. Defaults to None: the
+level-0 shard's byte size as a size target.</p>
           </div>
         </li>
     </ul>
@@ -11534,10 +11739,11 @@ for the image or FOV for each axis.</p>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">data</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -11575,15 +11781,24 @@ ZYX stack size will be used if not specified.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). See
+:meth:<code>create_zeros</code> for the accepted forms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.
-Each shard contains the product of the ratios number of chunks.
-No sharding will be used if not specified.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>. Use <code>shards</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -11640,10 +11855,11 @@ by default True</p>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">check_shape</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -11694,15 +11910,38 @@ ZYX stack size will be used if not specified.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). Only supported for
+OME-Zarr v0.5 (Zarr v3). One of:</p>
+<ul>
+<li>an explicit TCZYX shard shape in array elements, rounded up to
+  whole chunks (<code>shards=(2, 1, 96, 1792, 1280)</code>);</li>
+<li>a spatial extent, <code>"XY"</code> for one shard per plane or <code>"XYZ"</code>
+  for one shard per volume;</li>
+<li>a target file size such as <code>"2GB"</code> or <code>"512MiB"</code>: the
+  largest chunk-aligned shard whose nominal (uncompressed) size
+  fits under the target. X grows first, then Y, then Z, then time,
+  so a torn shard costs a spatial region before it costs
+  timepoints. The channel axis is never grown, because writers
+  address single channels.</li>
+</ul>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.
-Each shard contains the product of the ratios number of chunks.
-No sharding will be used if not specified.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>
+(<code>shards = chunks * shards_ratio</code>), by default None.
+Use <code>shards</code> instead; passing both raises <code>ValueError</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12213,9 +12452,10 @@ or "*" for the whole FOV</p>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">pyramid_levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">pyramid_levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -12274,15 +12514,24 @@ Values should be integers 0-255</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry, by default None (no sharding). See
+:meth:<code>create_zeros</code> for the accepted forms.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None.
-Each shard contains the product of the ratios number of chunks.
-No sharding will be used if not specified.</p>
+            <p>Deprecated per-axis multiplier over <code>chunks</code>. Use <code>shards</code>.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12398,12 +12647,13 @@ and <code>int64</code> are supported.</p>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">],</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">chunks</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">shards_ratio</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">transform</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">TransformationMeta</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">colors</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">properties</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">level</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0&quot;</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PositionLabel</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -12454,13 +12704,25 @@ filled later (e.g. chunk by chunk from several processes) with
           </div>
         </li>
         <li class="doc-section-item field-body">
+            <b><code>shards</code></b>
+              (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...] or <span title="str">str</span></code>, default:
+                  <code>None</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Shard geometry: an explicit TZYX shape, an extent keyword such as
+<code>"XYZ"</code>, or a size target such as <code>"1GB"</code>; see
+:func:<code>iohub.core.sharding.resolve_shards</code>. By default None (no sharding)</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
             <b><code>shards_ratio</code></b>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>, default:
                   <code>None</code>
 )
           –
           <div class="doc-md-description">
-            <p>Sharding ratio for each dimension, by default None (no sharding)</p>
+            <p>Deprecated multiplier over <code>chunks</code>; use <code>shards</code></p>
           </div>
         </li>
         <li class="doc-section-item field-body">
