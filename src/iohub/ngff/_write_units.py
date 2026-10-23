@@ -65,8 +65,15 @@ def _fsync_file(path: Path) -> None:
     its commit path rejects a handle not opened for writing -- so it opens
     read-write, which is safe there because no other writer holds the file by
     the time a unit is recorded.
+
+    The Windows handle must also be opened with ``O_BINARY``. ``os.open``
+    defaults to text mode there, and the C runtime, on opening a text-mode
+    file for read-write, truncates a trailing Ctrl-Z (``0x1A``) so that
+    appends land where a DOS-era reader expects. A shard ends in the crc32c
+    of its index, so about one shard in 256 would lose its last byte to the
+    barrier and fail to decode afterwards.
     """
-    flags = os.O_RDONLY if os.name == "posix" else os.O_RDWR
+    flags = os.O_RDONLY if os.name == "posix" else os.O_RDWR | os.O_BINARY
     descriptor = os.open(path, flags)
     try:
         os.fsync(descriptor)
