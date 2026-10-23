@@ -7096,8 +7096,13 @@ nominal byte size when level 0 is sharded, else no sharding.</p>
 
 <a href="#iohub.ngff.Position.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">resume</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">resume_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -7106,6 +7111,14 @@ nominal byte size when level 0 is sharded, else no sharding.</p>
 <p>Creates pyramid structure if none exists. Uses cascade downsampling
 where each level is derived from the previous level to prevent
 aliasing artifacts and chunk boundary issues.</p>
+<p>Each level is written one shard-aligned region at a time, and on a
+store that can be tracked (zarr-python backend, Zarr v3, local
+filesystem) every region is a resumable unit, like the writes of
+<code>iohub.ngff.utils.process_single_position</code>: its files are cleared
+before it is written, so a shard torn by an interruption is replaced
+rather than merged into, and a marker beside the store records it
+once its shards are synced. With <code>resume=True</code> the regions a
+previous run recorded under the same <code>resume_token</code> are skipped.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -7153,6 +7166,30 @@ structure. Defaults to <code>{"z", "y", "x"}</code>.</p>
             <p>Shard geometry of the new levels, forwarded to <code>initialize_pyramid</code>
 when creating the pyramid structure. Defaults to None: the
 level-0 shard's byte size as a size target.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resume</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Skip the regions an earlier run finished (recorded under
+<code>resume_token</code>) instead of recomputing every level. By default
+False: everything is recomputed, markers are still written.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resume_token</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>&#39;&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Fingerprint of what determines the pyramid (method, levels, the
+source data's revision), mixed into the markers' identity so a
+changed request recomputes rather than skips.</p>
           </div>
         </li>
     </ul>
@@ -9072,8 +9109,13 @@ same number of scale levels as the original image.</p>
 
 <a href="#iohub.ngff.nodes.PositionLabel.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;max&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;max&quot;</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">resume</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">resume_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -10118,8 +10160,13 @@ nominal byte size when level 0 is sharded, else no sharding.</p>
 
 <a href="#iohub.ngff.nodes.MultiscaleNode.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">resume</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">resume_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -10128,6 +10175,14 @@ nominal byte size when level 0 is sharded, else no sharding.</p>
 <p>Creates pyramid structure if none exists. Uses cascade downsampling
 where each level is derived from the previous level to prevent
 aliasing artifacts and chunk boundary issues.</p>
+<p>Each level is written one shard-aligned region at a time, and on a
+store that can be tracked (zarr-python backend, Zarr v3, local
+filesystem) every region is a resumable unit, like the writes of
+<code>iohub.ngff.utils.process_single_position</code>: its files are cleared
+before it is written, so a shard torn by an interruption is replaced
+rather than merged into, and a marker beside the store records it
+once its shards are synced. With <code>resume=True</code> the regions a
+previous run recorded under the same <code>resume_token</code> are skipped.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -10175,6 +10230,30 @@ structure. Defaults to <code>{"z", "y", "x"}</code>.</p>
             <p>Shard geometry of the new levels, forwarded to <code>initialize_pyramid</code>
 when creating the pyramid structure. Defaults to None: the
 level-0 shard's byte size as a size target.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resume</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Skip the regions an earlier run finished (recorded under
+<code>resume_token</code>) instead of recomputing every level. By default
+False: everything is recomputed, markers are still written.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resume_token</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>&#39;&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Fingerprint of what determines the pyramid (method, levels, the
+source data's revision), mixed into the markers' identity so a
+changed request recomputes rather than skips.</p>
           </div>
         </li>
     </ul>
@@ -11447,8 +11526,13 @@ nominal byte size when level 0 is sharded, else no sharding.</p>
 
 <a href="#iohub.ngff.TiledPosition.compute_pyramid" class="headerlink" title="Permanent link">&para;</a></h3>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">compute_pyramid</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span> <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">levels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">method</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;mean&quot;</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">dims</span><span class="p">:</span> <span class="nb">set</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">shards</span><span class="p">:</span> <span class="n">ShardsLike</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">resume</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">resume_token</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -11457,6 +11541,14 @@ nominal byte size when level 0 is sharded, else no sharding.</p>
 <p>Creates pyramid structure if none exists. Uses cascade downsampling
 where each level is derived from the previous level to prevent
 aliasing artifacts and chunk boundary issues.</p>
+<p>Each level is written one shard-aligned region at a time, and on a
+store that can be tracked (zarr-python backend, Zarr v3, local
+filesystem) every region is a resumable unit, like the writes of
+<code>iohub.ngff.utils.process_single_position</code>: its files are cleared
+before it is written, so a shard torn by an interruption is replaced
+rather than merged into, and a marker beside the store records it
+once its shards are synced. With <code>resume=True</code> the regions a
+previous run recorded under the same <code>resume_token</code> are skipped.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -11504,6 +11596,30 @@ structure. Defaults to <code>{"z", "y", "x"}</code>.</p>
             <p>Shard geometry of the new levels, forwarded to <code>initialize_pyramid</code>
 when creating the pyramid structure. Defaults to None: the
 level-0 shard's byte size as a size target.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resume</code></b>
+              (<code><span title="bool">bool</span></code>, default:
+                  <code>False</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Skip the regions an earlier run finished (recorded under
+<code>resume_token</code>) instead of recomputing every level. By default
+False: everything is recomputed, markers are still written.</p>
+          </div>
+        </li>
+        <li class="doc-section-item field-body">
+            <b><code>resume_token</code></b>
+              (<code><span title="str">str</span></code>, default:
+                  <code>&#39;&#39;</code>
+)
+          –
+          <div class="doc-md-description">
+            <p>Fingerprint of what determines the pyramid (method, levels, the
+source data's revision), mixed into the markers' identity so a
+changed request recomputes rather than skips.</p>
           </div>
         </li>
     </ul>
