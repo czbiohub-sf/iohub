@@ -83,6 +83,10 @@ from .registry import (
 from .registry import (
     set_default_implementation as set_default_implementation,
 )
+from .sharding import ShardsLike as ShardsLike
+from .sharding import parse_shard_size as parse_shard_size
+from .sharding import resolve_shard_shape as resolve_shard_shape
+from .sharding import resolve_shards as resolve_shards
 from .specs import ArraySpec as ArraySpec
 from .types import (
     AccessMode as AccessMode,

@@ -1832,9 +1832,9 @@ def test_label_initialize_pyramid_matches_image_levels(tmp_path):
             assert label.get_effective_scale(str(level)) == image_scale[:1] + image_scale[2:]
         # The level-0 scale is inherited, not reset to unit scale.
         assert label.get_effective_scale("1") == [1.0, 4.0, 1.0, 1.0]
-        assert label["1"].chunks == (1, 4, 16, 16)
-        assert label["1"].shards == (1, 4, 32, 32)
-        assert label["2"].chunks == (1, 2, 8, 8)
+        assert label["1"].chunks == (1, 4, 32, 32)  # level-0 chunks (1, 8, 32, 32), Z clamped
+        assert label["1"].shards == (1, 4, 32, 32)  # the whole 16 KiB level fits the 128 KiB target
+        assert label["2"].chunks == (1, 2, 16, 16)
 
 
 @pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
@@ -1990,6 +1990,63 @@ def test_create_label_pyramid_levels(tmp_path):
         assert label.array_keys() == ["0", "1"]
         assert label["1"].shape == (1, 2, 8, 8)
         assert label.get_effective_scale("1") == [1.0, 2.0, 2.0, 2.0]
+
+
+def test_initialize_pyramid_keeps_level0_shard_bytes(tmp_path):
+    """Coarser levels keep the level-0 chunks (clamped) and the level-0 shard's byte size."""
+    with open_ome_zarr(tmp_path / "pyr_shards.zarr", layout="fov", mode="a", channel_names=["a", "b"]) as pos:
+        pos.create_zeros(
+            "0",
+            shape=(40, 2, 8, 64, 64),
+            dtype=np.uint16,
+            chunks=(1, 1, 8, 16, 16),
+            shards=(4, 1, 8, 64, 64),  # 256 KiB nominal
+        )
+        pos.initialize_pyramid(levels=3)
+
+        assert pos["1"].shape == (40, 2, 4, 32, 32)
+        assert pos["1"].chunks == (1, 1, 4, 16, 16)  # level-0 chunks, Z clamped to the level
+        # The whole level is 8 KiB per timepoint per channel: the 256 KiB budget
+        # buys all of space and then 32 timepoints. C is never grown.
+        assert pos["1"].shards == (32, 1, 4, 32, 32)
+        assert pos["2"].shape == (40, 2, 2, 16, 16)
+        assert pos["2"].chunks == (1, 1, 2, 16, 16)
+        # 1 KiB per timepoint: every timepoint fits, so the shard is the array per channel.
+        assert pos["2"].shards == (40, 1, 2, 16, 16)
+        for level in ("1", "2"):
+            nbytes = np.prod(pos[level].shards) * 2
+            assert nbytes <= 4 * 8 * 64 * 64 * 2
+
+
+def test_initialize_pyramid_clamps_chunks_and_takes_explicit_shards(tmp_path):
+    """A chunk larger than the level is clamped; `shards` is applied to every level as given."""
+    with open_ome_zarr(tmp_path / "pyr_clamp.zarr", layout="fov", mode="a", channel_names=["a"]) as pos:
+        pos.create_zeros("0", shape=(2, 1, 3, 16, 16), dtype=np.uint16, chunks=(1, 1, 8, 16, 16))
+        assert pos["0"].shards is None
+        pos.initialize_pyramid(levels=3, shards="XYZ")
+        assert pos["1"].shape == (2, 1, 2, 8, 8)
+        assert pos["1"].chunks == (1, 1, 2, 8, 8)  # z chunk 4 -> clamped to the level's 2
+        assert pos["1"].shards == (1, 1, 2, 8, 8)
+        assert pos["2"].shape == (2, 1, 1, 4, 4)
+        assert pos["2"].chunks == (1, 1, 1, 4, 4)
+
+        # Unsharded level 0 and no request: the levels stay unsharded.
+        pos.delete_pyramid()
+        pos.initialize_pyramid(levels=2)
+        assert pos["1"].shards is None
+
+
+def test_label_pyramid_keeps_level0_shard_bytes(tmp_path):
+    """Label levels grow their time axis (named, so recognised as time) to keep the shard bytes."""
+    with open_ome_zarr(tmp_path / "pyr_label_shards.zarr", layout="fov", mode="a", channel_names=["a"]) as pos:
+        pos.create_zeros("0", shape=(32, 1, 1, 64, 64), dtype=np.uint16)
+        label = pos.create_label_zeros(
+            "cells", shape=(32, 1, 64, 64), dtype=np.uint32, chunks=(8, 1, 32, 32), shards=(8, 1, 64, 64)
+        )
+        label.compute_pyramid(levels=2, dims={"y", "x"})
+        assert label["1"].chunks == (8, 1, 32, 32)  # level-0 chunks, clamped to the level
+        # 128 KiB budget over a 4 KiB-per-timepoint level: all 32 timepoints fit.
+        assert label["1"].shards == (32, 1, 32, 32)
 
 
 def test_downsample_block_mode_shape():
@@ -2310,8 +2367,107 @@ def test_sharding_raises_on_v04(tmp_path):
             ds.create_image(
                 "0",
                 np.zeros((1, 1, 1, 64, 64)),
-                shards_ratio=(1, 1, 1, 2, 2),
+                shards="XYZ",
             )
+
+
+# --- Shard auto-sizing (issue #458) -----------------------------------------
+
+
+@contextmanager
+def _sharded_fov(tmp_path, shape, chunks, shards, dtype=np.uint16):
+    """A v0.5 FOV with a single zero-filled array, created with ``shards``."""
+    with open_ome_zarr(
+        tmp_path / "shards.zarr",
+        layout="fov",
+        mode="w-",
+        channel_names=[f"c{i}" for i in range(shape[1])],
+        version="0.5",
+    ) as dataset:
+        dataset.create_zeros("0", shape=shape, dtype=dtype, chunks=chunks, shards=shards)
+        yield dataset
+
+
+def test_create_zeros_with_size_target(tmp_path):
+    """A size target is resolved against the chunk shape the caller passed."""
+    with _sharded_fov(
+        tmp_path,
+        shape=(8, 2, 32, 512, 512),
+        chunks=(1, 1, 16, 256, 256),
+        shards="20MB",
+    ) as dataset:
+        # One chunk is 2 MiB, so 8 of them fit: 2 in X, 2 in Y, 2 in Z, and
+        # nothing left for T.
+        assert dataset["0"].shards == (1, 1, 32, 512, 512)
+
+
+def test_create_zeros_with_extent_keyword(tmp_path):
+    """``"XY"`` shards a chunk-thick YX slab, ``"XYZ"`` a whole volume."""
+    shape, chunks = (2, 2, 32, 512, 512), (1, 1, 16, 256, 256)
+    with _sharded_fov(tmp_path / "xy", shape, chunks, "XY") as dataset:
+        assert dataset["0"].shards == (1, 1, 16, 512, 512)
+    with _sharded_fov(tmp_path / "xyz", shape, chunks, "XYZ") as dataset:
+        assert dataset["0"].shards == (1, 1, 32, 512, 512)
+
+
+def test_create_zeros_shards_round_up_to_whole_chunks(tmp_path):
+    """An explicit shard shape off the chunk grid is rounded up, not rejected."""
+    with _sharded_fov(
+        tmp_path,
+        shape=(2, 1, 32, 512, 512),
+        chunks=(1, 1, 16, 256, 256),
+        shards=(1, 1, 20, 300, 300),
+    ) as dataset:
+        assert dataset["0"].shards == (1, 1, 32, 512, 512)
+
+
+def test_create_zeros_rejects_shards_with_shards_ratio(tmp_path):
+    with pytest.raises(ValueError, match="not both"):
+        with _sharded_fov(tmp_path, (2, 1, 8, 64, 64), (1, 1, 8, 64, 64), "XYZ") as dataset:
+            dataset.create_zeros(
+                "1",
+                shape=(2, 1, 8, 64, 64),
+                dtype=np.uint16,
+                shards="XYZ",
+                shards_ratio=(2, 1, 1, 1, 1),
+            )
+
+
+def test_create_zeros_shards_ratio_warns(tmp_path):
+    """The legacy multiplier keeps working, with a deprecation warning."""
+    with (
+        open_ome_zarr(
+            tmp_path / "ratio.zarr",
+            layout="fov",
+            mode="w-",
+            channel_names=["c0"],
+            version="0.5",
+        ) as dataset,
+        pytest.deprecated_call(match="shards_ratio is deprecated"),
+    ):
+        arr = dataset.create_zeros(
+            "0",
+            shape=(4, 1, 32, 512, 512),
+            dtype=np.uint16,
+            chunks=(1, 1, 16, 256, 256),
+            shards_ratio=(2, 1, 2, 2, 2),
+        )
+        assert arr.shards == (2, 1, 32, 512, 512)
+
+
+def test_sharded_pyramid_levels_stay_chunk_aligned(tmp_path):
+    """Downscaled levels keep a valid shard geometry, even off the grid."""
+    with _sharded_fov(
+        tmp_path,
+        shape=(2, 1, 24, 96, 96),
+        chunks=(1, 1, 3, 6, 6),
+        shards="XYZ",
+    ) as dataset:
+        dataset.initialize_pyramid(levels=3)
+        for level in ("0", "1", "2"):
+            arr = dataset[level]
+            assert all(s % c == 0 for s, c in zip(arr.shards, arr.chunks, strict=True))
+            assert all(s >= 1 for s in arr.shards)
 
 
 def _make_bf2raw_fixture(
