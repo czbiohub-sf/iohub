@@ -30,6 +30,7 @@ from iohub.ngff.utils import (
     _indices_to_shard_aligned_batches,
     _match_indices_to_batches,
     apply_transform_to_tczyx_and_save,
+    create_empty_labels,
     create_empty_plate,
     process_single_position,
 )
@@ -2816,3 +2817,162 @@ def test_create_empty_plate_label_argument_refusals(tmp_path, bad, match):
             **bad,
         )
     assert not store_path.exists()
+
+
+# -- Label images in an existing plate -------------------------------------
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_create_empty_labels_in_existing_positions(tmp_path, version):
+    """Labels take each position's own geometry; metadata goes on the label group."""
+    store_path = tmp_path / "plate.zarr"
+    shape = (3, 2, 4, 16, 16)
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0"), ("A", "1", "1")],
+        channel_names=["DAPI", "GFP"],
+        shape=shape,
+        version=version,
+        scale=(1, 1, 2.0, 0.5, 0.5),
+    )
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r+") as pos:
+        pos.create_label("nuclei", np.ones((3, 4, 16, 16), dtype=np.uint16))
+
+    kwargs = {"label_chunks": (2, 1, 8, 8)}
+    if version == "0.5":
+        kwargs["label_shards_ratio"] = (1, 4, 2, 2)
+    create_empty_labels(
+        store_path,
+        [("A", "1", "0"), ("A", "1", "1")],
+        ["nuclei", "cells"],
+        label_metadata={"provenance-segment": {"model": "cpsam_v2"}},
+        **kwargs,
+    )
+
+    with open_ome_zarr(store_path, mode="r") as plate:
+        for _name, pos in plate.positions():
+            assert pos.channel_names == ["DAPI", "GFP"]  # the image is untouched
+            assert pos.label_names() == ["cells", "nuclei"]
+            cells = pos.get_label("cells")
+            assert cells["0"].shape == (3, 4, 16, 16)
+            assert cells["0"].dtype == np.uint32
+            assert cells["0"].chunks == (2, 1, 8, 8)
+            if version == "0.5":
+                assert cells["0"].shards == (2, 4, 16, 16)
+            (scale,) = cells.metadata.multiscales[0].datasets[0].coordinate_transformations
+            assert scale.scale == [1.0, 2.0, 0.5, 0.5]
+            for name in ("cells", "nuclei"):
+                assert pos.get_label(name).zattrs["provenance-segment"] == {"model": "cpsam_v2"}
+        # The existing label kept its data and dtype.
+        nuclei = plate["A/1/0"].get_label("nuclei")
+        assert nuclei["0"].dtype == np.uint16
+        assert nuclei["0"][:].all()
+
+    # A second call is a no-op for the arrays and refreshes the metadata.
+    create_empty_labels(store_path, [("A", "1", "1")], ["cells"], label_metadata={"provenance-segment": {"model": "x"}})
+    with open_ome_zarr(store_path / "A/1/1", layout="fov", mode="r") as pos:
+        assert pos.get_label("cells").zattrs["provenance-segment"] == {"model": "x"}
+        assert get_ome_attrs(pos.labels_group.attrs)["labels"] == ["cells", "nuclei"]
+
+
+def test_create_empty_labels_refusals(tmp_path):
+    store_path = tmp_path / "plate.zarr"
+    create_empty_plate(
+        store_path=store_path,
+        position_keys=[("A", "1", "0")],
+        channel_names=["DAPI"],
+        shape=(1, 1, 4, 8, 8),
+        version="0.4",
+    )
+    with pytest.raises(FileNotFoundError, match="B/1/0 does not exist"):
+        create_empty_labels(store_path, [("B", "1", "0")], ["nuclei"])
+    with pytest.raises(ValueError, match="not supported for OME-Zarr v0"):
+        create_empty_labels(store_path, [("A", "1", "0")], ["nuclei"], label_shards_ratio=(1, 1, 1, 1))
+    with pytest.raises(ValueError, match="reserved"):
+        create_empty_labels(store_path, [("A", "1", "0")], ["nuclei"], label_metadata={"image-label": {}})
+    with pytest.raises(ValueError, match="at least one"):
+        create_empty_labels(store_path, [("A", "1", "0")], [])
+    with open_ome_zarr(store_path / "A/1/0", layout="fov", mode="r") as pos:
+        assert pos.label_names() == []
+
+
+# -- Writing into a label image --------------------------------------------
+
+
+def _label_transform(data, constant=2, call_log_dir=None):
+    """A labelling stand-in: one channel out, whatever channels came in."""
+    labels = counting_transform(data[:1], constant=constant, call_log_dir=call_log_dir)
+    return np.rint(labels).astype(np.uint32)
+
+
+def _make_labelled_store(tmp_path: Path, shape, position_key, label_names, **plate_kwargs):
+    store = tmp_path / "plate.zarr"
+    create_empty_plate(
+        store_path=store,
+        position_keys=[position_key],
+        channel_names=[f"c{c}" for c in range(shape[1])],
+        shape=shape,
+        version="0.5",
+        label_names=label_names,
+        label_dtype=np.uint32,
+        **plate_kwargs,
+    )
+    populate_store(store, [position_key], shape, np.float32)
+    return store
+
+
+@pytest.mark.parametrize("num_workers", [1, 2])
+def test_process_single_position_writes_a_label_image_of_the_input(tmp_path, num_workers):
+    """output_label writes func's one-channel result into labels/<name>, with resume."""
+    shape = (4, 2, 3, 8, 8)
+    position_key = ("A", "1", "0")
+    store = _make_labelled_store(tmp_path, shape, position_key, ["nuclei"])
+    position_path = store / Path(*position_key)
+    call_log = tmp_path / "calls"
+    run = partial(
+        process_single_position,
+        func=_label_transform,
+        input_position_path=position_path,
+        output_position_path=position_path,
+        input_channel_indices=[[1, 0]],
+        output_label="nuclei",
+        num_workers=num_workers,
+        constant=3,
+        call_log_dir=str(call_log),
+    )
+
+    run(resume=True)
+    first_pass = _call_count(call_log)
+    assert first_pass == shape[0]
+
+    run(resume=True)
+    assert _call_count(call_log) == first_pass, "resume recomputed units that were already written"
+
+    with open_ome_zarr(position_path, layout="fov") as position:
+        image = position.data[:]
+        labels = position.get_label("nuclei")["0"][:]
+        assert labels.shape == (shape[0], *shape[2:])
+        np.testing.assert_array_equal(labels, np.rint(image[:, 1] * 3).astype(np.uint32))
+        # The image itself is untouched by the label write.
+        assert not np.array_equal(image[:, 0], labels)
+    marker_dir = progress_dir_for(position_path) / "labels" / "nuclei"
+    assert list(marker_dir.glob("*.done"))
+
+
+def test_process_single_position_label_output_refusals(tmp_path):
+    shape = (2, 2, 3, 8, 8)
+    position_key = ("A", "1", "0")
+    store = _make_labelled_store(tmp_path, shape, position_key, ["nuclei"])
+    position_path = store / Path(*position_key)
+    run = partial(
+        process_single_position,
+        input_position_path=position_path,
+        output_position_path=position_path,
+    )
+
+    with pytest.raises(ValueError, match="does not exist"):
+        run(func=_label_transform, input_channel_indices=[[0]], output_label="missing")
+    with pytest.raises(ValueError, match="single input channel group"):
+        run(func=_label_transform, input_channel_indices=[[0], [1]], output_label="nuclei")
+    with pytest.raises(ValueError, match="one channel per timepoint"):
+        run(func=dummy_transform, input_channel_indices=[[0, 1]], output_label="nuclei")

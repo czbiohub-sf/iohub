@@ -337,13 +337,7 @@ def create_empty_plate(
 
     label_names = list(dict.fromkeys(label_names or []))
     if label_names:
-        if not np.issubdtype(label_dtype, np.integer):
-            raise ValueError(f"label_dtype must be an integer type, got {np.dtype(label_dtype)}.")
-        for arg_name, value in (("label_chunks", label_chunks), ("label_shards_ratio", label_shards_ratio)):
-            if value is not None and len(value) != 4:
-                raise ValueError(f"{arg_name} must be TZYX (4 values), got {value}.")
-        if version == "0.4" and label_shards_ratio is not None:
-            raise ValueError("label_shards_ratio is not supported for OME-Zarr v0.4.")
+        _validate_label_layout(label_dtype, label_chunks, label_shards_ratio, version)
     else:
         given = [
             arg_name
@@ -404,89 +398,7 @@ def create_empty_plate(
         if collected or extra_metadata:
             position.zattrs.put({**dict(position.zattrs), **collected, **extra_metadata})
 
-        _create_missing_labels(position)
-
-    def _create_missing_labels(position) -> None:
-        # Existing labels are never touched, which also makes a repeated
-        # call a no-op. Shapes and transforms come from the position's own
-        # image, level by level, so a label added to an existing plate
-        # matches the image pyramid it annotates.
-        missing = [name for name in label_names if name not in position.label_names()]
-        if not missing:
-            return
-        channel_index = position._get_channel_axis()
-
-        def _label_transforms(transforms: list[TransformationMeta] | None) -> list[TransformationMeta] | None:
-            if transforms is None:
-                return None
-            # A transform stored at `path` cannot have its channel component
-            # removed, and a relative path would no longer resolve from
-            # labels/<name>. iohub never writes these, so refuse rather than
-            # copy a transform that does not describe the label.
-            if any(transform.path is not None for transform in transforms):
-                raise ValueError(
-                    f"Cannot add labels to position '{position.zgroup.path}': its image uses "
-                    "path-backed coordinate transformations, which cannot be adapted to "
-                    "the label's TZYX axes."
-                )
-            stripped = []
-            for transform in transforms:
-                transform = transform.model_copy(deep=True)
-                for field in ("scale", "translation"):
-                    values = getattr(transform, field)
-                    if values is not None:
-                        setattr(transform, field, [v for i, v in enumerate(values) if i != channel_index])
-                stripped.append(transform)
-            return stripped
-
-        # The two transform scopes are kept apart: dataset transforms apply
-        # first and multiscale-level ones after them, so flattening them
-        # into the label's dataset transforms would reorder non-commuting
-        # operations (a dataset scale and a multiscale translation).
-        multiscale = position.metadata.multiscales[0]
-        multiscale_transforms = _label_transforms(multiscale.coordinate_transformations)
-        levels = []
-        for dataset in multiscale.datasets:
-            label_transform = _label_transforms(dataset.coordinate_transformations)
-            image_shape = position[dataset.path].shape
-            label_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
-            # Omitted layouts get the image defaults, computed per position
-            # and level: an existing position's image need not have this
-            # call's shape. The shards follow the label chunks, not the
-            # image's ratio, which was sized for the image chunks.
-            if label_chunks is None:
-                chunks_tzyx = _drop_channel_axis(_default_chunks(image_shape, label_dtype, position.version))
-            else:
-                chunks_tzyx = _clamp_chunks_to_shape(label_shape, label_chunks)
-            shards_ratio_tzyx = label_shards_ratio
-            if shards_ratio_tzyx is None and position.version == "0.5":
-                shards_ratio_tzyx = _drop_channel_axis(_default_shards_ratio(image_shape, chunks_tzyx))
-            levels.append((dataset.path, label_shape, chunks_tzyx, shards_ratio_tzyx, label_transform))
-        for name in missing:
-            label = None
-            for path, label_shape, chunks_tzyx, shards_ratio_tzyx, label_transform in levels:
-                if label is None:
-                    label = position.create_label_zeros(
-                        name,
-                        shape=label_shape,
-                        dtype=label_dtype,
-                        chunks=chunks_tzyx,
-                        shards_ratio=shards_ratio_tzyx,
-                        transform=label_transform,
-                        level=path,
-                    )
-                else:
-                    label.create_zeros(
-                        path,
-                        label_shape,
-                        label_dtype,
-                        chunks=chunks_tzyx,
-                        shards_ratio=shards_ratio_tzyx,
-                        transform=label_transform,
-                    )
-            if multiscale_transforms:
-                label.metadata.multiscales[0].coordinate_transformations = multiscale_transforms
-                label.dump_meta()
+        _create_missing_labels(position, label_names, label_dtype, label_chunks, label_shards_ratio)
 
     def _init_new_position(position_key_string: str, position) -> None:
         _ = position.create_zeros(
@@ -551,6 +463,227 @@ def create_empty_plate(
     output_plate.close()
 
 
+def _validate_label_layout(
+    label_dtype: DTypeLike,
+    label_chunks: tuple[int, ...] | None,
+    label_shards_ratio: tuple[int, ...] | None,
+    version: Literal["0.4", "0.5"],
+) -> None:
+    if not np.issubdtype(label_dtype, np.integer):
+        raise ValueError(f"label_dtype must be an integer type, got {np.dtype(label_dtype)}.")
+    for arg_name, value in (("label_chunks", label_chunks), ("label_shards_ratio", label_shards_ratio)):
+        if value is not None and len(value) != 4:
+            raise ValueError(f"{arg_name} must be TZYX (4 values), got {value}.")
+    if version == "0.4" and label_shards_ratio is not None:
+        raise ValueError("label_shards_ratio is not supported for OME-Zarr v0.4.")
+
+
+def _create_missing_labels(
+    position,
+    label_names: list[str],
+    label_dtype: DTypeLike,
+    label_chunks: tuple[int, ...] | None,
+    label_shards_ratio: tuple[int, ...] | None,
+) -> None:
+    """Create the label images of ``label_names`` the position does not have yet.
+
+    Existing labels are never touched, which also makes a repeated call a
+    no-op. Shapes and transforms come from the position's own image, level by
+    level, so a label added to an existing plate matches the image pyramid it
+    annotates.
+    """
+    missing = [name for name in label_names if name not in position.label_names()]
+    if not missing:
+        return
+    channel_index = position._get_channel_axis()
+
+    def _label_transforms(transforms: list[TransformationMeta] | None) -> list[TransformationMeta] | None:
+        if transforms is None:
+            return None
+        # A transform stored at `path` cannot have its channel component
+        # removed, and a relative path would no longer resolve from
+        # labels/<name>. iohub never writes these, so refuse rather than
+        # copy a transform that does not describe the label.
+        if any(transform.path is not None for transform in transforms):
+            raise ValueError(
+                f"Cannot add labels to position '{position.zgroup.path}': its image uses "
+                "path-backed coordinate transformations, which cannot be adapted to "
+                "the label's TZYX axes."
+            )
+        stripped = []
+        for transform in transforms:
+            transform = transform.model_copy(deep=True)
+            for field in ("scale", "translation"):
+                values = getattr(transform, field)
+                if values is not None:
+                    setattr(transform, field, [v for i, v in enumerate(values) if i != channel_index])
+            stripped.append(transform)
+        return stripped
+
+    # The two transform scopes are kept apart: dataset transforms apply
+    # first and multiscale-level ones after them, so flattening them
+    # into the label's dataset transforms would reorder non-commuting
+    # operations (a dataset scale and a multiscale translation).
+    multiscale = position.metadata.multiscales[0]
+    multiscale_transforms = _label_transforms(multiscale.coordinate_transformations)
+    levels = []
+    for dataset in multiscale.datasets:
+        label_transform = _label_transforms(dataset.coordinate_transformations)
+        image_shape = position[dataset.path].shape
+        label_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
+        # Omitted layouts get the image defaults, computed per position
+        # and level: an existing position's image need not have this
+        # call's shape. The shards follow the label chunks, not the
+        # image's ratio, which was sized for the image chunks.
+        if label_chunks is None:
+            chunks_tzyx = _drop_channel_axis(_default_chunks(image_shape, label_dtype, position.version))
+        else:
+            chunks_tzyx = _clamp_chunks_to_shape(label_shape, label_chunks)
+        shards_ratio_tzyx = label_shards_ratio
+        if shards_ratio_tzyx is None and position.version == "0.5":
+            shards_ratio_tzyx = _drop_channel_axis(_default_shards_ratio(image_shape, chunks_tzyx))
+        levels.append((dataset.path, label_shape, chunks_tzyx, shards_ratio_tzyx, label_transform))
+    for name in missing:
+        label = None
+        for path, label_shape, chunks_tzyx, shards_ratio_tzyx, label_transform in levels:
+            if label is None:
+                label = position.create_label_zeros(
+                    name,
+                    shape=label_shape,
+                    dtype=label_dtype,
+                    chunks=chunks_tzyx,
+                    shards_ratio=shards_ratio_tzyx,
+                    transform=label_transform,
+                    level=path,
+                )
+            else:
+                label.create_zeros(
+                    path,
+                    label_shape,
+                    label_dtype,
+                    chunks=chunks_tzyx,
+                    shards_ratio=shards_ratio_tzyx,
+                    transform=label_transform,
+                )
+        if multiscale_transforms:
+            label.metadata.multiscales[0].coordinate_transformations = multiscale_transforms
+            label.dump_meta()
+
+
+#: Attribute keys the OME-Zarr spec owns on a label image group: ``ome`` (v0.5), and
+#: the top-level v0.4 keys. Refused as ``label_metadata`` keys.
+_LABEL_OME_KEYS = {"ome", "multiscales", "image-label", "version"}
+
+
+def create_empty_labels(
+    store_path: Path,
+    position_keys: list[tuple[str, str, str]],
+    label_names: list[str],
+    label_dtype: DTypeLike = np.uint32,
+    label_chunks: tuple[int, ...] | None = None,
+    label_shards_ratio: tuple[int, ...] | None = None,
+    label_metadata: Mapping[str, Any] | None = None,
+) -> None:
+    """Create empty label images in existing positions of an HCS plate.
+
+    The label-image half of `create_empty_plate` for a plate that already has
+    its positions: the step that segments a plate it reads scaffolds its
+    ``labels/<name>`` images without restating the plate's channels, shape or
+    scale, which each label takes from its own position's image. Labels that
+    already exist are left untouched, so calling this again is a no-op.
+
+    Parameters
+    ----------
+    store_path : Path
+        Path to the existing HCS plate.
+    position_keys : list[tuple[str, str, str]]
+        Positions (row, column, fov) to create the labels in. Every one must
+        exist; use `create_empty_plate` to create positions.
+    label_names : list[str]
+        Names of the label images, at ``<fov>/labels/<name>/``. Each mirrors the
+        position's image pyramid: one TZYX level per image level, with the
+        image's shape and scale (and translation, if any) without the channel
+        axis. No data is written (fill value 0).
+    label_dtype : DTypeLike, optional
+        Integer data type of the label images. Defaults to np.uint32.
+    label_chunks : tuple[int, ...], optional
+        TZYX chunk size, clamped to the shape of each level. If None, the
+        version-specific image default at ``label_dtype`` without the channel
+        axis. Defaults to None.
+    label_shards_ratio : tuple[int, ...], optional
+        TZYX shards ratio. If None, for "0.5" the ratio that makes one shard
+        span a time chunk's whole ZYX volume; no sharding for "0.4", which
+        refuses an explicit ratio. Defaults to None.
+    label_metadata : Mapping[str, Any], optional
+        The caller's own metadata for the label images, written as top-level
+        attributes of every named label group in every position, existing
+        labels included, with the caller's entries winning over what is there:
+        the step's provenance, e.g.
+        ``{"biahub-segment": settings.model_dump()}``, the same spelling as
+        ``extra_metadata`` on a position. Keys the OME-Zarr spec owns on a
+        label are refused. Defaults to None.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the plate or one of the positions does not exist.
+    ValueError
+        If ``label_dtype`` is not an integer type, ``label_chunks`` or
+        ``label_shards_ratio`` is not TZYX, ``label_shards_ratio`` is given for
+        a "0.4" plate, or ``label_metadata`` uses a reserved key.
+
+    Examples
+    --------
+    >>> create_empty_labels(
+    ...     store_path=Path("/path/to/plate.zarr"),
+    ...     position_keys=[("A", "1", "0")],
+    ...     label_names=["nuclei"],
+    ...     label_chunks=(16, 1, 128, 128),
+    ...     label_metadata={"provenance-segment": {"model": "cpsam_v2"}},
+    ... )
+    >>> with open_ome_zarr("/path/to/plate.zarr/A/1/0", mode="r+") as position:
+    ...     position.get_label("nuclei")["0"][0] = segmentation  # ZYX
+    """
+    label_names = list(dict.fromkeys(label_names))
+    if not label_names:
+        raise ValueError("label_names must name at least one label image.")
+    if label_metadata is None:
+        label_metadata = {}
+    elif not isinstance(label_metadata, Mapping):
+        raise TypeError(f"label_metadata must be a mapping, got {type(label_metadata).__name__}.")
+    reserved = _LABEL_OME_KEYS.intersection(label_metadata)
+    if reserved:
+        raise ValueError(
+            f"label_metadata keys {sorted(reserved)} are reserved OME-Zarr keys on a label image. "
+            "Use a namespaced key (e.g. '<package>-<step>') instead."
+        )
+    label_metadata = dict(label_metadata)
+
+    keys = list(dict.fromkeys(tuple(normalize_path(str(part)) for part in k) for k in position_keys))
+    with open_ome_zarr(str(store_path), layout="hcs", mode="r+") as plate:
+        positions = []
+        for key in keys:
+            try:
+                positions.append(plate["/".join(key)])
+            except KeyError:
+                raise FileNotFoundError(
+                    f"Position {'/'.join(key)} does not exist in {store_path}; create_empty_plate creates positions."
+                ) from None
+        for position in positions:
+            _validate_label_layout(label_dtype, label_chunks, label_shards_ratio, position.version)
+
+        def _add_labels(position) -> None:
+            _create_missing_labels(position, label_names, label_dtype, label_chunks, label_shards_ratio)
+            if label_metadata:
+                for name in label_names:
+                    label = position.get_label(name)
+                    label.zattrs.put({**dict(label.zattrs), **label_metadata})
+
+        with ThreadPoolExecutor(max_workers=max(1, min(32, len(positions)))) as pool:
+            for future in as_completed([pool.submit(_add_labels, position) for position in positions]):
+                future.result()
+
+
 # -- Transform helpers -----------------------------------------------------
 
 
@@ -600,12 +733,31 @@ def _contiguous_runs(indices: Sequence[int]) -> list[slice]:
     return runs
 
 
+def _output_array(output_dataset, output_label: str | None):
+    """The array a write targets: the position's image, or one of its label images.
+
+    A label image is TZYX (no channel axis), so a label write spans the whole
+    second axis; `plan_write_unit` and the writes below pass ``slice(None)``
+    where the image write passes its channel indices.
+    """
+    if output_label is None:
+        return output_dataset.data
+    if output_label not in output_dataset.label_names():
+        raise ValueError(
+            f"Label image {output_label!r} does not exist in the output position "
+            f"(labels: {output_dataset.label_names()}); create it first, e.g. with "
+            "create_empty_plate(label_names=[...])."
+        )
+    return output_dataset.get_label(output_label)["0"]
+
+
 def _save_transformed(
     transformed: list[NDArray],
     output_position_path: Path,
     output_channel_indices: list[int] | slice,
     output_time_indices: list[int],
     write_unit: WriteUnit | None = None,
+    output_label: str | None = None,
 ) -> None:
     """Write the transformed timepoints, one run of consecutive timepoints at a time.
 
@@ -623,17 +775,30 @@ def _save_transformed(
     input was
     all zeros or NaNs from the middle of that batch. They also arise from a
     caller asking for non-consecutive ``output_time_indices`` outright.
+
+    With ``output_label`` the target is the TZYX label image of that name:
+    each transformed timepoint must then have exactly one channel, which is
+    dropped on the way in.
     """
+    if output_label is not None:
+        channels = {np.shape(czyx)[0] for czyx in transformed}
+        if channels != {1}:
+            raise ValueError(
+                f"Writing into label image {output_label!r} needs func to return one channel "
+                f"per timepoint, got {sorted(channels)} channels."
+            )
+        transformed = [np.asarray(czyx)[0] for czyx in transformed]
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
-        arr = output_dataset.data
+        arr = _output_array(output_dataset, output_label)
         if write_unit is not None:
             write_unit.begin()
         for run in _contiguous_runs(output_time_indices):
-            arr._impl.write_oindex(
-                arr.native,
-                (output_time_indices[run], output_channel_indices),
-                transformed[run],
+            selection = (
+                (output_time_indices[run],)
+                if output_label is not None
+                else (output_time_indices[run], output_channel_indices)
             )
+            arr._impl.write_oindex(arr.native, selection, transformed[run])
     # Recorded only after the store is closed, so the codec pipeline has
     # released the shards and anything it buffered in user space has reached
     # the kernel before `WriteUnit.complete` syncs it to disk. Marking the
@@ -649,19 +814,25 @@ def _plan_output_write(
     output_time_indices: list[int],
     resume: bool,
     resume_token: str,
+    output_label: str | None = None,
 ) -> tuple[WriteUnit | None, bool]:
     """Describe the files this write owns, and whether it already finished."""
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
+        array = _output_array(output_dataset, output_label)
+        progress_dir = progress_dir_for(output_position_path)
+        if output_label is not None and progress_dir is not None:
+            # Markers of a label image live beside the image's, under the label's name.
+            progress_dir = progress_dir / "labels" / output_label
         unit = plan_write_unit(
-            output_dataset.data,
+            array,
             output_time_indices,
-            output_channel_indices,
+            slice(None) if output_label is not None else output_channel_indices,
             token=resume_token,
-            progress_dir=progress_dir_for(output_position_path),
+            progress_dir=progress_dir,
         )
         if unit is None:
             return None, False
-        return unit, bool(resume and unit_is_complete(unit, output_dataset.data))
+        return unit, bool(resume and unit_is_complete(unit, array))
 
 
 def apply_transform_to_tczyx_and_save(
@@ -675,6 +846,7 @@ def apply_transform_to_tczyx_and_save(
     *,
     resume: bool = False,
     resume_token: str = "",
+    output_label: str | None = None,
     **kwargs,
 ) -> None:
     """Load a TCZYX array from a position store.
@@ -685,6 +857,8 @@ def apply_transform_to_tczyx_and_save(
     `iohub.ngff._write_units`) they are cleared before writing rather
     than written over, and completion is recorded in a marker file. Pass
     ``resume=True`` to skip a unit that a previous run already finished.
+    With ``output_label`` the result goes into that label image of the output
+    position instead of its image (see `process_single_position`).
     """
     unit, already_written = _plan_output_write(
         output_position_path,
@@ -692,6 +866,7 @@ def apply_transform_to_tczyx_and_save(
         _slice_to_list(output_time_indices),
         resume,
         resume_token,
+        output_label=output_label,
     )
     if already_written:
         click.echo(f"Skipping t={output_time_indices}, c={output_channel_indices}: already written")
@@ -724,6 +899,7 @@ def apply_transform_to_tczyx_and_save(
             output_channel_indices=output_channel_indices,
             output_time_indices=output_time_indices,
             write_unit=unit,
+            output_label=output_label,
         )
         _echo_finished(input_time_indices, input_channel_indices, skipped=False)
     elif unit is not None:
@@ -801,6 +977,7 @@ def process_single_position(
     use_threads: bool = False,
     resume: bool = False,
     resume_token: str = "",
+    output_label: str | None = None,
     **kwargs,
 ) -> None:
     """
@@ -819,7 +996,17 @@ def process_single_position(
         (e.g., input_store_path.zarr/A/1/0).
     output_position_path : Path
         The path to the output OME-Zarr position store
-        (e.g., output_store_path.zarr/A/1/0).
+        (e.g., output_store_path.zarr/A/1/0). May be the input position
+        when writing into one of its label images (``output_label``).
+    output_label : str, optional
+        Write into the label image ``labels/<output_label>`` of the output
+        position (created beforehand, e.g. by ``create_empty_plate``'s
+        ``label_names``) instead of its image. A label image is TZYX, so
+        ``func`` must return one channel per timepoint and
+        ``input_channel_indices`` must hold a single channel group;
+        ``output_channel_indices`` is ignored. Resume and repair work as for
+        the image, with the markers kept under the label's name.
+        Defaults to None, the image.
     input_time_indices : list[int], optional
         If not provided, all timepoints will be processed.
     output_time_indices : list[int], optional
@@ -879,13 +1066,16 @@ def process_single_position(
     click.echo(f"Function to be applied: \t{func}")
     click.echo(f"Input data path:\t{input_position_path}")
     click.echo(f"Output data path:\t{output_position_path}")
+    if output_label is not None:
+        click.echo(f"Output label image:\t{output_label}")
 
     # Get data shape and shard info
     with open_ome_zarr(input_position_path, layout="fov", mode="r") as input_dataset:
         input_data_shape = input_dataset.data.shape
     with open_ome_zarr(output_position_path, layout="fov", mode="r") as output_dataset:
-        output_shards = output_dataset.data.shards
-        if resume and not tracking_available(output_dataset.data):
+        output_array = _output_array(output_dataset, output_label)
+        output_shards = output_array.shards
+        if resume and not tracking_available(output_array):
             warnings.warn(
                 f"resume=True was requested but progress cannot be tracked for {output_position_path}, "
                 "so every unit will be recomputed. Tracking requires a local Zarr v3 (OME-Zarr v0.5) store.",
@@ -914,9 +1104,17 @@ def process_single_position(
         input_channel_indices = [[c] for c in range(input_data_shape[1])]
         output_channel_indices = input_channel_indices
     assert type(input_channel_indices) is list, "input_channel_indices must be a list"
-    if output_channel_indices is None:
+    if output_label is not None:
+        # One label image takes one result per timepoint, whatever channels feed it.
+        if len(input_channel_indices) != 1:
+            raise ValueError(
+                f"output_label={output_label!r} takes a single input channel group, "
+                f"got {len(input_channel_indices)}: {input_channel_indices}."
+            )
+        output_channel_indices = [slice(None)]
+    elif output_channel_indices is None:
         output_channel_indices = input_channel_indices
-    if output_shards is not None and output_shards[1] != 1:
+    if output_label is None and output_shards is not None and output_shards[1] != 1:
         raise ValueError("Sharding along the channel dimension is not supported.")
 
     # Check for invalid times
@@ -958,6 +1156,7 @@ def process_single_position(
         output_position_path,
         resume=resume,
         resume_token=resume_token,
+        output_label=output_label,
         **kwargs,
     )
     num_workers = min(num_workers, len(flat_iterable), _available_cpus())
