@@ -84,6 +84,38 @@ def target_region_to_source(
     return tuple(source_slices)
 
 
+def split_region(region: tuple[slice, ...], factors: list[int], step_shape: tuple[int, ...]) -> list[tuple[slice, ...]]:
+    """Split a target region into sub-blocks that downsample independently.
+
+    An axis that is not downsampled (factor 1, e.g. T and C) pools nothing
+    across its indices, so the region splits along it at ``step_shape``
+    (the target's chunk shape) without changing the result. A downsampled
+    axis keeps the region's full extent, so its edge padding is the same as
+    for the whole region.
+
+    Parameters
+    ----------
+    region : tuple[slice, ...]
+        Target region, with explicit start and stop on every axis.
+    factors : list[int]
+        Downsample factor per axis.
+    step_shape : tuple[int, ...]
+        Sub-block step per axis; only used on axes with factor 1.
+
+    Returns
+    -------
+    list[tuple[slice, ...]]
+        Sub-blocks tiling ``region``, in C order.
+    """
+    dim_ranges = []
+    for sl, f, step in zip(region, factors, step_shape, strict=True):
+        if f == 1:
+            dim_ranges.append([slice(s, min(s + step, sl.stop)) for s in range(sl.start, sl.stop, step)])
+        else:
+            dim_ranges.append([sl])
+    return [tuple(r) for r in itertools.product(*dim_ranges)]
+
+
 def iter_work_regions(shape: tuple[int, ...], step_shape: tuple[int, ...]) -> list[tuple[slice, ...]]:
     """Return shard/chunk-aligned regions covering the full array shape.
 

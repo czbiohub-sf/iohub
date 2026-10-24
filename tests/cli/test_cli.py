@@ -381,6 +381,8 @@ def test_cli_compute_pyramid(tmp_path, caplog):
             "3",
             "--method",
             "mean",
+            "--num-workers",
+            "2",
         ],
     )
     assert result.exit_code == 0, result.output

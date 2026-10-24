@@ -284,8 +284,12 @@ class TensorStoreImplementation(_TS_IMPL_BASE):
         target_region: tuple[slice, ...],
         factors: list[int],
         method: str = "mean",
+        num_workers: int = 1,
     ) -> None:
-        """Downsample a single region using TensorStore."""
+        """Downsample a single region using TensorStore.
+
+        ``num_workers`` is ignored: TensorStore runs on its own thread pool.
+        """
         import tensorstore as ts
 
         downsampled = ts.downsample(source, downsample_factors=factors, method=method)

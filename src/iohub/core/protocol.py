@@ -104,12 +104,15 @@ class ArrayIO[A](Protocol):
         target_region: tuple[slice, ...],
         factors: list[int],
         method: str = "mean",
+        num_workers: int = 1,
     ) -> None:
         """Downsample source into target for a single region.
 
         ``target_region`` is expressed in **target coordinates**.
         Implementations are responsible for mapping back to source
         coordinates (e.g. multiplying by ``factors``) as needed.
+        ``num_workers`` is the number of threads the region may use;
+        an implementation that parallelizes on its own may ignore it.
         """
         ...
 
