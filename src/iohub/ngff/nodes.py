@@ -661,7 +661,7 @@ class LabelsArray(NGFFArray):
         to TCZYX would read T as C. The stored dimension names decide when they
         are present; otherwise a 4D label is read as TZYX, a 5D one as TCZYX.
         """
-        names = self._dim_names
+        names = tuple(n.lower() for n in self._dim_names) if self._dim_names else ()
         if not names:
             names = tuple(self._SUPPORTED_DIMS.lower()) if self.ndim == 5 else ("t", "z", "y", "x")
             names = names[-self.ndim :] if self.ndim < len(names) else names

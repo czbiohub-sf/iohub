@@ -3097,3 +3097,28 @@ def test_process_single_position_label_output_refusals(tmp_path):
         run(func=_label_transform, input_channel_indices=[[0], [1]], output_label="nuclei")
     with pytest.raises(ValueError, match="one channel per timepoint"):
         run(func=dummy_transform, input_channel_indices=[[0, 1]], output_label="nuclei")
+
+
+def test_apply_transform_label_output_ignores_the_channel_selection(tmp_path):
+    """A direct caller's output_channel_indices cannot point past the label's one channel."""
+    shape = (2, 2, 3, 8, 8)
+    position_key = ("A", "1", "0")
+    store = _make_labelled_store(tmp_path, shape, position_key, ["nuclei"])
+    position_path = store / Path(*position_key)
+
+    apply_transform_to_tczyx_and_save(
+        _label_transform,
+        position_path,
+        position_path,
+        input_channel_indices=[1],
+        output_channel_indices=[1],  # would be out of range on the one-channel label
+        input_time_indices=[0, 1],
+        output_time_indices=[0, 1],
+        output_label="nuclei",
+        constant=2,
+    )
+
+    with open_ome_zarr(position_path, layout="fov") as position:
+        labels = position.get_label("nuclei")["0"][:]
+        assert labels.shape == (2, 1, 3, 8, 8)
+        np.testing.assert_array_equal(labels[:, 0], np.rint(position.data[:, 1] * 2).astype(np.uint32))

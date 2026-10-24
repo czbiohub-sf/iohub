@@ -840,6 +840,10 @@ def _save_transformed(
                 f"Writing into label image {output_label!r} needs func to return one channel "
                 f"per timepoint (a label has one channel), got {sorted(channels)} channels."
             )
+    if output_label is not None:
+        # The label's one channel, whatever a direct caller passed: this is the
+        # selection `_plan_output_write` planned the write unit for.
+        output_channel_indices = slice(None)
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
         arr = _output_array(output_dataset, output_label)
         if write_unit is not None:

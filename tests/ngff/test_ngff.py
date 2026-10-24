@@ -1676,6 +1676,19 @@ def test_legacy_tzyx_label_reads_with_its_own_axes(tmp_path, version):
         assert not pos.label_matches_pyramid(old)  # (3, 4, 8, 8) is not the (3, 1, 4, 8, 8) a new label has
 
 
+def test_labels_array_dimension_names_are_case_insensitive(tmp_path):
+    """Axes named in upper case (as some stores do) still resolve the dimension properties."""
+    from iohub.ngff.nodes import LabelsArray
+
+    with open_ome_zarr(tmp_path / "upper.zarr", layout="fov", mode="w-", channel_names=["DAPI"]) as pos:
+        pos.create_zeros("0", shape=(3, 1, 4, 8, 16), dtype=np.uint16)
+        label = pos.create_label_zeros("cells", shape=(3, 1, 4, 8, 16))
+        arr = LabelsArray.from_handle(label["0"]._handle, pos._impl, dim_names=("T", "C", "Z", "Y", "X"))
+        assert (arr.frames, arr.channels, arr.slices, arr.height, arr.width) == (3, 1, 4, 8, 16)
+        # Without names, a 4D array is read as TZYX and a 5D one as TCZYX.
+        assert LabelsArray.from_handle(label["0"]._handle, pos._impl).slices == 4
+
+
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_labels_group_metadata_on_disk(tmp_path, version):
     """Test the labels list is written to the labels group per the NGFF spec."""
