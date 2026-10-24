@@ -231,32 +231,33 @@ def create_empty_plate(
     label_names : list[str], optional
         Names of empty label images to create in every position in
         ``position_keys``, at ``<fov>/labels/<name>/``. Each label mirrors
-        the position's image pyramid: one TZYX level per image level, with
-        the same path, the image's shape and scale (and translation, if any)
-        without the channel axis. For a newly created position that is
-        ``shape``/``scale`` minus the channel axis; for an existing position
-        it is read from the image, so the label always matches the image it
-        annotates. Labels that already exist are left untouched, so calling
-        this again is a no-op. No data is written (fill value 0); fill a
-        label later with ``position.get_label(name)["0"][...] = data``.
+        the position's image pyramid: one level per image level, with the
+        same path, axes, scale (and translation, if any), and the image's
+        shape with one channel, ``(T, 1, Z, Y, X)``: a label is one
+        segmentation, and the DCA array standard wants every array 5D. For a
+        newly created position that is ``shape`` with C=1; for an existing
+        position it is read from the image, so the label always matches the
+        image it annotates. Labels that already exist are left untouched, so
+        calling this again is a no-op. No data is written (fill value 0); fill
+        a label later with ``position.get_label(name)["0"][...] = data``.
         Defaults to None (no labels).
     label_dtype : DTypeLike, optional
         Integer data type of the label images. Defaults to np.uint32.
     label_chunks : tuple[int, ...], optional
-        TZYX chunk size of the label images, clamped to the shape of each
-        level. If None, the version-specific default the image uses when
-        ``chunks`` is None, computed for each position and level from the
-        image shape, at ``label_dtype`` and without the channel axis (for
-        "0.4" the Z chunk is capped to 500 MB at ``label_dtype``). Explicit
-        image ``chunks`` are not inherited. Defaults to None.
+        TCZYX chunk size of the label images (C must be 1), clamped to the
+        shape of each level. If None, the version-specific default the image
+        uses when ``chunks`` is None, computed for each position and level
+        from the image shape at ``label_dtype`` (for "0.4" the Z chunk is
+        capped to 500 MB at ``label_dtype``). Explicit image ``chunks`` are
+        not inherited. Defaults to None.
     label_shards : tuple[int, ...] or str, optional
         Shard geometry of the label images, in the forms ``shards`` takes
-        (an explicit TZYX shape in elements, ``"XY"``/``"XYZ"``, or a size
+        (an explicit TCZYX shape in elements, ``"XY"``/``"XYZ"``, or a size
         target), resolved per level of each position's label. If None, for
         "0.5" one shard per ZYX volume (``"XYZ"``); no sharding for "0.4".
         The image's ``shards`` are not inherited. Defaults to None.
     label_shards_ratio : tuple[int, ...], optional
-        Deprecated TZYX multiplier over ``label_chunks``; use
+        Deprecated TCZYX multiplier over ``label_chunks``; use
         ``label_shards``. Passing both raises ``ValueError``. Defaults to None.
 
     Raises
@@ -265,8 +266,9 @@ def create_empty_plate(
         If ``metadata_keys`` is given without ``metadata_sources``.
     ValueError
         If ``label_dtype`` is not an integer type, or ``label_chunks`` or
-        ``label_shards_ratio`` is not TZYX (4 values), or ``label_shards``
-        / ``label_shards_ratio`` is given for version "0.4", or both are given.
+        ``label_shards_ratio`` is not TCZYX (5 values) with C 1, or
+        ``label_shards`` / ``label_shards_ratio`` is given for version "0.4",
+        or both are given.
     ValueError
         If ``label_dtype``, ``label_chunks``, ``label_shards`` or
         ``label_shards_ratio`` is given without ``label_names``: they
@@ -513,8 +515,12 @@ def _validate_label_layout(
     if not np.issubdtype(label_dtype, np.integer):
         raise ValueError(f"label_dtype must be an integer type, got {np.dtype(label_dtype)}.")
     for arg_name, value in (("label_chunks", label_chunks), ("label_shards_ratio", label_shards_ratio)):
-        if value is not None and len(value) != 4:
-            raise ValueError(f"{arg_name} must be TZYX (4 values), got {value}.")
+        if value is None:
+            continue
+        if len(value) != 5:
+            raise ValueError(f"{arg_name} must be TCZYX (5 values), got {value}.")
+        if value[1] != 1:
+            raise ValueError(f"{arg_name} must have 1 on the channel axis (a label has one channel), got {value}.")
     if version == "0.4" and (label_shards is not None or label_shards_ratio is not None):
         raise ValueError("label_shards / label_shards_ratio are not supported for OME-Zarr v0.4.")
     if label_shards is not None and label_shards_ratio is not None:
@@ -539,30 +545,21 @@ def _create_missing_labels(
     missing = [name for name in label_names if name not in position.label_names()]
     if not missing:
         return
-    channel_index = position._get_channel_axis()
 
     def _label_transforms(transforms: list[TransformationMeta] | None) -> list[TransformationMeta] | None:
         if transforms is None:
             return None
-        # A transform stored at `path` cannot have its channel component
-        # removed, and a relative path would no longer resolve from
-        # labels/<name>. iohub never writes these, so refuse rather than
-        # copy a transform that does not describe the label.
+        # A relative `path` would no longer resolve from labels/<name>. iohub
+        # never writes these, so refuse rather than copy a transform that
+        # does not describe the label.
         if any(transform.path is not None for transform in transforms):
             raise ValueError(
                 f"Cannot add labels to position '{position.zgroup.path}': its image uses "
-                "path-backed coordinate transformations, which cannot be adapted to "
-                "the label's TZYX axes."
+                "path-backed coordinate transformations, which do not resolve from the label."
             )
-        stripped = []
-        for transform in transforms:
-            transform = transform.model_copy(deep=True)
-            for field in ("scale", "translation"):
-                values = getattr(transform, field)
-                if values is not None:
-                    setattr(transform, field, [v for i, v in enumerate(values) if i != channel_index])
-            stripped.append(transform)
-        return stripped
+        # The label has the image's axes (its channel axis has length 1), so
+        # its transforms are the image's.
+        return [transform.model_copy(deep=True) for transform in transforms]
 
     # The two transform scopes are kept apart: dataset transforms apply
     # first and multiscale-level ones after them, so flattening them
@@ -574,13 +571,15 @@ def _create_missing_labels(
     for dataset in multiscale.datasets:
         label_transform = _label_transforms(dataset.coordinate_transformations)
         image_shape = position[dataset.path].shape
-        label_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
+        label_shape = position.label_shape(dataset.path)
         # Omitted layouts get the image defaults, computed per position
         # and level: an existing position's image need not have this
         # call's shape. The shards follow the label chunks, not the
         # image's ratio, which was sized for the image chunks.
         if label_chunks is None:
-            chunks_tzyx = _drop_channel_axis(_default_chunks(image_shape, label_dtype, position.version))
+            chunks_tzyx = _clamp_chunks_to_shape(
+                label_shape, _default_chunks(image_shape, label_dtype, position.version)
+            )
         else:
             chunks_tzyx = _clamp_chunks_to_shape(label_shape, label_chunks)
         # The caller's label_shards, else one shard per ZYX volume on v0.5
@@ -651,24 +650,23 @@ def create_empty_labels(
         exist; use `create_empty_plate` to create positions.
     label_names : list[str]
         Names of the label images, at ``<fov>/labels/<name>/``. Each mirrors the
-        position's image pyramid: one TZYX level per image level, with the
-        image's shape and scale (and translation, if any) without the channel
-        axis. No data is written (fill value 0).
+        position's image pyramid: one level per image level, with the image's
+        axes, scale (and translation, if any) and shape with one channel,
+        ``(T, 1, Z, Y, X)``. No data is written (fill value 0).
     label_dtype : DTypeLike, optional
         Integer data type of the label images. Defaults to np.uint32.
     label_chunks : tuple[int, ...], optional
-        TZYX chunk size, clamped to the shape of each level. If None, the
-        version-specific image default at ``label_dtype`` without the channel
-        axis. Defaults to None.
+        TCZYX chunk size (C must be 1), clamped to the shape of each level. If
+        None, the version-specific image default at ``label_dtype``. Defaults
+        to None.
     label_shards : tuple[int, ...] or str, optional
         Shard geometry of the label images, in the forms ``create_empty_plate``'s
-        ``shards`` takes (an explicit TZYX shape in elements, ``"XY"``/``"XYZ"``,
+        ``shards`` takes (an explicit TCZYX shape in elements, ``"XY"``/``"XYZ"``,
         or a size target), resolved per level. If None, one shard per ZYX
         volume on "0.5"; no sharding on "0.4". Defaults to None.
     label_shards_ratio : tuple[int, ...], optional
-        TZYX shards ratio. If None, for "0.5" the ratio that makes one shard
-        span a time chunk's whole ZYX volume; no sharding for "0.4", which
-        refuses an explicit ratio. Defaults to None.
+        Deprecated TCZYX multiplier over ``label_chunks``; use ``label_shards``.
+        Not supported for "0.4". Defaults to None.
     label_metadata : Mapping[str, Any], optional
         The caller's own metadata for the label images, written as top-level
         attributes of every named label group in every position, existing
@@ -684,8 +682,8 @@ def create_empty_labels(
         If the plate or one of the positions does not exist.
     ValueError
         If ``label_dtype`` is not an integer type, ``label_chunks`` or
-        ``label_shards_ratio`` is not TZYX, ``label_shards_ratio`` is given for
-        a "0.4" plate, or ``label_metadata`` uses a reserved key.
+        ``label_shards_ratio`` is not TCZYX with C 1, ``label_shards_ratio`` is
+        given for a "0.4" plate, or ``label_metadata`` uses a reserved key.
 
     Examples
     --------
@@ -693,7 +691,7 @@ def create_empty_labels(
     ...     store_path=Path("/path/to/plate.zarr"),
     ...     position_keys=[("A", "1", "0")],
     ...     label_names=["nuclei"],
-    ...     label_chunks=(16, 1, 128, 128),
+    ...     label_chunks=(16, 1, 1, 128, 128),
     ...     label_metadata={"provenance-segment": {"model": "cpsam_v2"}},
     ... )
     >>> with open_ome_zarr("/path/to/plate.zarr/A/1/0", mode="r+") as position:
@@ -791,9 +789,9 @@ def _contiguous_runs(indices: Sequence[int]) -> list[slice]:
 def _output_array(output_dataset, output_label: str | None):
     """The array a write targets: the position's image, or one of its label images.
 
-    A label image is TZYX (no channel axis), so a label write spans the whole
-    second axis; `plan_write_unit` and the writes below pass ``slice(None)``
-    where the image write passes its channel indices.
+    A label image has the image's axes with one channel, so a label write spans
+    its whole channel axis; `plan_write_unit` and the writes below pass
+    ``slice(None)`` where the image write passes its channel indices.
     """
     if output_label is None:
         return output_dataset.data
@@ -831,29 +829,31 @@ def _save_transformed(
     all zeros or NaNs from the middle of that batch. They also arise from a
     caller asking for non-consecutive ``output_time_indices`` outright.
 
-    With ``output_label`` the target is the TZYX label image of that name:
-    each transformed timepoint must then have exactly one channel, which is
-    dropped on the way in.
+    With ``output_label`` the target is the one-channel label image of that
+    name: each transformed timepoint must then have exactly one channel, which
+    lands on the label's channel axis.
     """
     if output_label is not None:
         channels = {np.shape(czyx)[0] for czyx in transformed}
         if channels != {1}:
             raise ValueError(
                 f"Writing into label image {output_label!r} needs func to return one channel "
-                f"per timepoint, got {sorted(channels)} channels."
+                f"per timepoint (a label has one channel), got {sorted(channels)} channels."
             )
-        transformed = [np.asarray(czyx)[0] for czyx in transformed]
+    if output_label is not None:
+        # The label's one channel, whatever a direct caller passed: this is the
+        # selection `_plan_output_write` planned the write unit for.
+        output_channel_indices = slice(None)
     with open_ome_zarr(output_position_path, layout="fov", mode="r+") as output_dataset:
         arr = _output_array(output_dataset, output_label)
         if write_unit is not None:
             write_unit.begin()
         for run in _contiguous_runs(output_time_indices):
-            selection = (
-                (output_time_indices[run],)
-                if output_label is not None
-                else (output_time_indices[run], output_channel_indices)
+            arr._impl.write_oindex(
+                arr.native,
+                (output_time_indices[run], output_channel_indices),
+                transformed[run],
             )
-            arr._impl.write_oindex(arr.native, selection, transformed[run])
     # Recorded only after the store is closed, so the codec pipeline has
     # released the shards and anything it buffered in user space has reached
     # the kernel before `WriteUnit.complete` syncs it to disk. Marking the
@@ -1056,7 +1056,7 @@ def process_single_position(
     output_label : str, optional
         Write into the label image ``labels/<output_label>`` of the output
         position (created beforehand, e.g. by ``create_empty_plate``'s
-        ``label_names``) instead of its image. A label image is TZYX, so
+        ``label_names``) instead of its image. A label image has one channel, so
         ``func`` must return one channel per timepoint and
         ``input_channel_indices`` must hold a single channel group;
         ``output_channel_indices`` is ignored. Resume and repair work as for
@@ -1322,8 +1322,3 @@ def _default_chunks(
         return (1, 1, *chunk_zyx_shape)
     # v0.5: DCA-aligned small chunks, clamped to the array shape.
     return _clamp_chunks_to_shape(shape, (1, 1, *_V05_DEFAULT_ZYX_CHUNKS))
-
-
-def _drop_channel_axis(values: tuple[int, ...]) -> tuple[int, ...]:
-    """TZYX version of a TCZYX tuple."""
-    return (values[0], *values[2:])

@@ -42,8 +42,8 @@ the same arguments; pick a method that never invents label ids (`max`,
 
 ```python
 with open_ome_zarr(store_path, mode="r+") as position:
-    labels = np.zeros((1, 32, 256, 256), dtype=np.uint32)
-    labels[0, :, 64:128, 64:128] = 1
+    labels = np.zeros((1, 1, 32, 256, 256), dtype=np.uint32)  # the image's axes, one channel
+    labels[0, 0, :, 64:128, 64:128] = 1
     label_image = position.create_label("cells", labels)
     label_image.compute_pyramid(levels=3, method="max")
     for level in range(3):

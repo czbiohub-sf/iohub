@@ -41,9 +41,9 @@ with open_ome_zarr(
 with open_ome_zarr(dataset_path, mode="r+") as position:
     print("2. Adding cell segmentation labels...")
 
-    # Create simple segmentation mask (TZYX: 1 time, 1 z-slice, 1024x1024)
-    # Note: Labels use TZYX format (no channel dimension)
-    segmentation = np.zeros((1, 1, 1024, 1024), dtype=np.uint16)
+    # Create simple segmentation mask (T, 1, Z, Y, X): the image's axes with one
+    # channel; 1 time, 1 z-slice, 1024x1024
+    segmentation = np.zeros((1, 1, 1, 1024, 1024), dtype=np.uint16)
 
     # Add 3 simple circular cells
     y, x = np.ogrid[:1024, :1024]
@@ -55,7 +55,7 @@ with open_ome_zarr(dataset_path, mode="r+") as position:
 
     for center_y, center_x, radius, label_value in cells:
         mask = ((y - center_y) ** 2 + (x - center_x) ** 2) <= radius**2
-        segmentation[0, 0, mask] = label_value
+        segmentation[0, 0, 0, mask] = label_value
 
     # Define colors for visualization (RGBA integers 0-255)
     colors = {
@@ -86,9 +86,9 @@ with open_ome_zarr(dataset_path, layout="fov", mode="r+") as position:
     print("3. Adding annotation labels...")
 
     # Create annotation points (single level)
-    annotations = np.zeros((1, 1, 1024, 1024), dtype=np.uint8)
-    annotations[0, 0, 200, 200] = 1  # Point of interest
-    annotations[0, 0, 800, 800] = 2  # Another point
+    annotations = np.zeros((1, 1, 1, 1024, 1024), dtype=np.uint8)  # (T, 1, Z, Y, X)
+    annotations[0, 0, 0, 200, 200] = 1  # Point of interest
+    annotations[0, 0, 0, 800, 800] = 2  # Another point
 
     annotations_label = position.create_label(
         name="annotations",

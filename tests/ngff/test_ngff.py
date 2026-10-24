@@ -1479,9 +1479,10 @@ def test_ngff_zarr_read(channels_and_random_5d, arr_name, version):
 def test_create_labels(channels_and_random_5d, label_name, version):
     """Test `iohub.ngff.Position.create_label()`"""
     channel_names, random_5d = channels_and_random_5d
-    # Create TZYX label data (no channel dimension)
+    # Create (T, 1, Z, Y, X) label data: the image's axes, one channel
     label_shape = (
         random_5d.shape[0],
+        1,
         random_5d.shape[2],
         random_5d.shape[3],
         random_5d.shape[4],
@@ -1503,9 +1504,10 @@ def test_create_labels(channels_and_random_5d, label_name, version):
         assert_array_equal(label_image.data.numpy(), label_data)
         assert label_image.data.dtype == label_data.dtype
 
-        # Verify TZYX format constraint
-        assert len(label_data.shape) == 4  # TZYX
-        assert len(random_5d.shape) == 5  # TCZYX
+        # The label has the image's axes, with one channel
+        assert label_data.shape[1] == 1
+        assert len(label_data.shape) == len(random_5d.shape) == 5  # TCZYX
+        assert [ax.name for ax in label_image.metadata.multiscales[0].axes] == [ax.name for ax in dataset.axes]
 
 
 @given(
@@ -1521,9 +1523,10 @@ def test_create_labels(channels_and_random_5d, label_name, version):
 def test_labels_pyramid(channels_and_random_5d, label_name, version):
     """Test `iohub.ngff.Position.create_label()` multiscale pyramids"""
     channel_names, random_5d = channels_and_random_5d
-    # Create TZYX label data
+    # Create (T, 1, Z, Y, X) label data
     label_shape = (
         random_5d.shape[0],
+        1,
         random_5d.shape[2],
         random_5d.shape[3],
         random_5d.shape[4],
@@ -1578,9 +1581,10 @@ def test_labels_pyramid(channels_and_random_5d, label_name, version):
 def test_labels_metadata_structure(channels_and_random_5d, label_name, version):
     """Test `iohub.ngff.Position.create_label()` NGFF metadata compliance"""
     channel_names, random_5d = channels_and_random_5d
-    # Create TZYX label data with fixed pattern for testing
+    # Create (T, 1, Z, Y, X) label data with fixed pattern for testing
     label_shape = (
         random_5d.shape[0],
+        1,
         random_5d.shape[2],
         random_5d.shape[3],
         random_5d.shape[4],
@@ -1617,13 +1621,82 @@ def test_labels_metadata_structure(channels_and_random_5d, label_name, version):
 
 
 @pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_labels_have_the_image_axes_and_one_channel(tmp_path, version):
+    """A label is (T, 1, Z, Y, X): the image's axes; more than one channel is refused."""
+    store_path = tmp_path / "labels.zarr"
+    with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI", "GFP"], version=version) as pos:
+        pos.create_zeros("0", shape=(2, 2, 4, 8, 8), dtype=np.uint16)
+        assert pos.label_shape() == (2, 1, 4, 8, 8)
+
+        label = pos.create_label("cells", np.zeros((2, 1, 4, 8, 8), dtype=np.uint16))
+        assert [ax.name for ax in label.metadata.multiscales[0].axes] == ["t", "c", "z", "y", "x"]
+        assert label["0"].shape == (2, 1, 4, 8, 8)
+        assert (label["0"].frames, label["0"].channels, label["0"].slices) == (2, 1, 4)
+        assert pos.get_label("cells").axes == pos.axes
+
+        with pytest.raises(ValueError, match="A label image has one channel"):
+            pos.create_label("two", np.zeros((2, 2, 4, 8, 8), dtype=np.uint16))
+        with pytest.raises(ValueError, match="A label image has one channel"):
+            pos.create_label_zeros("two", shape=(2, 2, 4, 8, 8))
+        with pytest.raises(ValueError, match=r"Label shape must be 5D \(T, 1, Z, Y, X\)"):
+            pos.create_label("flat", np.zeros((2, 4, 8, 8), dtype=np.uint16))
+        with pytest.raises(ValueError, match="A label image has one channel"):
+            label.create_zeros("1", (2, 2, 2, 4, 4), np.uint16)
+        assert pos.label_names() == ["cells"]
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_legacy_tzyx_label_reads_with_its_own_axes(tmp_path, version):
+    """A label written as TZYX (before labels kept the channel axis) still reads correctly."""
+    from iohub.ngff.nodes import PositionLabel
+
+    store_path = tmp_path / "legacy.zarr"
+    with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI"], version=version) as pos:
+        pos.create_zeros("0", shape=(3, 1, 4, 8, 8), dtype=np.uint16)
+        # What an earlier iohub wrote: the image's axes minus the channel.
+        legacy_axes = [ax for ax in pos.axes if ax.type != "channel"]
+        legacy = PositionLabel(
+            pos.create_labels_group().create_group("old"),
+            parse_meta=False,
+            axes=legacy_axes,
+            version=version,
+            impl=pos._impl,
+        )
+        legacy.create_zeros(
+            "0", (3, 4, 8, 8), np.uint16, transform=[TransformationMeta(type="scale", scale=[1.0, 2.0, 0.5, 0.5])]
+        )
+        pos._update_labels_metadata(pos.label_names())
+
+    with open_ome_zarr(store_path, layout="fov", mode="r") as pos:
+        old = pos.get_label("old")
+        assert [ax.name for ax in old.axes] == ["t", "z", "y", "x"]
+        assert old.get_effective_scale("0") == [1.0, 2.0, 0.5, 0.5]
+        arr = old["0"]
+        assert (arr.frames, arr.channels, arr.slices, arr.height, arr.width) == (3, 1, 4, 8, 8)
+        assert not pos.label_matches_pyramid(old)  # (3, 4, 8, 8) is not the (3, 1, 4, 8, 8) a new label has
+
+
+def test_labels_array_dimension_names_are_case_insensitive(tmp_path):
+    """Axes named in upper case (as some stores do) still resolve the dimension properties."""
+    from iohub.ngff.nodes import LabelsArray
+
+    with open_ome_zarr(tmp_path / "upper.zarr", layout="fov", mode="w-", channel_names=["DAPI"]) as pos:
+        pos.create_zeros("0", shape=(3, 1, 4, 8, 16), dtype=np.uint16)
+        label = pos.create_label_zeros("cells", shape=(3, 1, 4, 8, 16))
+        arr = LabelsArray.from_handle(label["0"]._handle, pos._impl, dim_names=("T", "C", "Z", "Y", "X"))
+        assert (arr.frames, arr.channels, arr.slices, arr.height, arr.width) == (3, 1, 4, 8, 16)
+        # Without names, a 4D array is read as TZYX and a 5D one as TCZYX.
+        assert LabelsArray.from_handle(label["0"]._handle, pos._impl).slices == 4
+
+
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
 def test_labels_group_metadata_on_disk(tmp_path, version):
     """Test the labels list is written to the labels group per the NGFF spec."""
     store_path = tmp_path / "labels.zarr"
     with open_ome_zarr(store_path, layout="fov", mode="w-", channel_names=["DAPI"], version=version) as pos:
         pos.create_zeros("0", shape=(1, 1, 4, 8, 8), dtype=np.uint16)
-        pos.create_label("cells", np.zeros((1, 4, 8, 8), dtype=np.uint16))
-        pos.create_label("nuclei", np.zeros((1, 4, 8, 8), dtype=np.uint16))
+        pos.create_label("cells", np.zeros((1, 1, 4, 8, 8), dtype=np.uint16))
+        pos.create_label("nuclei", np.zeros((1, 1, 4, 8, 8), dtype=np.uint16))
 
     if version == "0.5":
         labels_attrs = json.loads((store_path / "labels" / "zarr.json").read_text())["attributes"]
@@ -1652,9 +1725,10 @@ def test_labels_group_metadata_on_disk(tmp_path, version):
 def test_labels_access_patterns(channels_and_random_5d, version):
     """Test `iohub.ngff.Position` label access methods and iterators"""
     channel_names, random_5d = channels_and_random_5d
-    # Create TZYX label data
+    # Create (T, 1, Z, Y, X) label data
     label_shape = (
         random_5d.shape[0],
+        1,
         random_5d.shape[2],
         random_5d.shape[3],
         random_5d.shape[4],
@@ -1776,7 +1850,7 @@ def test_compute_pyramid(tmp_path, implementation):
 
 
 def _label_pyramid_fixture(store_path, implementation="zarrs-python", z_size=8):
-    """A FOV with a (1, 2, Z, 64, 64) image and a (1, Z, 64, 64) label "cells".
+    """A FOV with a (1, 2, Z, 64, 64) image and a (1, 1, Z, 64, 64) label "cells".
 
     The image has an anisotropic scale and chunks/shards of its own so the
     label can be checked for inheriting its level-0 transform.
@@ -1785,11 +1859,11 @@ def _label_pyramid_fixture(store_path, implementation="zarrs-python", z_size=8):
     image = rng.integers(0, 255, size=(1, 2, z_size, 64, 64), dtype=np.uint16)
     # A few blobs with ids 1..4 on a zero background, so coarser levels have
     # both foreground and background to pool.
-    label = np.zeros((1, z_size, 64, 64), dtype=np.uint32)
-    label[0, :, 4:20, 4:20] = 1
-    label[0, :, 30:60, 10:30] = 2
-    label[0, :, 2:10, 40:62] = 3
-    label[0, :, 40:44, 40:44] = 4
+    label = np.zeros((1, 1, z_size, 64, 64), dtype=np.uint32)
+    label[0, 0, :, 4:20, 4:20] = 1
+    label[0, 0, :, 30:60, 10:30] = 2
+    label[0, 0, :, 2:10, 40:62] = 3
+    label[0, 0, :, 40:44, 40:44] = 4
     pos = open_ome_zarr(
         store_path,
         layout="fov",
@@ -1806,9 +1880,9 @@ def _label_pyramid_fixture(store_path, implementation="zarrs-python", z_size=8):
         "cells",
         shape=label.shape,
         dtype=label.dtype,
-        chunks=(1, z_size, 32, 32),
-        shards_ratio=(1, 1, 2, 2),
-        transform=[TransformationMeta(type="scale", scale=[1.0, 2.0, 0.5, 0.5])],
+        chunks=(1, 1, z_size, 32, 32),
+        shards_ratio=(1, 1, 1, 2, 2),
+        transform=[TransformationMeta(type="scale", scale=[1.0, 1.0, 2.0, 0.5, 0.5])],
     )["0"][...] = label
     return pos, image, label
 
@@ -1824,17 +1898,16 @@ def test_label_initialize_pyramid_matches_image_levels(tmp_path):
         assert label.array_keys() == ["0", "1", "2"]
         assert label.metadata.multiscales[0].get_dataset_paths() == ["0", "1", "2"]
         for level in range(3):
-            image_level = pos[str(level)]
             label_level = label[str(level)]
-            # Image TCZYX minus C == label TZYX, level by level.
-            assert label_level.shape == image_level.shape[:1] + image_level.shape[2:]
-            image_scale = pos.get_effective_scale(str(level))
-            assert label.get_effective_scale(str(level)) == image_scale[:1] + image_scale[2:]
+            # The label has the image's shape with one channel, level by level.
+            assert label_level.shape == pos.label_shape(str(level))
+            assert label_level.shape[1] == 1
+            assert label.get_effective_scale(str(level)) == pos.get_effective_scale(str(level))
         # The level-0 scale is inherited, not reset to unit scale.
-        assert label.get_effective_scale("1") == [1.0, 4.0, 1.0, 1.0]
-        assert label["1"].chunks == (1, 4, 32, 32)  # level-0 chunks (1, 8, 32, 32), Z clamped
-        assert label["1"].shards == (1, 4, 32, 32)  # the whole 16 KiB level fits the 128 KiB target
-        assert label["2"].chunks == (1, 2, 16, 16)
+        assert label.get_effective_scale("1") == [1.0, 1.0, 4.0, 1.0, 1.0]
+        assert label["1"].chunks == (1, 1, 4, 32, 32)  # level-0 chunks (1, 1, 8, 32, 32), Z clamped
+        assert label["1"].shards == (1, 1, 4, 32, 32)  # the whole 16 KiB level fits the 128 KiB target
+        assert label["2"].chunks == (1, 1, 2, 16, 16)
 
 
 @pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])
@@ -1860,7 +1933,7 @@ def test_label_compute_pyramid_keeps_label_ids(tmp_path, implementation, method)
         if method == "max":
             # A max filter never shrinks an object: its coarse footprint covers
             # the fine one.
-            coarse = np.repeat(np.repeat(np.repeat(label["1"][:], 2, 1), 2, 2), 2, 3)
+            coarse = np.repeat(np.repeat(np.repeat(label["1"][:], 2, 2), 2, 3), 2, 4)
             assert np.all(coarse[label_data > 0] > 0)
 
         # Recomputing an existing pyramid is allowed; a different level count is not.
@@ -1878,11 +1951,11 @@ def test_label_compute_pyramid_yx_only(tmp_path):
     with pos:
         label = pos.get_label("cells")
         label.compute_pyramid(levels=3, method="max", dims={"y", "x"})
-        assert label["1"].shape == (1, 1, 32, 32)
-        assert label["2"].shape == (1, 1, 16, 16)
-        assert label.get_effective_scale("2") == [1.0, 2.0, 2.0, 2.0]
+        assert label["1"].shape == (1, 1, 1, 32, 32)
+        assert label["2"].shape == (1, 1, 1, 16, 16)
+        assert label.get_effective_scale("2") == [1.0, 1.0, 2.0, 2.0, 2.0]
         with pytest.raises(ValueError, match="not in dataset axes"):
-            label.initialize_pyramid(levels=2, dims={"c"})
+            label.initialize_pyramid(levels=2, dims={"q"})
 
 
 def test_label_compute_pyramid_default_and_refused_methods(tmp_path):
@@ -1911,12 +1984,12 @@ def test_pyramid_dims_and_label_levels_follow_existing_image_pyramid(tmp_path):
         label.compute_pyramid(levels=3, dims=pos.pyramid_dims())
         assert label.pyramid_dims() == {"x", "y"}
         for level in ("1", "2"):
-            assert label[level].shape[1] == pos[level].shape[2] == 8
-            assert label.get_effective_scale(level)[1] == pos.get_effective_scale(level)[2] == 2.0
+            assert label[level].shape[2] == pos[level].shape[2] == 8
+            assert label.get_effective_scale(level)[2] == pos.get_effective_scale(level)[2] == 2.0
 
         # create_label(pyramid_levels=) follows the image too.
-        second = pos.create_label("nuclei", np.zeros((1, 8, 64, 64), dtype=np.uint32), pyramid_levels=3)
-        assert second["2"].shape == (1, 8, 16, 16)
+        second = pos.create_label("nuclei", np.zeros((1, 1, 8, 64, 64), dtype=np.uint32), pyramid_levels=3)
+        assert second["2"].shape == (1, 1, 8, 16, 16)
 
 
 def test_pyramid_dims_rejects_a_schedule_that_varies_by_level(tmp_path):
@@ -1954,7 +2027,7 @@ def test_pyramid_dims_rejects_a_schedule_that_varies_by_level(tmp_path):
 
 
 def test_label_matches_pyramid(tmp_path):
-    """Shape and scale of every level are compared, minus the channel axis."""
+    """Shape (with one channel) and scale of every level are compared."""
     pos, _, _ = _label_pyramid_fixture(tmp_path / "label_match.zarr")
     with pos:
         label = pos.get_label("cells")
@@ -1986,10 +2059,10 @@ def test_create_label_pyramid_levels(tmp_path):
     """create_label(pyramid_levels=) still scaffolds the coarser levels."""
     with open_ome_zarr(tmp_path / "label_levels.zarr", layout="fov", mode="a", channel_names=["ch1"]) as pos:
         pos.create_image("0", np.zeros((1, 1, 4, 16, 16), dtype=np.uint16))
-        label = pos.create_label("cells", np.zeros((1, 4, 16, 16), dtype=np.uint16), pyramid_levels=2)
+        label = pos.create_label("cells", np.zeros((1, 1, 4, 16, 16), dtype=np.uint16), pyramid_levels=2)
         assert label.array_keys() == ["0", "1"]
-        assert label["1"].shape == (1, 2, 8, 8)
-        assert label.get_effective_scale("1") == [1.0, 2.0, 2.0, 2.0]
+        assert label["1"].shape == (1, 1, 2, 8, 8)
+        assert label.get_effective_scale("1") == [1.0, 1.0, 2.0, 2.0, 2.0]
 
 
 def test_initialize_pyramid_keeps_level0_shard_bytes(tmp_path):
@@ -2041,12 +2114,12 @@ def test_label_pyramid_keeps_level0_shard_bytes(tmp_path):
     with open_ome_zarr(tmp_path / "pyr_label_shards.zarr", layout="fov", mode="a", channel_names=["a"]) as pos:
         pos.create_zeros("0", shape=(32, 1, 1, 64, 64), dtype=np.uint16)
         label = pos.create_label_zeros(
-            "cells", shape=(32, 1, 64, 64), dtype=np.uint32, chunks=(8, 1, 32, 32), shards=(8, 1, 64, 64)
+            "cells", shape=(32, 1, 1, 64, 64), dtype=np.uint32, chunks=(8, 1, 1, 32, 32), shards=(8, 1, 1, 64, 64)
         )
         label.compute_pyramid(levels=2, dims={"y", "x"})
-        assert label["1"].chunks == (8, 1, 32, 32)  # level-0 chunks, clamped to the level
+        assert label["1"].chunks == (8, 1, 1, 32, 32)  # level-0 chunks, clamped to the level
         # 128 KiB budget over a 4 KiB-per-timepoint level: all 32 timepoints fit.
-        assert label["1"].shards == (32, 1, 32, 32)
+        assert label["1"].shards == (32, 1, 1, 32, 32)
 
 
 def _count_downsample_calls(monkeypatch, pos):
@@ -2110,8 +2183,8 @@ def test_compute_pyramid_resume_covers_labels_and_untracked_backends(tmp_path, m
     store = tmp_path / "resume_labels.zarr"
     with open_ome_zarr(store, layout="fov", mode="a", channel_names=["a"]) as pos:
         pos.create_zeros("0", shape=(4, 1, 1, 32, 32), dtype=np.uint16, chunks=(1, 1, 1, 16, 16))
-        label = pos.create_label_zeros("cells", shape=(4, 1, 32, 32), dtype=np.uint32, chunks=(2, 1, 16, 16))
-        label["0"][:, :, :16, :16] = 3
+        label = pos.create_label_zeros("cells", shape=(4, 1, 1, 32, 32), dtype=np.uint32, chunks=(2, 1, 1, 16, 16))
+        label["0"][:, :, :, :16, :16] = 3
         label.compute_pyramid(levels=2, resume=True, resume_token="t")
         assert set(np.unique(label["1"][:])) == {0, 3}
         calls = _count_downsample_calls(monkeypatch, label)

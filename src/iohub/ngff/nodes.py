@@ -642,37 +642,65 @@ class TiledImageArray(ImageArray):
 
 
 class LabelsArray(NGFFArray):
-    """Container for labels stored as zarr array (4D: TZYX)"""
+    """Container for labels stored as zarr array (5D: TCZYX, with one channel).
 
-    _SUPPORTED_DIMS = "TZYX"
-    _N_DIMS = 4
+    A label image has the axes of the image it annotates, so a 5D image's label is
+    ``(T, 1, Z, Y, X)``: the channel axis is kept, with length 1, because a label
+    is one segmentation rather than a stack of per-channel ones (and the DCA
+    array standard wants every array 5D).
+    """
+
+    _SUPPORTED_DIMS = "TCZYX"
+    _N_DIMS = 5
+
+    def _label_dim(self, name: str) -> int:
+        """Size of axis ``name``, by the array's own axes when known.
+
+        Labels written before they kept the channel axis are TZYX, and a label of
+        an image without a channel axis has none either; padding such a 4D array
+        to TCZYX would read T as C. The stored dimension names decide when they
+        are present; otherwise a 4D label is read as TZYX, a 5D one as TCZYX.
+        """
+        names = tuple(n.lower() for n in self._dim_names) if self._dim_names else ()
+        if not names:
+            names = tuple(self._SUPPORTED_DIMS.lower()) if self.ndim == 5 else ("t", "z", "y", "x")
+            names = names[-self.ndim :] if self.ndim < len(names) else names
+        if name in names:
+            return self.shape[names.index(name)]
+        return 1
 
     @property
     def frames(self):
         """Number of time frames in the labels array."""
-        return self._get_dim(0)
+        return self._label_dim("t")
+
+    @property
+    def channels(self):
+        """Number of channels in the labels array (1)."""
+        return self._label_dim("c")
 
     @property
     def slices(self):
         """Number of Z slices in the labels array."""
-        return self._get_dim(1)
+        return self._label_dim("z")
 
     @property
     def height(self):
         """Height (Y dimension) of the labels array."""
-        return self._get_dim(2)
+        return self._label_dim("y")
 
     @property
     def width(self):
         """Width (X dimension) of the labels array."""
-        return self._get_dim(3)
+        return self._label_dim("x")
 
 
 class MultiscaleNode(NGFFNode):
     """A group holding one multiscale image: the pyramid levels and their transforms.
 
     Shared by [`Position`][iohub.ngff.Position] (TCZYX images) and
-    [`PositionLabel`][iohub.ngff.nodes.PositionLabel] (TZYX label images): both are
+    [`PositionLabel`][iohub.ngff.nodes.PositionLabel] (TCZYX label images with one
+    channel): both are
     `ome.multiscales` groups whose level "0" is the full-resolution array and
     whose further levels are 2x downsampled per level. The pyramid methods here
     only need ``metadata.multiscales[0]``, ``data``, ``create_zeros`` and
@@ -1019,12 +1047,43 @@ class MultiscaleNode(NGFFNode):
         return [float(x) for x in full_scale]
 
 
+def check_label_shape(shape: tuple[int, ...], axes: list[AxisMeta]) -> None:
+    """Refuse a label array shape that does not fit ``axes`` with one channel.
+
+    A label image has the axes of the image it annotates, and its channel axis has
+    length 1: a label is one segmentation, not a stack of per-channel ones (what a
+    longer channel axis would mean is undefined), and the DCA array standard wants
+    every array 5D, so a 5D image's label is ``(T, 1, Z, Y, X)``.
+
+    Raises
+    ------
+    ValueError
+        If ``shape`` does not have one entry per axis, or the channel axis is
+        longer than 1.
+    """
+    names = [ax.name for ax in axes]
+    expected = ", ".join("1" if ax.type == "channel" else ax.name.upper() for ax in axes)
+    if len(shape) != len(axes):
+        raise ValueError(
+            f"Label shape must be {len(axes)}D ({expected}), the image's axes {names} with one "
+            f"channel, got {len(shape)}D shape: {tuple(shape)}."
+        )
+    for index, ax in enumerate(axes):
+        if ax.type == "channel" and shape[index] != 1:
+            raise ValueError(
+                f"A label image has one channel, got {shape[index]} on axis {ax.name!r} of shape "
+                f"{tuple(shape)}: a label is one segmentation ({expected}); write several "
+                "segmentations as several label images."
+            )
+
+
 class PositionLabel(MultiscaleNode):
     """Multiscale label image group containing LabelsArray pyramid levels.
 
     This class manages label images according to NGFF specification where
     each label image MUST implement the multiscales specification with the
-    same number of scale levels as the original image.
+    same number of scale levels as the original image. A label has the axes of
+    the image it annotates; its channel axis has length 1.
 
     Parameters
     ----------
@@ -1033,7 +1092,7 @@ class PositionLabel(MultiscaleNode):
     parse_meta : bool, optional
         Whether to parse NGFF metadata in `.zattrs`, by default True
     axes : list[AxisMeta], optional
-        List of axes for TZYX dimensions (no channel), by default None
+        List of axes (TCZYX, the image's), by default None
     version : Literal["0.4", "0.5"]
         OME-NGFF specification version
     colors : dict[int, list[int]], optional
@@ -1052,7 +1111,7 @@ class PositionLabel(MultiscaleNode):
     zattr : Attributes
         Zarr attributes of the group
     axes : list[AxisMeta]
-        Axes metadata (TZYX, no channel)
+        Axes metadata (TCZYX, the image's)
     """
 
     _MEMBER_TYPE = LabelsArray
@@ -1068,7 +1127,7 @@ class PositionLabel(MultiscaleNode):
         overwriting_creation: bool = False,
         impl: ZarrImplementation | None = None,
     ):
-        self.axes = [ax for ax in (axes or self._DEFAULT_AXES) if ax.type != "channel"]
+        self.axes = list(axes or self._DEFAULT_AXES)
 
         super().__init__(
             group=group,
@@ -1084,12 +1143,19 @@ class PositionLabel(MultiscaleNode):
         self._properties = properties
 
     def _parse_meta(self):
-        """Parse multiscales and image-label metadata."""
+        """Parse multiscales and image-label metadata.
+
+        The label's own stored axes replace the ones the caller passed (the
+        image's, for a new label): a label written before labels kept the
+        channel axis is TZYX, and its scales and dimension lookups must follow
+        its four axes rather than the image's five.
+        """
         try:
             attrs = dict(self.maybe_wrapped_ome_attrs)
             if "version" not in attrs:
                 attrs["version"] = self.version
             self.metadata = LabelImageMeta.model_validate(attrs)
+            self.axes = list(self.metadata.multiscales[0].axes)
         except ValidationError as e:
             _logger.warning(str(e))
             self._warn_invalid_meta()
@@ -1113,7 +1179,7 @@ class PositionLabel(MultiscaleNode):
             handle = self._impl.open_array(self._group, key)
         except (FileNotFoundError, KeyError) as err:
             raise KeyError(key) from err
-        return LabelsArray.from_handle(handle, self._impl)
+        return LabelsArray.from_handle(handle, self._impl, dim_names=tuple(ax.name for ax in self.axes))
 
     def compute_pyramid(
         self,
@@ -1164,7 +1230,7 @@ class PositionLabel(MultiscaleNode):
         level : str
             Resolution level name (e.g., "0", "1", "2")
         data : NDArray
-            Label data (integer array, TZYX format)
+            Label data (integer array, TCZYX with one channel)
         chunks : tuple[int, ...], optional
             Chunk size, by default None
         shards : tuple[int, ...] or str, optional
@@ -1214,7 +1280,7 @@ class PositionLabel(MultiscaleNode):
         level : str
             Resolution level name
         shape : tuple[int, ...]
-            Array shape (TZYX)
+            Array shape (TCZYX with one channel, e.g. ``(T, 1, Z, Y, X)``)
         dtype : DTypeLike
             Integer data type for labels
         chunks : tuple[int, ...], optional
@@ -1231,13 +1297,20 @@ class PositionLabel(MultiscaleNode):
         -------
         LabelsArray
             Zero-filled label array
+
+        Raises
+        ------
+        ValueError
+            If the dtype is not an integer type, the shape does not have one
+            entry per axis, or the channel axis is longer than 1.
         """
         if not np.issubdtype(dtype, np.integer):
             raise ValueError(f"Labels must use integer dtype, got {dtype}")
+        check_label_shape(shape, self.axes)
         if not chunks:
             chunks = pad_shape(shape[-3:], target=len(shape))
         arr_handle = self._create_zarr_array(level, shape, dtype, chunks, shards, shards_ratio)
-        lbl_arr = LabelsArray.from_handle(arr_handle, self._impl)
+        lbl_arr = LabelsArray.from_handle(arr_handle, self._impl, dim_names=tuple(ax.name for ax in self.axes))
         self._create_label_meta(level, transform=transform)
         return lbl_arr
 
@@ -1863,9 +1936,7 @@ class Position(MultiscaleNode):
         self.set_transform(image, new_transforms)
 
     def _get_label_dimension_names(self, ndims: int) -> list[str]:
-        """Get dimension names for label arrays.
-
-        Labels use TZYX format (excluding channel dimension).
+        """Get dimension names for label arrays (the image's axes).
 
         Parameters
         ----------
@@ -1877,8 +1948,6 @@ class Position(MultiscaleNode):
         list[str]
             List of dimension names for the label array
         """
-        # Labels use TZYX dimensions (no channel dimension)
-
         return [ax.name for ax in self.label_axes[:ndims]]
 
     @property
@@ -1890,16 +1959,21 @@ class Position(MultiscaleNode):
 
     @property
     def label_axes(self) -> list[AxisMeta]:
-        """Axes for labels (TZYX, excluding channel dimension)."""
-        return [ax for ax in self.axes if ax.type != "channel"]
+        """Axes for labels: the image's axes (TCZYX); a label's channel axis has length 1."""
+        return list(self.axes)
 
     @property
     def has_labels(self) -> bool:
         """Check if this position has any labels."""
         return "labels" in self._group and len(self._impl.group_keys(self.labels_group)) > 0
 
+    def label_shape(self, path: str = "0") -> tuple[int, ...]:
+        """The shape of a label of this image's level ``path``: the image's, with one channel."""
+        channel_index = self._find_axis("channel")
+        return tuple(1 if i == channel_index else s for i, s in enumerate(self[path].shape))
+
     def label_matches_pyramid(self, label: PositionLabel) -> bool:
-        """Whether ``label`` has the image's levels: same paths, shapes and scales minus the channel axis.
+        """Whether ``label`` has the image's levels: same paths, shapes (with one channel) and scales.
 
         A label scaffolded before the image's pyramid existed, or with other
         ``dims``, may carry the right number of levels with the wrong geometry;
@@ -1908,15 +1982,10 @@ class Position(MultiscaleNode):
         image_paths = self.metadata.multiscales[0].get_dataset_paths()
         if label.metadata.multiscales[0].get_dataset_paths() != image_paths:
             return False
-        # None for an image without a channel axis: the label then has every axis.
-        channel_index = self._find_axis("channel")
         for path in image_paths:
-            image_shape = self[path].shape
-            expected_shape = tuple(s for i, s in enumerate(image_shape) if i != channel_index)
-            if label[path].shape != expected_shape:
+            if label[path].shape != self.label_shape(path):
                 return False
-            image_scale = [s for i, s in enumerate(self.get_effective_scale(path)) if i != channel_index]
-            if not np.allclose(label.get_effective_scale(path), image_scale):
+            if not np.allclose(label.get_effective_scale(path), self.get_effective_scale(path)):
                 return False
         return True
 
@@ -2010,7 +2079,8 @@ class Position(MultiscaleNode):
         name : str
             Name for the new label image
         data : NDArray
-            Label data as integer array (TZYX format, no channel dimension)
+            Label data as integer array with the image's axes and one channel,
+            e.g. ``(T, 1, Z, Y, X)`` for a TCZYX image
         colors : dict[int, list[int]], optional
             Color mapping for label values {label_value: [r, g, b, a]}
             Values should be integers 0-255
@@ -2046,10 +2116,10 @@ class Position(MultiscaleNode):
         >>> import numpy as np
         >>> from iohub.ngff.nodes import open_ome_zarr
         >>>
-        >>> # Create segmentation mask (TZYX format, no channel dimension)
-        >>> segmentation = np.zeros((1, 3, 256, 256), dtype=np.uint16)
-        >>> segmentation[0, :, 50:100, 50:100] = 1  # Cell 1
-        >>> segmentation[0, :, 150:200, 150:200] = 2  # Cell 2
+        >>> # Create segmentation mask (T, 1, Z, Y, X): the image's axes, one channel
+        >>> segmentation = np.zeros((1, 1, 3, 256, 256), dtype=np.uint16)
+        >>> segmentation[0, 0, :, 50:100, 50:100] = 1  # Cell 1
+        >>> segmentation[0, 0, :, 150:200, 150:200] = 2  # Cell 2
         >>>
         >>> # Define colors for visualization (RGBA integers 0-255)
         >>> colors = {
@@ -2099,10 +2169,8 @@ class Position(MultiscaleNode):
         if not np.issubdtype(data.dtype, np.integer):
             raise ValueError(f"Label data must be an integer dtype, got {data.dtype}.")
 
-        # Validate dimensionality (TZYX, no channel)
-        expected_dims = len(self.label_axes)
-        if len(data.shape) != expected_dims:
-            raise ValueError(f"Label data must be {expected_dims}D (TZYX), got {len(data.shape)}D shape: {data.shape}")
+        # The image's axes, with one channel
+        check_label_shape(data.shape, self.label_axes)
 
         # Create labels group if it doesn't exist
         labels_group = self.create_labels_group()
@@ -2110,7 +2178,7 @@ class Position(MultiscaleNode):
         # Create label image group
         label_group = labels_group.create_group(name, overwrite=self._overwrite)
 
-        # Create PositionLabel with proper axes (TZYX, no channel)
+        # Create PositionLabel with the image's axes
         label_image = PositionLabel(
             group=label_group,
             parse_meta=False,
@@ -2158,20 +2226,21 @@ class Position(MultiscaleNode):
         name : str
             Name for the new label image
         shape : tuple[int, ...]
-            Shape of the first level (TZYX, no channel dimension)
+            Shape of the first level: the image's axes with one channel, e.g.
+            ``(T, 1, Z, Y, X)`` (see :meth:`label_shape`)
         dtype : DTypeLike, optional
             Integer data type of the label, by default ``np.uint32``
         chunks : tuple[int, ...], optional
             Chunk size, by default None (one ZYX volume per chunk)
         shards : tuple[int, ...] or str, optional
-            Shard geometry: an explicit TZYX shape, an extent keyword such as
+            Shard geometry: an explicit TCZYX shape, an extent keyword such as
             ``"XYZ"``, or a size target such as ``"1GB"``; see
             :func:`iohub.core.sharding.resolve_shards`. By default None (no sharding)
         shards_ratio : tuple[int, ...], optional
             Deprecated multiplier over ``chunks``; use ``shards``
         transform : list[TransformationMeta], optional
             Coordinate transformations of level "0", by default None
-            (unit scale). Should match the image's TZYX transforms.
+            (unit scale). Should match the image's transforms.
         colors : dict[int, list[int]], optional
             Color mapping for label values {label_value: [r, g, b, a]}
         properties : list[dict[str, Any]], optional
@@ -2189,13 +2258,12 @@ class Position(MultiscaleNode):
         Raises
         ------
         ValueError
-            If the dtype is not an integer type or the shape is not TZYX
+            If the dtype is not an integer type, or the shape is not the image's
+            axes with one channel
         """
         if not np.issubdtype(dtype, np.integer):
             raise ValueError(f"Labels must use integer dtype, got {dtype}.")
-        expected_dims = len(self.label_axes)
-        if len(shape) != expected_dims:
-            raise ValueError(f"Label shape must be {expected_dims}D (TZYX), got {len(shape)}D shape: {shape}")
+        check_label_shape(shape, self.label_axes)
 
         labels_group = self.create_labels_group()
         label_group = labels_group.create_group(name, overwrite=self._overwrite)
