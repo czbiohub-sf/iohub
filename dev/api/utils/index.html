@@ -1435,14 +1435,15 @@ Defaults to None.</p>
           <div class="doc-md-description">
             <p>Names of empty label images to create in every position in
 <code>position_keys</code>, at <code>&lt;fov&gt;/labels/&lt;name&gt;/</code>. Each label mirrors
-the position's image pyramid: one TZYX level per image level, with
-the same path, the image's shape and scale (and translation, if any)
-without the channel axis. For a newly created position that is
-<code>shape</code>/<code>scale</code> minus the channel axis; for an existing position
-it is read from the image, so the label always matches the image it
-annotates. Labels that already exist are left untouched, so calling
-this again is a no-op. No data is written (fill value 0); fill a
-label later with <code>position.get_label(name)["0"][...] = data</code>.
+the position's image pyramid: one level per image level, with the
+same path, axes, scale (and translation, if any), and the image's
+shape with one channel, <code>(T, 1, Z, Y, X)</code>: a label is one
+segmentation, and the DCA array standard wants every array 5D. For a
+newly created position that is <code>shape</code> with C=1; for an existing
+position it is read from the image, so the label always matches the
+image it annotates. Labels that already exist are left untouched, so
+calling this again is a no-op. No data is written (fill value 0); fill
+a label later with <code>position.get_label(name)["0"][...] = data</code>.
 Defaults to None (no labels).</p>
           </div>
         </li>
@@ -1463,12 +1464,12 @@ Defaults to None (no labels).</p>
 )
           –
           <div class="doc-md-description">
-            <p>TZYX chunk size of the label images, clamped to the shape of each
-level. If None, the version-specific default the image uses when
-<code>chunks</code> is None, computed for each position and level from the
-image shape, at <code>label_dtype</code> and without the channel axis (for
-"0.4" the Z chunk is capped to 500 MB at <code>label_dtype</code>). Explicit
-image <code>chunks</code> are not inherited. Defaults to None.</p>
+            <p>TCZYX chunk size of the label images (C must be 1), clamped to the
+shape of each level. If None, the version-specific default the image
+uses when <code>chunks</code> is None, computed for each position and level
+from the image shape at <code>label_dtype</code> (for "0.4" the Z chunk is
+capped to 500 MB at <code>label_dtype</code>). Explicit image <code>chunks</code> are
+not inherited. Defaults to None.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -1479,7 +1480,7 @@ image <code>chunks</code> are not inherited. Defaults to None.</p>
           –
           <div class="doc-md-description">
             <p>Shard geometry of the label images, in the forms <code>shards</code> takes
-(an explicit TZYX shape in elements, <code>"XY"</code>/<code>"XYZ"</code>, or a size
+(an explicit TCZYX shape in elements, <code>"XY"</code>/<code>"XYZ"</code>, or a size
 target), resolved per level of each position's label. If None, for
 "0.5" one shard per ZYX volume (<code>"XYZ"</code>); no sharding for "0.4".
 The image's <code>shards</code> are not inherited. Defaults to None.</p>
@@ -1492,7 +1493,7 @@ The image's <code>shards</code> are not inherited. Defaults to None.</p>
 )
           –
           <div class="doc-md-description">
-            <p>Deprecated TZYX multiplier over <code>label_chunks</code>; use
+            <p>Deprecated TCZYX multiplier over <code>label_chunks</code>; use
 <code>label_shards</code>. Passing both raises <code>ValueError</code>. Defaults to None.</p>
           </div>
         </li>
@@ -1513,8 +1514,9 @@ The image's <code>shards</code> are not inherited. Defaults to None.</p>
             –
           <div class="doc-md-description">
             <p>If <code>label_dtype</code> is not an integer type, or <code>label_chunks</code> or
-<code>label_shards_ratio</code> is not TZYX (4 values), or <code>label_shards</code>
-/ <code>label_shards_ratio</code> is given for version "0.4", or both are given.</p>
+<code>label_shards_ratio</code> is not TCZYX (5 values) with C 1, or
+<code>label_shards</code> / <code>label_shards_ratio</code> is given for version "0.4",
+or both are given.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -1690,9 +1692,9 @@ exist; use <code>create_empty_plate</code> to create positions.</p>
           –
           <div class="doc-md-description">
             <p>Names of the label images, at <code>&lt;fov&gt;/labels/&lt;name&gt;/</code>. Each mirrors the
-position's image pyramid: one TZYX level per image level, with the
-image's shape and scale (and translation, if any) without the channel
-axis. No data is written (fill value 0).</p>
+position's image pyramid: one level per image level, with the image's
+axes, scale (and translation, if any) and shape with one channel,
+<code>(T, 1, Z, Y, X)</code>. No data is written (fill value 0).</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -1712,9 +1714,9 @@ axis. No data is written (fill value 0).</p>
 )
           –
           <div class="doc-md-description">
-            <p>TZYX chunk size, clamped to the shape of each level. If None, the
-version-specific image default at <code>label_dtype</code> without the channel
-axis. Defaults to None.</p>
+            <p>TCZYX chunk size (C must be 1), clamped to the shape of each level. If
+None, the version-specific image default at <code>label_dtype</code>. Defaults
+to None.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -1725,7 +1727,7 @@ axis. Defaults to None.</p>
           –
           <div class="doc-md-description">
             <p>Shard geometry of the label images, in the forms <code>create_empty_plate</code>'s
-<code>shards</code> takes (an explicit TZYX shape in elements, <code>"XY"</code>/<code>"XYZ"</code>,
+<code>shards</code> takes (an explicit TCZYX shape in elements, <code>"XY"</code>/<code>"XYZ"</code>,
 or a size target), resolved per level. If None, one shard per ZYX
 volume on "0.5"; no sharding on "0.4". Defaults to None.</p>
           </div>
@@ -1737,9 +1739,8 @@ volume on "0.5"; no sharding on "0.4". Defaults to None.</p>
 )
           –
           <div class="doc-md-description">
-            <p>TZYX shards ratio. If None, for "0.5" the ratio that makes one shard
-span a time chunk's whole ZYX volume; no sharding for "0.4", which
-refuses an explicit ratio. Defaults to None.</p>
+            <p>Deprecated TCZYX multiplier over <code>label_chunks</code>; use <code>label_shards</code>.
+Not supported for "0.4". Defaults to None.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -1775,8 +1776,8 @@ label are refused. Defaults to None.</p>
             –
           <div class="doc-md-description">
             <p>If <code>label_dtype</code> is not an integer type, <code>label_chunks</code> or
-<code>label_shards_ratio</code> is not TZYX, <code>label_shards_ratio</code> is given for
-a "0.4" plate, or <code>label_metadata</code> uses a reserved key.</p>
+<code>label_shards_ratio</code> is not TCZYX with C 1, <code>label_shards_ratio</code> is
+given for a "0.4" plate, or <code>label_metadata</code> uses a reserved key.</p>
           </div>
         </li>
     </ul>
@@ -1787,7 +1788,7 @@ a "0.4" plate, or <code>label_metadata</code> uses a reserved key.</p>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">... </span>    <span class="n">store_path</span><span class="o">=</span><span class="n">Path</span><span class="p">(</span><span class="s2">&quot;/path/to/plate.zarr&quot;</span><span class="p">),</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">... </span>    <span class="n">position_keys</span><span class="o">=</span><span class="p">[(</span><span class="s2">&quot;A&quot;</span><span class="p">,</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span> <span class="s2">&quot;0&quot;</span><span class="p">)],</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">... </span>    <span class="n">label_names</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;nuclei&quot;</span><span class="p">],</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">... </span>    <span class="n">label_chunks</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">),</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">... </span>    <span class="n">label_chunks</span><span class="o">=</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">),</span>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">... </span>    <span class="n">label_metadata</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;provenance-segment&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;model&quot;</span><span class="p">:</span> <span class="s2">&quot;cpsam_v2&quot;</span><span class="p">}},</span>
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">... </span><span class="p">)</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">open_ome_zarr</span><span class="p">(</span><span class="s2">&quot;/path/to/plate.zarr/A/1/0&quot;</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s2">&quot;r+&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">position</span><span class="p">:</span>
@@ -1910,7 +1911,7 @@ when writing into one of its label images (<code>output_label</code>).</p>
           <div class="doc-md-description">
             <p>Write into the label image <code>labels/&lt;output_label&gt;</code> of the output
 position (created beforehand, e.g. by <code>create_empty_plate</code>'s
-<code>label_names</code>) instead of its image. A label image is TZYX, so
+<code>label_names</code>) instead of its image. A label image has one channel, so
 <code>func</code> must return one channel per timepoint and
 <code>input_channel_indices</code> must hold a single channel group;
 <code>output_channel_indices</code> is ignored. Resume and repair work as for

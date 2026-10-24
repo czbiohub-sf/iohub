@@ -1462,6 +1462,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#iohub.ngff.Position.label_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;label_shape
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#iohub.ngff.Position.label_matches_pyramid" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -2562,6 +2573,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_scale
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.ngff.TiledPosition.label_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;label_shape
       </span>
     </span>
   </a>
@@ -3889,6 +3911,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#iohub.ngff.Position.label_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;label_shape
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#iohub.ngff.Position.label_matches_pyramid" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -4989,6 +5022,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;set_scale
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#iohub.ngff.TiledPosition.label_shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code class="doc-symbol doc-symbol-toc doc-symbol-method"></code>&nbsp;label_shape
       </span>
     </span>
   </a>
@@ -6733,7 +6777,7 @@ by the OME-NGFF specification.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Axes for labels (TZYX, excluding channel dimension).</p>
+        <p>Axes for labels: the image's axes (TCZYX); a label's channel axis has length 1.</p>
 
     </div>
 
@@ -8049,6 +8093,26 @@ or "*" for the whole FOV</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="iohub.ngff.Position.label_shape" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">label_shape</span>
+
+
+<a href="#iohub.ngff.Position.label_shape" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">label_shape</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;0&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The shape of a label of this image's level <code>path</code>: the image's, with one channel.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="iohub.ngff.Position.label_matches_pyramid" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">label_matches_pyramid</span>
 
@@ -8059,7 +8123,7 @@ or "*" for the whole FOV</p>
 
     <div class="doc doc-contents ">
 
-        <p>Whether <code>label</code> has the image's levels: same paths, shapes and scales minus the channel axis.</p>
+        <p>Whether <code>label</code> has the image's levels: same paths, shapes (with one channel) and scales.</p>
 <p>A label scaffolded before the image's pyramid existed, or with other
 <code>dims</code>, may carry the right number of levels with the wrong geometry;
 <code>iohub compute-pyramid</code> uses this to rebuild such levels.</p>
@@ -8252,7 +8316,8 @@ or "*" for the whole FOV</p>
               (<code><span title="numpy.typing.NDArray">NDArray</span></code>)
           –
           <div class="doc-md-description">
-            <p>Label data as integer array (TZYX format, no channel dimension)</p>
+            <p>Label data as integer array with the image's axes and one channel,
+e.g. <code>(T, 1, Z, Y, X)</code> for a TCZYX image</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8356,10 +8421,10 @@ Values should be integers 0-255</p>
     <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">iohub.ngff.nodes</span><span class="w"> </span><span class="kn">import</span> <span class="n">open_ome_zarr</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt;</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Create segmentation mask (TZYX format, no channel dimension)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Cell 1</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>  <span class="c1"># Cell 2</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Create segmentation mask (T, 1, Z, Y, X): the image&#39;s axes, one channel</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Cell 1</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>  <span class="c1"># Cell 2</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">&gt;&gt;&gt;</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Define colors for visualization (RGBA integers 0-255)</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">colors</span> <span class="o">=</span> <span class="p">{</span>
@@ -8453,7 +8518,8 @@ filled later (e.g. chunk by chunk from several processes) with
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>)
           –
           <div class="doc-md-description">
-            <p>Shape of the first level (TZYX, no channel dimension)</p>
+            <p>Shape of the first level: the image's axes with one channel, e.g.
+<code>(T, 1, Z, Y, X)</code> (see :meth:<code>label_shape</code>)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8483,7 +8549,7 @@ filled later (e.g. chunk by chunk from several processes) with
 )
           –
           <div class="doc-md-description">
-            <p>Shard geometry: an explicit TZYX shape, an extent keyword such as
+            <p>Shard geometry: an explicit TCZYX shape, an extent keyword such as
 <code>"XYZ"</code>, or a size target such as <code>"1GB"</code>; see
 :func:<code>iohub.core.sharding.resolve_shards</code>. By default None (no sharding)</p>
           </div>
@@ -8506,7 +8572,7 @@ filled later (e.g. chunk by chunk from several processes) with
           –
           <div class="doc-md-description">
             <p>Coordinate transformations of level "0", by default None
-(unit scale). Should match the image's TZYX transforms.</p>
+(unit scale). Should match the image's transforms.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8562,7 +8628,8 @@ added on the returned label with
               <code><span title="ValueError">ValueError</span></code>
             –
           <div class="doc-md-description">
-            <p>If the dtype is not an integer type or the shape is not TZYX</p>
+            <p>If the dtype is not an integer type, or the shape is not the image's
+axes with one channel</p>
           </div>
         </li>
     </ul>
@@ -8741,7 +8808,8 @@ via the scale and translation.</p>
         <p>Multiscale label image group containing LabelsArray pyramid levels.</p>
 <p>This class manages label images according to NGFF specification where
 each label image MUST implement the multiscales specification with the
-same number of scale levels as the original image.</p>
+same number of scale levels as the original image. A label has the axes of
+the image it annotates; its channel axis has length 1.</p>
 
 
 <p><span class="doc-section-title">Parameters:</span></p>
@@ -8771,7 +8839,7 @@ same number of scale levels as the original image.</p>
 )
           –
           <div class="doc-md-description">
-            <p>List of axes for TZYX dimensions (no channel), by default None</p>
+            <p>List of axes (TCZYX, the image's), by default None</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -8858,7 +8926,7 @@ same number of scale levels as the original image.</p>
               (<code><span title="list">list</span>[<span title="iohub.ngff.models.AxisMeta">AxisMeta</span>]</code>)
           –
           <div class="doc-md-description">
-            <p>Axes metadata (TZYX, no channel)</p>
+            <p>Axes metadata (TCZYX, the image's)</p>
           </div>
         </li>
     </ul>
@@ -9175,7 +9243,7 @@ arrays at specific multiscale resolution levels.</p>
               (<code><span title="numpy.typing.NDArray">NDArray</span></code>)
           –
           <div class="doc-md-description">
-            <p>Label data (integer array, TZYX format)</p>
+            <p>Label data (integer array, TCZYX with one channel)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -9277,7 +9345,7 @@ arrays at specific multiscale resolution levels.</p>
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>)
           –
           <div class="doc-md-description">
-            <p>Array shape (TZYX)</p>
+            <p>Array shape (TCZYX with one channel, e.g. <code>(T, 1, Z, Y, X)</code>)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -9339,6 +9407,19 @@ arrays at specific multiscale resolution levels.</p>
           –
           <div class="doc-md-description">
             <p>Zero-filled label array</p>
+          </div>
+        </li>
+    </ul>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <ul>
+        <li class="doc-section-item field-body">
+              <code><span title="ValueError">ValueError</span></code>
+            –
+          <div class="doc-md-description">
+            <p>If the dtype is not an integer type, the shape does not have one
+entry per axis, or the channel axis is longer than 1.</p>
           </div>
         </li>
     </ul>
@@ -9860,7 +9941,8 @@ for the image or FOV for each axis.</p>
 
         <p>A group holding one multiscale image: the pyramid levels and their transforms.</p>
 <p>Shared by <a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;Position&lt;/span&gt;" href="./#iohub.ngff.Position"><code>Position</code></a> (TCZYX images) and
-<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;PositionLabel&lt;/span&gt;" href="./#iohub.ngff.nodes.PositionLabel"><code>PositionLabel</code></a> (TZYX label images): both are
+<a class="autorefs autorefs-internal" title="&lt;code class=&quot;doc-symbol doc-symbol-heading doc-symbol-class&quot;&gt;&lt;/code&gt;            &lt;span class=&quot;doc doc-object-name doc-class-name&quot;&gt;PositionLabel&lt;/span&gt;" href="./#iohub.ngff.nodes.PositionLabel"><code>PositionLabel</code></a> (TCZYX label images with one
+channel): both are
 <code>ome.multiscales</code> groups whose level "0" is the full-resolution array and
 whose further levels are 2x downsampled per level. The pyramid methods here
 only need <code>metadata.multiscales[0]</code>, <code>data</code>, <code>create_zeros</code> and
@@ -11076,7 +11158,7 @@ by the OME-NGFF specification.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Axes for labels (TZYX, excluding channel dimension).</p>
+        <p>Axes for labels: the image's axes (TCZYX); a label's channel axis has length 1.</p>
 
     </div>
 
@@ -12392,6 +12474,26 @@ or "*" for the whole FOV</p>
 <div class="doc doc-object doc-function">
 
 
+<h3 id="iohub.ngff.TiledPosition.label_shape" class="doc doc-heading">
+<code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">label_shape</span>
+
+
+<a href="#iohub.ngff.TiledPosition.label_shape" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">label_shape</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;0&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The shape of a label of this image's level <code>path</code>: the image's, with one channel.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
 <h3 id="iohub.ngff.TiledPosition.label_matches_pyramid" class="doc doc-heading">
 <code class="doc-symbol doc-symbol-heading doc-symbol-method"></code>            <span class="doc doc-object-name doc-function-name">label_matches_pyramid</span>
 
@@ -12402,7 +12504,7 @@ or "*" for the whole FOV</p>
 
     <div class="doc doc-contents ">
 
-        <p>Whether <code>label</code> has the image's levels: same paths, shapes and scales minus the channel axis.</p>
+        <p>Whether <code>label</code> has the image's levels: same paths, shapes (with one channel) and scales.</p>
 <p>A label scaffolded before the image's pyramid existed, or with other
 <code>dims</code>, may carry the right number of levels with the wrong geometry;
 <code>iohub compute-pyramid</code> uses this to rebuild such levels.</p>
@@ -12595,7 +12697,8 @@ or "*" for the whole FOV</p>
               (<code><span title="numpy.typing.NDArray">NDArray</span></code>)
           –
           <div class="doc-md-description">
-            <p>Label data as integer array (TZYX format, no channel dimension)</p>
+            <p>Label data as integer array with the image's axes and one channel,
+e.g. <code>(T, 1, Z, Y, X)</code> for a TCZYX image</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12699,10 +12802,10 @@ Values should be integers 0-255</p>
     <div class="language-pycon highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span><span class="w"> </span><span class="nn">iohub.ngff.nodes</span><span class="w"> </span><span class="kn">import</span> <span class="n">open_ome_zarr</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="gp">&gt;&gt;&gt;</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Create segmentation mask (TZYX format, no channel dimension)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">)</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Cell 1</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>  <span class="c1"># Cell 2</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Create segmentation mask (T, 1, Z, Y, X): the image&#39;s axes, one channel</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">)</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">,</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># Cell 1</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">segmentation</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">,</span> <span class="mi">150</span><span class="p">:</span><span class="mi">200</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>  <span class="c1"># Cell 2</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="gp">&gt;&gt;&gt;</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="gp">&gt;&gt;&gt; </span><span class="c1"># Define colors for visualization (RGBA integers 0-255)</span>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="gp">&gt;&gt;&gt; </span><span class="n">colors</span> <span class="o">=</span> <span class="p">{</span>
@@ -12796,7 +12899,8 @@ filled later (e.g. chunk by chunk from several processes) with
               (<code><span title="tuple">tuple</span>[<span title="int">int</span>, ...]</code>)
           –
           <div class="doc-md-description">
-            <p>Shape of the first level (TZYX, no channel dimension)</p>
+            <p>Shape of the first level: the image's axes with one channel, e.g.
+<code>(T, 1, Z, Y, X)</code> (see :meth:<code>label_shape</code>)</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12826,7 +12930,7 @@ filled later (e.g. chunk by chunk from several processes) with
 )
           –
           <div class="doc-md-description">
-            <p>Shard geometry: an explicit TZYX shape, an extent keyword such as
+            <p>Shard geometry: an explicit TCZYX shape, an extent keyword such as
 <code>"XYZ"</code>, or a size target such as <code>"1GB"</code>; see
 :func:<code>iohub.core.sharding.resolve_shards</code>. By default None (no sharding)</p>
           </div>
@@ -12849,7 +12953,7 @@ filled later (e.g. chunk by chunk from several processes) with
           –
           <div class="doc-md-description">
             <p>Coordinate transformations of level "0", by default None
-(unit scale). Should match the image's TZYX transforms.</p>
+(unit scale). Should match the image's transforms.</p>
           </div>
         </li>
         <li class="doc-section-item field-body">
@@ -12905,7 +13009,8 @@ added on the returned label with
               <code><span title="ValueError">ValueError</span></code>
             –
           <div class="doc-md-description">
-            <p>If the dtype is not an integer type or the shape is not TZYX</p>
+            <p>If the dtype is not an integer type, or the shape is not the image's
+axes with one channel</p>
           </div>
         </li>
     </ul>
