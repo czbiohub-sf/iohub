@@ -2242,6 +2242,32 @@ def test_downsample_block_odd_axis():
     assert out[0, -1] == 20.0
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.uint16, np.uint32])
+@pytest.mark.parametrize("method", ["mean", "min", "max"])
+def test_downsample_block_pooling_matches_window_reduction(dtype, method):
+    """Pooling one axis at a time agrees with reducing each window of the reshaped block.
+
+    Exact for min, max and integer means; a float mean only up to rounding,
+    since the summation order differs.
+    """
+    from iohub.core.downsample import downsample_block
+
+    rng = np.random.default_rng(1)
+    data = (rng.random((2, 3, 9, 16, 21)) * 4000).astype(dtype)  # odd axes are edge-padded
+    factors = [1, 1, 3, 2, 2]
+    out = downsample_block(data, factors, method)
+
+    padded = np.pad(data, [(0, (-s) % f) for s, f in zip(data.shape, factors, strict=True)], mode="edge")
+    windows = padded.reshape(2, 1, 3, 1, 3, 3, 8, 2, 11, 2)
+    expected = getattr(windows, method)(axis=(1, 3, 5, 7, 9)).astype(dtype)
+    assert out.shape == expected.shape == (2, 3, 3, 8, 11)
+    assert out.dtype == dtype
+    if method == "mean" and np.issubdtype(dtype, np.floating):
+        np.testing.assert_allclose(out, expected, rtol=1e-6)
+    else:
+        np.testing.assert_array_equal(out, expected)
+
+
 def test_split_region_splits_only_axes_not_downsampled():
     """Factor-1 axes split at the step; downsampled axes keep the region's extent."""
     from iohub.core.downsample import split_region
