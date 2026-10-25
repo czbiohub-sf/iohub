@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import numpy as np
 import zarr
 
 from iohub.core.config import PYTHON_CODEC_PIPELINE, ZARRS_CODEC_PIPELINE, ZarrConfig
-from iohub.core.downsample import downsample_block, iter_work_regions, target_region_to_source
+from iohub.core.downsample import downsample_block, iter_work_regions, split_region, target_region_to_source
 from iohub.core.protocol import ZarrImplementation
 from iohub.core.specs import ArraySpec
 from iohub.core.types import StorePath
@@ -167,12 +168,41 @@ class ZarrPythonImplementation(ZarrImplementation[zarr.Group, zarr.Array]):
         target_region: tuple[slice, ...],
         factors: list[int],
         method: str = "mean",
+        num_workers: int = 1,
     ) -> None:
-        """Read, downsample, and write a single shard-aligned region."""
-        source_region = target_region_to_source(target_region, factors, source.shape)
-        source_data = np.asarray(source[source_region])
-        downsampled = downsample_block(source_data, factors, method)
-        target[target_region] = downsampled
+        """Read, downsample, and write a single shard-aligned region.
+
+        The region is downsampled in sub-blocks split along the axes that are
+        not downsampled (one target chunk each, e.g. one (t, c) volume), so the
+        source held at any moment is a few sub-blocks' rather than the whole
+        region's, and ``num_workers`` threads overlap their reads and
+        reductions. The sub-blocks fill one buffer, written with a single
+        assignment, so the region is still one write of whole shards.
+        """
+        sub_regions = split_region(target_region, factors, target.chunks)
+        if len(sub_regions) == 1:
+            source_region = target_region_to_source(target_region, factors, source.shape)
+            target[target_region] = downsample_block(np.asarray(source[source_region]), factors, method)
+            return
+
+        buffer = np.empty(tuple(sl.stop - sl.start for sl in target_region), dtype=target.dtype)
+
+        def downsample_sub_region(sub_region: tuple[slice, ...]) -> None:
+            source_region = target_region_to_source(sub_region, factors, source.shape)
+            local = tuple(
+                slice(sub.start - sl.start, sub.stop - sl.start)
+                for sub, sl in zip(sub_region, target_region, strict=True)
+            )
+            buffer[local] = downsample_block(np.asarray(source[source_region]), factors, method)
+
+        if num_workers > 1:
+            with ThreadPoolExecutor(max_workers=min(num_workers, len(sub_regions))) as pool:
+                # list() re-raises the first worker exception here.
+                list(pool.map(downsample_sub_region, sub_regions))
+        else:
+            for sub_region in sub_regions:
+                downsample_sub_region(sub_region)
+        target[target_region] = buffer
 
     def iter_work_regions(self, target: zarr.Array) -> list[tuple[slice, ...]]:
         """Return shard/chunk-aligned regions for parallel iteration."""

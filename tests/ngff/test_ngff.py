@@ -2126,9 +2126,9 @@ def _count_downsample_calls(monkeypatch, pos):
     calls = []
     original = pos._impl.downsample_region
 
-    def counting(source, target, region, factors, method="mean"):
+    def counting(source, target, region, factors, method="mean", num_workers=1):
         calls.append(region)
-        return original(source, target, region, factors, method)
+        return original(source, target, region, factors, method, num_workers=num_workers)
 
     monkeypatch.setattr(pos._impl, "downsample_region", counting)
     return calls
@@ -2240,6 +2240,75 @@ def test_downsample_block_odd_axis():
     # copy of itself, so the result is 20.0 rather than missing (old
     # trim behaviour) or 10.0 (the original "left half only" bug).
     assert out[0, -1] == 20.0
+
+
+@pytest.mark.parametrize("dtype", [np.float32, np.uint16, np.uint32])
+@pytest.mark.parametrize("method", ["mean", "min", "max"])
+def test_downsample_block_pooling_matches_window_reduction(dtype, method):
+    """Pooling one axis at a time agrees with reducing each window of the reshaped block.
+
+    Exact for min, max and integer means; a float mean only up to rounding,
+    since the summation order differs.
+    """
+    from iohub.core.downsample import downsample_block
+
+    rng = np.random.default_rng(1)
+    data = (rng.random((2, 3, 9, 16, 21)) * 4000).astype(dtype)  # odd axes are edge-padded
+    factors = [1, 1, 3, 2, 2]
+    out = downsample_block(data, factors, method)
+
+    padded = np.pad(data, [(0, (-s) % f) for s, f in zip(data.shape, factors, strict=True)], mode="edge")
+    windows = padded.reshape(2, 1, 3, 1, 3, 3, 8, 2, 11, 2)
+    expected = getattr(windows, method)(axis=(1, 3, 5, 7, 9)).astype(dtype)
+    assert out.shape == expected.shape == (2, 3, 3, 8, 11)
+    assert out.dtype == dtype
+    if method == "mean" and np.issubdtype(dtype, np.floating):
+        np.testing.assert_allclose(out, expected, rtol=1e-6)
+    else:
+        np.testing.assert_array_equal(out, expected)
+
+
+def test_split_region_splits_only_axes_not_downsampled():
+    """Factor-1 axes split at the step; downsampled axes keep the region's extent."""
+    from iohub.core.downsample import split_region
+
+    region = (slice(0, 5), slice(0, 2), slice(0, 4), slice(0, 8), slice(0, 9))
+    subs = split_region(region, [1, 1, 2, 2, 2], (2, 1, 1, 4, 4))
+    assert [(s[0], s[1]) for s in subs] == [
+        (slice(t, min(t + 2, 5)), slice(c, c + 1)) for t in (0, 2, 4) for c in (0, 1)
+    ]
+    assert all(s[2:] == region[2:] for s in subs)
+
+    # A YX-only pyramid also splits Z, at the Z step.
+    subs = split_region(region, [1, 1, 1, 2, 2], (5, 2, 2, 4, 4))
+    assert [s[2] for s in subs] == [slice(0, 2), slice(2, 4)]
+    assert all(s[0] == region[0] and s[3:] == region[3:] for s in subs)
+
+
+@pytest.mark.parametrize("num_workers", [1, 4])
+def test_compute_pyramid_sub_blocks_match_whole_region(tmp_path, num_workers):
+    """Downsampling per (t, c) sub-block, serially or threaded, gives the whole-region result.
+
+    Level 0 holds several timepoints per shard and an odd X, so every region
+    splits into sub-blocks and the downsampled axes edge-pad.
+    """
+    from iohub.core.downsample import downsample_block
+
+    rng = np.random.default_rng(0)
+    data = rng.random((6, 2, 8, 32, 33), dtype=np.float32)
+    labels = rng.integers(0, 9, size=(6, 1, 8, 32, 33), dtype=np.uint32)
+    with open_ome_zarr(tmp_path / "split.zarr", layout="fov", mode="a", channel_names=["a", "b"]) as pos:
+        pos.create_image("0", data, chunks=(1, 1, 4, 16, 16), shards=(3, 1, 8, 32, 48))
+        pos.compute_pyramid(levels=3, method="mean", num_workers=num_workers)
+        label = pos.create_label("cells", labels, chunks=(1, 1, 4, 16, 16), shards=(3, 1, 8, 32, 48))
+        label.compute_pyramid(levels=3, dims={"y", "x"}, num_workers=num_workers)
+
+        level1 = downsample_block(data, [1, 1, 2, 2, 2], "mean")
+        np.testing.assert_array_equal(pos["1"][:], level1)
+        np.testing.assert_array_equal(pos["2"][:], downsample_block(level1, [1, 1, 2, 2, 2], "mean"))
+        label1 = downsample_block(labels, [1, 1, 1, 2, 2], "max")
+        np.testing.assert_array_equal(label["1"][:], label1)
+        np.testing.assert_array_equal(label["2"][:], downsample_block(label1, [1, 1, 1, 2, 2], "max"))
 
 
 @pytest.mark.parametrize("implementation", ["zarrs-python", "tensorstore"])

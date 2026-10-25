@@ -791,6 +791,7 @@ class MultiscaleNode(NGFFNode):
         shards: ShardsLike = None,
         resume: bool = False,
         resume_token: str = "",
+        num_workers: int = 1,
     ) -> None:
         """Compute pyramid by downsampling from source level.
 
@@ -830,6 +831,12 @@ class MultiscaleNode(NGFFNode):
             Fingerprint of what determines the pyramid (method, levels, the
             source data's revision), mixed into the markers' identity so a
             changed request recomputes rather than skips.
+        num_workers : int, optional
+            Threads that downsample each region, one sub-block per thread: a
+            region splits along the axes that are not downsampled (e.g. one
+            (t, c) volume per sub-block), which also bounds the source data
+            held in memory to a few sub-blocks. Ignored by the TensorStore
+            implementation, which uses its own thread pool. By default 1.
 
         Raises
         ------
@@ -897,6 +904,7 @@ class MultiscaleNode(NGFFNode):
                     region,
                     downsample_factors,
                     method,
+                    num_workers=num_workers,
                 )
                 if unit is not None:
                     unit.complete()
@@ -1189,6 +1197,7 @@ class PositionLabel(MultiscaleNode):
         shards: ShardsLike = None,
         resume: bool = False,
         resume_token: str = "",
+        num_workers: int = 1,
     ) -> None:
         """Compute the label pyramid with a method that never invents a label id.
 
@@ -1208,7 +1217,13 @@ class PositionLabel(MultiscaleNode):
                 f"got {method!r}."
             )
         super().compute_pyramid(
-            levels=levels, method=method, dims=dims, shards=shards, resume=resume, resume_token=resume_token
+            levels=levels,
+            method=method,
+            dims=dims,
+            shards=shards,
+            resume=resume,
+            resume_token=resume_token,
+            num_workers=num_workers,
         )
 
     def create_label(

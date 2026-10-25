@@ -281,6 +281,15 @@ def compute_pyramid(
             ),
         ),
     ] = False,
+    num_workers: Annotated[
+        int,
+        typer.Option(
+            "--num-workers",
+            "-n",
+            min=1,
+            help="Threads that downsample each region, one timepoint and channel volume per thread.",
+        ),
+    ] = 1,
 ) -> None:
     """Create or recompute an OME-Zarr pyramid in place.
 
@@ -305,7 +314,12 @@ def compute_pyramid(
         _logger.info(f"Computing pyramid for {input_position_dirpath}")
         with open_ome_zarr(input_position_dirpath, layout="fov", mode="r+") as dataset:
             dataset.compute_pyramid(
-                levels=levels, method=method.value, dims=parsed_dims, resume=resume, resume_token=token
+                levels=levels,
+                method=method.value,
+                dims=parsed_dims,
+                resume=resume,
+                resume_token=token,
+                num_workers=num_workers,
             )
             labels = list(dataset.labels())
             if not labels:
@@ -328,7 +342,12 @@ def compute_pyramid(
                     label.delete_pyramid()
                 _logger.info(f"Computing pyramid for label {name!r} of {input_position_dirpath}")
                 label.compute_pyramid(
-                    levels=levels, method=label_method.value, dims=label_dims, resume=resume, resume_token=token
+                    levels=levels,
+                    method=label_method.value,
+                    dims=label_dims,
+                    resume=resume,
+                    resume_token=token,
+                    num_workers=num_workers,
                 )
 
 
