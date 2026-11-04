@@ -241,6 +241,43 @@ def test_init_ome_zarr(channel_names, version):
         assert dataset.channel_names == channel_names
 
 
+@pytest.mark.parametrize("version", ["0.4", "0.5"])
+def test_ngff_node_repr(tmp_path, version):
+    store_path = tmp_path / "ome.zarr"
+    with open_ome_zarr(
+        store_path,
+        layout="fov",
+        mode="w-",
+        channel_names=["DAPI"],
+        version=version,
+    ) as dataset:
+        dataset.create_zeros("0", shape=(1, 1, 1, 4, 4), dtype=np.uint16)
+        assert repr(dataset) == "\n".join(
+            [
+                "Type: <class 'iohub.ngff.nodes.Position'>",
+                "Path: /",
+                f"OME-Zarr version: {version}",
+                "Axes: t (time); c (channel); z (space); y (space); x (space)",
+                "Channel names: ['DAPI']",
+                "Members: 1",
+            ]
+        )
+
+
+def test_empty_plate_repr(tmp_path):
+    with open_ome_zarr(
+        tmp_path / "empty.zarr",
+        layout="hcs",
+        mode="w-",
+        channel_names=["DAPI"],
+    ) as dataset:
+        text = repr(dataset)
+
+    assert "Type: <class 'iohub.ngff.nodes.Plate'>" in text
+    assert "Channel names: ['DAPI']" in text
+    assert "Members: 0" in text
+
+
 @pytest.mark.parametrize("mode", ["w", "w-"])
 def test_open_ome_zarr_v04_write_succeeds(tmp_path, mode):
     """Creating new v0.4 stores must succeed."""

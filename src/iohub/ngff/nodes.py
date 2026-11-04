@@ -285,6 +285,29 @@ class NGFFNode:
     def __len__(self):
         return len(self._member_names)
 
+    def __repr__(self) -> str:
+        member_count = len(self)
+        if member_count:
+            axes = self.axes
+            try:
+                channel_names = self.channel_names
+            except AttributeError:
+                channel_names = "unavailable"
+        else:
+            axes = self.__dict__.get("axes", self._DEFAULT_AXES)
+            channel_names = self.__dict__.get("channel_names", "unavailable")
+        axes_text = "; ".join(f"{axis.name} ({axis.type})" for axis in axes)
+        return "\n".join(
+            [
+                f"Type: {type(self)}",
+                f"Path: {self.zgroup.name}",
+                f"OME-Zarr version: {self.version}",
+                f"Axes: {axes_text}",
+                f"Channel names: {channel_names}",
+                f"Members: {member_count}",
+            ]
+        )
+
     def __getitem__(self, key):
         key = normalize_path(str(key))
         levels = len(key.split("/")) - 1
